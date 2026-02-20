@@ -1,0 +1,49 @@
+<Window x:Class="TopStepTrader.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="TopStep AI Trader"
+        Height="900" Width="1400"
+        MinHeight="700" MinWidth="1100"
+        Background="{StaticResource BackgroundBrush}"
+        WindowStartupLocation="CenterScreen">
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Navigation Sidebar -->
+        <Border Grid.Column="0" Background="{StaticResource SidebarBrush}">
+            <StackPanel Margin="0,20,0,0">
+                <TextBlock Text="TopStep AI Trader"
+                           Foreground="{StaticResource AccentBrush}"
+                           FontSize="14" FontWeight="Bold"
+                           Margin="16,0,16,24" TextWrapping="Wrap"/>
+
+                <Button Content="📊  Dashboard"    Tag="Dashboard"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                <Button Content="📈  Market Data"  Tag="Market"      Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                <Button Content="🤖  AI Signals"   Tag="Signals"     Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                <Button Content="📋  Orders"        Tag="Orders"      Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                <Button Content="🛡️  Risk Guard"   Tag="Risk"        Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                <Button Content="🔬  Backtest"      Tag="Backtest"    Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                <Button Content="⚙️  Settings"      Tag="Settings"    Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+
+                <!-- Connection Status -->
+                <Border Margin="16,20,16,8" CornerRadius="4"
+                        Background="{Binding ConnectionStatusBrush, RelativeSource={RelativeSource AncestorType=Window}}">
+                    <TextBlock Text="{Binding ConnectionStatus, RelativeSource={RelativeSource AncestorType=Window}}"
+                               Foreground="White" FontSize="11" Margin="8,4" TextAlignment="Center"/>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Content Area -->
+        <ContentControl Grid.Column="1"
+                        x:Name="MainContent"
+                        Margin="0"/>
+    </Grid>
+</Window>

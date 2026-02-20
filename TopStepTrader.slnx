@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TopStepTrader.API/TopStepTrader.API.vbproj" />
+    <Project Path="src/TopStepTrader.Core/TopStepTrader.Core.vbproj" />
+    <Project Path="src/TopStepTrader.Data/TopStepTrader.Data.vbproj" />
+    <Project Path="src/TopStepTrader.ML/TopStepTrader.ML.vbproj" />
+    <Project Path="src/TopStepTrader.Services/TopStepTrader.Services.vbproj" />
+    <Project Path="src/TopStepTrader.UI/TopStepTrader.UI.vbproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+</Solution>
