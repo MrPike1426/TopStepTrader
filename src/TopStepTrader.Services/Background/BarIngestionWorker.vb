@@ -20,7 +20,7 @@ Namespace TopStepTrader.Services.Background
         Private _disposed As Boolean = False
 
         ' Default contract (ES front month) — updated by UI/settings
-        Public Property ContractId As Integer = 0
+        Public Property ContractId As String = String.Empty
         Public Property Timeframe As BarTimeframe = BarTimeframe.FiveMinute
 
         Public Sub New(ingestionService As BarIngestionService,
@@ -40,7 +40,7 @@ Namespace TopStepTrader.Services.Background
         End Function
 
         Private Async Sub DoWork(state As Object)
-            If ContractId = 0 Then
+            If String.IsNullOrEmpty(ContractId) Then
                 _logger.LogDebug("BarIngestionWorker: no contract configured, skipping")
                 Return
             End If

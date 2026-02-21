@@ -6,7 +6,7 @@ Namespace TopStepTrader.Core.Models
         Public Property Id As Long
         Public Property ExternalOrderId As Long?
         Public Property AccountId As Long
-        Public Property ContractId As Integer
+        Public Property ContractId As String = String.Empty
         Public Property Side As OrderSide
         Public Property OrderType As OrderType
         Public Property Quantity As Integer

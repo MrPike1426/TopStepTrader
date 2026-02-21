@@ -19,12 +19,12 @@ Namespace TopStepTrader.UI.ViewModels
 
         ' ── Bindable properties ──────────────────────────────────────────────
 
-        Private _contractId As Integer = 0
-        Public Property ContractId As Integer
+        Private _contractId As String = String.Empty
+        Public Property ContractId As String
             Get
                 Return _contractId
             End Get
-            Set(value As Integer)
+            Set(value As String)
                 SetProperty(_contractId, value)
                 OnPropertyChanged(NameOf(IsSubscribed))
             End Set
@@ -42,7 +42,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public ReadOnly Property IsSubscribed As Boolean
             Get
-                Return _contractId > 0 AndAlso _marketDataService.IsSubscribed(_contractId)
+                Return Not String.IsNullOrEmpty(_contractId) AndAlso _marketDataService.IsSubscribed(_contractId)
             End Get
         End Property
 
@@ -137,7 +137,7 @@ Namespace TopStepTrader.UI.ViewModels
             _tradingSettings   = tradingOptions.Value
 
             SubscribeCommand   = New RelayCommand(AddressOf ExecuteSubscribe,
-                                                   Function() Not IsSubscribed AndAlso _contractId > 0)
+                                                   Function() Not IsSubscribed AndAlso Not String.IsNullOrEmpty(_contractId))
             UnsubscribeCommand = New RelayCommand(AddressOf ExecuteUnsubscribe,
                                                    Function() IsSubscribed)
 
@@ -147,8 +147,8 @@ Namespace TopStepTrader.UI.ViewModels
         ' ── Commands impl ────────────────────────────────────────────────────
 
         Private Sub ExecuteSubscribe()
-            Dim id As Integer
-            If Integer.TryParse(_contractIdText.Trim(), id) AndAlso id > 0 Then
+            Dim id = _contractIdText.Trim()
+            If Not String.IsNullOrEmpty(id) Then
                 ContractId = id
                 Task.Run(Async Function()
                              Try
@@ -162,7 +162,7 @@ Namespace TopStepTrader.UI.ViewModels
                              End Try
                          End Function)
             Else
-                StatusText = "Please enter a valid integer Contract ID"
+                StatusText = "Please enter a valid Contract ID"
             End If
         End Sub
 
@@ -171,7 +171,7 @@ Namespace TopStepTrader.UI.ViewModels
                          Try
                              Await _marketDataService.UnsubscribeAsync(_contractId)
                              Dispatch(Sub()
-                                          ContractId = 0
+                                          ContractId = String.Empty
                                           BidPrice = 0
                                           AskPrice = 0
                                           LastPrice = 0

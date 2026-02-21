@@ -4,7 +4,7 @@ Namespace TopStepTrader.Core.Models
 
     Public Class TradeSignal
         Public Property Id As Long
-        Public Property ContractId As Integer
+        Public Property ContractId As String = String.Empty
         Public Property GeneratedAt As DateTimeOffset
         Public Property SignalType As SignalType
         Public Property Confidence As Single          ' 0.0 to 1.0

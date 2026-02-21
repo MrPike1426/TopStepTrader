@@ -140,9 +140,9 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Private Sub ExecutePlaceOrder(side As OrderSide)
-            Dim contractId As Integer
+            Dim contractId = _newContractId.Trim()
             Dim qty As Integer
-            If Not Integer.TryParse(_newContractId.Trim(), contractId) OrElse contractId <= 0 Then
+            If String.IsNullOrEmpty(contractId) Then
                 StatusText = "Invalid Contract ID" : Return
             End If
             If Not Integer.TryParse(_newQuantity.Trim(), qty) OrElse qty <= 0 Then
@@ -211,7 +211,7 @@ Namespace TopStepTrader.UI.ViewModels
     ''' <summary>View-friendly wrapper around Order.</summary>
     Public Class OrderRowVm
         Public Property OrderId    As Long
-        Public Property ContractId As Integer
+        Public Property ContractId As String
         Public Property Side       As String
         Public Property Qty        As Integer
         Public Property Status     As String

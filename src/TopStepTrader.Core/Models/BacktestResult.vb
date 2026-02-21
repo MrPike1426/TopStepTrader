@@ -3,7 +3,7 @@ Namespace TopStepTrader.Core.Models
     Public Class BacktestResult
         Public Property Id As Long
         Public Property RunName As String = String.Empty
-        Public Property ContractId As Integer
+        Public Property ContractId As String = String.Empty
         Public Property StartDate As Date
         Public Property EndDate As Date
         Public Property InitialCapital As Decimal

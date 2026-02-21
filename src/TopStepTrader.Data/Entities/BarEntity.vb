@@ -10,7 +10,8 @@ Namespace TopStepTrader.Data.Entities
         Public Property Id As Long
 
         <Required>
-        Public Property ContractId As Integer
+        <MaxLength(50)>
+        Public Property ContractId As String = String.Empty
 
         ''' <summary>Bar timeframe in minutes (1, 5, 15, 30, 60, 240, 1440)</summary>
         <Required>

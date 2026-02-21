@@ -1,7 +1,7 @@
 Namespace TopStepTrader.Core.Models
 
     Public Class Quote
-        Public Property ContractId As Integer
+        Public Property ContractId As String = String.Empty
         Public Property Timestamp As DateTimeOffset
         Public Property BidPrice As Decimal
         Public Property AskPrice As Decimal

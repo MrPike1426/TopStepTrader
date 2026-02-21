@@ -8,7 +8,7 @@ Namespace TopStepTrader.Core.Models
         Public Property Id              As Long
         Public Property SignalId        As Long
         Public Property OrderId         As Long?
-        Public Property ContractId      As Integer
+        Public Property ContractId      As String = String.Empty
         Public Property Timeframe       As Integer       ' bars (e.g., 5 = 5-minute)
         Public Property SignalType      As String = String.Empty  ' "Buy" or "Sell"
         Public Property SignalConfidence As Single

@@ -4,7 +4,7 @@ Namespace TopStepTrader.Core.Models
 
     Public Class MarketBar
         Public Property Id As Long
-        Public Property ContractId As Integer
+        Public Property ContractId As String = String.Empty
         Public Property Timestamp As DateTimeOffset
         Public Property Timeframe As BarTimeframe
         Public Property Open As Decimal

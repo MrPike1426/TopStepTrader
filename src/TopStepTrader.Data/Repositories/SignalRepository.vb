@@ -36,7 +36,7 @@ Namespace TopStepTrader.Data.Repositories
             Return entity.Id
         End Function
 
-        Public Async Function GetSignalHistoryAsync(contractId As Integer,
+        Public Async Function GetSignalHistoryAsync(contractId As String,
                                                      from As DateTime,
                                                      [to] As DateTime,
                                                      Optional cancel As CancellationToken = Nothing) As Task(Of List(Of TradeSignal))
@@ -50,7 +50,7 @@ Namespace TopStepTrader.Data.Repositories
             Return entities.Select(AddressOf MapToModel).ToList()
         End Function
 
-        Public Async Function GetRecentSignalsAsync(contractId As Integer,
+        Public Async Function GetRecentSignalsAsync(contractId As String,
                                                      count As Integer,
                                                      Optional cancel As CancellationToken = Nothing) As Task(Of List(Of TradeSignal))
             Dim entities = Await _context.Signals _

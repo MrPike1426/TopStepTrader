@@ -10,7 +10,8 @@ Namespace TopStepTrader.Data.Entities
         Public Property Id As Long
 
         <Required>
-        Public Property ContractId As Integer
+        <MaxLength(50)>
+        Public Property ContractId As String = String.Empty
 
         <Required>
         Public Property GeneratedAt As DateTimeOffset

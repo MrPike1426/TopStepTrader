@@ -17,8 +17,8 @@ Namespace TopStepTrader.Services.Market
 
         Private ReadOnly _hub As MarketHubClient
         Private ReadOnly _logger As ILogger(Of MarketDataService)
-        Private ReadOnly _quotes As New ConcurrentDictionary(Of Integer, Quote)()
-        Private ReadOnly _subscriptions As New HashSet(Of Integer)()
+        Private ReadOnly _quotes As New ConcurrentDictionary(Of String, Quote)()
+        Private ReadOnly _subscriptions As New HashSet(Of String)()
         Private ReadOnly _subLock As New Object()
 
         Public Event QuoteReceived As EventHandler(Of QuoteEventArgs) Implements IMarketDataService.QuoteReceived
@@ -41,7 +41,7 @@ Namespace TopStepTrader.Services.Market
             RaiseEvent BarCompleted(Me, New BarEventArgs(e.Bar))
         End Sub
 
-        Public Async Function SubscribeAsync(contractId As Integer) As Task _
+        Public Async Function SubscribeAsync(contractId As String) As Task _
             Implements IMarketDataService.SubscribeAsync
             SyncLock _subLock
                 If _subscriptions.Contains(contractId) Then Return
@@ -51,7 +51,7 @@ Namespace TopStepTrader.Services.Market
             _logger.LogInformation("Subscribed to contract {Id}", contractId)
         End Function
 
-        Public Async Function UnsubscribeAsync(contractId As Integer) As Task _
+        Public Async Function UnsubscribeAsync(contractId As String) As Task _
             Implements IMarketDataService.UnsubscribeAsync
             SyncLock _subLock
                 _subscriptions.Remove(contractId)
@@ -60,14 +60,14 @@ Namespace TopStepTrader.Services.Market
             _logger.LogInformation("Unsubscribed from contract {Id}", contractId)
         End Function
 
-        Public Function GetCurrentQuoteAsync(contractId As Integer) As Task(Of Quote) _
+        Public Function GetCurrentQuoteAsync(contractId As String) As Task(Of Quote) _
             Implements IMarketDataService.GetCurrentQuoteAsync
             Dim q As Quote = Nothing
             _quotes.TryGetValue(contractId, q)
             Return Task.FromResult(q)
         End Function
 
-        Public Function IsSubscribed(contractId As Integer) As Boolean _
+        Public Function IsSubscribed(contractId As String) As Boolean _
             Implements IMarketDataService.IsSubscribed
             SyncLock _subLock
                 Return _subscriptions.Contains(contractId)

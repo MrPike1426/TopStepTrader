@@ -36,10 +36,10 @@ Namespace TopStepTrader.API.Http
         ''' <summary>
         ''' Retrieve historical bars. Uses the history-specific rate limit slot.
         ''' </summary>
-        ''' <param name="contractId">Numeric contract ID from Contract/available</param>
+        ''' <param name="contractId">String contract ID e.g. "CON.F.US.EP.H26"</param>
         ''' <param name="unit">1=1min, 2=5min, 3=15min, 4=30min, 5=1hr, 6=1day</param>
         ''' <param name="unitsBack">Number of bars to fetch (max ~500 per call)</param>
-        Public Function RetrieveBarsAsync(contractId As Integer,
+        Public Function RetrieveBarsAsync(contractId As String,
                                           unit As Integer,
                                           unitsBack As Integer,
                                           Optional startTime As DateTimeOffset? = Nothing,
@@ -47,11 +47,15 @@ Namespace TopStepTrader.API.Http
                                           Optional cancel As CancellationToken = Nothing) As Task(Of BarResponse)
 
             Dim request = New RetrieveBarsRequest With {
-                .ContractId = contractId,
-                .Unit = unit,
-                .UnitsBack = unitsBack,
-                .StartTime = If(startTime.HasValue, startTime.Value.ToString("O"), Nothing),
-                .EndTime = If(endTime.HasValue, endTime.Value.ToString("O"), Nothing)
+                .ContractId  = contractId,
+                .Unit        = unit,
+                .UnitNumber  = unit,
+                .Limit       = unitsBack,
+                .Live        = False,
+                .StartTime   = If(startTime.HasValue, startTime.Value.ToString("O"),
+                                  DateTimeOffset.UtcNow.AddMonths(-6).ToString("O")),
+                .EndTime     = If(endTime.HasValue, endTime.Value.ToString("O"),
+                                  DateTimeOffset.UtcNow.ToString("O"))
             }
             Dim endpoint = $"{_settings.RestBaseUrl}/api/History/retrieveBars"
 

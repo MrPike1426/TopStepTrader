@@ -29,7 +29,7 @@ Namespace TopStepTrader.Services.Market
         ''' Fetch and store up to <paramref name="barsToFetch"/> bars for a contract.
         ''' Skips bars already in the database (based on latest stored timestamp).
         ''' </summary>
-        Public Async Function IngestAsync(contractId As Integer,
+        Public Async Function IngestAsync(contractId As String,
                                           timeframe As BarTimeframe,
                                           Optional barsToFetch As Integer = 500,
                                           Optional cancel As CancellationToken = Nothing) As Task(Of Integer)
@@ -64,7 +64,7 @@ Namespace TopStepTrader.Services.Market
             Dim bars = response.Bars.Select(Function(b) New MarketBar With {
                 .ContractId = contractId,
                 .Timeframe = CInt(timeframe),
-                .Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(b.Timestamp),
+                .Timestamp = DateTimeOffset.Parse(b.Timestamp, Nothing, System.Globalization.DateTimeStyles.RoundtripKind),
                 .Open = CDec(b.Open),
                 .High = CDec(b.High),
                 .Low = CDec(b.Low),
@@ -81,7 +81,7 @@ Namespace TopStepTrader.Services.Market
         ''' <summary>
         ''' Returns the N most recent bars from the DB as domain objects for the ML engine.
         ''' </summary>
-        Public Async Function GetBarsForMLAsync(contractId As Integer,
+        Public Async Function GetBarsForMLAsync(contractId As String,
                                                  timeframe As BarTimeframe,
                                                  Optional maxBars As Integer = 200,
                                                  Optional cancel As CancellationToken = Nothing) As Task(Of IList(Of MarketBar))

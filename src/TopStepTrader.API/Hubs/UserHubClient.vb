@@ -139,7 +139,7 @@ Namespace TopStepTrader.API.Hubs
 
     Public Class UserPositionData
         Public Property AccountId As Long
-        Public Property ContractId As Integer
+        Public Property ContractId As String = String.Empty
         Public Property NetPos As Integer       ' positive=long, negative=short, 0=flat
         Public Property AvgPrice As Double
         Public Property OpenPnL As Double

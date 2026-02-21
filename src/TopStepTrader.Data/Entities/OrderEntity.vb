@@ -15,7 +15,8 @@ Namespace TopStepTrader.Data.Entities
         Public Property AccountId As Long
 
         <Required>
-        Public Property ContractId As Integer
+        <MaxLength(50)>
+        Public Property ContractId As String = String.Empty
 
         ''' <summary>0=Buy, 1=Sell</summary>
         <Required>

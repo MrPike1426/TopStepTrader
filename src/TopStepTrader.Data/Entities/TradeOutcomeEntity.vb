@@ -17,7 +17,8 @@ Namespace TopStepTrader.Data.Entities
 
         Public Property SignalId        As Long
         Public Property OrderId         As Long?
-        Public Property ContractId      As Integer
+        <MaxLength(50)>
+        Public Property ContractId      As String = String.Empty
         Public Property Timeframe       As Integer
 
         <MaxLength(10)>

@@ -97,7 +97,7 @@ Namespace TopStepTrader.Services.Trading
                 .OrderType     = OrderType.Market,
                 .Quantity      = 1,
                 .SourceSignalId = signal.Id,
-                .Notes         = signal.ContractId.ToString()
+                .Notes         = signal.ContractId
             }
 
             _logger.LogInformation(

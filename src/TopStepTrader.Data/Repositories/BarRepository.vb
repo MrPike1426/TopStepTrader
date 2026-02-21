@@ -18,7 +18,7 @@ Namespace TopStepTrader.Data.Repositories
         End Sub
 
         ''' <summary>Get bars for ML training or backtest. Returns newest-first by default.</summary>
-        Public Async Function GetBarsAsync(contractId As Integer,
+        Public Async Function GetBarsAsync(contractId As String,
                                             timeframe As BarTimeframe,
                                             from As DateTimeOffset,
                                             [to] As DateTimeOffset,
@@ -35,7 +35,7 @@ Namespace TopStepTrader.Data.Repositories
         End Function
 
         ''' <summary>Get the N most recent bars for a contract/timeframe.</summary>
-        Public Async Function GetRecentBarsAsync(contractId As Integer,
+        Public Async Function GetRecentBarsAsync(contractId As String,
                                                   timeframe As BarTimeframe,
                                                   count As Integer,
                                                   Optional cancel As CancellationToken = Nothing) As Task(Of List(Of MarketBar))
@@ -51,7 +51,7 @@ Namespace TopStepTrader.Data.Repositories
         End Function
 
         ''' <summary>Get the timestamp of the latest stored bar (used to know where to fetch from).</summary>
-        Public Async Function GetLatestTimestampAsync(contractId As Integer,
+        Public Async Function GetLatestTimestampAsync(contractId As String,
                                                        timeframe As BarTimeframe,
                                                        Optional cancel As CancellationToken = Nothing) As Task(Of DateTimeOffset?)
             Dim latest = Await _context.Bars _

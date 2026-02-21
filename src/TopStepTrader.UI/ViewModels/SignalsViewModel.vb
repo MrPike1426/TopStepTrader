@@ -70,12 +70,10 @@ Namespace TopStepTrader.UI.ViewModels
                          Try
                              Dim from = DateTime.Today.AddDays(-7)
                              Dim [to] = DateTime.Now
-                             Dim id As Integer
-                             Integer.TryParse(_filterContractId, id)
-                             If id = 0 Then id = -1  ' use -1 as "all" sentinel
+                             Dim filterContractId = _filterContractId.Trim()
 
                              Dim fetched = Await _signalService.GetSignalHistoryAsync(
-                                 If(id > 0, id, 0), from, [to])
+                                 filterContractId, from, [to])
                              Dim rows = fetched.OrderByDescending(Function(x) x.GeneratedAt).ToList()
                              Dispatch(Sub()
                                           Signals.Clear()
@@ -105,7 +103,7 @@ Namespace TopStepTrader.UI.ViewModels
     ''' <summary>View-friendly wrapper around TradeSignal.</summary>
     Public Class SignalRowVm
         Public Property Time          As String
-        Public Property ContractId    As Integer
+        Public Property ContractId    As String
         Public Property SignalType    As String
         Public Property Confidence    As String
         Public Property ModelVersion  As String

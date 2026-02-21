@@ -18,7 +18,7 @@ Namespace TopStepTrader.API.Models.Responses
 
     Public Class BarDto
         <JsonPropertyName("t")>
-        Public Property Timestamp As Long       ' Unix milliseconds
+        Public Property Timestamp As String = String.Empty  ' ISO 8601 datetime
 
         <JsonPropertyName("o")>
         Public Property Open As Double

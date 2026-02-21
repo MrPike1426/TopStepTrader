@@ -18,7 +18,7 @@ Namespace TopStepTrader.API.Hubs
         Private ReadOnly _tokenManager As TokenManager
         Private ReadOnly _logger As ILogger(Of MarketHubClient)
         Private _connection As HubConnection
-        Private ReadOnly _subscribedContracts As New HashSet(Of Integer)
+        Private ReadOnly _subscribedContracts As New HashSet(Of String)
 
         Public Event QuoteReceived As EventHandler(Of MarketQuoteEventArgs)
         Public Event BarReceived As EventHandler(Of MarketBarEventArgs)
@@ -96,14 +96,14 @@ Namespace TopStepTrader.API.Hubs
             RaiseEvent ConnectionStateChanged(Me, _connection.State)
         End Function
 
-        Public Async Function SubscribeContractAsync(contractId As Integer,
+        Public Async Function SubscribeContractAsync(contractId As String,
                                                       Optional cancel As CancellationToken = Nothing) As Task
             If _subscribedContracts.Contains(contractId) Then Return
             Await ResubscribeAsync(contractId, cancel)
             _subscribedContracts.Add(contractId)
         End Function
 
-        Public Async Function UnsubscribeContractAsync(contractId As Integer,
+        Public Async Function UnsubscribeContractAsync(contractId As String,
                                                         Optional cancel As CancellationToken = Nothing) As Task
             If Not _subscribedContracts.Contains(contractId) Then Return
             Await _connection.InvokeAsync("UnsubscribeContractQuotes", contractId, cancel)
@@ -112,7 +112,7 @@ Namespace TopStepTrader.API.Hubs
             _logger.LogInformation("Unsubscribed from contract {ContractId}", contractId)
         End Function
 
-        Private Async Function ResubscribeAsync(contractId As Integer,
+        Private Async Function ResubscribeAsync(contractId As String,
                                                  Optional cancel As CancellationToken = Nothing) As Task
             Await _connection.InvokeAsync("SubscribeContractQuotes", contractId, cancel)
             Await _connection.InvokeAsync("SubscribeContractTrades", contractId, cancel)
@@ -156,7 +156,7 @@ Namespace TopStepTrader.API.Hubs
     ' ---- SignalR message DTOs ----
 
     Public Class MarketQuoteData
-        Public Property ContractId As Integer
+        Public Property ContractId As String = String.Empty
         Public Property Bp As Double        ' Bid price
         Public Property Ap As Double        ' Ask price
         Public Property Lp As Double        ' Last price
@@ -166,7 +166,7 @@ Namespace TopStepTrader.API.Hubs
     End Class
 
     Public Class MarketBarData
-        Public Property ContractId As Integer
+        Public Property ContractId As String = String.Empty
         Public Property T As Long           ' Timestamp (unix ms)
         Public Property O As Double         ' Open
         Public Property H As Double         ' High

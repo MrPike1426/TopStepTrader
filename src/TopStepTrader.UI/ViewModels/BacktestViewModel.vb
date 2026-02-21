@@ -244,8 +244,8 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Private Sub ExecuteRun()
-            Dim contractId As Integer
-            If Not Integer.TryParse(_contractIdText.Trim(), contractId) OrElse contractId <= 0 Then
+            Dim contractId = _contractIdText.Trim()
+            If String.IsNullOrEmpty(contractId) Then
                 ProgressText = "Invalid Contract ID" : Return
             End If
             Dim capital As Decimal

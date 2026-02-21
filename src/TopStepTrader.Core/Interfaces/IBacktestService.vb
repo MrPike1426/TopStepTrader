@@ -12,7 +12,7 @@ Namespace TopStepTrader.Core.Interfaces
 
     Public Class BacktestConfiguration
         Public Property RunName As String = String.Empty
-        Public Property ContractId As Integer
+        Public Property ContractId As String = String.Empty
         Public Property Timeframe As Integer = 5
         Public Property StartDate As Date
         Public Property EndDate As Date

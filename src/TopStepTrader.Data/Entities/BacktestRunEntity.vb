@@ -14,7 +14,8 @@ Namespace TopStepTrader.Data.Entities
         Public Property RunName As String = String.Empty
 
         <Required>
-        Public Property ContractId As Integer
+        <MaxLength(50)>
+        Public Property ContractId As String = String.Empty
 
         <Required>
         Public Property Timeframe As Integer

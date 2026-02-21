@@ -38,7 +38,7 @@ Namespace TopStepTrader.Services.Signals
             _logger = logger
         End Sub
 
-        Public Async Function GenerateSignalAsync(contractId As Integer,
+        Public Async Function GenerateSignalAsync(contractId As String,
                                                    recentBars As IEnumerable(Of MarketBar)) _
             As Task(Of TradeSignal) Implements ISignalService.GenerateSignalAsync
 
@@ -84,7 +84,7 @@ Namespace TopStepTrader.Services.Signals
             Return signal
         End Function
 
-        Public Async Function GetSignalHistoryAsync(contractId As Integer,
+        Public Async Function GetSignalHistoryAsync(contractId As String,
                                                      from As DateTime,
                                                      [to] As DateTime) _
             As Task(Of IEnumerable(Of TradeSignal)) Implements ISignalService.GetSignalHistoryAsync
