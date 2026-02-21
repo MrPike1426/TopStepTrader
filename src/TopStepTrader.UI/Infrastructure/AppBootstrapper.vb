@@ -6,7 +6,6 @@ Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Data
 Imports TopStepTrader.API
 Imports TopStepTrader.ML
-Imports TopStepTrader.ML.Models
 Imports TopStepTrader.ML.Prediction
 Imports TopStepTrader.Services
 Imports TopStepTrader.UI.ViewModels
@@ -74,9 +73,28 @@ Namespace TopStepTrader.UI.Infrastructure
         End Function
 
         ''' <summary>
-        ''' Call after host is built to initialise the ML model manager (loads model + starts watcher).
+        ''' Call after host is built to:
+        '''   1. Ensure the SQL Server database and all tables exist (EnsureCreated).
+        '''   2. Initialise the ML model manager (loads model + starts FileSystemWatcher).
         ''' </summary>
         Public Sub InitialiseServices(host As IHost)
+            ' ── Database bootstrap ──────────────────────────────────────────────
+            ' EnsureCreated creates TopStepTraderDb + all tables from the EF model.
+            ' Safe to call on every startup: no-ops if the schema already exists.
+            ' (EF Core migration code-gen does not support VB.NET, so we use this
+            '  approach instead of "dotnet ef migrations add".)
+            Try
+                Using scope = host.Services.CreateScope()
+                    Dim db = scope.ServiceProvider.GetRequiredService(Of AppDbContext)()
+                    db.Database.EnsureCreated()
+                End Using
+            Catch ex As Exception
+                ' Surface the error without crashing — app can still start if DB is unavailable
+                System.Diagnostics.Trace.TraceError(
+                    "Database initialisation failed — SQL Server may be unavailable: {0}", ex.Message)
+            End Try
+
+            ' ── ML model manager ────────────────────────────────────────────────
             Dim modelManager = host.Services.GetService(Of ModelManager)()
             modelManager?.Initialize()
         End Sub
