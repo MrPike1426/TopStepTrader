@@ -4,23 +4,26 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
-    <RootNamespace>TopStepTrader.UI</RootNamespace>
+    <RootNamespace></RootNamespace>
     <AssemblyName>TopStepTrader.UI</AssemblyName>
     <StartupObject>TopStepTrader.UI.App</StartupObject>
-    <ApplicationIcon>Resources\topstep.ico</ApplicationIcon>
-    <Platforms>x64</Platforms>
+<Platforms>x64</Platforms>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\TopStepTrader.Services\TopStepTrader.Services.vbproj" />
     <ProjectReference Include="..\TopStepTrader.Core\TopStepTrader.Core.vbproj" />
+    <ProjectReference Include="..\TopStepTrader.Data\TopStepTrader.Data.vbproj" />
+    <ProjectReference Include="..\TopStepTrader.API\TopStepTrader.API.vbproj" />
+    <ProjectReference Include="..\TopStepTrader.ML\TopStepTrader.ML.vbproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.*" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.*" />
-    <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.*" />
-    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
+    <!-- LiveChartsCore requires pre-release 2.x; add when stable is published -->
+    <!-- <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.*-*" /> -->
+<PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
   </ItemGroup>
 
   <ItemGroup>

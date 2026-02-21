@@ -1,0 +1,117 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ═══ DataGrid (dark terminal) ═══ -->
+    <Style TargetType="DataGrid">
+        <Setter Property="Background"               Value="{StaticResource SurfaceBrush}"/>
+        <Setter Property="Foreground"               Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush"              Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness"          Value="1"/>
+        <Setter Property="GridLinesVisibility"      Value="Horizontal"/>
+        <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="RowBackground"            Value="Transparent"/>
+        <Setter Property="AlternatingRowBackground" Value="#0AFFFFFF"/>
+        <Setter Property="HeadersVisibility"        Value="Column"/>
+        <Setter Property="SelectionMode"            Value="Single"/>
+        <Setter Property="AutoGenerateColumns"      Value="False"/>
+        <Setter Property="CanUserAddRows"           Value="False"/>
+        <Setter Property="CanUserDeleteRows"        Value="False"/>
+        <Setter Property="CanUserResizeRows"        Value="False"/>
+        <Setter Property="FontFamily"               Value="Segoe UI"/>
+        <Setter Property="FontSize"                 Value="12"/>
+        <Setter Property="RowHeight"                Value="30"/>
+    </Style>
+
+    <!-- Column header -->
+    <Style TargetType="DataGridColumnHeader">
+        <Setter Property="Background"      Value="{StaticResource CardBrush}"/>
+        <Setter Property="Foreground"      Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="Padding"         Value="8,6"/>
+        <Setter Property="BorderBrush"     Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="FontFamily"      Value="Segoe UI"/>
+        <Setter Property="FontSize"        Value="11"/>
+        <Setter Property="FontWeight"      Value="SemiBold"/>
+        <Setter Property="SeparatorBrush" Value="{StaticResource BorderBrush}"/>
+    </Style>
+
+    <!-- Row -->
+    <Style TargetType="DataGridRow">
+        <Setter Property="Background" Value="Transparent"/>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="{StaticResource NavSelectedBrush}"/>
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource NavHoverBrush}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Cell -->
+    <Style TargetType="DataGridCell">
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding"         Value="8,4"/>
+        <Setter Property="Foreground"      Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridCell">
+                    <Border Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ScrollBar - slim dark -->
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Width"      Value="8"/>
+    </Style>
+
+    <!-- Progress bar -->
+    <Style TargetType="ProgressBar">
+        <Setter Property="Background"   Value="{StaticResource SurfaceBrush}"/>
+        <Setter Property="Foreground"   Value="{StaticResource AccentBrush}"/>
+        <Setter Property="BorderBrush"  Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Height"       Value="8"/>
+    </Style>
+
+    <!-- Separator -->
+    <Style TargetType="Separator">
+        <Setter Property="Background" Value="{StaticResource BorderBrush}"/>
+        <Setter Property="Height"     Value="1"/>
+        <Setter Property="Margin"     Value="0,8"/>
+    </Style>
+
+    <!-- TabControl -->
+    <Style TargetType="TabControl">
+        <Setter Property="Background"       Value="{StaticResource BackgroundBrush}"/>
+        <Setter Property="BorderBrush"      Value="{StaticResource BorderBrush}"/>
+        <Setter Property="BorderThickness"  Value="0,1,0,0"/>
+    </Style>
+
+    <Style TargetType="TabItem">
+        <Setter Property="Foreground"       Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="Background"       Value="Transparent"/>
+        <Setter Property="BorderThickness"  Value="0"/>
+        <Setter Property="Padding"          Value="14,8"/>
+        <Setter Property="FontFamily"       Value="Segoe UI"/>
+        <Setter Property="FontSize"         Value="13"/>
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+</ResourceDictionary>

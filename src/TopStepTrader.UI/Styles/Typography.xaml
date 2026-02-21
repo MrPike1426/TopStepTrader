@@ -1,0 +1,59 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Base TextBlock -->
+    <Style TargetType="TextBlock">
+        <Setter Property="Foreground"  Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="FontFamily"  Value="Segoe UI"/>
+        <Setter Property="FontSize"    Value="13"/>
+        <Setter Property="LineHeight"  Value="20"/>
+    </Style>
+
+    <!-- Page title -->
+    <Style x:Key="PageTitleStyle" TargetType="TextBlock">
+        <Setter Property="Foreground"  Value="{StaticResource TextHeaderBrush}"/>
+        <Setter Property="FontFamily"  Value="Segoe UI"/>
+        <Setter Property="FontSize"    Value="22"/>
+        <Setter Property="FontWeight"  Value="SemiBold"/>
+        <Setter Property="Margin"      Value="0,0,0,16"/>
+    </Style>
+
+    <!-- Section heading (caps-like appearance via font size + weight, not TextTransform) -->
+    <Style x:Key="SectionHeadingStyle" TargetType="TextBlock">
+        <Setter Property="Foreground"  Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="FontFamily"  Value="Segoe UI"/>
+        <Setter Property="FontSize"    Value="10"/>
+        <Setter Property="FontWeight"  Value="SemiBold"/>
+        <Setter Property="Margin"      Value="0,0,0,6"/>
+    </Style>
+
+    <!-- Large metric value (P&L, balance) -->
+    <Style x:Key="MetricValueStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily"  Value="Segoe UI"/>
+        <Setter Property="FontSize"    Value="26"/>
+        <Setter Property="FontWeight"  Value="Bold"/>
+        <Setter Property="Foreground"  Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+
+    <!-- Small label -->
+    <Style x:Key="LabelStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="FontSize"   Value="11"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+    </Style>
+
+    <!-- Mono font for prices -->
+    <Style x:Key="PriceStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily"  Value="Consolas, Courier New"/>
+        <Setter Property="FontSize"    Value="14"/>
+        <Setter Property="Foreground"  Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+
+    <!-- Status badge text -->
+    <Style x:Key="BadgeTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily"  Value="Segoe UI"/>
+        <Setter Property="FontSize"    Value="11"/>
+        <Setter Property="FontWeight"  Value="SemiBold"/>
+    </Style>
+
+</ResourceDictionary>

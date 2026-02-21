@@ -1,0 +1,117 @@
+<UserControl x:Class="TopStepTrader.UI.Views.MarketDataView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource BackgroundBrush}">
+
+    <Grid Margin="24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="16"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="📈  Market Data" Style="{StaticResource PageTitleStyle}"/>
+
+        <!-- Subscription bar -->
+        <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}"
+                CornerRadius="6" Padding="16,12">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Contract ID:" VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
+                <TextBox Width="120" Text="{Binding ContractIdText, UpdateSourceTrigger=PropertyChanged}"
+                         VerticalAlignment="Center"/>
+                <Button Content="Subscribe"
+                        Command="{Binding SubscribeCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Margin="8,0,0,0"/>
+                <Button Content="Unsubscribe"
+                        Command="{Binding UnsubscribeCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Margin="8,0,0,0"/>
+                <TextBlock Text="{Binding StatusText}"
+                           VerticalAlignment="Center"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Margin="16,0,0,0" FontSize="12"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Live price display -->
+        <UniformGrid Grid.Row="4" Columns="4">
+
+            <!-- Bid -->
+            <Border Background="{StaticResource CardBrush}" CornerRadius="6"
+                    Margin="0,0,8,0" Padding="16,14" BorderBrush="{StaticResource SellBrush}"
+                    BorderThickness="0,0,0,3">
+                <StackPanel>
+                    <TextBlock Text="BID" Style="{StaticResource SectionHeadingStyle}"
+                               Foreground="{StaticResource SellBrush}"/>
+                    <TextBlock Text="{Binding BidPrice, StringFormat=F2}"
+                               Style="{StaticResource MetricValueStyle}"
+                               Foreground="{StaticResource SellBrush}"
+                               FontFamily="Consolas" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Ask -->
+            <Border Background="{StaticResource CardBrush}" CornerRadius="6"
+                    Margin="4,0,4,0" Padding="16,14" BorderBrush="{StaticResource BuyBrush}"
+                    BorderThickness="0,0,0,3">
+                <StackPanel>
+                    <TextBlock Text="ASK" Style="{StaticResource SectionHeadingStyle}"
+                               Foreground="{StaticResource BuyBrush}"/>
+                    <TextBlock Text="{Binding AskPrice, StringFormat=F2}"
+                               Style="{StaticResource MetricValueStyle}"
+                               Foreground="{StaticResource BuyBrush}"
+                               FontFamily="Consolas" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Last / Change -->
+            <Border Background="{StaticResource CardBrush}" CornerRadius="6"
+                    Margin="4,0,4,0" Padding="16,14">
+                <StackPanel>
+                    <TextBlock Text="LAST" Style="{StaticResource SectionHeadingStyle}"/>
+                    <TextBlock Text="{Binding LastPrice, StringFormat=F2}"
+                               Style="{StaticResource MetricValueStyle}"
+                               Foreground="{Binding PriceChangeColor, Converter={StaticResource BrushKeyConverter}}"
+                               FontFamily="Consolas" Margin="0,4,0,0"/>
+                    <TextBlock Text="{Binding PriceChange, StringFormat='+#0.00;-#0.00;0.00'}"
+                               Style="{StaticResource LabelStyle}"
+                               Foreground="{Binding PriceChangeColor, Converter={StaticResource BrushKeyConverter}}"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Volume / Update -->
+            <Border Background="{StaticResource CardBrush}" CornerRadius="6"
+                    Margin="8,0,0,0" Padding="16,14">
+                <StackPanel>
+                    <TextBlock Text="VOLUME" Style="{StaticResource SectionHeadingStyle}"/>
+                    <TextBlock Text="{Binding Volume, StringFormat=N0}"
+                               Style="{StaticResource MetricValueStyle}" FontFamily="Consolas"
+                               Margin="0,4,0,0"/>
+                    <TextBlock Text="{Binding UpdateTime, StringFormat='@ {0}'}"
+                               Style="{StaticResource LabelStyle}" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
+        </UniformGrid>
+
+        <!-- Placeholder chart area -->
+        <Border Grid.Row="6" Background="{StaticResource SurfaceBrush}"
+                CornerRadius="6" Margin="0,0,0,0">
+            <TextBlock Text="Live chart will appear here when subscribed"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="14"/>
+        </Border>
+
+    </Grid>
+</UserControl>

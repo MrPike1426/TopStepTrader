@@ -1,6 +1,7 @@
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 Imports System.Windows
+Imports TopStepTrader.UI.Infrastructure
 
 Namespace TopStepTrader.UI
 
@@ -14,6 +15,9 @@ Namespace TopStepTrader.UI
 
             _host = AppBootstrapper.BuildHost()
             Await _host.StartAsync()
+
+            ' Initialise ML model manager (loads model file + starts file watcher)
+            AppBootstrapper.InitialiseServices(_host)
 
             Dim mainWindow = _host.Services.GetRequiredService(Of MainWindow)()
             mainWindow.Show()

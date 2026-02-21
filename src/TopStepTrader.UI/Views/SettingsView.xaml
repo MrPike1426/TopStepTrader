@@ -1,0 +1,140 @@
+<UserControl x:Class="TopStepTrader.UI.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource BackgroundBrush}">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="24,20" MaxWidth="680" HorizontalAlignment="Left">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="16"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="20"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="20"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="16"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Text="⚙️  Settings" Style="{StaticResource PageTitleStyle}"/>
+
+            <!-- API Connection -->
+            <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Padding="20,16">
+                <StackPanel>
+                    <TextBlock Text="API CONNECTION" Style="{StaticResource SectionHeadingStyle}"/>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,4">
+                        <TextBlock Text="Status: " Foreground="{StaticResource TextSecondaryBrush}" Width="120"/>
+                        <TextBlock Text="{Binding ConnectionStatusText}"
+                                   Foreground="{Binding ConnectionStatusColor, Converter={StaticResource BrushKeyConverter}}"
+                                   FontWeight="SemiBold"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
+                        <TextBlock Text="API Endpoint: " Foreground="{StaticResource TextSecondaryBrush}" Width="120"/>
+                        <TextBlock Text="{Binding ApiBaseUrl}" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontFamily="Consolas" FontSize="11"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,12">
+                        <TextBlock Text="Token Expires: " Foreground="{StaticResource TextSecondaryBrush}" Width="120"/>
+                        <TextBlock Text="{Binding TokenExpiresAt}" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontFamily="Consolas" FontSize="11"/>
+                    </StackPanel>
+
+                    <Button Content="Reconnect / Refresh Token"
+                            Command="{Binding ConnectCommand}"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Risk Settings -->
+            <Border Grid.Row="4" Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Padding="20,16">
+                <StackPanel>
+                    <TextBlock Text="RISK GUARD SETTINGS" Style="{StaticResource SectionHeadingStyle}"/>
+                    <TextBlock Text="Changes apply immediately for the current session. Edit appsettings.json for persistence."
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                               TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="160"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="10"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="10"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="10"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Daily Loss Limit ($):"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="0" Grid.Column="1"
+                                 Text="{Binding DailyLossLimit, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Max Drawdown ($):"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="2" Grid.Column="1"
+                                 Text="{Binding MaxDrawdown, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Max Position (contracts):"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="4" Grid.Column="1"
+                                 Text="{Binding MaxPosition, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Min Signal Confidence (0-1):"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                        <TextBox Grid.Row="6" Grid.Column="1"
+                                 Text="{Binding MinConfidence, UpdateSourceTrigger=PropertyChanged}"/>
+                    </Grid>
+
+                    <Button Content="Apply Risk Settings"
+                            Command="{Binding ApplyRiskCommand}"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            HorizontalAlignment="Left" Margin="0,16,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Auto-Execution -->
+            <Border Grid.Row="6"
+                    Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Padding="20,16"
+                    BorderBrush="{StaticResource HaltedBrush}"
+                    BorderThickness="{Binding AutoExecutionEnabled, Converter={StaticResource BoolToBorderThicknessConverter}}">
+                <StackPanel>
+                    <TextBlock Text="AUTO-EXECUTION" Style="{StaticResource SectionHeadingStyle}"
+                               Foreground="{StaticResource HaltedBrush}"/>
+                    <TextBlock Text="⚠  When enabled, the AI will automatically place real orders on live accounts."
+                               Foreground="{StaticResource WarningBrush}" FontSize="12"
+                               TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <CheckBox Content="Enable Autonomous Order Execution"
+                              IsChecked="{Binding AutoExecutionEnabled}"
+                              Foreground="{StaticResource HaltedBrush}"
+                              FontWeight="SemiBold" FontSize="14"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Status -->
+            <TextBlock Grid.Row="8"
+                       Text="{Binding StatusMessage}"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="12"/>
+
+        </Grid>
+    </ScrollViewer>
+</UserControl>
