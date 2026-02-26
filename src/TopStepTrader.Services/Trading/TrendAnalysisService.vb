@@ -1,3 +1,4 @@
+Imports System.Linq
 Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Models
@@ -163,7 +164,7 @@ Namespace TopStepTrader.Services.Trading
 
             ' 6. Recent Candle Pattern: Last 3 bars — majority bullish or bearish?
             Dim recentBars = bars.Skip(bars.Count - Math.Min(3, bars.Count)).ToList()
-            Dim bullishCandles = recentBars.Count(Function(b) b.IsBullish)
+            Dim bullishCandles = Enumerable.Count(recentBars, Function(b) b.IsBullish)
             Dim bearishCandles = recentBars.Count - bullishCandles
             If bullishCandles > bearishCandles Then
                 bullishScore += CANDLE_PATTERN_WEIGHT
