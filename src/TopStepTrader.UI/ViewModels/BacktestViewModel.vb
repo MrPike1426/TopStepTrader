@@ -1,9 +1,11 @@
 Imports System.Collections.ObjectModel
 Imports System.Threading
 Imports System.Windows
+Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Events
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
+Imports TopStepTrader.Services.Trading
 Imports TopStepTrader.UI.ViewModels.Base
 
 Namespace TopStepTrader.UI.ViewModels
@@ -13,13 +15,26 @@ Namespace TopStepTrader.UI.ViewModels
     ''' Shows a trade-list grid and summary metrics.
     ''' Also provides the "Train Model" command to trigger initial / periodic
     ''' ML retraining from bar history stored in the database.
+    '''
+    ''' Tab 3 — Test Trade: fetches the past 24 bars, runs a combined
+    ''' EMA 21/50 + RSI 14 trend analysis, and displays Up/Down probability
+    ''' percentages.  The user can then choose to place a Test BUY or Test SELL.
     ''' </summary>
     Public Class BacktestViewModel
         Inherits ViewModelBase
 
         Private ReadOnly _backtestService  As IBacktestService
         Private ReadOnly _trainingService  As IModelTrainingService
+        Private ReadOnly _trendService     As TrendAnalysisService
+        Private ReadOnly _orderService     As IOrderService
+        Private ReadOnly _accountService   As IAccountService
         Private _cancelSource As CancellationTokenSource
+
+        Private _accountId As Long = 0
+
+        ' ══════════════════════════════════════════════════════════════════════
+        '  TAB 1 — RUN BACKTEST
+        ' ══════════════════════════════════════════════════════════════════════
 
         ' ── Configuration form ───────────────────────────────────────────────
 
@@ -243,33 +258,270 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public ReadOnly Property PreviousRuns As New ObservableCollection(Of BacktestRunSummaryVm)()
 
+        ' ══════════════════════════════════════════════════════════════════════
+        '  TAB 3 — TEST TRADE (EMA / RSI Trend Analysis)
+        ' ══════════════════════════════════════════════════════════════════════
+
+        Private _testTradeContractId As String = ""
+        Public Property TestTradeContractId As String
+            Get
+                Return _testTradeContractId
+            End Get
+            Set(value As String)
+                SetProperty(_testTradeContractId, value)
+            End Set
+        End Property
+
+        Private _testTradeQuantity As String = "1"
+        Public Property TestTradeQuantity As String
+            Get
+                Return _testTradeQuantity
+            End Get
+            Set(value As String)
+                SetProperty(_testTradeQuantity, value)
+            End Set
+        End Property
+
+        Private _hasTrendResult As Boolean = False
+        Public Property HasTrendResult As Boolean
+            Get
+                Return _hasTrendResult
+            End Get
+            Set(value As Boolean)
+                SetProperty(_hasTrendResult, value)
+            End Set
+        End Property
+
+        Private _upProbabilityText As String = "—"
+        Public Property UpProbabilityText As String
+            Get
+                Return _upProbabilityText
+            End Get
+            Set(value As String)
+                SetProperty(_upProbabilityText, value)
+            End Set
+        End Property
+
+        Private _downProbabilityText As String = "—"
+        Public Property DownProbabilityText As String
+            Get
+                Return _downProbabilityText
+            End Get
+            Set(value As String)
+                SetProperty(_downProbabilityText, value)
+            End Set
+        End Property
+
+        Private _trendEMA21Text As String = "—"
+        Public Property TrendEMA21Text As String
+            Get
+                Return _trendEMA21Text
+            End Get
+            Set(value As String)
+                SetProperty(_trendEMA21Text, value)
+            End Set
+        End Property
+
+        Private _trendEMA50Text As String = "—"
+        Public Property TrendEMA50Text As String
+            Get
+                Return _trendEMA50Text
+            End Get
+            Set(value As String)
+                SetProperty(_trendEMA50Text, value)
+            End Set
+        End Property
+
+        Private _trendRSI14Text As String = "—"
+        Public Property TrendRSI14Text As String
+            Get
+                Return _trendRSI14Text
+            End Get
+            Set(value As String)
+                SetProperty(_trendRSI14Text, value)
+            End Set
+        End Property
+
+        Private _trendLastCloseText As String = "—"
+        Public Property TrendLastCloseText As String
+            Get
+                Return _trendLastCloseText
+            End Get
+            Set(value As String)
+                SetProperty(_trendLastCloseText, value)
+            End Set
+        End Property
+
+        Private _trendSummaryText As String = ""
+        Public Property TrendSummaryText As String
+            Get
+                Return _trendSummaryText
+            End Get
+            Set(value As String)
+                SetProperty(_trendSummaryText, value)
+            End Set
+        End Property
+
+        Private _testTradeStatus As String = "Enter a Contract ID and click Analyse Trend, then choose Test BUY or Test SELL."
+        Public Property TestTradeStatus As String
+            Get
+                Return _testTradeStatus
+            End Get
+            Set(value As String)
+                SetProperty(_testTradeStatus, value)
+            End Set
+        End Property
+
+        Public ReadOnly Property TrendSignals As New ObservableCollection(Of String)()
+
         ' ── Commands ─────────────────────────────────────────────────────────
 
         Public ReadOnly Property RunCommand          As RelayCommand
         Public ReadOnly Property CancelCommand       As RelayCommand
         Public ReadOnly Property LoadHistoryCommand  As RelayCommand
         Public ReadOnly Property TrainModelCommand   As RelayCommand
+        Public ReadOnly Property AnalyseTrendCommand As RelayCommand
+        Public ReadOnly Property TestBuyCommand      As RelayCommand
+        Public ReadOnly Property TestSellCommand     As RelayCommand
 
         ' ── Constructor ──────────────────────────────────────────────────────
 
         Public Sub New(backtestService As IBacktestService,
-                       trainingService As IModelTrainingService)
+                       trainingService As IModelTrainingService,
+                       trendService As TrendAnalysisService,
+                       orderService As IOrderService,
+                       accountService As IAccountService)
             _backtestService = backtestService
             _trainingService = trainingService
+            _trendService    = trendService
+            _orderService    = orderService
+            _accountService  = accountService
 
-            RunCommand         = New RelayCommand(AddressOf ExecuteRun,        Function() CanRun)
-            CancelCommand      = New RelayCommand(AddressOf ExecuteCancel,     Function() CanCancel)
-            LoadHistoryCommand = New RelayCommand(AddressOf LoadPreviousRuns)
-            TrainModelCommand  = New RelayCommand(AddressOf ExecuteTrainModel, Function() CanTrain)
+            RunCommand          = New RelayCommand(AddressOf ExecuteRun,        Function() CanRun)
+            CancelCommand       = New RelayCommand(AddressOf ExecuteCancel,     Function() CanCancel)
+            LoadHistoryCommand  = New RelayCommand(AddressOf LoadPreviousRuns)
+            TrainModelCommand   = New RelayCommand(AddressOf ExecuteTrainModel, Function() CanTrain)
+            AnalyseTrendCommand = New RelayCommand(AddressOf ExecuteAnalyseTrend)
+            TestBuyCommand      = New RelayCommand(Sub() ExecuteTestTrade(OrderSide.Buy))
+            TestSellCommand     = New RelayCommand(Sub() ExecuteTestTrade(OrderSide.Sell))
 
             AddHandler _backtestService.ProgressUpdated, AddressOf OnProgress
+            AddHandler _orderService.OrderFilled,   AddressOf OnTestOrderFilled
+            AddHandler _orderService.OrderRejected, AddressOf OnTestOrderRejected
         End Sub
 
         Public Sub LoadDataAsync()
             LoadPreviousRuns()
+            Task.Run(AddressOf LoadAccountAsync)
         End Sub
 
-        ' ── Train Model ───────────────────────────────────────────────────────
+        Private Async Function LoadAccountAsync() As Task
+            Try
+                Dim accounts = Await _accountService.GetActiveAccountsAsync()
+                Dim first = accounts.FirstOrDefault()
+                If first IsNot Nothing Then _accountId = first.Id
+            Catch
+                ' Silently ignore — account will be 0 until resolved
+            End Try
+        End Function
+
+        ' ══════════════════════════════════════════════════════════════════════
+        '  TAB 3 — TREND ANALYSIS + TEST TRADE EXECUTION
+        ' ══════════════════════════════════════════════════════════════════════
+
+        Private Sub ExecuteAnalyseTrend()
+            Dim contractId = _testTradeContractId.Trim()
+            If String.IsNullOrEmpty(contractId) Then
+                TestTradeStatus = "Please enter a valid Contract ID."
+                Return
+            End If
+
+            TestTradeStatus = "Analysing trend (fetching past 24 bars)..."
+            HasTrendResult = False
+
+            Task.Run(Async Function()
+                         Try
+                             Dim result = Await _trendService.AnalyseTrendAsync(contractId, 24, BarTimeframe.OneHour)
+
+                             Dispatch(Sub()
+                                          UpProbabilityText   = $"{result.UpProbability:F1}%"
+                                          DownProbabilityText = $"{result.DownProbability:F1}%"
+                                          TrendEMA21Text      = result.EMA21.ToString("F2")
+                                          TrendEMA50Text      = result.EMA50.ToString("F2")
+                                          TrendRSI14Text      = result.RSI14.ToString("F1")
+                                          TrendLastCloseText  = result.LastClose.ToString("F2")
+                                          TrendSummaryText    = result.Summary
+
+                                          TrendSignals.Clear()
+                                          For Each s In result.Signals
+                                              TrendSignals.Add(s)
+                                          Next
+
+                                          HasTrendResult = True
+
+                                          Dim direction = If(result.UpProbability > result.DownProbability, "UP", "DOWN")
+                                          TestTradeStatus = $"Analysis complete — trend favours {direction} ({Math.Max(result.UpProbability, result.DownProbability):F1}%). " &
+                                                            $"Choose Test BUY or Test SELL below."
+                                      End Sub)
+                         Catch ex As Exception
+                             Dispatch(Sub() TestTradeStatus = $"Analysis error: {ex.Message}")
+                         End Try
+                     End Function)
+        End Sub
+
+        Private Sub ExecuteTestTrade(side As OrderSide)
+            Dim contractId = _testTradeContractId.Trim()
+            Dim qty As Integer
+            If String.IsNullOrEmpty(contractId) Then
+                TestTradeStatus = "Please enter a valid Contract ID." : Return
+            End If
+            If Not Integer.TryParse(_testTradeQuantity.Trim(), qty) OrElse qty <= 0 Then
+                TestTradeStatus = "Invalid quantity." : Return
+            End If
+            If _accountId = 0 Then
+                TestTradeStatus = "No active account found. Check Settings → API connection." : Return
+            End If
+
+            Dim order As New Order With {
+                .AccountId  = _accountId,
+                .ContractId = contractId,
+                .Side       = side,
+                .OrderType  = OrderType.Market,
+                .Quantity   = qty,
+                .Status     = OrderStatus.Pending,
+                .PlacedAt   = DateTimeOffset.UtcNow,
+                .Notes      = $"Test Trade ({side}) via Trend Analysis tab"
+            }
+
+            TestTradeStatus = $"Placing test {side} order for {qty}x {contractId}..."
+
+            Task.Run(Async Function()
+                         Try
+                             Dim placed = Await _orderService.PlaceOrderAsync(order)
+                             Dispatch(Sub()
+                                          TestTradeStatus = $"Test {side} order #{placed.Id} placed successfully for {qty}x {contractId}."
+                                      End Sub)
+                         Catch ex As Exception
+                             Dispatch(Sub() TestTradeStatus = $"Order error: {ex.Message}")
+                         End Try
+                     End Function)
+        End Sub
+
+        Private Sub OnTestOrderFilled(sender As Object, e As OrderFilledEventArgs)
+            Dispatch(Sub()
+                         TestTradeStatus = $"Order #{e.Order.Id} FILLED @ {e.Order.FillPrice:F2}"
+                     End Sub)
+        End Sub
+
+        Private Sub OnTestOrderRejected(sender As Object, e As OrderRejectedEventArgs)
+            Dispatch(Sub()
+                         TestTradeStatus = $"Order #{e.Order.Id} REJECTED: {e.Reason}"
+                     End Sub)
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════════
+        '  TAB 1 — TRAIN MODEL
+        ' ══════════════════════════════════════════════════════════════════════
 
         Private Sub ExecuteTrainModel()
             IsTraining   = True
@@ -297,7 +549,9 @@ Namespace TopStepTrader.UI.ViewModels
                      End Function)
         End Sub
 
-        ' ── Backtest Run ──────────────────────────────────────────────────────
+        ' ══════════════════════════════════════════════════════════════════════
+        '  TAB 1 — BACKTEST RUN
+        ' ══════════════════════════════════════════════════════════════════════
 
         Private Sub ExecuteRun()
             Dim contractId = _contractIdText.Trim()

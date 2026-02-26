@@ -209,5 +209,164 @@
             </Grid>
         </TabItem>
 
+        <!-- Tab 3: Test Trade — EMA/RSI Trend Analysis -->
+        <TabItem Header="🎯  Test Trade">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <Grid Margin="24,20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="16"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="16"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="16"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="16"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="16"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="🎯  Test Trade — EMA / RSI Trend Analysis"
+                               Style="{StaticResource PageTitleStyle}"/>
+
+                    <!-- Contract input -->
+                    <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}"
+                            CornerRadius="6" Padding="20,16">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="200"/>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0" Text="Contract ID:"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding TestTradeContractId, UpdateSourceTrigger=PropertyChanged}"
+                                     VerticalAlignment="Center"/>
+
+                            <TextBlock Grid.Column="3" Text="Quantity:"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBox Grid.Column="4"
+                                     Text="{Binding TestTradeQuantity, UpdateSourceTrigger=PropertyChanged}"
+                                     VerticalAlignment="Center"/>
+
+                            <Button Grid.Column="6"
+                                    Content="📊  Analyse Trend"
+                                    Command="{Binding AnalyseTrendCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    Width="160" HorizontalAlignment="Left"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Trend Analysis Results -->
+                    <Border Grid.Row="4" Background="{StaticResource CardBrush}"
+                            CornerRadius="6" Padding="20,16"
+                            Visibility="{Binding HasTrendResult, Converter={StaticResource BoolToVisibilityConverter}}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="16"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Probability display -->
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <StackPanel Margin="0,0,48,0" HorizontalAlignment="Center">
+                                    <TextBlock Text="UP PROBABILITY"
+                                               Style="{StaticResource SectionHeadingStyle}"
+                                               HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding UpProbabilityText}"
+                                               FontSize="36" FontWeight="Bold"
+                                               Foreground="{StaticResource BuyBrush}"
+                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="DOWN PROBABILITY"
+                                               Style="{StaticResource SectionHeadingStyle}"
+                                               HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding DownProbabilityText}"
+                                               FontSize="36" FontWeight="Bold"
+                                               Foreground="{StaticResource SellBrush}"
+                                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Indicator values -->
+                            <UniformGrid Grid.Row="2" Columns="4" HorizontalAlignment="Stretch">
+                                <StackPanel Margin="0,0,8,0">
+                                    <TextBlock Text="EMA 21" Style="{StaticResource SectionHeadingStyle}"/>
+                                    <TextBlock Text="{Binding TrendEMA21Text}"
+                                               Style="{StaticResource MetricValueStyle}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <StackPanel Margin="4,0,4,0">
+                                    <TextBlock Text="EMA 50" Style="{StaticResource SectionHeadingStyle}"/>
+                                    <TextBlock Text="{Binding TrendEMA50Text}"
+                                               Style="{StaticResource MetricValueStyle}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <StackPanel Margin="4,0,4,0">
+                                    <TextBlock Text="RSI 14" Style="{StaticResource SectionHeadingStyle}"/>
+                                    <TextBlock Text="{Binding TrendRSI14Text}"
+                                               Style="{StaticResource MetricValueStyle}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <StackPanel Margin="8,0,0,0">
+                                    <TextBlock Text="LAST CLOSE" Style="{StaticResource SectionHeadingStyle}"/>
+                                    <TextBlock Text="{Binding TrendLastCloseText}"
+                                               Style="{StaticResource MetricValueStyle}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </UniformGrid>
+
+                            <!-- Signal breakdown -->
+                            <ItemsControl Grid.Row="4" ItemsSource="{Binding TrendSignals}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="11" Margin="0,1,0,1"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </Border>
+
+                    <!-- Test BUY / Test SELL buttons -->
+                    <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Content="▲  Test BUY"
+                                Command="{Binding TestBuyCommand}"
+                                Style="{StaticResource BuyButtonStyle}"
+                                Width="180" Height="48" FontSize="16" FontWeight="Bold"
+                                Margin="0,0,24,0"/>
+                        <Button Content="▼  Test SELL"
+                                Command="{Binding TestSellCommand}"
+                                Style="{StaticResource SellButtonStyle}"
+                                Width="180" Height="48" FontSize="16" FontWeight="Bold"/>
+                    </StackPanel>
+
+                    <!-- Status -->
+                    <TextBlock Grid.Row="8"
+                               Text="{Binding TestTradeStatus}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="12" HorizontalAlignment="Center"/>
+
+                    <!-- Analysis summary -->
+                    <TextBlock Grid.Row="10"
+                               Text="{Binding TrendSummaryText}"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="11" TextWrapping="Wrap"
+                               HorizontalAlignment="Left"/>
+
+                </Grid>
+            </ScrollViewer>
+        </TabItem>
+
     </TabControl>
 </UserControl>

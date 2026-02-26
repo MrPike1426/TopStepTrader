@@ -44,6 +44,7 @@ Namespace TopStepTrader.Services
             ' ── Trading
             services.AddScoped(Of IOrderService, OrderService)()
             services.AddScoped(Of AutoExecutionService)()
+            services.AddScoped(Of TrendAnalysisService)()
 
             ' ── Backtest
             services.AddScoped(Of IBacktestService, BacktestEngine)()
