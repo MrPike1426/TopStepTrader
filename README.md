@@ -87,13 +87,25 @@ dotnet build
 dotnet run --project src/TopStepTrader.UI/TopStepTrader.UI.vbproj
 ```
 
+### TopStepX Account & API Key
+
+This application trades exclusively through **TopStepX** (powered by the ProjectX API).
+
+1. Create a TopStepX account at [https://www.topsteptrader.com](https://www.topsteptrader.com)
+2. Once your account is active, log in to the **TopStepX Member Portal**
+3. Navigate to **API / Developer Settings** and generate an API key
+4. Note down your **account email address** (username) and the generated **API key** — these are the only two credentials the application requires
+
+> **Practice vs Live:** TopStepX provides separate Practice (simulated) and Live (funded) account environments. The application will list all accounts available to your credentials on the Dashboard — select the appropriate one before starting any engine.
+
 ### Configuration
 
-1. Copy `appsettings.template.json` → `appsettings.json`
-2. Open **API Keys** (sidebar) and enter your TopStepX credentials
-3. On the **Dashboard**, select the active account — this context propagates to all engines
+1. Copy `src/TopStepTrader.UI/appsettings.template.json` → `src/TopStepTrader.UI/appsettings.json`
+2. Open the application and navigate to **API Keys** in the sidebar
+3. Enter your TopStepX **email address** and **API key**, then click Save
+4. On the **Dashboard**, select the active account — this context propagates to all engines
 
-Credentials are never stored in `appsettings.json`; they are managed by `ApiKeyStore`.
+Credentials are never stored in `appsettings.json`; they are saved to `%LOCALAPPDATA%\TopStepTrader\apikeys.json` on your local machine only.
 
 ---
 
