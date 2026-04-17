@@ -1,0 +1,463 @@
+<UserControl x:Class="TopStepTrader.UI.Views.ApiKeysView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource BackgroundBrush}">
+
+    <UserControl.Resources>
+        <!-- Dark-themed PasswordBox to match card background -->
+        <Style x:Key="DarkPasswordBoxStyle" TargetType="PasswordBox">
+            <Setter Property="Background"    Value="{StaticResource CardBrush}"/>
+            <Setter Property="Foreground"    Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="CaretBrush"    Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush"   Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"       Value="6,4"/>
+            <Setter Property="FontFamily"    Value="Segoe UI"/>
+            <Setter Property="FontSize"      Value="13"/>
+            <Setter Property="Height"        Value="32"/>
+        </Style>
+        <Style x:Key="DarkTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background"    Value="{StaticResource CardBrush}"/>
+            <Setter Property="Foreground"    Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="CaretBrush"    Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush"   Value="{StaticResource BorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding"       Value="6,4"/>
+            <Setter Property="FontFamily"    Value="Segoe UI"/>
+            <Setter Property="FontSize"      Value="13"/>
+            <Setter Property="Height"        Value="32"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <!-- Label column TextBox for future slot provider names -->
+        <Style x:Key="FutureLabelBoxStyle" TargetType="TextBox"
+               BasedOn="{StaticResource DarkTextBoxStyle}">
+            <Setter Property="Foreground"    Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="FontStyle"     Value="Italic"/>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="24,20" MaxWidth="900" HorizontalAlignment="Left">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="16"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="20"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="20"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="20"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- ── Title + Show/Hide toggle ──────────────────────────────────── -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="🔑  API Keys"
+                           Style="{StaticResource PageTitleStyle}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,20,16"/>
+                <Button Content="{Binding ShowKeysLabel}"
+                        Command="{Binding ToggleShowKeysCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        VerticalAlignment="Center"
+                        Padding="12,6"
+                        Margin="0,0,0,16"/>
+            </StackPanel>
+
+            <!-- ── Active Broker card ────────────────────────────────────────── -->
+            <Border Grid.Row="2"
+                    Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Padding="20,16">
+                <StackPanel>
+                    <TextBlock Text="ACTIVE BROKER" Style="{StaticResource SectionHeadingStyle}"/>
+                    <TextBlock Text="Select which broker is used for trading. The app routes orders, positions and market data through the selected broker."
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                               TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton Content="eToro (CFDs)"
+                                     IsChecked="{Binding IsEToroActive, Mode=TwoWay}"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     FontSize="13" FontWeight="SemiBold"
+                                     Margin="0,0,24,0" VerticalAlignment="Center"/>
+                        <RadioButton Content="TopStepX (Futures)"
+                                     IsChecked="{Binding IsTopStepXActive, Mode=TwoWay}"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     FontSize="13" FontWeight="SemiBold"
+                                     VerticalAlignment="Center"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ── Named Providers card ──────────────────────────────────────── -->
+            <Border Grid.Row="4"
+                    Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Padding="20,16">
+                <StackPanel>
+                    <TextBlock Text="NAMED PROVIDERS" Style="{StaticResource SectionHeadingStyle}"/>
+                    <TextBlock Text="Keys are stored locally in %LOCALAPPDATA%\TopStepTrader\apikeys.json and never committed to source control."
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                               TextWrapping="Wrap" Margin="0,0,0,16"/>
+
+                    <!-- eToro -->
+                    <StackPanel Margin="0,0,0,16">
+                        <TextBlock Text="eToro"
+                                   FontWeight="SemiBold" FontSize="12"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Margin="0,0,0,6"/>
+
+                        <!-- Account mode selector -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <TextBlock Text="Account:"
+                                       FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <RadioButton Content="Demo"
+                                         IsChecked="{Binding IsEtoroDemoSelected, Mode=TwoWay}"
+                                         Foreground="{StaticResource TextPrimaryBrush}"
+                                         FontSize="12" Margin="0,0,16,0"
+                                         VerticalAlignment="Center"/>
+                            <RadioButton Content="Live"
+                                         IsChecked="{Binding IsEtoroLiveSelected, Mode=TwoWay}"
+                                         Foreground="{StaticResource TextPrimaryBrush}"
+                                         FontSize="12"
+                                         VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- Row 1: Key name + API Key -->
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Key name"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,3"/>
+                                <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                         Text="{Binding EtoroKeyName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="API Key (x-api-key — shared across accounts)"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,3"/>
+                                <Grid>
+                                    <PasswordBox x:Name="pb_Etoro"
+                                                 Style="{StaticResource DarkPasswordBoxStyle}"
+                                                 Visibility="{Binding HideKeys, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                 PasswordChanged="pb_Etoro_PasswordChanged"/>
+                                    <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                             Text="{Binding EtoroApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Visibility="{Binding ShowKeys, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Row 2: Demo User Key + Live User Key -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Demo User Key (x-user-key)"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,3"/>
+                                <Grid>
+                                    <PasswordBox x:Name="pb_EtoroUser"
+                                                 Style="{StaticResource DarkPasswordBoxStyle}"
+                                                 Visibility="{Binding HideKeys, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                 PasswordChanged="pb_EtoroUser_PasswordChanged"/>
+                                    <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                             Text="{Binding EtoroUserKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Visibility="{Binding ShowKeys, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Live User Key (x-user-key)"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,3"/>
+                                <Grid>
+                                    <PasswordBox x:Name="pb_EtoroLiveUser"
+                                                 Style="{StaticResource DarkPasswordBoxStyle}"
+                                                 Visibility="{Binding HideKeys, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                 PasswordChanged="pb_EtoroLiveUser_PasswordChanged"/>
+                                    <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                             Text="{Binding EtoroLiveUserKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Visibility="{Binding ShowKeys, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- TopStepX -->
+                    <StackPanel Margin="0,0,0,16">
+                        <TextBlock Text="TopStepX"
+                                   FontWeight="SemiBold" FontSize="12"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Margin="0,0,0,6"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Account email"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,3"/>
+                                <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                         Text="{Binding TopStepXUsername, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="API Key"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,3"/>
+                                <Grid>
+                                    <PasswordBox x:Name="pb_TopStepX"
+                                                 Style="{StaticResource DarkPasswordBoxStyle}"
+                                                 Visibility="{Binding HideKeys, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                 PasswordChanged="pb_TopStepX_PasswordChanged"/>
+                                    <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                             Text="{Binding TopStepXApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Visibility="{Binding ShowKeys, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- Claude -->
+                    <StackPanel Margin="0,0,0,16">
+                        <TextBlock Text="Claude (Anthropic)"
+                                   FontWeight="SemiBold" FontSize="12"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Margin="0,0,0,6"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Organisation / Workspace ID (optional)"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,3"/>
+                                <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                         Text="{Binding ClaudeOrgId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="API Key"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,3"/>
+                                <Grid>
+                                    <PasswordBox x:Name="pb_Claude"
+                                                 Style="{StaticResource DarkPasswordBoxStyle}"
+                                                 Visibility="{Binding HideKeys, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                 PasswordChanged="pb_Claude_PasswordChanged"/>
+                                    <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                             Text="{Binding ClaudeApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Visibility="{Binding ShowKeys, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- Binance -->
+                    <StackPanel Margin="0,0,0,0">
+                        <TextBlock Text="Binance"
+                                   FontWeight="SemiBold" FontSize="12"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Margin="0,0,0,6"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="API Key"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,3"/>
+                                <Grid>
+                                    <PasswordBox x:Name="pb_Binance"
+                                                 Style="{StaticResource DarkPasswordBoxStyle}"
+                                                 Visibility="{Binding HideKeys, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                 PasswordChanged="pb_Binance_PasswordChanged"/>
+                                    <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                             Text="{Binding BinanceApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Visibility="{Binding ShowKeys, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Secret Key"
+                                           FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,3"/>
+                                <Grid>
+                                    <PasswordBox x:Name="pb_BinanceSecret"
+                                                 Style="{StaticResource DarkPasswordBoxStyle}"
+                                                 Visibility="{Binding HideKeys, Converter={StaticResource BoolToVisibilityConverter}}"
+                                                 PasswordChanged="pb_BinanceSecret_PasswordChanged"/>
+                                    <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                             Text="{Binding BinanceSecretKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Visibility="{Binding ShowKeys, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ── Future Slots card ─────────────────────────────────────────── -->
+            <Border Grid.Row="6"
+                    Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Padding="20,16">
+                <StackPanel>
+                    <TextBlock Text="FUTURE SLOTS" Style="{StaticResource SectionHeadingStyle}"/>
+                    <TextBlock Text="Reserved for future integrations. Edit the label on the left to name each provider when ready."
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                               TextWrapping="Wrap" Margin="0,0,0,16"/>
+
+                    <!-- Column header hint -->
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Provider name"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="10" Opacity="0.6"/>
+                        <TextBlock Grid.Column="1" Text="Username / Email"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="10" Opacity="0.6"/>
+                        <TextBlock Grid.Column="3" Text="API Key"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="10" Opacity="0.6"/>
+                    </Grid>
+
+                    <!-- Future 1 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Style="{StaticResource FutureLabelBoxStyle}"
+                                 Text="{Binding Future1Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,8,0"/>
+                        <TextBox Grid.Column="1"
+                                 Style="{StaticResource DarkTextBoxStyle}"
+                                 Text="{Binding Future1Username, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Grid Grid.Column="3">
+                            <PasswordBox x:Name="pb_Future1"
+                                         Style="{StaticResource DarkPasswordBoxStyle}"
+                                         Visibility="{Binding HideKeys, Converter={StaticResource BoolToVisibilityConverter}}"
+                                         PasswordChanged="pb_Future1_PasswordChanged"/>
+                            <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                     Text="{Binding Future1Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Visibility="{Binding ShowKeys, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Future 2 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Style="{StaticResource FutureLabelBoxStyle}"
+                                 Text="{Binding Future2Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,8,0"/>
+                        <TextBox Grid.Column="1"
+                                 Style="{StaticResource DarkTextBoxStyle}"
+                                 Text="{Binding Future2Username, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Grid Grid.Column="3">
+                            <PasswordBox x:Name="pb_Future2"
+                                         Style="{StaticResource DarkPasswordBoxStyle}"
+                                         Visibility="{Binding HideKeys, Converter={StaticResource BoolToVisibilityConverter}}"
+                                         PasswordChanged="pb_Future2_PasswordChanged"/>
+                            <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                     Text="{Binding Future2Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Visibility="{Binding ShowKeys, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Future 3 -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Style="{StaticResource FutureLabelBoxStyle}"
+                                 Text="{Binding Future3Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,8,0"/>
+                        <TextBox Grid.Column="1"
+                                 Style="{StaticResource DarkTextBoxStyle}"
+                                 Text="{Binding Future3Username, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Grid Grid.Column="3">
+                            <PasswordBox x:Name="pb_Future3"
+                                         Style="{StaticResource DarkPasswordBoxStyle}"
+                                         Visibility="{Binding HideKeys, Converter={StaticResource BoolToVisibilityConverter}}"
+                                         PasswordChanged="pb_Future3_PasswordChanged"/>
+                            <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                     Text="{Binding Future3Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Visibility="{Binding ShowKeys, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Future 4 -->
+                    <Grid Margin="0,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0"
+                                 Style="{StaticResource FutureLabelBoxStyle}"
+                                 Text="{Binding Future4Label, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,8,0"/>
+                        <TextBox Grid.Column="1"
+                                 Style="{StaticResource DarkTextBoxStyle}"
+                                 Text="{Binding Future4Username, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Grid Grid.Column="3">
+                            <PasswordBox x:Name="pb_Future4"
+                                         Style="{StaticResource DarkPasswordBoxStyle}"
+                                         Visibility="{Binding HideKeys, Converter={StaticResource BoolToVisibilityConverter}}"
+                                         PasswordChanged="pb_Future4_PasswordChanged"/>
+                            <TextBox Style="{StaticResource DarkTextBoxStyle}"
+                                     Text="{Binding Future4Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     Visibility="{Binding ShowKeys, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        </Grid>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- ── Save bar ───────────────────────────────────────────────────── -->
+            <StackPanel Grid.Row="8" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="💾  Save Keys"
+                        Command="{Binding SaveCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Padding="20,8"
+                        Margin="0,0,16,0"/>
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           FontSize="12"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+
+        </Grid>
+    </ScrollViewer>
+</UserControl>

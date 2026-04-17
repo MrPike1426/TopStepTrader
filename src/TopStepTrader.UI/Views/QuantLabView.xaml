@@ -1,0 +1,666 @@
+<UserControl x:Class="TopStepTrader.UI.Views.QuantLabView"
+             xmlns:controls="clr-namespace:TopStepTrader.UI.Controls"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
+             mc:Ignorable="d"
+             Background="{StaticResource BackgroundBrush}">
+
+    <UserControl.Resources>
+
+        <!-- ── Dark DatePicker (copy from BacktestView — same theme requirement) ── -->
+        <Style TargetType="DatePickerTextBox">
+            <Setter Property="Foreground"               Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="Background"               Value="Transparent"/>
+            <Setter Property="BorderThickness"          Value="0"/>
+            <Setter Property="CaretBrush"               Value="{StaticResource AccentBrush}"/>
+            <Setter Property="SelectionBrush"           Value="{StaticResource AccentBrush}"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DatePickerTextBox">
+                        <Grid>
+                            <ContentControl x:Name="PART_Watermark"
+                                            Foreground="#66E0E0F0" IsHitTestVisible="False"
+                                            Padding="4,0" VerticalAlignment="Center"
+                                            Visibility="Collapsed"/>
+                            <ScrollViewer x:Name="PART_ContentHost"
+                                          Margin="4,0" VerticalAlignment="Center"
+                                          Foreground="{TemplateBinding Foreground}"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding Path=SelectedDate,
+                                                           RelativeSource={RelativeSource AncestorType={x:Type DatePicker}}}"
+                                         Value="{x:Null}">
+                                <Setter TargetName="PART_Watermark" Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="Calendar">
+            <Setter Property="Background"   Value="#FF243156"/>
+            <Setter Property="Foreground"   Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush"  Value="#FF2E3F6E"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Calendar">
+                        <StackPanel HorizontalAlignment="Center">
+                            <CalendarItem x:Name="PART_CalendarItem"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          Foreground="{TemplateBinding Foreground}"/>
+                        </StackPanel>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="CalendarItem">
+            <Setter Property="Background" Value="#FF243156"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="#FF2E3F6E"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style TargetType="CalendarDayButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CalendarDayButton">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <TextBlock Text="{TemplateBinding Content}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#332E3F6E"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#FF2E3F6E"/>
+                                <Setter Property="Foreground" Value="#FFFF9500"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                            <Trigger Property="IsBlackedOut" Value="True">
+                                <Setter Property="Foreground" Value="#66888888"/>
+                                <Setter Property="IsEnabled" Value="False"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="DarkDatePickerStyle" TargetType="DatePicker">
+            <Setter Property="Background"      Value="#FF243156"/>
+            <Setter Property="Foreground"      Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="BorderBrush"     Value="#FF2E3F6E"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontFamily"      Value="Segoe UI"/>
+            <Setter Property="FontSize"        Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DatePicker">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="26"/>
+                                </Grid.ColumnDefinitions>
+                                <DatePickerTextBox x:Name="PART_TextBox"
+                                                   Grid.Column="0"
+                                                   Foreground="{TemplateBinding Foreground}"
+                                                   Background="Transparent"
+                                                   BorderThickness="0"
+                                                   Padding="6,0"
+                                                   VerticalContentAlignment="Center"/>
+                                <Button x:Name="PART_Button"
+                                        Grid.Column="1" Focusable="False"
+                                        VerticalAlignment="Stretch"
+                                        HorizontalAlignment="Stretch">
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="BtnBd" Background="Transparent" CornerRadius="0,3,3,0">
+                                                <Path Data="M0,0 L4,5 L8,0 Z"
+                                                      Fill="#FFE0E0F0"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="BtnBd" Property="Background" Value="#332E3F6E"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                </Button>
+                                <Popup x:Name="PART_Popup" AllowsTransparency="True"
+                                       Placement="Bottom" StaysOpen="False"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── QuantLab Strategy Card style ─────────────────────────────────── -->
+        <!--  Each card represents one research strategy. Normal = dark border.
+              When IsSelected = True → accent-colour border + lighter fill.
+              Hover state adds a subtle highlight ring.  -->
+        <Style x:Key="QuantCardStyle" TargetType="Border">
+            <Setter Property="Background"      Value="{StaticResource CardBrush}"/>
+            <Setter Property="BorderBrush"     Value="#FF2E3F6E"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius"    Value="6"/>
+            <Setter Property="Padding"         Value="14,12"/>
+            <Setter Property="Cursor"          Value="Hand"/>
+        </Style>
+
+        <!-- ── DataGrid shared styles ─────────────────────────────────────────── -->
+        <Style x:Key="QLGridHeaderStyle" TargetType="DataGridColumnHeader">
+            <Setter Property="Background"   Value="Transparent"/>
+            <Setter Property="Foreground"   Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="FontSize"     Value="9"/>
+            <Setter Property="Padding"      Value="4,3"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style x:Key="QLGridCellStyle" TargetType="DataGridCell">
+            <Setter Property="Background"       Value="Transparent"/>
+            <Setter Property="BorderThickness"  Value="0"/>
+            <Setter Property="Padding"          Value="4,2"/>
+            <Setter Property="Foreground"       Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="24,20,24,24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>   <!-- 0: Page title -->
+                <RowDefinition Height="16"/>     <!-- 1: spacer -->
+                <RowDefinition Height="Auto"/>   <!-- 2: Strategy cards -->
+                <RowDefinition Height="10"/>     <!-- 3: spacer -->
+                <RowDefinition Height="Auto"/>   <!-- 4: Selected strategy description -->
+                <RowDefinition Height="12"/>     <!-- 5: spacer -->
+                <RowDefinition Height="Auto"/>   <!-- 6: Configuration form -->
+                <RowDefinition Height="10"/>     <!-- 7: spacer -->
+                <RowDefinition Height="Auto"/>   <!-- 8: Action buttons + status -->
+                <RowDefinition Height="6"/>      <!-- 9: spacer -->
+                <RowDefinition Height="Auto"/>   <!-- 10: Progress bar -->
+                <RowDefinition Height="16"/>     <!-- 11: spacer -->
+                <RowDefinition Height="Auto"/>   <!-- 12: Results metrics -->
+                <RowDefinition Height="10"/>     <!-- 13: spacer -->
+                <RowDefinition Height="Auto"/>   <!-- 14: Info note -->
+                <RowDefinition Height="10"/>     <!-- 15: spacer -->
+                <RowDefinition Height="*"/>      <!-- 16: Trade list -->
+            </Grid.RowDefinitions>
+
+            <!-- ── Row 0: Page title ──────────────────────────────────────────── -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal">
+                <TextBlock Text="🧪  QuantLab — Strategy Research"
+                           Style="{StaticResource PageTitleStyle}" Margin="0"/>
+                <Border Background="#1A27AE60" CornerRadius="4"
+                        Padding="8,3" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="RESEARCH MODE · BACKTESTING ONLY"
+                               Foreground="{StaticResource AccentBrush}"
+                               FontSize="9" FontWeight="SemiBold"/>
+                </Border>
+            </StackPanel>
+
+            <!-- ── Row 2: Strategy cards ─────────────────────────────────────── -->
+            <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Padding="20,16">
+                <StackPanel>
+                    <TextBlock Text="SELECT STRATEGY"
+                               Style="{StaticResource SectionHeadingStyle}"
+                               Margin="0,0,0,10"/>
+
+                    <!-- Four strategy cards in a 4-column uniform grid -->
+                    <ItemsControl ItemsSource="{Binding StrategyCards}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="4"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border x:Name="CardBorder"
+                                                Margin="0,0,8,0">
+                                            <Border.InputBindings>
+                                                <MouseBinding MouseAction="LeftClick"
+                                                              Command="{Binding DataContext.SelectCardCommand,
+                                                                        RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                              CommandParameter="{Binding}"/>
+                                            </Border.InputBindings>
+                                            <StackPanel>
+                                                <!-- Emoji + Name -->
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                    <TextBlock Text="{Binding Emoji}"
+                                                               FontSize="18" Margin="0,0,8,0"
+                                                               VerticalAlignment="Center"/>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Name}"
+                                                                   FontWeight="SemiBold" FontSize="13"
+                                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                        <TextBlock Text="{Binding Subtitle}"
+                                                                   FontSize="10" Margin="0,1,0,0"
+                                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <!-- Performance badge row -->
+                                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                                    <Border Background="#1A00C851" CornerRadius="3"
+                                                            Padding="5,2" Margin="0,0,6,0">
+                                                        <StackPanel>
+                                                            <TextBlock Text="WIN RATE"
+                                                                       FontSize="8"
+                                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                            <TextBlock Text="{Binding WinRateRange}"
+                                                                       FontSize="11" FontWeight="SemiBold"
+                                                                       Foreground="#FF00C851"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <Border Background="#1A4A9FFF" CornerRadius="3"
+                                                            Padding="5,2">
+                                                        <StackPanel>
+                                                            <TextBlock Text="SHARPE"
+                                                                       FontSize="8"
+                                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                            <TextBlock Text="{Binding SharpeRange}"
+                                                                       FontSize="11" FontWeight="SemiBold"
+                                                                       Foreground="{StaticResource TextHeaderBrush}"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <!-- Selected / hover triggers -->
+                                            <Border.Style>
+                                                <Style TargetType="Border" BasedOn="{StaticResource QuantCardStyle}">
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="BorderBrush" Value="#FF3A5080"/>
+                                                            <Setter Property="Background"  Value="#FF2A3A60"/>
+                                                        </Trigger>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                                            <Setter Property="Background"  Value="#1A27AE60"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                    </StackPanel>
+            </Border>
+
+            <!-- ── Row 4: Selected strategy description ───────────────────────── -->
+            <Border Grid.Row="4"
+                    Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Padding="20,14"
+                    Visibility="{Binding HasSelectedStrategy,
+                                 Converter={StaticResource BoolToVisibilityConverter}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Strategy emoji + name header -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center"
+                                Margin="0,0,20,0">
+                        <TextBlock Text="{Binding SelectedCard.Emoji}"
+                                   FontSize="22" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding SelectedCard.Name}"
+                                       FontSize="15" FontWeight="Bold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock Text="{Binding SelectedCard.Subtitle}"
+                                       FontSize="11"
+                                       Foreground="{StaticResource AccentBrush}"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Description text -->
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding SelectedCard.Description}"
+                               FontSize="12" TextWrapping="Wrap"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               VerticalAlignment="Center"/>
+
+                    <!-- Academic metrics pill -->
+                    <Border Grid.Column="2" Background="{StaticResource CardBrush}"
+                            CornerRadius="6" Padding="12,8" Margin="16,0,0,0"
+                            VerticalAlignment="Center">
+                        <StackPanel>
+                            <TextBlock Text="ACADEMIC BENCHMARKS"
+                                       Style="{StaticResource SectionHeadingStyle}"
+                                       Margin="0,0,0,4"/>
+                            <StackPanel Orientation="Horizontal">
+                                <StackPanel Margin="0,0,16,0">
+                                    <TextBlock Text="Win Rate"
+                                               FontSize="10"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Text="{Binding SelectedCard.WinRateRange}"
+                                               FontSize="14" FontWeight="Bold"
+                                               Foreground="#FF00C851"/>
+                                </StackPanel>
+                                <StackPanel>
+                                    <TextBlock Text="Sharpe"
+                                               FontSize="10"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Text="{Binding SelectedCard.SharpeRange}"
+                                               FontSize="14" FontWeight="Bold"
+                                               Foreground="{StaticResource TextHeaderBrush}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- ── Row 6: Configuration form ─────────────────────────────────── -->
+            <Border Grid.Row="6" Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Padding="20,16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="145"/>   <!-- label -->
+                        <ColumnDefinition Width="*"/>     <!-- left value -->
+                        <ColumnDefinition Width="32"/>    <!-- gap -->
+                        <ColumnDefinition Width="145"/>   <!-- label -->
+                        <ColumnDefinition Width="*"/>     <!-- right value -->
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>  <!-- 0: Contract -->
+                        <RowDefinition Height="10"/>
+                        <RowDefinition Height="Auto"/>  <!-- 2: Capital / Qty -->
+                        <RowDefinition Height="10"/>
+                        <RowDefinition Height="Auto"/>  <!-- 4: Start Date | End Date -->
+                        <RowDefinition Height="10"/>
+                        <RowDefinition Height="Auto"/>  <!-- 6: Interval -->
+                    </Grid.RowDefinitions>
+
+                    <!-- Row 0 — Contract ────────────────────────────────────── -->
+                    <TextBlock Grid.Row="0" Grid.Column="0"
+                               Text="Contract:"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <controls:ContractSelectorControl
+                               Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="4"
+                               ContractId="{Binding ContractIdText, Mode=TwoWay,
+                                           UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <!-- Row 2 — Capital / Qty ────────────────────────────────── -->
+                    <TextBlock Grid.Row="2" Grid.Column="0"
+                               Text="Capital ($) / Qty:"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                        <TextBox Text="{Binding InitialCapital, UpdateSourceTrigger=PropertyChanged}"
+                                 Width="80" ToolTip="Initial capital in USD"/>
+                        <TextBox Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}"
+                                 Width="50" Margin="8,0,0,0" ToolTip="Contracts per signal"/>
+                    </StackPanel>
+
+                    <!-- Row 2 — Interval ─────────────────────────────────────── -->
+                    <TextBlock Grid.Row="2" Grid.Column="3"
+                               Text="Interval:"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <ComboBox Grid.Row="2" Grid.Column="4"
+                              ItemsSource="{Binding AvailableIntervals}"
+                              SelectedItem="{Binding SelectedInterval, Mode=TwoWay,
+                                            UpdateSourceTrigger=PropertyChanged}"
+                              Style="{StaticResource UnclippedComboBoxStyle}"
+                              ItemContainerStyle="{StaticResource DarkComboBoxItemStyle}"
+                              ToolTip="Bar timeframe. ConnorsRsi2/SuperTrend work best on daily bars.">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" Foreground="White" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <!-- Row 4 — Start Date | End Date ────────────────────────── -->
+                    <TextBlock Grid.Row="4" Grid.Column="0"
+                               Text="Start Date:"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <DatePicker Grid.Row="4" Grid.Column="1"
+                                SelectedDate="{Binding StartDate}"
+                                Style="{StaticResource DarkDatePickerStyle}"/>
+
+                    <TextBlock Grid.Row="4" Grid.Column="3"
+                               Text="End Date:"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <DatePicker Grid.Row="4" Grid.Column="4"
+                                SelectedDate="{Binding EndDate}"
+                                Style="{StaticResource DarkDatePickerStyle}"/>
+
+                    <!-- Row 6 — Strategy hint ────────────────────────────────── -->
+                    <TextBlock Grid.Row="6" Grid.Column="0"
+                               Text="Selected Strategy:"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <TextBlock Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="4"
+                               Text="{Binding SelectedStrategyName}"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource AccentBrush}"
+                               FontFamily="Consolas" FontSize="13"
+                               FontWeight="SemiBold"/>
+                </Grid>
+            </Border>
+
+            <!-- ── Row 8: Action buttons + status ────────────────────────────── -->
+            <Grid Grid.Row="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0"
+                        Content="▶  Run Backtest"
+                        Command="{Binding RunCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Width="160"
+                        ToolTip="Download bars if needed, then replay the selected strategy against historical data"/>
+
+                <Button Grid.Column="1"
+                        Content="⏹  Cancel"
+                        Command="{Binding CancelCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Width="100" Margin="10,0,0,0"
+                        ToolTip="Cancel the running backtest"
+                        Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                <Button Grid.Column="2"
+                        Content="📊  Export CSV"
+                        Command="{Binding ExportCsvCommand}"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Width="120" Margin="10,0,0,0"
+                        ToolTip="Export trade list to CSV"
+                        Visibility="{Binding HasResults, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                <TextBlock Grid.Column="3"
+                           Text="{Binding StatusText}"
+                           VerticalAlignment="Center"
+                           Margin="16,0,0,0"
+                           FontFamily="Consolas" FontSize="11"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           TextTrimming="CharacterEllipsis"/>
+            </Grid>
+
+            <!-- ── Row 10: Progress bar ───────────────────────────────────────── -->
+            <ProgressBar Grid.Row="10" Height="4"
+                         Value="{Binding ProgressPct}" Maximum="100"
+                         Visibility="{Binding IsRunning,
+                                     Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+            <!-- ── Row 12: Results metrics ────────────────────────────────────── -->
+            <Border Grid.Row="12"
+                    Background="{StaticResource CardBrush}"
+                    CornerRadius="6" Padding="16,14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Total Trades -->
+                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
+                        <TextBlock Text="TRADES" Style="{StaticResource SectionHeadingStyle}"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding TotalTrades}"
+                                   Style="{StaticResource MetricValueStyle}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Win Rate -->
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Center">
+                        <TextBlock Text="WIN RATE" Style="{StaticResource SectionHeadingStyle}"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding WinRate}"
+                                   Style="{StaticResource MetricValueStyle}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Total P&L -->
+                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
+                        <TextBlock Text="TOTAL P&amp;L" Style="{StaticResource SectionHeadingStyle}"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding TotalPnL}"
+                                   Style="{StaticResource MetricValueStyle}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Final Capital -->
+                    <StackPanel Grid.Column="3" HorizontalAlignment="Center">
+                        <TextBlock Text="FINAL CAPITAL" Style="{StaticResource SectionHeadingStyle}"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding FinalCapital}"
+                                   Style="{StaticResource MetricValueStyle}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Max Drawdown -->
+                    <StackPanel Grid.Column="4" HorizontalAlignment="Center">
+                        <TextBlock Text="MAX DRAWDOWN" Style="{StaticResource SectionHeadingStyle}"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding MaxDrawdown}"
+                                   Style="{StaticResource MetricValueStyle}"
+                                   Foreground="{StaticResource SellBrush}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Sharpe -->
+                    <StackPanel Grid.Column="5" HorizontalAlignment="Center">
+                        <TextBlock Text="SHARPE" Style="{StaticResource SectionHeadingStyle}"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding Sharpe}"
+                                   Style="{StaticResource MetricValueStyle}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Avg P&L / Trade -->
+                    <StackPanel Grid.Column="6" HorizontalAlignment="Center">
+                        <TextBlock Text="AVG P&amp;L / TRADE" Style="{StaticResource SectionHeadingStyle}"
+                                   HorizontalAlignment="Center"/>
+                        <TextBlock Text="{Binding AvgPnL}"
+                                   Style="{StaticResource MetricValueStyle}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ── Row 14: Info note ──────────────────────────────────────────── -->
+            <TextBlock Grid.Row="14"
+                       FontFamily="Consolas" FontSize="10" TextWrapping="Wrap"
+                       Foreground="{StaticResource TextSecondaryBrush}">
+                <Run Text="ℹ  Academic benchmarks are based on published strategy research. "/>
+                <Run Text="Actual results depend on the contract, timeframe, and date range selected. "/>
+                <Run Text="ConnorsRsi2 and BB+RSI Reversion work best on daily bars; SuperTrend and Donchian work on 15-min or higher."
+                     FontStyle="Italic"/>
+            </TextBlock>
+
+            <!-- ── Row 16: Trade list ─────────────────────────────────────────── -->
+            <DataGrid Grid.Row="16"
+                      ItemsSource="{Binding Trades}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserSortColumns="True"
+                      CanUserResizeRows="False"
+                      HeadersVisibility="Column"
+                      GridLinesVisibility="None"
+                      Background="Transparent"
+                      RowBackground="Transparent"
+                      AlternatingRowBackground="#0AFFFFFF"
+                      BorderThickness="0"
+                      FontFamily="Consolas" FontSize="10"
+                      Foreground="{StaticResource TextPrimaryBrush}"
+                      Visibility="{Binding HasResults,
+                                   Converter={StaticResource BoolToVisibilityConverter}}">
+                <DataGrid.ColumnHeaderStyle>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background"      Value="Transparent"/>
+                        <Setter Property="Foreground"      Value="{StaticResource TextSecondaryBrush}"/>
+                        <Setter Property="FontSize"        Value="9"/>
+                        <Setter Property="Padding"         Value="4,3"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                    </Style>
+                </DataGrid.ColumnHeaderStyle>
+                <DataGrid.CellStyle>
+                    <Style TargetType="DataGridCell">
+                        <Setter Property="Background"       Value="Transparent"/>
+                        <Setter Property="BorderThickness"  Value="0"/>
+                        <Setter Property="Padding"          Value="4,2"/>
+                        <Setter Property="Foreground"       Value="{StaticResource TextPrimaryBrush}"/>
+                        <Setter Property="VerticalAlignment" Value="Center"/>
+                    </Style>
+                </DataGrid.CellStyle>
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Grp"         Binding="{Binding PositionGroupId}" Width="44"/>
+                    <DataGridTextColumn Header="Entry Time"   Binding="{Binding EntryTime,  StringFormat=\{0:yyyy-MM-dd HH:mm\}}"  Width="130"/>
+                    <DataGridTextColumn Header="Exit Time"    Binding="{Binding ExitTime,   StringFormat=\{0:yyyy-MM-dd HH:mm\}}"  Width="130"/>
+                    <DataGridTextColumn Header="Side"         Binding="{Binding Side}"        Width="55"/>
+                    <DataGridTextColumn Header="Entry Price"  Binding="{Binding EntryPrice,  StringFormat=F4}" Width="90"/>
+                    <DataGridTextColumn Header="Exit Price"   Binding="{Binding ExitPrice,   StringFormat=F4}" Width="90"/>
+                    <DataGridTextColumn Header="P&amp;L ($)"  Binding="{Binding PnL,         StringFormat=F2}" Width="80"/>
+                    <DataGridTextColumn Header="Exit Reason"  Binding="{Binding ExitReason}"  Width="100"/>
+                    <DataGridTextColumn Header="Qty"          Binding="{Binding Quantity}"     Width="45"/>
+                    <DataGridTextColumn Header="Confidence"   Binding="{Binding SignalConfidence, StringFormat=P0}" Width="*"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+        </Grid>
+    </ScrollViewer>
+</UserControl>

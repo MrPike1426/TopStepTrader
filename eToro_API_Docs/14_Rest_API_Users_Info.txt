@@ -1,0 +1,1575 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Retrieve comprehensive user profile data and aggregated account information
+
+> Returns detailed user profile information including account status, verification levels, biographical data, and associated metadata. This endpoint aggregates essential user information from multiple sources to provide a complete user profile overview.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/user-info/people
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/user-info/people:
+    get:
+      tags:
+        - Users Info
+      summary: >-
+        Retrieve comprehensive user profile data and aggregated account
+        information
+      description: >-
+        Returns detailed user profile information including account status,
+        verification levels, biographical data, and associated metadata. This
+        endpoint aggregates essential user information from multiple sources to
+        provide a complete user profile overview.
+      operationId: get_api_v1_user-info_people
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 858da930-1f1f-4583-a031-ae1103cbba74
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: usernames
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          explode: false
+          required: false
+        - name: cidList
+          in: query
+          schema:
+            type: array
+            items:
+              type: integer
+          explode: false
+          required: false
+      responses:
+        '200':
+          description: Successfully retrieved user information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicAggregatedInfoResponse'
+              example:
+                users:
+                  - gcid: 1536861
+                    realCID: 1563191
+                    demoCID: 1563191
+                    username: exampleuser
+                    language: 1
+                    languageIsoCode: en-GB
+                    country: 54
+                    allowDisplayFullName: false
+                    userBio:
+                      gcid: 1536861
+                      languageCode: null
+                    whiteLabel: 1
+                    optOut: true
+                    homepage: null
+                    playerStatus: null
+                    piLevel: 0
+                    isPi: false
+                    avatars:
+                      - url: >-
+                          https://openbook-static-files-test.s3.amazonaws.com/images/avatoros/35x35/cy.png
+                        width: 35
+                        height: 35
+                        type: Resized
+                      - url: >-
+                          https://openbook-static-files-test.s3.amazonaws.com/images/avatoros/50x50/cy.png
+                        width: 50
+                        height: 50
+                        type: Resized
+                      - url: >-
+                          https://openbook-static-files-test.s3.amazonaws.com/images/avatoros/150x150/cy.png
+                        width: 150
+                        height: 150
+                        type: Resized
+                    masterAccountCid: null
+                    accountType: 1
+                    fundType: null
+                    isVerified: false
+                    verificationLevel: 1
+                    accountStatus: 1
+                    gdprInfo: null
+                    userFlowSignature: >-
+                      233a065f3f8d7e344516fc75f7e6c4646a0c0d38798c00e4655fa0a9447ea223
+        '400':
+          description: >-
+            Invalid request - Typically due to exceeding maximum usernames limit
+            or invalid username format
+        '404':
+          description: One or more requested usernames not found
+components:
+  schemas:
+    PublicAggregatedInfoResponse:
+      type: object
+      description: Container for the aggregated user information response
+      properties:
+        Users:
+          type: array
+          description: Array of user profiles with their associated information
+          items:
+            $ref: '#/components/schemas/PublicAggregatedInfoUser'
+    PublicAggregatedInfoUser:
+      type: object
+      description: >-
+        Comprehensive user profile information including account details,
+        verification status, and preferences
+      properties:
+        gcid:
+          type: integer
+          description: Global Customer ID - Unique identifier across all systems
+        realCID:
+          type: integer
+          description: Customer ID for real trading account
+        demoCID:
+          type: integer
+          nullable: true
+          description: Customer ID for demo/practice account if available
+        username:
+          type: string
+          description: Unique username identifier for the user
+        language:
+          type: integer
+          nullable: true
+          description: User's preferred language ID based on system language codes
+        languageIsoCode:
+          type: string
+          description: ISO 639-1 language code for user's preferred language
+        country:
+          type: integer
+          nullable: true
+          description: User's registered country ID based on system country codes
+        allowDisplayFullName:
+          type: boolean
+          description: >-
+            Indicates whether the user has consented to displaying their full
+            name publicly
+        userBio:
+          $ref: '#/components/schemas/PublicAggregatedInfoUiUserBio'
+          description: Structured biographical information including trading strategy
+        whiteLabel:
+          type: integer
+          nullable: true
+          description: White label partner identifier if user belongs to a partner program
+        optOut:
+          type: boolean
+          description: Indicates if user has opted out of public profile features
+        homepage:
+          type: integer
+          nullable: true
+        playerStatus:
+          type: integer
+          nullable: true
+        piLevel:
+          type: integer
+          nullable: true
+        isPi:
+          type: boolean
+          description: Indicates if user is a Professional Investor with special privileges
+        avatars:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicAggregatedInfoUiUserAvatar'
+        masterAccountCid:
+          type: integer
+          nullable: true
+        accountType:
+          type: integer
+          nullable: true
+        fundType:
+          type: string
+          nullable: true
+        isVerified:
+          type: boolean
+        verificationLevel:
+          type: integer
+          description: User's current verification level (0-3, where 3 is fully verified)
+        accountStatus:
+          type: integer
+          nullable: true
+          description: >-
+            Current account status code indicating active, suspended, or other
+            states
+        gdprInfo:
+          type: object
+          properties:
+            accountStatus:
+              $ref: '#/components/schemas/PublicAggregatedInfoAccountStatus'
+            playerStatus:
+              $ref: '#/components/schemas/PublicAggregatedInfoPlayerStatus'
+            playerStatusReason:
+              $ref: '#/components/schemas/PublicAggregatedInfoPlayerStatusReason'
+        userFlowSignature:
+          type: string
+    PublicAggregatedInfoUiUserBio:
+      type: object
+      properties:
+        gcid:
+          type: integer
+        languageCode:
+          type: string
+          nullable: true
+    PublicAggregatedInfoUiUserAvatar:
+      type: object
+      properties:
+        url:
+          type: string
+        width:
+          type: string
+        height:
+          type: string
+        avatarType:
+          type: integer
+          enum:
+            - 1
+            - 2
+            - 3
+            - 4
+          x-enumNames:
+            - Original
+            - OriginalCropped
+            - Resized
+            - Retouched
+    PublicAggregatedInfoAccountStatus:
+      type: integer
+      enum:
+        - 1
+        - 2
+      x-enumNames:
+        - Open
+        - Closed
+      nullable: true
+    PublicAggregatedInfoPlayerStatus:
+      type: integer
+      enum:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+      x-enumNames:
+        - Normal
+        - Blocked
+        - ChatBlocked
+        - BlockedUponRequest
+        - Warning
+        - BlockedUnderInvestigation
+        - ScalpersBlock
+        - BlockedPayPalInvestigation
+        - TradeBlock
+        - DepositBlocked
+        - SocialIndex
+        - CopyBlock
+        - PendingVerification
+        - BlockedFailedVerification
+        - BlockTrading
+      nullable: true
+    PublicAggregatedInfoPlayerStatusReason:
+      type: integer
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+        - 16
+        - 17
+        - 18
+        - 19
+        - 20
+        - 21
+        - 22
+        - 23
+        - 24
+        - 25
+        - 26
+        - 27
+        - 28
+        - 29
+        - 30
+        - 31
+        - 32
+        - 33
+        - 34
+        - 35
+        - 36
+        - 37
+        - 38
+        - 39
+        - 40
+        - 41
+        - 42
+      x-enumNames:
+        - None
+        - FailedVerification
+        - ExpiredDocument
+        - CloseAccountByUser
+        - Risk
+        - Chargeback
+        - AMLAccountClosed
+        - HRC
+        - Underage
+        - Deceased
+        - AML
+        - AMLreview
+        - OffMarketAbuse
+        - Overpayment
+        - RiskCheck
+        - ThirdParty
+        - PayPalInvestigation
+        - NOC_NOF_RFI
+        - WCHMatch
+        - Other
+        - RightToBeForgotten
+        - SelfService
+        - ByRequest
+        - ACHChargeback
+        - PWMBChargeback
+        - Abuse
+        - AffiliateAccount
+        - PendingDocs
+        - EmployeeAccount
+        - PIAccount
+        - CheckoutChargeback
+        - CheckoutRetrievel
+        - CheckoutCaptureDecline
+        - EToroMoneyRestriction
+        - AbusiveTrading
+        - HackedAccount
+        - PartnersAndPIs
+        - CS_ManagementDecision
+        - Deposits
+        - KYC
+        - AccountClosed
+        - Tax
+        - Corporate
+      nullable: true
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Comprehensive search and analytics engine for user discovery and analysis
+
+> Powerful search platform that enables advanced user discovery with comprehensive filtering capabilities. Supports complex queries across multiple dimensions including performance metrics, risk profiles, investment patterns, and account characteristics. Ideal for identifying users based on specific trading behaviors and performance criteria.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/user-info/people/search
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/user-info/people/search:
+    get:
+      tags:
+        - Users Info
+      summary: >-
+        Comprehensive search and analytics engine for user discovery and
+        analysis
+      description: >-
+        Powerful search platform that enables advanced user discovery with
+        comprehensive filtering capabilities. Supports complex queries across
+        multiple dimensions including performance metrics, risk profiles,
+        investment patterns, and account characteristics. Ideal for identifying
+        users based on specific trading behaviors and performance criteria.
+      operationId: get_api_v1_user-info_people_search
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 0019d285-3bd9-4600-a83e-54f879ff337b
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: period
+          in: query
+          description: >-
+            Defines the time period for analyzing user metrics and performance
+            data. Supports various predefined intervals for consistent analysis.
+          required: true
+          schema:
+            type: string
+            enum:
+              - CurrMonth
+              - CurrQuarter
+              - CurrYear
+              - LastYear
+              - LastTwoYears
+              - OneMonthAgo
+              - TwoMonthsAgo
+              - ThreeMonthsAgo
+              - SixMonthsAgo
+              - OneYearAgo
+          example: LastYear
+        - name: isTestAccount
+          in: query
+          description: >-
+            When set to true, filters results to include only test/demo
+            accounts. When false, shows only live accounts. Optional filter.
+          required: false
+          schema:
+            type: boolean
+          example: false
+        - name: optIn
+          in: query
+          description: >-
+            Filter for users who have explicitly opted in to specific features
+            or programs. Used for compliance and feature-specific filtering.
+          required: false
+          schema:
+            type: boolean
+          example: true
+        - name: blocked
+          in: query
+          description: >-
+            When true, includes only blocked accounts in the results. Used for
+            compliance and risk management purposes.
+          required: false
+          schema:
+            type: boolean
+          example: false
+        - name: page
+          in: query
+          description: Page number for pagination.
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: pageSize
+          in: query
+          description: Number of results per page.
+          required: false
+          schema:
+            type: integer
+            example: 10
+        - name: sort
+          in: query
+          description: Sort results by specific field (e.g., -copiers).
+          required: false
+          schema:
+            type: string
+            example: '-copiers'
+        - name: popularInvestor
+          in: query
+          description: Filter for popular investors.
+          required: false
+          schema:
+            type: boolean
+        - name: gainMax
+          in: query
+          description: Max gain value filter.
+          required: false
+          schema:
+            type: integer
+            example: 100
+        - name: maxDailyRiskScoreMin
+          in: query
+          description: Minimum daily risk score.
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: maxDailyRiskScoreMax
+          in: query
+          description: Maximum daily risk score.
+          required: false
+          schema:
+            type: integer
+            example: 7
+        - name: maxMonthlyRiskScoreMin
+          in: query
+          description: Minimum monthly risk score.
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: maxMonthlyRiskScoreMax
+          in: query
+          description: Maximum monthly risk score.
+          required: false
+          schema:
+            type: integer
+            example: 6
+        - name: weeksSinceRegistrationMin
+          in: query
+          description: Minimum weeks since registration.
+          required: false
+          schema:
+            type: integer
+            example: 75
+        - name: countryId
+          in: query
+          description: The registered country ID of the user
+          required: false
+          schema:
+            type: integer
+            example: 101
+        - name: instrumentId
+          in: query
+          description: >-
+            The instrument ID (you can also use this to exclude an instrument
+            e.g., -5).
+          required: false
+          schema:
+            type: integer
+            example: -5
+        - name: instrumentPctMin
+          in: query
+          description: Minimum percentage of investment in the requested instrument ID.
+          required: false
+          schema:
+            type: integer
+            example: 100
+        - name: instrumentPctMax
+          in: query
+          description: Maximum percentage of investment in the requested instrument ID.
+          required: false
+          schema:
+            type: integer
+            example: 100
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  totalRows:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        customerId:
+                          type: integer
+                        userName:
+                          type: string
+                        fullName:
+                          type: string
+                        hasAvatar:
+                          type: boolean
+                        isSocialConnected:
+                          type: boolean
+                        isTestAccount:
+                          type: boolean
+                        displayFullName:
+                          type: boolean
+                        bonusOnly:
+                          type: boolean
+                        blocked:
+                          type: boolean
+                        verified:
+                          type: boolean
+                        popularInvestor:
+                          type: boolean
+                        copyBlock:
+                          type: boolean
+                        isFund:
+                          type: boolean
+                        isBronze:
+                          type: boolean
+                        fundType:
+                          type: integer
+                        tags:
+                          type: array
+                          items:
+                            type: integer
+                        gain:
+                          type: number
+                          format: float
+                        dailyGain:
+                          type: number
+                          format: float
+                        thisWeekGain:
+                          type: number
+                          format: float
+                        riskScore:
+                          type: integer
+                        maxDailyRiskScore:
+                          type: integer
+                        maxMonthlyRiskScore:
+                          type: integer
+                        copiers:
+                          type: integer
+                        copiedTrades:
+                          type: integer
+                        copyTradesPct:
+                          type: number
+                          format: float
+                        copyInvestmentPct:
+                          type: number
+                          format: float
+                        baseLineCopiers:
+                          type: integer
+                        copiersGain:
+                          type: number
+                          format: float
+                        aumTier:
+                          type: integer
+                        aumTierV2:
+                          type: integer
+                        aumTierDesc:
+                          type: string
+                          nullable: true
+                        virtualCopiers:
+                          type: integer
+                        trades:
+                          type: integer
+                        winRatio:
+                          type: number
+                          format: float
+                        dailyDd:
+                          type: number
+                          format: float
+                        weeklyDd:
+                          type: number
+                          format: float
+                        profitableWeeksPct:
+                          type: number
+                          format: float
+                        profitableMonthsPct:
+                          type: number
+                          format: float
+                        velocity:
+                          type: number
+                          format: float
+                        exposure:
+                          type: number
+                          format: float
+                        avgPosSize:
+                          type: number
+                          format: float
+                        optimalCopyPosSize:
+                          type: number
+                          format: float
+                        highLeveragePct:
+                          type: number
+                          format: float
+                        mediumLeveragePct:
+                          type: number
+                          format: float
+                        lowLeveragePct:
+                          type: number
+                          format: float
+                        peakToValley:
+                          type: number
+                          format: float
+                        peakToValleyStart:
+                          type: string
+                          format: date-time
+                        peakToValleyEnd:
+                          type: string
+                          format: date-time
+                        longPosPct:
+                          type: number
+                          format: float
+                        topTradedInstrumentId:
+                          type: integer
+                        topTradedAssetClassId:
+                          type: integer
+                        topTradedInstrumentPct:
+                          type: number
+                          format: float
+                        totalTradedInstruments:
+                          type: integer
+                        activeWeeks:
+                          type: integer
+                        firstActivity:
+                          type: string
+                          format: date-time
+                        lastActivity:
+                          type: string
+                          format: date-time
+                        activeWeeksPct:
+                          type: number
+                          format: float
+                        weeksSinceRegistration:
+                          type: integer
+                        country:
+                          type: string
+                        affiliateId:
+                          type: integer
+                        instrumentPct:
+                          type: number
+                          format: float
+                required:
+                  - status
+                  - totalRows
+                  - items
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Retrieve granular performance data for specific time periods
+
+> Provides detailed performance analytics including daily gains, cumulative returns, and period-specific metrics within a specified date range. Supports various time-based analyses and performance reporting requirements.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/user-info/people/{username}/daily-gain
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/user-info/people/{username}/daily-gain:
+    get:
+      tags:
+        - Users Info
+      summary: Retrieve granular performance data for specific time periods
+      description: >-
+        Provides detailed performance analytics including daily gains,
+        cumulative returns, and period-specific metrics within a specified date
+        range. Supports various time-based analyses and performance reporting
+        requirements.
+      operationId: get_api_v1_user-info_people_username_daily-gain
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 3cd97b26-7cab-4a1b-890c-349a74208c0d
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: username
+          in: path
+          description: >-
+            Unique identifier of the user whose performance data is being
+            requested
+          schema:
+            type: string
+          required: true
+          example: trader123
+        - name: minDate
+          in: query
+          description: Start date for the analysis period (inclusive) in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+          required: true
+          example: '2024-01-01'
+        - name: maxDate
+          in: query
+          description: End date for the analysis period (inclusive) in YYYY-MM-DD format
+          schema:
+            type: string
+            format: date
+          required: true
+          example: '2024-12-31'
+        - name: type
+          in: query
+          description: >-
+            Specifies the granularity of the performance data: 'Daily' for
+            day-by-day metrics or 'Period' for aggregated period statistics
+          schema:
+            type: string
+            enum:
+              - Daily
+              - Period
+          required: true
+          example: Daily
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/getUserDailyGainResponse'
+              examples:
+                dailyExample:
+                  summary: Daily Gains Example
+                  value:
+                    - timestamp: '2023-01-01T00:00:00Z'
+                      gain: 0
+                    - timestamp: '2023-01-02T00:00:00Z'
+                      gain: 0.14
+                    - timestamp: '2023-01-03T00:00:00Z'
+                      gain: -0.26
+                    - timestamp: '2023-01-04T00:00:00Z'
+                      gain: 0.68
+                periodExample:
+                  summary: Period Gain Example
+                  value:
+                    gain: 7.52
+components:
+  schemas:
+    getUserDailyGainResponse:
+      oneOf:
+        - type: array
+          items:
+            $ref: '#/components/schemas/gainEntry'
+        - type: object
+          properties:
+            gain:
+              type: number
+    gainEntry:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        gain:
+          type: number
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Retrieve detailed historical performance metrics and analytics for a specified user
+
+> Returns comprehensive historical monthly and yearly performance data including gain percentages, risk-adjusted returns, and detailed trading statistics. This endpoint provides both aggregated and time-series performance metrics.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/user-info/people/{username}/gain
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/user-info/people/{username}/gain:
+    get:
+      tags:
+        - Users Info
+      summary: >-
+        Retrieve detailed historical performance metrics and analytics for a
+        specified user
+      description: >-
+        Returns comprehensive historical monthly and yearly performance data
+        including gain percentages, risk-adjusted returns, and detailed trading
+        statistics. This endpoint provides both aggregated and time-series
+        performance metrics.
+      operationId: get_api_v1_user-info_people_username_gain
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 07334e1b-b3b2-494a-aacf-8e53f6028dba
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: username
+          description: >-
+            Unique identifier of the user whose performance metrics are being
+            requested
+          in: path
+          schema:
+            type: string
+          required: true
+          example: trader123
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/getUserGainResponse'
+components:
+  schemas:
+    getUserGainResponse:
+      type: object
+      properties:
+        monthly:
+          type: array
+          items:
+            $ref: '#/components/schemas/gainEntry'
+        yearly:
+          type: array
+          items:
+            $ref: '#/components/schemas/gainEntry'
+    gainEntry:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        gain:
+          type: number
+
+````> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get the live portfolio of a user
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/user-info/people/{username}/portfolio/live
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/user-info/people/{username}/portfolio/live:
+    get:
+      tags:
+        - Users Info
+      summary: Get the live portfolio of a user
+      operationId: get_api_v1_user-info_people_username_portfolio_live
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: f4613ff1-9119-4448-80ee-18ce52eebd52
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: username
+          description: The username of the user to retrieve the live portfolio for.
+          in: path
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  realizedCreditPct:
+                    type: number
+                    format: decimal
+                    description: Credit as a percentage of the realized credit
+                  unrealizedCreditPct:
+                    type: number
+                    format: decimal
+                    description: Credit as a percentage of the unrealized credit
+                  positions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        positionId:
+                          type: integer
+                          description: Position ID
+                        openTimestamp:
+                          type: string
+                          format: date-time
+                          description: Open Timestamp
+                        openRate:
+                          type: number
+                          format: decimal
+                          description: Open Rate
+                        instrumentId:
+                          type: integer
+                          description: Instrument ID
+                        isBuy:
+                          type: boolean
+                          description: Buy/Sell
+                        leverage:
+                          type: integer
+                          description: Leverage
+                        takeProfitRate:
+                          type: number
+                          format: decimal
+                          description: Take Profit
+                        stopLossRate:
+                          type: number
+                          format: decimal
+                          description: Stop Loss
+                        socialTradeId:
+                          type: integer
+                          description: Mirror ID
+                        parentPositionId:
+                          type: integer
+                          description: Parent Position ID
+                        investmentPct:
+                          type: number
+                          format: decimal
+                          description: Realized Investment
+                        netProfit:
+                          type: number
+                          format: decimal
+                          description: Profit Percentage
+                        trailingStopLoss:
+                          type: boolean
+                          description: Trailing Stop loss enabled
+                  socialTrades:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        socialTradeId:
+                          type: integer
+                          description: Internal Mirror ID
+                        parentUsername:
+                          type: string
+                          description: Parent Username
+                        stopLossPercentage:
+                          type: number
+                          format: decimal
+                          description: Stop Loss
+                        openTimestamp:
+                          type: string
+                          format: date-time
+                          description: Opening Timestamp
+                        investmentPct:
+                          type: number
+                          format: decimal
+                          description: Investment Pct
+                        openInvestmentPct:
+                          type: number
+                          format: decimal
+                          description: Open Trades in Mirror
+                        netProfit:
+                          type: number
+                          format: decimal
+                          description: Profit Pct
+                        openNetProfit:
+                          type: number
+                          format: decimal
+                          description: Net profit of opened trades
+                        closedNetProfit:
+                          type: number
+                          format: decimal
+                          description: Net profit of closed trades
+                        realizedPct:
+                          type: number
+                          format: decimal
+                          description: Live Realized percentage
+                        unrealizedPct:
+                          type: number
+                          format: decimal
+                          description: Unrealized
+                        isClosing:
+                          type: boolean
+                          description: Pending Close
+                        positions:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              positionId:
+                                type: integer
+                                description: Position ID
+                              openTimestamp:
+                                type: string
+                                format: date-time
+                                description: Open Timestamp
+                              openRate:
+                                type: number
+                                format: decimal
+                                description: Open Rate
+                              instrumentId:
+                                type: integer
+                                description: Instrument ID
+                              isBuy:
+                                type: boolean
+                                description: Buy/Sell
+                              leverage:
+                                type: integer
+                                description: Leverage
+                              takeProfitRate:
+                                type: number
+                                format: decimal
+                                description: Take Profit
+                              stopLossRate:
+                                type: number
+                                format: decimal
+                                description: Stop Loss
+                              socialTradeId:
+                                type: integer
+                                description: Mirror ID
+                              parentPositionId:
+                                type: integer
+                                description: Parent Position ID
+                              investmentPct:
+                                type: number
+                                format: decimal
+                                description: Realized Investment
+                              netProfit:
+                                type: number
+                                format: decimal
+                                description: Profit Percentage
+                              trailingStopLoss:
+                                type: boolean
+                                description: Trailing Stop loss enabled
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get trade info for a specific user
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/user-info/people/{username}/tradeinfo
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/user-info/people/{username}/tradeinfo:
+    get:
+      tags:
+        - Users Info
+      summary: Get trade info for a specific user
+      operationId: get_api_v1_user-info_people_username_tradeinfo
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 4fde2eba-37f7-459e-94ad-fd6607eb0fdf
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: username
+          description: The username of the user to retrieve the discovery info for.
+          in: path
+          schema:
+            type: string
+          required: true
+        - name: period
+          in: query
+          description: The period filter (e.g., LastTwoYears).
+          required: true
+          schema:
+            type: string
+            enum:
+              - CurrMonth
+              - CurrQuarter
+              - CurrYear
+              - LastYear
+              - LastTwoYears
+              - OneMonthAgo
+              - TwoMonthsAgo
+              - ThreeMonthsAgo
+              - SixMonthsAgo
+              - OneYearAgo
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userName:
+                    type: string
+                    description: The username of the customer
+                  fullName:
+                    type: string
+                    description: Full name of the customer
+                  weeksSinceRegistration:
+                    type: integer
+                    description: Number of weeks since registration
+                  countryId:
+                    type: integer
+                    description: The registered country ID of the user
+                  affiliateId:
+                    type: integer
+                    description: The affiliate ID of the user
+                  isPopularInvestor:
+                    type: boolean
+                    description: Is the customer a popular investor
+                  isFund:
+                    type: boolean
+                    description: Does this customer represent a fund
+                  hasAvatar:
+                    type: boolean
+                    description: Does the customer have a picture
+                  gain:
+                    type: number
+                    format: float
+                    description: The periodic gain of the user
+                  dailyGain:
+                    type: number
+                    format: float
+                    description: The user's last day gain
+                  thisWeekGain:
+                    type: number
+                    format: float
+                    description: The user's gain from the beginning of the trading week
+                  riskScore:
+                    type: integer
+                    description: The current risk score of the user
+                  maxDailyRiskScore:
+                    type: integer
+                    description: The maximum daily risk score of the user in this interval
+                  maxMonthlyRiskScore:
+                    type: integer
+                    description: >-
+                      The maximum monthly risk score of the user in this
+                      interval
+                  copiers:
+                    type: integer
+                    description: The current number of copiers of this user
+                  copiedTrades:
+                    type: integer
+                    description: The total number of copied trades in this interval
+                  copyTradesPct:
+                    type: number
+                    format: float
+                    description: >-
+                      The percentage of copied trades in this interval of all
+                      trades
+                  copyInvestmentPct:
+                    type: number
+                    format: float
+                    description: >-
+                      The percentage of invested amounts in copied trades in
+                      this interval of all investments
+                  baseLineCopiers:
+                    type: integer
+                    description: The number of copiers one week ago
+                  copiersGain:
+                    type: number
+                    format: float
+                    description: The gain percentage of the number of copiers in a week
+                  aumTier:
+                    type: integer
+                    description: >-
+                      The total assets under management of the user, in a scale
+                      of 0-4, where 4 is the highest tier
+                  aumTierDesc:
+                    type: string
+                    description: Description of the AUM Tier
+                  fundType:
+                    type: integer
+                    description: Fund Type
+                  virtualCopiers:
+                    type: integer
+                    description: The total amount of virtual copiers of this user
+                  trades:
+                    type: integer
+                    description: The total number of trades in this interval
+                  topTradedInstrumentId:
+                    type: integer
+                    description: Top Traded Instrument ID in this interval
+                  topTradedAssetId:
+                    type: integer
+                    description: Top Traded Asset ID in this interval
+                  winRatio:
+                    type: number
+                    format: float
+                    description: The winning ratio of all closed trades in this interval
+                  dailyDd:
+                    type: number
+                    format: float
+                    description: The maximum daily draw-down of the user in this interval
+                  weeklyDd:
+                    type: number
+                    format: float
+                    description: The maximum weekly draw-down of this user in this interval
+                  peakToValley:
+                    type: number
+                    format: float
+                    description: The peak to valley draw-down in this interval
+                  profitableWeeksPct:
+                    type: number
+                    format: float
+                    description: >-
+                      The percentage of trading weeks which were profitable in
+                      this interval
+                  profitableMonthsPct:
+                    type: number
+                    format: float
+                    description: >-
+                      The percentage of months which were profitable in this
+                      interval
+                  avgPosSize:
+                    type: number
+                    format: float
+                    description: >-
+                      Average position size relative to the realized equity on
+                      opening the trade
+                  highLeveragePct:
+                    type: number
+                    format: float
+                    description: High leverage trades percentage in this interval
+                  mediumLeveragePct:
+                    type: number
+                    format: float
+                    description: Medium leverage trades percentage in this interval
+                  lowLeveragePct:
+                    type: number
+                    format: float
+                    description: Low leverage trades percentage in this interval
+                  firstActivity:
+                    type: integer
+                    description: >-
+                      Number of days since the beginning of the interval of a
+                      user trading activity
+                  lastActivity:
+                    type: integer
+                    description: >-
+                      Number of days from the last trading activity till the end
+                      of the interval
+                  activeWeeksPct:
+                    type: number
+                    format: float
+                    description: >-
+                      The percentage of weeks in the interval which the user had
+                      active trades
+                  instrumentPct:
+                    type: number
+                    format: float
+                    description: Percentage of investment in the requested instrument ID
+
+````

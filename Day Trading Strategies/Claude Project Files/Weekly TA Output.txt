@@ -1,0 +1,161 @@
+# Weekly Technical Analysis Output Framework
+
+## Required Data Sets
+
+### Essential Charts / Data
+1. Weekly Chart (6-12 months minimum)
+2. Daily Chart (40-60 trading days)
+3. 4-Hour Chart (7-10 trading days)
+4. Newsfeed if available.
+
+### Core Indicators
+1. EMA Package
+   - EMA 21 (primary trend)
+   - EMA 50 (intermediate trend)
+   - EMA 200 (major trend)
+2. DMI/ADX (14,14)
+   - +DI (bullish pressure)
+   - -DI (bearish pressure)
+   - ADX (trend strength)
+3. MACD (12,26,9)
+4. ATR (14)
+5. Stochastic RSI
+
+## Pre-Analysis Validation
+
+### Data Integrity Verification
+- [ ] Check for data gaps in all timeframes
+- [ ] Verify data feed status
+- [ ] Confirm last candle completion
+- [ ] Validate volume data consistency
+- [ ] Check for irregular candle patterns
+- [ ] Verify indicator calculations
+
+### Indicator Cross-Validation
+- [ ] EMA relationships and crossovers
+- [ ] DMI/ADX alignment with price action
+- [ ] MACD signal confirmation
+- [ ] ATR volatility context
+- [ ] Stochastic RSI extremes
+
+## Analysis Components
+
+### 1. Market Context <!-- 200-300 words -->
+- Major market themes
+- Fundamental drivers
+- Key news events
+- Institutional activity
+- Market regime identification
+
+#### TLDR: One sentence summary of the analysis.
+
+### 2. Pro-Trader Analysis <!-- 400-500 words -->
+
+#### Market Psychology
+- Smart money positioning
+- Key market drivers
+- Volume analysis
+- Institutional flows
+
+#### Professional Edge Factors
+- Major support/resistance levels
+- Technical confluences
+- Volume profile analysis
+- Risk factor assessment
+
+### 3. Technical Overview <!-- 250-350 words -->
+
+#### Trend Analysis
+- Weekly trend direction
+- Daily trend alignment
+- 4H momentum state
+- Volume confirmation
+
+#### Key Levels
+- Major support zones
+- Resistance barriers
+- Weekly ranges
+- Key EMA levels
+
+### 4. Pattern Analysis
+
+Pattern Status Indicators:
+- 🟢 Active and confirmed
+- 🟡 Developing (>50% complete)
+- 🔴 Failed/Invalidated
+- ⚠️ At critical level
+- 🎯 Target approaching
+
+For Each Pattern:
+- Formation status
+- Completion criteria
+- Target projections
+- Risk parameters
+- Volume confirmation
+
+### 5. Risk Framework
+- Volatility assessment
+- Key invalidation levels
+- Position sizing guidelines
+- Risk/reward scenarios
+- Correlation considerations
+
+### 6. Week Ahead Scenarios
+
+#### Primary Scenario (60%+ probability)
+- Directional bias
+- Key levels
+- Target zones
+- Trigger conditions
+- Risk factors
+
+#### Alternative Scenario (30%+ probability)
+- Counter-trend possibilities
+- Warning signs
+- Defense strategy
+- Invalidation points
+
+### 7. Trade Plan
+
+#### Setup Parameters
+- Entry zones
+- Initial position sizing
+- Risk parameters
+- Target zones
+- Time-based exits
+
+#### Risk Management
+- Stop placement guidelines
+- Position sizing rules
+- Maximum risk exposure
+- Pattern invalidation points
+
+### 8. Warning Flags
+🚩 Unusual volume patterns
+🚩 Extreme indicator readings
+🚩 Pattern violations
+🚩 Market structure breaks
+🚩 Volatility spikes
+
+## Final Validation Checklist
+
+### Analysis Quality Control
+- [ ] Timeframe alignment verified
+- [ ] Pattern measurements confirmed
+- [ ] Risk calculations validated
+- [ ] Volume analysis completed
+- [ ] News impact assessed
+- [ ] Risk/reward validated
+- [ ] Stop distances optimized
+- [ ] Target projections measured
+- [ ] Pattern invalidation identified
+- [ ] Final probability assessed
+
+### Trade Journal Entry
+- Date:
+- Ticker:
+- Timeframe:
+- Setup Type:
+- Key Levels:
+- Risk Parameters:
+- Analysis Summary <!-- 100-150 words -->

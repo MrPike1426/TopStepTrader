@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>TopStepTrader.Tests</RootNamespace>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="xunit" Version="2.9.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.*">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.*" />
+    <!-- Required by BarRepositoryTests: provides SqliteConnection for in-memory SQLite regression tests -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TopStepTrader.Core\TopStepTrader.Core.vbproj" />
+    <ProjectReference Include="..\TopStepTrader.Services\TopStepTrader.Services.vbproj" />
+    <ProjectReference Include="..\TopStepTrader.API\TopStepTrader.API.vbproj" />
+    <ProjectReference Include="..\TopStepTrader.Data\TopStepTrader.Data.vbproj" />
+    <ProjectReference Include="..\TopStepTrader.UI\TopStepTrader.UI.vbproj" />
+  </ItemGroup>
+
+</Project>

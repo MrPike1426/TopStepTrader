@@ -1,0 +1,191 @@
+# Technical Analysis Framework - Current & Enhanced Setup
+
+## Current Indicator Setup
+
+### Moving Averages
+1. EMA 21
+   - Primary trend identifier
+   - Short-term momentum gauge
+   - Dynamic support/resistance
+   - Plot line shown as a light blue line
+
+2. EMA 50
+   - Intermediate trend confirmation
+   - Major support/resistance level
+   - Golden/Death cross with EMA 21
+   - Plot line shown as a dark blue line
+   
+3. MA/EMA Cross 10 10
+	- Shown as MA Orange Line
+	- EMA -  Green Line
+	- Crosses - blue crosses
+
+### Ichimoku Cloud (Standard Settings)
+```
+Settings:
+- Conversion Line (Tenkan-sen): 9
+- Base Line (Kijun-sen): 26
+- Leading Span A: 26
+- Leading Span B: 52
+- Lagging Span: 26
+```
+Key Signals:
+- Cloud breakouts/breakdowns
+- Tenkan/Kijun crosses
+- Future cloud color changes
+- Price position relative to cloud
+
+### DMI (14,14)
+```
+Settings:
+- DI Length: 14
+- ADX Smoothing: 14
+- Only +DI, -DI and ADX visible
+- +DI -  Blue line
+- -DI - Orange Line
+- ADX - Pink Line
+
+```
+Signals:
+- Trend strength (ADX > 25)
+- Trend direction (DI+ vs DI-)
+- Crossovers for trend changes
+
+### MACD
+```
+Settings:
+- Fast Length: 12
+- Slow Length: 26
+- Signal Smoothing: 9
+- Applied to: Close
+- MACD shown as a blue line
+- Signal shown as an Orange line
+
+```
+Usage:
+- Momentum confirmation
+- Divergence identification
+- Signal line crossovers
+
+### Stochastic RSI
+```
+Settings:
+- Length: 14
+- RSI Length: 14
+- Stochastic Length: 3
+- Smoothing: 3
+```
+Signals:
+- Overbought (>80)
+- Oversold (<20)
+- Centerline crosses
+- Divergence patterns
+
+## Enhanced Integration Framework
+
+### Combined Signal Strategy
+
+1. Primary Trend Identification
+   ```
+   Strong Trend Criteria:
+   - EMA21 > EMA50 (bullish)
+   - Price above Ichimoku Cloud
+   - ADX > 25
+   - MACD above signal line
+   ```
+
+2. Entry Confirmation Requirements
+   ```
+   Long Entry:
+   - Price > EMA21
+   - Ichimoku Tenkan > Kijun
+   - DI+ > DI-
+   - Stoch RSI < 0.8
+   - MACD histogram increasing
+
+   Short Entry:
+   - Price < EMA21
+   - Ichimoku Tenkan < Kijun
+   - DI- > DI+
+   - Stoch RSI > 0.2
+   - MACD histogram decreasing
+   ```
+
+3. Risk Management Rules
+   ```
+   Stop Loss Placement:
+   - Below/Above recent swing low/high
+   - Below/Above Ichimoku Cloud
+   - Minimum 2:1 reward:risk ratio
+   ```
+
+### Additional Suggested Indicators
+
+1. Volume Profile
+   ```
+   Purpose:
+   - Identify high-volume price levels
+   - Confirm breakouts
+   - Find value areas
+   ```
+
+2. ATR (14)
+   ```
+   Usage:
+   - Position sizing
+   - Stop loss distances
+   - Volatility awareness
+   ```
+
+3. Cumulative Volume Delta
+   ```
+   Benefits:
+   - Volume pressure analysis
+   - Buying/selling intensity
+   - Divergence identification
+   ```
+
+## Trading Plan Integration
+
+### Entry Checklist
+1. Trend Alignment
+   - EMA alignment
+   - Ichimoku cloud position
+   - DMI direction
+   
+2. Momentum Confirmation
+   - MACD direction
+   - Stoch RSI position
+   - Volume confirmation
+
+3. Risk Assessment
+   - ATR-based position sizing
+   - Clear invalidation points
+   - Multiple timeframe confirmation
+
+### Exit Strategy
+1. Technical Exits
+   - Indicator divergence
+   - Trend line breaks
+   - Key level breaches
+
+2. Trailing Stops
+   - Based on ATR
+   - Using Ichimoku Cloud
+   - Following EMAs
+
+## Performance Tracking
+```
+Monitor:
+1. Win Rate by Setup Type
+2. Average R:R Achieved
+3. Maximum Drawdown
+4. Time in Trade
+5. Setup Failure Points
+```
+
+### Notes for Optimization
+- Track which indicator combinations provide highest win rate
+- Note market conditions where strategy performs best
+- Document failed trades for pattern recognition
+- Regular review of position sizing effectiveness

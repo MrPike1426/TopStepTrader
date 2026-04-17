@@ -1,0 +1,340 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Overview
+
+> Overview of the eToro WebSocket API
+
+### What is the WebSocket API
+
+The eToro WebSocket API provides real-time streaming access to market data and trading events through a persistent connection. This API enables developers to build responsive applications that react instantly to market changes, order updates, and portfolio events without the overhead of constant HTTP polling.
+
+The API uses JSON message format over WebSocket protocol, supporting both public market data streams and private authenticated feeds for personalized trading information.
+
+### Key Features
+
+* **Real-time Market Data:** Live price feeds for instruments with bid/ask prices
+
+* **Trading Notifications:** Instant updates for order executions, position changes, and portfolio events
+
+* **Flexible Subscriptions:** Subscribe to specific instruments or private data feeds based on your needs
+
+* **Snapshot Support:** Optional initial snapshots when subscribing to topics for current state
+
+* **Authentication Integration:** Secure access to private data using your eToro API credentials
+
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Authentication
+
+> Authentication of the eToro WebSocket API
+
+To use certain WebSocket channels, you must authenticate with your User and API keys.
+
+### Request
+
+```json  theme={null}
+{
+    "id": "ed72693c-1545-4fa1-8a10-aca7cf5419a6",
+    "data": {
+        "userKey": "<your user key>",
+        "apiKey": "<your API key>"
+    }
+}
+```
+
+### Successful Response
+
+```json  theme={null}
+{
+    "id": "ed72693c-1545-4fa1-8a10-aca7cf5419a6",
+    "success": true,
+    "operation": "Authenticate"
+}
+```
+
+### Unsuccessful Response
+
+```json  theme={null}
+{
+    "id": "ed72693c-1545-4fa1-8a10-aca7cf5419a6",
+    "success": false,
+    "operation": "Authenticate",
+    "errorMessage": "<Error Message>",
+    "errorCode": "<Error Code>"
+}
+```
+
+### Error Codes
+
+<ResponseField name="SessionAlreadyAuthenticated" type="Error Code">
+  Session is already authenticated
+</ResponseField>
+
+<ResponseField name="DataRequired" type="Error Code">
+  Data is required
+</ResponseField>
+
+<ResponseField name="ApiKeyRequired" type="Error Code">
+  ApiKey is required
+</ResponseField>
+
+<ResponseField name="UserKeyRequired" type="Error Code">
+  UserKey is required
+</ResponseField>
+
+<ResponseField name="TooManyRequests" type="Error Code">
+  Too many requests
+</ResponseField>
+
+<ResponseField name="Forbidden" type="Error Code">
+  Access to this resource is forbidden. Please contact customer support for assistance
+</ResponseField>
+
+<ResponseField name="UnhandledException" type="Error Code">
+  Global Error
+</ResponseField>
+
+<ResponseField name="InvalidKey" type="Error Code">
+  Key is invalid
+</ResponseField>
+
+<ResponseField name="Unauthorized" type="Error Code">
+  Unauthorized
+</ResponseField>
+
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Topics
+
+> Topics for the eToro WebSocket API
+
+## Instrument Topics
+
+Subscribe to real-time market price updates for various instruments.
+
+### Request
+
+```json  theme={null}
+{
+    "id": "ed72693c-1545-4fa1-8a10-aca7cf5419a6",
+    "operation": "Subscribe",
+    "data": {
+        "topics": ["instrument:<instrumentId>","instrument:<instrumentId>",...],
+        "snapshot": <true / false>
+    }
+}
+```
+
+### Response
+
+```json  theme={null}
+{
+    "messages": [
+        {
+            "topic": "instrument:100000",
+            "content": "{\"Ask\":\"84917.73\",\"Bid\":\"83232.21\",\"LastExecution\":\"84072.94\",\"Date\":\"2025-04-01T08:36:02.8305456Z\",\"NewUnitMargin\":\"83232.21\",\"UnitMarginAsk\":\"84917.73\",\"UnitMarginBid\":\"83232.21\",\"PriceRateID\":\"106439224591\",\"BidDiscounted\":\"84072.94\",\"AskDiscounted\":\"84076.96\",\"UnitMarginBidDiscounted\":\"84072.94\",\"UnitMarginAskDiscounted\":\"84076.96\"}",
+            "id": "f1992278-2c4a-4b8f-92d6-8b99f5e1cb00",
+            "type": "Trading.Instrument.Rate"
+        }
+    ]
+}
+```
+
+### Prettified Content Field
+
+```json  theme={null}
+{
+    "Ask": "84917.73",
+    "Bid": "83232.21",
+    "LastExecution": "84072.94",
+    "Date": "2025-04-01T08:36:02.8305456Z",
+    "NewUnitMargin": "83232.21",
+    "UnitMarginAsk": "84917.73",
+    "UnitMarginBid": "83232.21",
+    "PriceRateID": "106439224591",
+    "BidDiscounted": "84072.94",
+    "AskDiscounted": "84076.96",
+    "UnitMarginBidDiscounted": "84072.94",
+    "UnitMarginAskDiscounted": "84076.96"
+}
+```
+
+### Rate Object Schema
+
+<ResponseField name="Ask" type="number <float>">
+  Current asking price (offer) for the instrument. This is the price at which you can buy the asset.
+</ResponseField>
+
+<ResponseField name="Bid" type="number <float>">
+  Current bid price for the instrument. This is the price at which you can sell the asset.
+</ResponseField>
+
+<ResponseField name="LastExecution" type="number <float>">
+  Price of the most recent trade execution for this instrument.
+</ResponseField>
+
+<ResponseField name="Date" type="string <date-time>">
+  The date-time of the price in the system.
+</ResponseField>
+
+<ResponseField name="NewUnitMargin" type="number <float>" deprecated>
+  USD equivalent of the instrument price.
+</ResponseField>
+
+<ResponseField name="UnitMarginAsk" type="number <float>" deprecated>
+  USD equivalent of the instrument ask price.
+</ResponseField>
+
+<ResponseField name="UnitMarginBid" type="number <float>" deprecated>
+  USD equivalent of the instrument bid price.
+</ResponseField>
+
+<ResponseField name="PriceRateID" type="integer">
+  Unique identifier of the rate.
+</ResponseField>
+
+<ResponseField name="BidDiscounted" type="number <float>" deprecated>
+  Obsolete.
+</ResponseField>
+
+<ResponseField name="AskDiscounted" type="number <float>" deprecated>
+  Obsolete.
+</ResponseField>
+
+<ResponseField name="UnitMarginBidDiscounted" type="number <float>" deprecated>
+  Obsolete.
+</ResponseField>
+
+<ResponseField name="UnitMarginAskDiscounted" type="number <float>" deprecated>
+  Obsolete.
+</ResponseField>
+
+## Transaction Updates
+
+Receive real-time updates on transactions and orders from your portfolio.
+
+### Request
+
+```json  theme={null}
+{
+    "id": "ed72693c-1545-4fa1-8a10-aca7cf5419a6",
+    "operation": "Subscribe",
+    "data": {
+        "topics": ["private"],
+        "snapshot": <true / false>
+    }
+}
+```
+
+### Response
+
+```json  theme={null}
+{
+    "messages": [
+        {
+            "topic": "private",
+            "content": "{\"OrderID\":981286176,\"OrderType\":20,\"CID\":32612044,\"StatusID\":11,\"InstrumentID\":1111,\"UnitsToDeduct\":0.0,\"RequestGuid\":\"fca38698-1fcf-407d-b930-3222e57274fa\",\"RequestOccurred\":\"2025-04-01T08:55:53.6910145Z\",\"RequestToken\":\"fca38698-1fcf-407d-b930-3222e57274fa\",\"ErrorCode\":0,\"RequestedUnits\":13.859902,\"ExecutedUnits\":0.0,\"EndRate\":0.0,\"NetProfit\":0.0,\"CloseReason\":0,\"PendingClosePositionIDs\":[2980225895],\"OpenDateTime\":\"2025-04-01T08:55:53.6910145Z\",\"IsInMirror\":false,\"StatusId\":11,\"TotalExternalFees\":0.0,\"TotalExternalTaxes\":0.0,\"LotsToDeduct\":0.0,\"RequestedLots\":13.859902,\"ExecutedLots\":0.0}",
+            "id": "5263070a-c52f-436b-8ca8-10b3bd6d2970",
+            "type": "Trading.OrderForCloseMultiple.Update"
+        }
+    ]
+}
+```
+
+### Prettified Content Field
+
+```json  theme={null}
+{
+    "OrderID": 981286176,
+    "OrderType": 20,
+    "CID": 32613364,
+    "StatusID": 11,
+    "InstrumentID": 1111,
+    "UnitsToDeduct": 0,
+    "RequestGuid": "fca38698-1fcf-407d-b930-3222e57274fa",
+    "RequestOccurred": "2025-04-01T08:55:53.6910145Z",
+    "RequestToken": "fca38698-1fcf-407d-b930-3222e57274fa",
+    "ErrorCode": 0,
+    "RequestedUnits": 13.859902,
+    "ExecutedUnits": 0,
+    "EndRate": 0,
+    "NetProfit": 0,
+    "CloseReason": 0,
+    "PendingClosePositionIDs": [
+        2980225895
+    ],
+    "OpenDateTime": "2025-04-01T08:55:53.6910145Z",
+    "IsInMirror": false,
+    "StatusId": 11,
+    "TotalExternalFees": 0,
+    "TotalExternalTaxes": 0,
+    "LotsToDeduct": 0,
+    "RequestedLots": 13.859902,
+    "ExecutedLots": 0
+}
+```
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Example code
+
+> Example code for the eToro WebSocket API
+
+Here is an example of how to connect to the WebSocket API using JavaScript:
+
+```javascript  theme={null}
+let ws;
+ws = new WebSocket("wss://ws.etoro.com/ws");
+
+ws.onmessage = (event) => {
+    // Implement your own logic here to handle incoming messages.
+    logMessage("Received: " + event.data);
+};
+
+// Authenticate
+const authRequest = {
+    id: "<random guid>",
+    operation: "Authenticate",
+    data: {
+        userKey: "<your user key>",
+        apiKey: "<your API key>"
+    }
+};
+
+ws.send(JSON.stringify(authRequest));
+
+// Subscribe
+const subscribeRequest = {
+    id: "<random guid>",
+    operation: "Subscribe",
+    data: {
+        topics: ["instrument:100000"], // Sending topic as an array
+        snapshot: false
+    }
+};
+
+ws.send(JSON.stringify(subscribeRequest));
+
+// Unsubscribe
+const unsubscribeRequest = {
+    id: "<random guid>", 
+    operation: "Unsubscribe",
+    data: {
+        topics: [topic] // Sending topic as an array
+    }
+};
+
+ws.send(JSON.stringify(unsubscribeRequest));
+
+// Close websocket
+if (ws) {
+    ws.close();
+}
+```

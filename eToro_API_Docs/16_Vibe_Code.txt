@@ -1,0 +1,42 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Claude Code
+
+> Integrate eToro API documentation into Claude Code using MCP
+
+Claude Code is an agentic coding tool that lives in your terminal. You can configure it to access the eToro API documentation via the Model Context Protocol (MCP).
+
+## Configuration
+
+Run the following command in your terminal to add the eToro Docs MCP server:
+
+```bash  theme={null}
+claude mcp add --transport http etoro-api-docs https://api-portal.etoro.com/mcp
+```
+
+<Note>
+  This command registers the MCP server with Claude Code, allowing it to query the documentation during your coding sessions.
+</Note>
+
+## Verification
+
+To confirm that the MCP server has been added successfully, run:
+
+```bash  theme={null}
+claude mcp list
+```
+
+You should see `etoro-api-docs` in the list of available MCP servers.
+
+## Usage
+
+Once configured, you can ask Claude Code questions about the eToro API directly from your terminal.
+
+**Examples:**
+
+* `claude "How do I authenticate with the eToro WebSocket API?"`
+* `claude "Generate a Python script to place a market order using the eToro API"`
+
+Claude Code will use the MCP connection to read the documentation and provide accurate answers and code snippets.

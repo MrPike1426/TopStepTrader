@@ -1,0 +1,292 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Create a comment on a post
+
+> Creates a new comment on a specific discussion post. Comments can include text, mentions, tags, and attachments.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json post /api/v1/reactions/{postId}/comment
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/reactions/{postId}/comment:
+    post:
+      tags:
+        - Comments
+      summary: Create a comment on a post
+      description: >-
+        Creates a new comment on a specific discussion post. Comments can
+        include text, mentions, tags, and attachments.
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: cca18efc-7b9d-43bd-bda1-a24715fad8fd
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: postId
+          in: path
+          description: ID of the post to comment on
+          required: true
+          schema:
+            type: string
+          example: '12345'
+      requestBody:
+        description: Comment creation details
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentCreateRequest'
+      responses:
+        '201':
+          description: Comment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+components:
+  schemas:
+    CommentCreateRequest:
+      type: object
+      description: Request model for creating a new comment
+      required:
+        - owner
+        - message
+      properties:
+        owner:
+          type: integer
+          description: ID of the user creating the comment
+          example: 12345
+        message:
+          type: string
+          description: The text content of the comment
+          example: Great analysis! Thanks for sharing.
+        tags:
+          $ref: '#/components/schemas/Tags'
+        mentions:
+          $ref: '#/components/schemas/Mentions'
+        attachments:
+          $ref: '#/components/schemas/Attachments'
+    Comment:
+      type: object
+      properties:
+        entity:
+          type: object
+          properties:
+            message:
+              type: object
+              properties:
+                text:
+                  type: string
+                languageCode:
+                  type: string
+            id:
+              type: string
+            owner:
+              $ref: '#/components/schemas/User'
+            created:
+              type: string
+              format: date-time
+        repliesCount:
+          type: integer
+        emotionsData:
+          type: object
+        requesterContext:
+          type: object
+    Tags:
+      type: object
+      description: Tags associated with a post or comment
+      properties:
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: Name of the tag
+                example: string
+              id:
+                type: string
+                description: ID of the tag
+                example: string
+    Mentions:
+      type: object
+      description: Mentions included in a post or comment
+      properties:
+        mentions:
+          type: array
+          items:
+            type: object
+            properties:
+              userName:
+                type: string
+                description: Username of the mentioned user
+                example: string
+              id:
+                type: string
+                description: ID of the mentioned user
+                example: string
+              isDirect:
+                type: boolean
+                description: Indicates if the mention is direct
+                example: true
+    Attachments:
+      type: array
+      description: List of attachments for a post or comment
+      items:
+        type: object
+        properties:
+          url:
+            type: string
+            description: URL of the attachment
+            example: string
+          title:
+            type: string
+            description: Title of the attachment
+            example: string
+          host:
+            type: string
+            description: Host of the attachment
+            example: string
+          description:
+            type: string
+            description: Description of the attachment
+            example: string
+          mediaType:
+            type: string
+            description: Type of media in the attachment
+            enum:
+              - None
+              - Image
+              - Video
+            example: None
+          media:
+            type: object
+            properties:
+              image:
+                type: object
+                properties:
+                  width:
+                    type: integer
+                    description: Width of the image
+                    example: 0
+                  height:
+                    type: integer
+                    description: Height of the image
+                    example: 0
+                  url:
+                    type: string
+                    description: URL of the image
+                    example: string
+              video:
+                type: object
+                properties:
+                  videoSourceId:
+                    type: string
+                    description: ID of the video source
+                    example: string
+                  videoSource:
+                    type: string
+                    description: Source of the video
+                    enum:
+                      - None
+                      - YouTube
+                      - Vimeo
+                    example: None
+                  image:
+                    type: object
+                    properties:
+                      width:
+                        type: integer
+                        description: Width of the video thumbnail
+                        example: 0
+                      height:
+                        type: integer
+                        description: Height of the video thumbnail
+                        example: 0
+                      url:
+                        type: string
+                        description: URL of the video thumbnail
+                        example: string
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        avatar:
+          type: object
+          properties:
+            small:
+              type: string
+              format: uri
+            medium:
+              type: string
+              format: uri
+            large:
+              type: string
+              format: uri
+        roles:
+          type: array
+          items:
+            type: string
+        isBlocked:
+          type: boolean
+        isPrivate:
+          type: boolean
+        countryCode:
+          type: integer
+        piLevel:
+          type: integer
+
+````

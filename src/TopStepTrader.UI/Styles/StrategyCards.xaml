@@ -1,0 +1,191 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        ═══════════════════════════════════════════════════════════════════════
+        Strategy card body templates — shared across HydraView, BacktestView,
+        and any future view that presents strategy selection tiles.
+
+        Usage in each view:
+            <Button ...>
+                <Button.Style>... (DataTrigger for highlight) ...</Button.Style>
+                <ContentControl Template="{StaticResource EmaRsiCardContent}"/>
+            </Button>
+
+        Editing text, icons, or font sizes here updates every view in one place.
+        Line 1  FontSize="12"  TextPrimaryBrush   — strategy name + icon
+        Line 2  FontSize="10"  TextSecondaryBrush — indicator summary
+        Line 3  FontSize="9"   TextSecondaryBrush — timeframe / notes
+        ═══════════════════════════════════════════════════════════════════════
+    -->
+
+    <!-- ── Row 1: Live trading strategies ─────────────────────────────────── -->
+
+    <!-- 1. EMA / RSI Combined -->
+    <ControlTemplate x:Key="EmaRsiCardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="🎯  EMA/RSI Combined"
+                       FontWeight="SemiBold" FontSize="14"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="EMA21 · EMA50 · RSI14 weighted"
+                       FontSize="10" Margin="0,2,0,0"
+                       Foreground="GhostWhite"/>
+            <TextBlock Text="5-min bars · user confidence %"
+                       FontSize="10" Margin="0,1,0,0"
+                       Foreground="GhostWhite"/>
+        </StackPanel>
+    </ControlTemplate>
+
+    <!-- 2. Multi-Confluence Engine -->
+    <ControlTemplate x:Key="MultiConfluenceCardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="☁  Multi-Confluence"
+                       FontWeight="SemiBold" FontSize="14"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="Ichimoku · EMA · MACD · StochRSI · ADX"
+                       FontSize="10" Margin="0,2,0,0"
+                       Foreground="GhostWhite"/>
+            <TextBlock Text="15-min bars · ATR dynamic SL/TP"
+                       FontSize="10" Margin="0,1,0,0"
+                       Foreground="GhostWhite"/>
+        </StackPanel>
+    </ControlTemplate>
+
+    <!-- 3. LULT Divergence -->
+    <ControlTemplate x:Key="LultDivergenceCardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="🌊  LULT Divergence"
+                       FontWeight="SemiBold" FontSize="14"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="WaveTrend · Anchor/Trigger · Divergence"
+                       FontSize="10" Margin="0,2,0,0"
+                       Foreground="GhostWhite"/>
+            <TextBlock Text="5-min NQ bars · 2R · EST time filter"
+                       FontSize="10" Margin="0,1,0,0"
+                       Foreground="GhostWhite"/>
+        </StackPanel>
+    </ControlTemplate>
+
+    <!-- 4. BB Squeeze Scalper -->
+    <ControlTemplate x:Key="BbSqueezeCardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="📊  BB Squeeze Scalper"
+                       FontWeight="SemiBold" FontSize="14"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="BB(12) · %B · RSI7 · EMA5 · ATR10"
+                       FontSize="11" Margin="0,2,0,0"
+                       Foreground="GhostWhite"/>
+            <TextBlock Text="1-min bars · 0.4%/0.2% scalp · 5× lvg"
+                       FontSize="11" Margin="0,1,0,0"
+                       Foreground="GhostWhite"/>
+        </StackPanel>
+    </ControlTemplate>
+
+    <!-- 5. VIDYA Cross -->
+    <ControlTemplate x:Key="VidyaCrossCardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="〰  VIDYA Cross"
+                       FontWeight="SemiBold" FontSize="14"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="VIDYA(14) · CMO(9) · Adaptive EMA"
+                       FontSize="11" Margin="0,2,0,0"
+                       Foreground="GhostWhite"/>
+            <TextBlock Text="5-min bars · trend-adaptive crossover"
+                       FontSize="11" Margin="0,1,0,0"
+                       Foreground="GhostWhite"/>
+        </StackPanel>
+    </ControlTemplate>
+
+    <!-- ── Row 2: Research / additional strategies ─────────────────────────── -->
+
+    <!-- 6. Connors RSI-2 -->
+    <ControlTemplate x:Key="ConnorsRsi2CardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="📉  Connors RSI-2"
+                       FontWeight="SemiBold" FontSize="14"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="RSI(2) · SMA(200) trend filter"
+                       FontSize="11" Margin="0,2,0,0"
+                       Foreground="GhostWhite"/>
+            <TextBlock Text="Daily · mean reversion · 67–72% WR"
+                       FontSize="11" Margin="0,1,0,0"
+                       Foreground="GhostWhite"/>
+        </StackPanel>
+    </ControlTemplate>
+
+    <!-- 7. SuperTrend -->
+    <ControlTemplate x:Key="SuperTrendCardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="📈  SuperTrend"
+                       FontWeight="SemiBold" FontSize="12"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="ATR(10) × 3.0 direction flip"
+                       FontSize="10" Margin="0,2,0,0"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <TextBlock Text="Daily · trend-follow · SL at ST line"
+                       FontSize="9" Margin="0,1,0,0"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+        </StackPanel>
+    </ControlTemplate>
+
+    <!-- 8. Donchian Breakout -->
+    <ControlTemplate x:Key="DonchianBreakoutCardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="🐢  Donchian Breakout"
+                       FontWeight="SemiBold" FontSize="12"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="20-bar channel · Turtle system"
+                       FontSize="10" Margin="0,2,0,0"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <TextBlock Text="Daily · breakout · 10-bar exit"
+                       FontSize="9" Margin="0,1,0,0"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+        </StackPanel>
+    </ControlTemplate>
+
+    <!-- 9. BB + RSI Reversion -->
+    <ControlTemplate x:Key="BbRsiReversionCardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="🔄  BB + RSI Reversion"
+                       FontWeight="SemiBold" FontSize="12"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="BB(20,2) · RSI(14) dual-confirm"
+                       FontSize="10" Margin="0,2,0,0"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <TextBlock Text="Daily · mean reversion · 55–65% WR"
+                       FontSize="9" Margin="0,1,0,0"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+        </StackPanel>
+    </ControlTemplate>
+
+    <!-- Placeholder (coming soon) -->
+    <ControlTemplate x:Key="PlaceholderCardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="⚙  Coming Soon"
+                       FontWeight="SemiBold" FontSize="12"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <TextBlock Text="Strategy in development"
+                       FontSize="10" Margin="0,2,0,0"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+            <TextBlock Text="—"
+                       FontSize="9" Margin="0,1,0,0"
+                       Foreground="{StaticResource TextSecondaryBrush}"/>
+        </StackPanel>
+    </ControlTemplate>
+
+    <!-- 10. Naked Trader -->
+    <ControlTemplate x:Key="NakedTraderCardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="👁  Naked Trader"
+                       FontWeight="SemiBold" FontSize="12"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="EMA(9/21) · MACD · DMI/ADX · VWAP"
+                       FontSize="10" Margin="0,2,0,0"
+                       Foreground="GhostWhite"/>
+            <TextBlock Text="5-min bars · 4-vote consensus"
+                       FontSize="9" Margin="0,1,0,0"
+                       Foreground="GhostWhite"/>
+        </StackPanel>
+    </ControlTemplate>
+
+</ResourceDictionary>

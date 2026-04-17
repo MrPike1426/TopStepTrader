@@ -1,0 +1,128 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Calculate Available Cash
+
+> Learn how to calculate your available cash balance in demo or real accounts.
+
+Available cash represents the funds you have available to open new positions. It is calculated by taking your total credits and subtracting the sum of all pending order amounts.
+
+<Note>
+  Available cash only refers to your USD balance.
+</Note>
+
+To retrieve the data needed for this calculation, use the P\&L endpoint for either demo or real accounts.
+
+## The Calculation Process
+
+Calculating available cash involves fetching your account data and performing a simple subtraction of all pending order amounts from your total credits.
+
+### 1. Endpoints
+
+Use the **P\&L** endpoint to retrieve your account information.
+
+**Demo Account:** `GET https://public-api.etoro.com/api/v1/trading/info/demo/pnl`
+
+**Real Account:** `GET https://public-api.etoro.com/api/v1/trading/info/real/pnl`
+
+### 2. Header Requirements
+
+Remember to include your authentication headers with every request.
+
+* `x-api-key`
+* `x-user-key`
+* `x-request-id`
+
+### 3. Calculation Formula
+
+```
+Available Cash = credits - (Σ(ordersForOpen[i].amount where mirrorID = 0) + Σ(orders[i].amount))
+```
+
+Where:
+
+* `credits` is the total credit balance in your account
+* `ordersForOpen` is an array of pending market orders (filtered to only include manual positions where `mirrorID = 0`)
+* `orders` is an array of pending Market-if-touched orders (similar to Limit orders)
+* `mirrorID = 0` indicates a manual position; `mirrorID ≠ 0` indicates a mirrored (copy) position
+* `amount` is the allocated amount for each order
+
+## Examples
+
+<CodeGroup>
+  ```bash cURL theme={null}
+  curl -X GET "https://public-api.etoro.com/api/v1/trading/info/demo/pnl" \
+    -H "x-api-key: <YOUR_PUBLIC_KEY>" \
+    -H "x-user-key: <YOUR_USER_KEY>" \
+    -H "x-request-id: <UUID>"
+  ```
+
+  ```javascript JavaScript theme={null}
+  const url = 'https://public-api.etoro.com/api/v1/trading/info/demo/pnl';
+
+  fetch(url, options)
+      .then(res => res.json())
+      .then(data => {
+          const credits = data.credits;
+          // Only include manual positions (mirrorID = 0) from ordersForOpen
+          const ordersForOpenAmount = data.ordersForOpen
+              .filter(order => order.mirrorID === 0)
+              .reduce((sum, order) => sum + order.amount, 0);
+          const ordersAmount = data.orders.reduce((sum, order) => sum + order.amount, 0);
+          const availableCash = credits - (ordersForOpenAmount + ordersAmount);
+          
+          console.log("Available Cash:", availableCash);
+      })
+      .catch(err => console.error(err));
+  ```
+
+  ```python Python theme={null}
+  import requests
+  import uuid
+
+  url = "https://public-api.etoro.com/api/v1/trading/info/demo/pnl"
+
+  headers = {
+      "x-api-key": "<YOUR_PUBLIC_KEY>",
+      "x-user-key": "<YOUR_USER_KEY>",
+      "x-request-id": str(uuid.uuid4())
+  }
+
+  response = requests.get(url, headers=headers)
+
+  if response.status_code == 200:
+      data = response.json()
+      credits = data['credits']
+      # Only include manual positions (mirrorID = 0) from ordersForOpen
+      orders_for_open_amount = sum(order['amount'] for order in data['ordersForOpen'] if order['mirrorID'] == 0)
+      orders_amount = sum(order['amount'] for order in data['orders'])
+      available_cash = credits - (orders_for_open_amount + orders_amount)
+      
+      print(f"Available Cash: {available_cash}")
+  else:
+      print(f"Error: {response.status_code}")
+  ```
+</CodeGroup>
+
+### Example Calculation
+
+If your account has:
+
+* `credits`: 1000
+* `ordersForOpen`: Two manual pending orders with `amount` values of 200 each (where `mirrorID = 0`), and one mirrored order with `amount` of 100 (where `mirrorID ≠ 0`)
+* `orders`: One existing order with `amount` value of 150
+
+Then your available cash would be:
+
+```
+1000 - ((200 + 200) + 150) = 450
+```
+
+Note: The mirrored order with amount 100 is excluded from the calculation because `mirrorID ≠ 0`.
+
+### Best Practices
+
+1. **Check Before Trading:** Always verify your available cash before attempting to open new positions to avoid insufficient funds errors.
+2. **Account for Manual Orders Only:** Only manual positions (where `mirrorID = 0`) from `ordersForOpen` are included in the calculation. Mirrored (copy) positions are excluded. All items in the `orders` array are included regardless of `mirrorID`.
+3. **Use the Correct Environment:** Make sure to use the demo endpoint when testing and the real endpoint for live trading.

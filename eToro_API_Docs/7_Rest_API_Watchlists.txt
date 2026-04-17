@@ -1,0 +1,2493 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get curated lists
+
+> Retrieves curated investment lists available to the authenticated user.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/curated-lists
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/curated-lists:
+    get:
+      tags:
+        - Watchlists
+      summary: Get curated lists
+      description: Retrieves curated investment lists available to the authenticated user.
+      operationId: get_api_v1_curated-lists
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 07e54e7f-4a34-4735-b208-94d597a365c3
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+      responses:
+        '200':
+          description: Successfully retrieved curated lists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CuratedListsResponse'
+        '204':
+          description: No curated lists available
+components:
+  schemas:
+    CuratedListsResponse:
+      type: object
+      description: Response containing curated investment lists
+      properties:
+        CuratedLists:
+          type: array
+          description: List of curated investment lists
+          items:
+            $ref: '#/components/schemas/CuratedList'
+    CuratedList:
+      type: object
+      description: Represents a curated investment list
+      properties:
+        Uuid:
+          type: string
+          description: Unique identifier of the curated list
+          example: '12345'
+        Name:
+          type: string
+          description: Display name of the curated list
+          example: Tech Watchlist
+        Description:
+          type: string
+          description: Description of the curated list
+          example: A list of tech stocks
+        ListImageUrl:
+          type: string
+          description: URL of the list's image
+          example: https://example.com/tech-watchlist.jpg
+        Items:
+          type: array
+          description: Items in the curated list
+          items:
+            $ref: '#/components/schemas/CuratedListItem'
+          example:
+            - InstrumentId: 12345
+    CuratedListItem:
+      type: object
+      description: Represents an item in a curated list
+      properties:
+        InstrumentId:
+          type: integer
+          format: int32
+          description: ID of the financial instrument
+          example: 12345
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get market recommendations
+
+> Retrieves personalized market recommendations for the authenticated user.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/market-recommendations/{itemsCount}
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/market-recommendations/{itemsCount}:
+    get:
+      tags:
+        - Watchlists
+      summary: Get market recommendations
+      description: >-
+        Retrieves personalized market recommendations for the authenticated
+        user.
+      operationId: get_api_v1_market-recommendations_itemsCount
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 040fa1ff-d497-41ad-af36-fecde3282b63
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: itemsCount
+          in: path
+          description: Number of recommendations to return
+          required: true
+          schema:
+            type: integer
+            format: int16
+            default: 10
+            minimum: 1
+            maximum: 100
+          example: 10
+      responses:
+        '200':
+          description: Successfully retrieved market recommendations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketRecommendationsResponse'
+        '204':
+          description: No recommendations available
+components:
+  schemas:
+    MarketRecommendationsResponse:
+      type: object
+      description: Response containing market recommendations
+      properties:
+        ResponseType:
+          type: string
+          description: Type of recommendation response
+          example: Instrument
+        Recommendations:
+          type: array
+          description: List of recommended instrument IDs
+          items:
+            type: integer
+            format: int32
+          example:
+            - 12345
+            - 67890
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get user watchlists
+
+> Retrieves all watchlists for the authenticated user with optional pagination and built-in watchlist management.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/watchlists
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists:
+    get:
+      tags:
+        - Watchlists
+      summary: Get user watchlists
+      description: >-
+        Retrieves all watchlists for the authenticated user with optional
+        pagination and built-in watchlist management.
+      operationId: get_api_v1_watchlists
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: b4acf81f-9fc6-4741-b538-d5c814d4794b
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: itemsPerPageForSingle
+          in: query
+          description: Number of items to include per watchlist for pagination
+          schema:
+            type: integer
+            format: int32
+            default: 100
+            minimum: 1
+            maximum: 1000
+            example: 100
+        - name: ensureBuiltinWatchlists
+          in: query
+          description: Whether to ensure built-in watchlists are included
+          schema:
+            type: boolean
+            default: true
+            example: true
+        - name: addRelatedAssets
+          in: query
+          description: Whether to include related assets in the response
+          schema:
+            type: boolean
+            default: false
+            example: false
+      responses:
+        '200':
+          description: Successfully retrieved user watchlists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistsResponse'
+components:
+  schemas:
+    WatchlistsResponse:
+      type: object
+      description: Response containing multiple watchlists with metadata
+      properties:
+        watchlists:
+          type: array
+          description: List of user watchlists
+          items:
+            $ref: '#/components/schemas/WatchlistResponse'
+        metadata:
+          type: object
+          description: Response metadata including pagination info
+          properties:
+            totalCount:
+              type: integer
+              description: Total number of watchlists
+              example: 100
+            maxItemsInWatchlist:
+              type: integer
+              description: Maximum allowed items per watchlist
+              example: 1000
+            maxWatchlistPerUser:
+              type: integer
+              description: Maximum allowed watchlists per user
+              example: 10
+    WatchlistResponse:
+      type: object
+      description: Represents a watchlist with its metadata and items
+      properties:
+        WatchlistId:
+          type: string
+          description: Unique identifier of the watchlist
+          example: '12345'
+        Name:
+          type: string
+          description: Display name of the watchlist
+          example: Tech Watchlist
+        Gcid:
+          type: integer
+          format: int32
+          description: Global Customer ID of the watchlist owner
+          example: 12345
+        WatchlistType:
+          type: string
+          enum:
+            - Static
+            - Dynamic
+          description: Type of the watchlist
+          example: Static
+        TotalItems:
+          type: integer
+          format: int32
+          description: Total number of items in the watchlist
+          example: 100
+        IsDefault:
+          type: boolean
+          description: Whether this is a default system watchlist
+          example: true
+        IsUserSelectedDefault:
+          type: boolean
+          description: Whether this is the user's selected default watchlist
+          example: true
+        WatchlistRank:
+          type: integer
+          format: int32
+          description: Display order rank of the watchlist
+          example: 1
+        DynamicUrl:
+          type: string
+          description: URL for dynamic watchlist queries
+        Items:
+          type: array
+          description: Items contained in the watchlist
+          items:
+            $ref: '#/components/schemas/WatchlistItemDto'
+          example:
+            - ItemId: 12345
+              ItemType: Instrument
+              ItemRank: 1
+        RelatedAssets:
+          type: array
+          description: Related asset IDs
+          items:
+            type: integer
+            format: int32
+          example:
+            - 12345
+            - 67890
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Create a new watchlist
+
+> Creates a new watchlist for the authenticated user with the specified name and type.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json post /api/v1/watchlists
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists:
+    post:
+      tags:
+        - Watchlists
+      summary: Create a new watchlist
+      description: >-
+        Creates a new watchlist for the authenticated user with the specified
+        name and type.
+      operationId: post_api_v1_watchlists
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 951fac8a-9138-4d79-b275-13fc4b8502b8
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: name
+          in: query
+          description: Name of the new watchlist
+          required: true
+          schema:
+            type: string
+            maxLength: 100
+            example: Tech Watchlist
+        - name: type
+          in: query
+          description: Type of watchlist to create
+          schema:
+            type: string
+            enum:
+              - Static
+              - Dynamic
+            default: Static
+            example: Static
+        - name: dynamicQuery
+          in: query
+          description: Dynamic query URL for dynamic watchlists
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Watchlist created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistResponse'
+components:
+  schemas:
+    WatchlistResponse:
+      type: object
+      description: Represents a watchlist with its metadata and items
+      properties:
+        WatchlistId:
+          type: string
+          description: Unique identifier of the watchlist
+          example: '12345'
+        Name:
+          type: string
+          description: Display name of the watchlist
+          example: Tech Watchlist
+        Gcid:
+          type: integer
+          format: int32
+          description: Global Customer ID of the watchlist owner
+          example: 12345
+        WatchlistType:
+          type: string
+          enum:
+            - Static
+            - Dynamic
+          description: Type of the watchlist
+          example: Static
+        TotalItems:
+          type: integer
+          format: int32
+          description: Total number of items in the watchlist
+          example: 100
+        IsDefault:
+          type: boolean
+          description: Whether this is a default system watchlist
+          example: true
+        IsUserSelectedDefault:
+          type: boolean
+          description: Whether this is the user's selected default watchlist
+          example: true
+        WatchlistRank:
+          type: integer
+          format: int32
+          description: Display order rank of the watchlist
+          example: 1
+        DynamicUrl:
+          type: string
+          description: URL for dynamic watchlist queries
+        Items:
+          type: array
+          description: Items contained in the watchlist
+          items:
+            $ref: '#/components/schemas/WatchlistItemDto'
+          example:
+            - ItemId: 12345
+              ItemType: Instrument
+              ItemRank: 1
+        RelatedAssets:
+          type: array
+          description: Related asset IDs
+          items:
+            type: integer
+            format: int32
+          example:
+            - 12345
+            - 67890
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Create default watchlist with selected items
+
+> Creates a default watchlist populated with the specified items.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json post /api/v1/watchlists/default-watchlist/selected-items
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/default-watchlist/selected-items:
+    post:
+      tags:
+        - Watchlists
+      summary: Create default watchlist with selected items
+      description: Creates a default watchlist populated with the specified items.
+      operationId: post_api_v1_watchlists_default-watchlist_selected-items
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: df1848af-38a2-4dd2-a35b-b5990d1da406
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+      requestBody:
+        description: Items to include in the default watchlist
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/WatchlistItemDto'
+      responses:
+        '201':
+          description: Default watchlist created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistResponse'
+components:
+  schemas:
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+    WatchlistResponse:
+      type: object
+      description: Represents a watchlist with its metadata and items
+      properties:
+        WatchlistId:
+          type: string
+          description: Unique identifier of the watchlist
+          example: '12345'
+        Name:
+          type: string
+          description: Display name of the watchlist
+          example: Tech Watchlist
+        Gcid:
+          type: integer
+          format: int32
+          description: Global Customer ID of the watchlist owner
+          example: 12345
+        WatchlistType:
+          type: string
+          enum:
+            - Static
+            - Dynamic
+          description: Type of the watchlist
+          example: Static
+        TotalItems:
+          type: integer
+          format: int32
+          description: Total number of items in the watchlist
+          example: 100
+        IsDefault:
+          type: boolean
+          description: Whether this is a default system watchlist
+          example: true
+        IsUserSelectedDefault:
+          type: boolean
+          description: Whether this is the user's selected default watchlist
+          example: true
+        WatchlistRank:
+          type: integer
+          format: int32
+          description: Display order rank of the watchlist
+          example: 1
+        DynamicUrl:
+          type: string
+          description: URL for dynamic watchlist queries
+        Items:
+          type: array
+          description: Items contained in the watchlist
+          items:
+            $ref: '#/components/schemas/WatchlistItemDto'
+          example:
+            - ItemId: 12345
+              ItemType: Instrument
+              ItemRank: 1
+        RelatedAssets:
+          type: array
+          description: Related asset IDs
+          items:
+            type: integer
+            format: int32
+          example:
+            - 12345
+            - 67890
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get default watchlist items
+
+> Retrieves items from user's default watchlists with optional pagination.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/watchlists/default-watchlists/items
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/default-watchlists/items:
+    get:
+      tags:
+        - Watchlists
+      summary: Get default watchlist items
+      description: Retrieves items from user's default watchlists with optional pagination.
+      operationId: get_api_v1_watchlists_default-watchlists_items
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: a6b110b9-af91-4630-83e9-ad631727d476
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: itemsLimit
+          in: query
+          description: Maximum number of items to return
+          schema:
+            type: integer
+            format: int32
+          example: 123456
+        - name: itemsPerPage
+          in: query
+          description: Number of items per page for pagination
+          schema:
+            type: integer
+            format: int32
+            default: 100
+          example: 100
+      responses:
+        '200':
+          description: Successfully retrieved default watchlist items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WatchlistItemDto'
+components:
+  schemas:
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Create watchlist and set as default
+
+> Creates a new watchlist and immediately sets it as the user's default watchlist.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json post /api/v1/watchlists/newasdefault-watchlist
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/newasdefault-watchlist:
+    post:
+      tags:
+        - Watchlists
+      summary: Create watchlist and set as default
+      description: >-
+        Creates a new watchlist and immediately sets it as the user's default
+        watchlist.
+      operationId: post_api_v1_watchlists_newasdefault-watchlist
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: f8f795f9-f44b-43a0-a07b-fae4b1be6f71
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: name
+          in: query
+          description: Name of the new watchlist
+          required: true
+          schema:
+            type: string
+            maxLength: 100
+          example: Tech Watchlist
+        - name: type
+          in: query
+          description: Type of watchlist to create
+          schema:
+            type: string
+            default: Static
+            enum:
+              - Static
+              - Dynamic
+          example: Static
+        - name: dynamicQuery
+          in: query
+          description: Query string for dynamic watchlists
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Watchlist created and set as default successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistResponse'
+components:
+  schemas:
+    WatchlistResponse:
+      type: object
+      description: Represents a watchlist with its metadata and items
+      properties:
+        WatchlistId:
+          type: string
+          description: Unique identifier of the watchlist
+          example: '12345'
+        Name:
+          type: string
+          description: Display name of the watchlist
+          example: Tech Watchlist
+        Gcid:
+          type: integer
+          format: int32
+          description: Global Customer ID of the watchlist owner
+          example: 12345
+        WatchlistType:
+          type: string
+          enum:
+            - Static
+            - Dynamic
+          description: Type of the watchlist
+          example: Static
+        TotalItems:
+          type: integer
+          format: int32
+          description: Total number of items in the watchlist
+          example: 100
+        IsDefault:
+          type: boolean
+          description: Whether this is a default system watchlist
+          example: true
+        IsUserSelectedDefault:
+          type: boolean
+          description: Whether this is the user's selected default watchlist
+          example: true
+        WatchlistRank:
+          type: integer
+          format: int32
+          description: Display order rank of the watchlist
+          example: 1
+        DynamicUrl:
+          type: string
+          description: URL for dynamic watchlist queries
+        Items:
+          type: array
+          description: Items contained in the watchlist
+          items:
+            $ref: '#/components/schemas/WatchlistItemDto'
+          example:
+            - ItemId: 12345
+              ItemType: Instrument
+              ItemRank: 1
+        RelatedAssets:
+          type: array
+          description: Related asset IDs
+          items:
+            type: integer
+            format: int32
+          example:
+            - 12345
+            - 67890
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get user's public watchlists
+
+> Retrieves all public watchlists for a specific user.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/watchlists/public/{userId}
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/public/{userId}:
+    get:
+      tags:
+        - Watchlists
+      summary: Get user's public watchlists
+      description: Retrieves all public watchlists for a specific user.
+      operationId: get_api_v1_watchlists_public_userId
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 78988623-b24c-437f-9c4e-4435b68897a3
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: userId
+          in: path
+          description: User ID whose public watchlists to retrieve
+          required: true
+          schema:
+            type: integer
+            format: int32
+          example: 12345
+        - name: itemsPerPageForSingle
+          in: query
+          description: Number of items per watchlist
+          schema:
+            type: integer
+            format: int32
+            default: 100
+          example: 50
+      responses:
+        '200':
+          description: Successfully retrieved public watchlists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistsResponse'
+components:
+  schemas:
+    WatchlistsResponse:
+      type: object
+      description: Response containing multiple watchlists with metadata
+      properties:
+        watchlists:
+          type: array
+          description: List of user watchlists
+          items:
+            $ref: '#/components/schemas/WatchlistResponse'
+        metadata:
+          type: object
+          description: Response metadata including pagination info
+          properties:
+            totalCount:
+              type: integer
+              description: Total number of watchlists
+              example: 100
+            maxItemsInWatchlist:
+              type: integer
+              description: Maximum allowed items per watchlist
+              example: 1000
+            maxWatchlistPerUser:
+              type: integer
+              description: Maximum allowed watchlists per user
+              example: 10
+    WatchlistResponse:
+      type: object
+      description: Represents a watchlist with its metadata and items
+      properties:
+        WatchlistId:
+          type: string
+          description: Unique identifier of the watchlist
+          example: '12345'
+        Name:
+          type: string
+          description: Display name of the watchlist
+          example: Tech Watchlist
+        Gcid:
+          type: integer
+          format: int32
+          description: Global Customer ID of the watchlist owner
+          example: 12345
+        WatchlistType:
+          type: string
+          enum:
+            - Static
+            - Dynamic
+          description: Type of the watchlist
+          example: Static
+        TotalItems:
+          type: integer
+          format: int32
+          description: Total number of items in the watchlist
+          example: 100
+        IsDefault:
+          type: boolean
+          description: Whether this is a default system watchlist
+          example: true
+        IsUserSelectedDefault:
+          type: boolean
+          description: Whether this is the user's selected default watchlist
+          example: true
+        WatchlistRank:
+          type: integer
+          format: int32
+          description: Display order rank of the watchlist
+          example: 1
+        DynamicUrl:
+          type: string
+          description: URL for dynamic watchlist queries
+        Items:
+          type: array
+          description: Items contained in the watchlist
+          items:
+            $ref: '#/components/schemas/WatchlistItemDto'
+          example:
+            - ItemId: 12345
+              ItemType: Instrument
+              ItemRank: 1
+        RelatedAssets:
+          type: array
+          description: Related asset IDs
+          items:
+            type: integer
+            format: int32
+          example:
+            - 12345
+            - 67890
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get single public watchlist
+
+> Retrieves a specific public watchlist from a user.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/watchlists/public/{userId}/{watchlistId}
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/public/{userId}/{watchlistId}:
+    get:
+      tags:
+        - Watchlists
+      summary: Get single public watchlist
+      description: Retrieves a specific public watchlist from a user.
+      operationId: get_api_v1_watchlists_public_userId__watchlistId
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 81d7a2f8-f0a2-48e1-8511-9a8c32ff7e90
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: userId
+          in: path
+          description: User ID who owns the watchlist
+          required: true
+          schema:
+            type: integer
+            format: int32
+          example: 12345
+        - name: watchlistId
+          in: path
+          description: Unique identifier of the watchlist
+          required: true
+          schema:
+            type: string
+          example: '12345'
+        - name: pageNumber
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            format: int32
+            default: 0
+          example: 0
+        - name: itemsPerPage
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            format: int32
+            default: 100
+          example: 30
+      responses:
+        '200':
+          description: Successfully retrieved public watchlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistResponse'
+components:
+  schemas:
+    WatchlistResponse:
+      type: object
+      description: Represents a watchlist with its metadata and items
+      properties:
+        WatchlistId:
+          type: string
+          description: Unique identifier of the watchlist
+          example: '12345'
+        Name:
+          type: string
+          description: Display name of the watchlist
+          example: Tech Watchlist
+        Gcid:
+          type: integer
+          format: int32
+          description: Global Customer ID of the watchlist owner
+          example: 12345
+        WatchlistType:
+          type: string
+          enum:
+            - Static
+            - Dynamic
+          description: Type of the watchlist
+          example: Static
+        TotalItems:
+          type: integer
+          format: int32
+          description: Total number of items in the watchlist
+          example: 100
+        IsDefault:
+          type: boolean
+          description: Whether this is a default system watchlist
+          example: true
+        IsUserSelectedDefault:
+          type: boolean
+          description: Whether this is the user's selected default watchlist
+          example: true
+        WatchlistRank:
+          type: integer
+          format: int32
+          description: Display order rank of the watchlist
+          example: 1
+        DynamicUrl:
+          type: string
+          description: URL for dynamic watchlist queries
+        Items:
+          type: array
+          description: Items contained in the watchlist
+          items:
+            $ref: '#/components/schemas/WatchlistItemDto'
+          example:
+            - ItemId: 12345
+              ItemType: Instrument
+              ItemRank: 1
+        RelatedAssets:
+          type: array
+          description: Related asset IDs
+          items:
+            type: integer
+            format: int32
+          example:
+            - 12345
+            - 67890
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get single public watchlist
+
+> Retrieves a specific public watchlist from a user.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/watchlists/public/{userId}/{watchlistId}
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/public/{userId}/{watchlistId}:
+    get:
+      tags:
+        - Watchlists
+      summary: Get single public watchlist
+      description: Retrieves a specific public watchlist from a user.
+      operationId: get_api_v1_watchlists_public_userId__watchlistId
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 81d7a2f8-f0a2-48e1-8511-9a8c32ff7e90
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: userId
+          in: path
+          description: User ID who owns the watchlist
+          required: true
+          schema:
+            type: integer
+            format: int32
+          example: 12345
+        - name: watchlistId
+          in: path
+          description: Unique identifier of the watchlist
+          required: true
+          schema:
+            type: string
+          example: '12345'
+        - name: pageNumber
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            format: int32
+            default: 0
+          example: 0
+        - name: itemsPerPage
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            format: int32
+            default: 100
+          example: 30
+      responses:
+        '200':
+          description: Successfully retrieved public watchlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistResponse'
+components:
+  schemas:
+    WatchlistResponse:
+      type: object
+      description: Represents a watchlist with its metadata and items
+      properties:
+        WatchlistId:
+          type: string
+          description: Unique identifier of the watchlist
+          example: '12345'
+        Name:
+          type: string
+          description: Display name of the watchlist
+          example: Tech Watchlist
+        Gcid:
+          type: integer
+          format: int32
+          description: Global Customer ID of the watchlist owner
+          example: 12345
+        WatchlistType:
+          type: string
+          enum:
+            - Static
+            - Dynamic
+          description: Type of the watchlist
+          example: Static
+        TotalItems:
+          type: integer
+          format: int32
+          description: Total number of items in the watchlist
+          example: 100
+        IsDefault:
+          type: boolean
+          description: Whether this is a default system watchlist
+          example: true
+        IsUserSelectedDefault:
+          type: boolean
+          description: Whether this is the user's selected default watchlist
+          example: true
+        WatchlistRank:
+          type: integer
+          format: int32
+          description: Display order rank of the watchlist
+          example: 1
+        DynamicUrl:
+          type: string
+          description: URL for dynamic watchlist queries
+        Items:
+          type: array
+          description: Items contained in the watchlist
+          items:
+            $ref: '#/components/schemas/WatchlistItemDto'
+          example:
+            - ItemId: 12345
+              ItemType: Instrument
+              ItemRank: 1
+        RelatedAssets:
+          type: array
+          description: Related asset IDs
+          items:
+            type: integer
+            format: int32
+          example:
+            - 12345
+            - 67890
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Set a specific watchlist as user's default
+
+> Sets the specified watchlist as the user's default watchlist.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json put /api/v1/watchlists/setUserSelectedUserDefault/{watchlistId}
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/setUserSelectedUserDefault/{watchlistId}:
+    put:
+      tags:
+        - Watchlists
+      summary: Set a specific watchlist as user's default
+      description: Sets the specified watchlist as the user's default watchlist.
+      operationId: put_api_v1_watchlists_setUserSelectedUserDefault_watchlistId
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 7e30ac21-8431-48a7-8c9f-d20c3be3b683
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: watchlistId
+          in: path
+          description: Unique identifier of the watchlist to set as default
+          required: true
+          schema:
+            type: string
+          example: '12345'
+      responses:
+        '200':
+          description: Default watchlist set successfully
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get single watchlist
+
+> Retrieves a specific watchlist with its items using pagination.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/watchlists/{watchlistId}
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/{watchlistId}:
+    get:
+      tags:
+        - Watchlists
+      summary: Get single watchlist
+      description: Retrieves a specific watchlist with its items using pagination.
+      operationId: get_api_v1_watchlists_watchlistId
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: a839a6be-cbb7-4735-b31a-5afd2ef3b064
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: watchlistId
+          in: path
+          description: Unique identifier of the watchlist
+          required: true
+          schema:
+            type: string
+          example: '12345'
+        - name: pageNumber
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            format: int32
+            default: 0
+            minimum: 0
+          example: 0
+        - name: itemsPerPage
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            format: int32
+            default: 100
+            minimum: 1
+            maximum: 1000
+          example: 50
+      responses:
+        '200':
+          description: Successfully retrieved watchlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistResponse'
+components:
+  schemas:
+    WatchlistResponse:
+      type: object
+      description: Represents a watchlist with its metadata and items
+      properties:
+        WatchlistId:
+          type: string
+          description: Unique identifier of the watchlist
+          example: '12345'
+        Name:
+          type: string
+          description: Display name of the watchlist
+          example: Tech Watchlist
+        Gcid:
+          type: integer
+          format: int32
+          description: Global Customer ID of the watchlist owner
+          example: 12345
+        WatchlistType:
+          type: string
+          enum:
+            - Static
+            - Dynamic
+          description: Type of the watchlist
+          example: Static
+        TotalItems:
+          type: integer
+          format: int32
+          description: Total number of items in the watchlist
+          example: 100
+        IsDefault:
+          type: boolean
+          description: Whether this is a default system watchlist
+          example: true
+        IsUserSelectedDefault:
+          type: boolean
+          description: Whether this is the user's selected default watchlist
+          example: true
+        WatchlistRank:
+          type: integer
+          format: int32
+          description: Display order rank of the watchlist
+          example: 1
+        DynamicUrl:
+          type: string
+          description: URL for dynamic watchlist queries
+        Items:
+          type: array
+          description: Items contained in the watchlist
+          items:
+            $ref: '#/components/schemas/WatchlistItemDto'
+          example:
+            - ItemId: 12345
+              ItemType: Instrument
+              ItemRank: 1
+        RelatedAssets:
+          type: array
+          description: Related asset IDs
+          items:
+            type: integer
+            format: int32
+          example:
+            - 12345
+            - 67890
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Rename watchlist
+
+> Updates the name of an existing watchlist.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json put /api/v1/watchlists/{watchlistId}
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/{watchlistId}:
+    put:
+      tags:
+        - Watchlists
+      summary: Rename watchlist
+      description: Updates the name of an existing watchlist.
+      operationId: put_api_v1_watchlists_watchlistId
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 3a86d262-3f16-4ec9-96d7-9a15eb2c24ee
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: watchlistId
+          in: path
+          description: Unique identifier of the watchlist
+          required: true
+          schema:
+            type: string
+          example: '12345'
+        - name: newName
+          in: query
+          description: New name for the watchlist
+          required: true
+          schema:
+            type: string
+            maxLength: 100
+          example: Updated Watchlist
+      responses:
+        '204':
+          description: Watchlist renamed successfully
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Delete watchlist
+
+> Removes a watchlist and all its items.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json delete /api/v1/watchlists/{watchlistId}
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/{watchlistId}:
+    delete:
+      tags:
+        - Watchlists
+      summary: Delete watchlist
+      description: Removes a watchlist and all its items.
+      operationId: delete_api_v1_watchlists_watchlistId
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 2326068c-ed98-452b-9b41-05c45bc7b1a1
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: watchlistId
+          in: path
+          description: Unique identifier of the watchlist to delete
+          required: true
+          schema:
+            type: string
+          example: '12345'
+      responses:
+        '204':
+          description: Watchlist deleted successfully
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Update items in watchlist
+
+> Updates existing items in a watchlist (rank, etc.).
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json put /api/v1/watchlists/{watchlistId}/items
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/{watchlistId}/items:
+    put:
+      tags:
+        - Watchlists
+      summary: Update items in watchlist
+      description: Updates existing items in a watchlist (rank, etc.).
+      operationId: put_api_v1_watchlists_watchlistId_items
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 7a1c7e8c-ebf0-4e75-93ac-2391f5c17c67
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: watchlistId
+          in: path
+          description: Unique identifier of the watchlist
+          required: true
+          schema:
+            type: string
+          example: '12345'
+      requestBody:
+        description: Items to update in the watchlist
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/WatchlistItemDto'
+      responses:
+        '204':
+          description: Items updated successfully
+components:
+  schemas:
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Add items to watchlist
+
+> Adds new items to an existing watchlist.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json post /api/v1/watchlists/{watchlistId}/items
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/{watchlistId}/items:
+    post:
+      tags:
+        - Watchlists
+      summary: Add items to watchlist
+      description: Adds new items to an existing watchlist.
+      operationId: post_api_v1_watchlists_watchlistId_items
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 9ac1f9ec-6ecf-484d-a098-15cfbfde1d1e
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: watchlistId
+          in: path
+          description: Unique identifier of the watchlist
+          required: true
+          schema:
+            type: string
+          example: '12345'
+      requestBody:
+        description: Items to add to the watchlist
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/WatchlistItemDto'
+      responses:
+        '201':
+          description: Items added successfully
+components:
+  schemas:
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Remove items from watchlist
+
+> Removes specified items from a watchlist.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json delete /api/v1/watchlists/{watchlistId}/items
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/watchlists/{watchlistId}/items:
+    delete:
+      tags:
+        - Watchlists
+      summary: Remove items from watchlist
+      description: Removes specified items from a watchlist.
+      operationId: delete_api_v1_watchlists_watchlistId_items
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 842a6b52-5d74-4044-9c64-57239df483dc
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: watchlistId
+          in: path
+          description: Unique identifier of the watchlist
+          required: true
+          schema:
+            type: string
+          example: '12345'
+      requestBody:
+        description: Items to remove from the watchlist
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/WatchlistItemDto'
+      responses:
+        '204':
+          description: Items removed successfully
+components:
+  schemas:
+    WatchlistItemDto:
+      type: object
+      description: Represents an item in a watchlist
+      required:
+        - ItemId
+        - ItemType
+      properties:
+        ItemId:
+          type: integer
+          format: int32
+          description: Unique identifier of the financial instrument
+          example: 12345
+        ItemType:
+          type: string
+          description: Type of the financial instrument (e.g., 'Instrument', 'Person')
+          example: Instrument
+        ItemRank:
+          type: integer
+          format: int32
+          description: Ranking position of the item in the watchlist
+          default: 0
+          example: 1
+
+````

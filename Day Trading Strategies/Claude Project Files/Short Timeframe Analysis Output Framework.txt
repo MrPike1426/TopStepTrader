@@ -1,0 +1,179 @@
+# Enhanced Technical Analysis Framework
+Version 1.0
+
+## 1. Initial Context (25-50 words)
+- Ticker symbol & timeframe analyzed
+- Current market session & conditions
+- Key market indices status
+- Notable sector activity
+- Recent volatility context (ATR)
+
+## 2. TLDR Summary (Single focused paragraph, max 75 words)
+- Clear directional bias (LONG/SHORT/NEUTRAL)
+One or two sentence trade recommendation with direction and key levels.
+
+## 3. Candlestick Analysis 
+### Recent Price Action
+- Individual candle analysis (last 3-5 candles) 
+  - Doji patterns
+  - Hammer/Inverted hammer signals
+  - Long body candles
+  - Topping/Bottoming tails
+- Multi-candle patterns
+  - Trend direction
+  - Momentum assessment
+  - Volume correlation
+
+### Pattern Recognition
+Focus on TCG's primary patterns:
+1. Double Bottom/Top
+   - Support/resistance levels
+   - Volume confirmation
+   - Stop placement zones
+2. Equilibrium/Symmetrical Triangle
+   - Trend line convergence
+   - Volume contraction
+   - Breakout targets
+3. Head & Shoulders
+   - Neckline identification
+   - Volume profile
+   - Target measurement
+
+## 4. Moving Average Analysis
+### Core EMAs (9, 20, 50, 200)
+- Price relationship to each EMA
+- EMA stacking order
+- Crossover signals
+
+### TCG EMA Strategies
+1. Smush Zone Setup
+   - EMA compression identification
+   - Volume characteristics
+   - Breakout potential
+
+2. Double Tap Pattern
+   - EMA resistance/support levels
+   - Price rejection points
+   - Trading range definition
+
+3. Flipperoo Signals
+   - Dominant EMA identification
+   - Support/resistance flip points
+   - Follow-through confirmation
+
+## 5. Technical Indicator Suite
+### Primary Indicators
+- RSI (Relative Strength Index)
+  - Overbought/oversold levels
+  - Divergence patterns
+  - Trend strength
+
+- Bollinger Bands
+  - Price location within bands
+  - Band width trends
+  - Extreme moves (outside bands)
+
+### Volume Analysis
+- Current vs. Average volume
+- Volume trend analysis
+- Price/volume relationships
+- Key volume nodes
+
+## 6. Risk Management Framework
+### Position Sizing
+- Account risk parameters (1-2% max per trade)
+- ATR-based position sizing
+- Leverage considerations
+- Scaling rules
+
+### Stop Loss Strategy
+- Technical stop placement
+- ATR-based stop ranges
+- Time-based stops
+- Scale-out levels
+
+### Profit Targets
+- Primary target (2:1 minimum R:R)
+- Secondary targets
+- Trailing stop methodology
+- Scale-out points
+
+## 7. Trade Execution Plan
+### Entry Strategy
+Base Position (40%)
+- Entry price zones
+- Stop placement
+- Initial target
+- Dollar risk amount
+
+Scaling Plan (if confirmed)
+- Second entry (30%) conditions
+- Final entry (30%) conditions
+- Stop adjustments
+- Target adjustments
+
+### Trade Management
+- Scale-out levels
+- Stop adjustment rules
+- Time-based management
+- Pattern invalidation points
+
+## 8. Market Context
+- Market breadth indicators
+- Sector rotation analysis
+- Correlated assets
+- Key economic events
+
+## 9. Psychological Conditions
+- Fear/Greed assessment
+- Momentum characteristics
+- Crowd psychology indicators
+- FOMO potential
+
+## 10. Trade Journal
+Entry Analysis:
+- Setup quality (1-10)
+- Pattern clarity
+- Risk/reward ratio
+- Technical alignment
+
+Exit Analysis:
+- Target achievement
+- Stop execution
+- Scale-out effectiveness
+- Strategy adherence
+
+Lessons Learned:
+- What worked
+- What didn't work
+- Adjustments needed
+- Psychology notes
+
+## Pre-Analysis Checklist
+1. Data Verification
+   - Price data current
+   - Volume data valid
+   - Indicator calculations verified
+   - Timeframe alignment checked
+
+2. Pattern Validation
+   - Multiple timeframe confirmation
+   - Volume confirmation
+   - Key level identification
+   - Risk/reward minimum 2:1
+
+3. Risk Assessment
+   - Position size calculated
+   - Stop loss placement valid
+   - Maximum risk exposure defined
+   - Pattern invalidation clear
+
+## Update Format (Intraday)
+Brief update on:
+1. Pattern development
+2. Technical changes
+3. Volume conditions
+4. New opportunities
+5. Risk adjustments
+
+Note: All analysis should prioritize risk management and align with TCG's principles of disciplined trading and emotional control.

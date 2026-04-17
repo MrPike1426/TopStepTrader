@@ -1,0 +1,1348 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Retrieves a list of exchanges supported by the platform along with basic descriptive data.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/market-data/exchanges
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/market-data/exchanges:
+    get:
+      tags:
+        - Market Data
+      summary: >-
+        Retrieves a list of exchanges supported by the platform along with basic
+        descriptive data.
+      operationId: GetExchanges
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 5311edab-c115-4ccb-a707-8390cb1251ef
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: exchangeIds
+          in: query
+          description: A comma seperated list of exchange ids to retrieve
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangesResponse'
+components:
+  schemas:
+    ExchangesResponse:
+      type: object
+      properties:
+        exchangeInfo:
+          type: array
+          items:
+            type: object
+            properties:
+              exchangeId:
+                type: integer
+              exchangeDescription:
+                type: string
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Fetch available instrument types (asset classes) such as stocks, ETFs, commodities, etc.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/market-data/instrument-types
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/market-data/instrument-types:
+    get:
+      tags:
+        - Market Data
+      summary: >-
+        Fetch available instrument types (asset classes) such as stocks, ETFs,
+        commodities, etc.
+      operationId: GetInstrumentTypes
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: c14542e0-ff4d-4425-96f4-33d42bd34ccb
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: instrumentTypeIds
+          in: query
+          description: A comma seperated list of instrument type ids to retrieve
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentTypesResponse'
+components:
+  schemas:
+    InstrumentTypesResponse:
+      type: object
+      properties:
+        instrumentTypes:
+          type: array
+          items:
+            type: object
+            properties:
+              instrumentTypeId:
+                type: integer
+              instrumentTypeDescription:
+                type: string
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Retrieves metadata for specified instruments, including display names, exchange IDs, and classification.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/market-data/instruments
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/market-data/instruments:
+    get:
+      tags:
+        - Market Data
+      summary: >-
+        Retrieves metadata for specified instruments, including display names,
+        exchange IDs, and classification.
+      operationId: GetInstrumentsByFilters
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: ccac4bbf-f9cf-456c-b380-b71fcef1df66
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: instrumentIds
+          in: query
+          description: A comma seperated list of instrument ids to filter on
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int32
+        - name: exchangeIds
+          in: query
+          description: A comma seperated list of exchange ids to filter on
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int32
+        - name: stocksIndustryIds
+          in: query
+          description: A comma seperated list of stock industry ids to filter on
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int32
+        - name: instrumentTypeIds
+          in: query
+          description: A comma seperated list of instrument type ids to filter on
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentsResponse'
+components:
+  schemas:
+    InstrumentsResponse:
+      type: object
+      properties:
+        instrumentDisplayDatas:
+          type: array
+          items:
+            type: object
+            properties:
+              instrumentId:
+                type: integer
+              instrumentDisplayName:
+                type: string
+              instrumentTypeId:
+                type: integer
+              exchangeId:
+                type: integer
+              symbolFull:
+                type: string
+              stocksIndustryId:
+                type: integer
+              priceSource:
+                type: string
+                description: >-
+                  The data provider or market source for the price, such as
+                  Nasdaq, LSE, or CME.
+              hasExpirationDate:
+                type: boolean
+              isInternalInstrument:
+                type: boolean
+                description: >-
+                  If set to true, the instrument is restricted from public
+                  access.
+              images:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    instrumentId:
+                      type: integer
+                    width:
+                      type: integer
+                    height:
+                      type: integer
+                    uri:
+                      type: string
+                    backgroundColor:
+                      type: string
+                    textColor:
+                      type: string
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get historical closing prices for all instruments
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/market-data/instruments/history/closing-price
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/market-data/instruments/history/closing-price:
+    get:
+      tags:
+        - Market Data
+      summary: Get historical closing prices for all instruments
+      operationId: getClosingPrices
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: e97cf2ae-0aff-4471-907e-5f90bf0e002b
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+      responses:
+        '200':
+          description: Successful retrieval of closing prices
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/closingPricesResponse'
+              example:
+                - instrumentId: 1002
+                  officialClosingPrice: 175.75
+                  isMarketOpen: true
+                  closingPrices:
+                    daily:
+                      price: 175.75
+                      date: '2025-03-07 00:00:00Z'
+                    weekly:
+                      price: 175.75
+                      date: '2025-03-07 00:00:00Z'
+                    monthly:
+                      price: 172.22
+                      date: '2025-02-28 00:00:00Z'
+                - instrumentId: 999
+                  officialClosingPrice: 68
+                  isMarketOpen: false
+                  closingPrices:
+                    daily:
+                      price: 68
+                      date: '2024-11-16 00:00:00Z'
+                    weekly:
+                      price: 68
+                      date: '2024-11-16 00:00:00Z'
+                    monthly:
+                      price: -1
+                      date: '0001-01-01 00:00:00Z'
+components:
+  schemas:
+    closingPricesResponse:
+      type: array
+      description: List of closing prices for all instruments
+      items:
+        type: object
+        description: Closing price information for a specific instrument
+        properties:
+          instrumentId:
+            type: integer
+            description: Unique identifier of the instrument
+          officialClosingPrice:
+            type: number
+            format: float
+            description: Most recent official closing price for the instrument
+          isMarketOpen:
+            type: boolean
+            description: Obsolete - Do not use
+          closingPrices:
+            type: object
+            description: Historical closing prices at different time intervals
+            properties:
+              daily:
+                type: object
+                description: Official closing price from the previous trading day
+                properties:
+                  price:
+                    type: number
+                    format: float
+                    description: Closing price value
+                  date:
+                    type: string
+                    format: date-time
+                    description: Date and time of the closing price in ISO 8601 format
+              weekly:
+                type: object
+                description: Official closing price from the previous trading week
+                properties:
+                  price:
+                    type: number
+                    format: float
+                    description: Closing price value
+                  date:
+                    type: string
+                    format: date-time
+                    description: Date and time of the closing price in ISO 8601 format
+              monthly:
+                type: object
+                description: Official closing price from the previous trading month
+                properties:
+                  price:
+                    type: number
+                    format: float
+                    description: >-
+                      Closing price value. A value of -1 indicates no data
+                      available.
+                  date:
+                    type: string
+                    format: date-time
+                    description: >-
+                      Date and time of the closing price in ISO 8601 format.
+                      Default date (0001-01-01) indicates no data available.
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Retrieve current market rates and pricing information for specified instruments
+
+> Provides real-time market data including bid/ask prices, conversion rates, and execution prices for specified financial instruments. Essential for price discovery and trade execution decisions.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/market-data/instruments/rates
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/market-data/instruments/rates:
+    get:
+      tags:
+        - Market Data
+      summary: >-
+        Retrieve current market rates and pricing information for specified
+        instruments
+      description: >-
+        Provides real-time market data including bid/ask prices, conversion
+        rates, and execution prices for specified financial instruments.
+        Essential for price discovery and trade execution decisions.
+      operationId: get_api_v1_market-data_instruments_rates
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 75be4f6d-24bd-475f-95c4-bf956a61eabe
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: instrumentIds
+          in: query
+          style: form
+          description: >-
+            Comma-separated list of instrument IDs to retrieve market rates for.
+            Each ID represents a unique tradable asset in the system.
+          explode: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int32
+            maxItems: 100
+          example: 1,2,3
+          required: true
+      responses:
+        '200':
+          description: Successfully retrieved current market rates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveRatesResponse'
+        '400':
+          description: >-
+            Invalid request - Typically due to invalid instrument IDs or
+            exceeding maximum limit
+components:
+  schemas:
+    LiveRatesResponse:
+      type: object
+      description: Container for real-time market rates data
+      properties:
+        rates:
+          type: array
+          description: Array of current market rates for requested instruments
+          items:
+            type: object
+            description: Individual instrument rate information
+            properties:
+              instrumentID:
+                type: integer
+                description: Unique identifier for the financial instrument
+              ask:
+                type: number
+                format: float
+                description: >-
+                  Current asking price (offer) for the instrument. This is the
+                  price at which you can buy the asset.
+              bid:
+                type: number
+                format: float
+                description: >-
+                  Current bid price for the instrument. This is the price at
+                  which you can sell the asset.
+              lastExecution:
+                type: number
+                format: float
+                description: Price of the most recent trade execution for this instrument
+              conversionRateAsk:
+                type: number
+                format: float
+                description: >-
+                  Current conversion rate (ask) from instrument's currency to
+                  USD, used for position value calculations
+              conversionRateBid:
+                type: number
+                format: float
+                description: >-
+                  Current conversion rate (bid) from instrument's currency to
+                  USD, used for position value calculations
+              date:
+                type: string
+                format: date-time
+                description: The date-time of the price in the system
+              unitMargin:
+                type: number
+                format: float
+                description: (Obsolete) USD equivalent of the instrument price
+              unitMarginAsk:
+                type: number
+                format: float
+                description: (Obsolete) USD equivalent of the instrument ask price
+              unitMarginBid:
+                type: number
+                format: float
+                description: (Obsolete) USD equivalent of the instrument bid price
+              priceRateID:
+                type: integer
+              bidDiscounted:
+                type: number
+                format: float
+                description: Obsolete
+              askDiscounted:
+                type: number
+                format: float
+                description: Obsolete
+              unitMarginBidDiscounted:
+                type: number
+                format: float
+                description: Obsolete
+              unitMarginAskDiscounted:
+                type: number
+                format: float
+                description: Obsolete
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get historical candles data for an instrument
+
+> Retrieves historical price data in OHLCV (Open, High, Low, Close, Volume) format for a specified instrument. The data is organized into time-based candles of various intervals, from one minute to one week.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/market-data/instruments/{instrumentId}/history/candles/{direction}/{interval}/{candlesCount}
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/market-data/instruments/{instrumentId}/history/candles/{direction}/{interval}/{candlesCount}:
+    get:
+      tags:
+        - Market Data
+      summary: Get historical candles data for an instrument
+      description: >-
+        Retrieves historical price data in OHLCV (Open, High, Low, Close,
+        Volume) format for a specified instrument. The data is organized into
+        time-based candles of various intervals, from one minute to one week.
+      operationId: getCandles
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: fc546905-29af-4bad-a27c-127c9e8a8663
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: direction
+          in: path
+          description: >-
+            Sorting direction of the candles data. Use 'asc' for oldest to
+            newest, or 'desc' for newest to oldest.
+          required: true
+          schema:
+            type: string
+            enum:
+              - asc
+              - desc
+        - name: interval
+          in: path
+          description: >-
+            Time interval for each candle. Determines the granularity of the
+            price data. Shorter intervals provide more detailed price action but
+            require more data points.
+          required: true
+          schema:
+            type: string
+            enum:
+              - OneMinute
+              - FiveMinutes
+              - TenMinutes
+              - FifteenMinutes
+              - ThirtyMinutes
+              - OneHour
+              - FourHours
+              - OneDay
+              - OneWeek
+        - name: candlesCount
+          in: path
+          description: >-
+            Number of candles to retrieve. Maximum value is 1000. For longer
+            historical periods, consider using a larger time interval or making
+            multiple requests.
+          required: true
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - name: instrumentId
+          in: path
+          description: >-
+            Unique identifier of the financial instrument to retrieve candles
+            for. This ID is consistent across all eToro systems.
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful retrieval of candles data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/candlesResponse'
+              example:
+                interval: OneMinute
+                candles:
+                  - instrumentId: 12
+                    candles:
+                      - instrumentID: 12
+                        fromDate: '2025-03-05T10:34:00Z'
+                        open: 1.70227
+                        high: 1.70277
+                        low: 1.70221
+                        close: 1.70253
+                        volume: 0
+                      - instrumentID: 12
+                        fromDate: '2025-03-05T10:35:00Z'
+                        open: 1.70252
+                        high: 1.70276
+                        low: 1.70244
+                        close: 1.70276
+                        volume: 0
+                    rangeOpen: 1.70227
+                    rangeClose: 1.70276
+                    rangeHigh: 1.70277
+                    rangeLow: 1.70221
+                    volume: 0
+components:
+  schemas:
+    candlesResponse:
+      type: object
+      description: Response containing historical price data in candlestick format
+      properties:
+        interval:
+          type: string
+          description: >-
+            Time interval of the returned candles. Matches the interval
+            parameter from the request.
+          enum:
+            - OneMinute
+            - FiveMinutes
+            - TenMinutes
+            - FifteenMinutes
+            - ThirtyMinutes
+            - OneHour
+            - FourHours
+            - OneDay
+            - OneWeek
+        candles:
+          type: array
+          description: List of candle data grouped by instrument
+          items:
+            type: object
+            description: Candle data for a specific instrument
+            properties:
+              instrumentId:
+                type: integer
+                description: Identifier of the instrument these candles belong to
+              candles:
+                type: array
+                description: List of individual candles representing price action over time
+                items:
+                  type: object
+                  description: Individual candle data point
+                  properties:
+                    instrumentID:
+                      type: integer
+                      description: Identifier of the instrument this candle belongs to
+                    fromDate:
+                      type: string
+                      format: date-time
+                      description: Start time of the candle period in ISO 8601 format
+                    open:
+                      type: number
+                      format: float
+                      description: Opening price at the start of the candle period
+                    high:
+                      type: number
+                      format: float
+                      description: Highest price reached during the candle period
+                    low:
+                      type: number
+                      format: float
+                      description: Lowest price reached during the candle period
+                    close:
+                      type: number
+                      format: float
+                      description: Closing price at the end of the candle period
+                    volume:
+                      type: number
+                      format: float
+                      description: Trading volume during the candle period
+              rangeOpen:
+                type: number
+                format: float
+                description: Opening price of the first candle in the range
+              rangeClose:
+                type: number
+                format: float
+                description: Closing price of the last candle in the range
+              rangeHigh:
+                type: number
+                format: float
+                description: Highest price across all candles in the range
+              rangeLow:
+                type: number
+                format: float
+                description: Lowest price across all candles in the range
+              volume:
+                type: number
+                format: float
+                description: Total trading volume across all candles in the range
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Search for Instruments
+
+> Retrieve a list of instruments based on various search criteria. Each field in the response can be utilized as a filter or projection.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/market-data/search
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/market-data/search:
+    get:
+      tags:
+        - Market Data
+      summary: Search for Instruments
+      description: >-
+        Retrieve a list of instruments based on various search criteria. Each
+        field in the response can be utilized as a filter or projection.
+      operationId: get_api_v1_market-data_search
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: df693805-6b0d-4517-a4b2-f6657d7fd9ec
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: searchText
+          in: query
+          description: Text to search for within instrument names.
+          required: false
+          schema:
+            type: string
+        - name: pageSize
+          in: query
+          description: The number of results to return per page.
+          required: false
+          schema:
+            type: integer
+        - name: pageNumber
+          in: query
+          description: The page number to retrieve for pagination.
+          required: false
+          schema:
+            type: integer
+        - name: fields
+          in: query
+          description: >-
+            A comma-separated list of fields to include in the response.
+            Example: pop=popularityUniques7Day,displayname
+          required: true
+          schema:
+            type: string
+        - name: sort
+          in: query
+          description: >-
+            The field to sort by, with direction (asc/desc). Example:
+            popularityUniques7Day desc
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response containing the list of instruments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentSearchResponse'
+components:
+  schemas:
+    InstrumentSearchResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: The current page number.
+        pageSize:
+          type: integer
+          description: The number of items per page.
+        totalItems:
+          type: integer
+          description: The total number of instruments matching the search criteria.
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Instrument'
+    Instrument:
+      type: object
+      properties:
+        instrumentId:
+          type: integer
+          description: A unique identifier for the instrument.
+        displayname:
+          type: string
+          description: The display name of the instrument.
+        popularityUniques7Day:
+          type: integer
+          description: >-
+            The number of unique users who viewed this instrument in the last 7
+            days.
+        instrumentTypeID:
+          type: integer
+          description: The type ID of the instrument.
+        instrumentType:
+          type: string
+          description: The type of the instrument.
+        exchangeID:
+          type: integer
+          description: The ID of the exchange where the instrument is traded.
+        symbol:
+          type: string
+          description: The trading symbol of the instrument.
+        isOpen:
+          type: boolean
+          description: Indicates whether the instrument is currently open for trading.
+        internalAssetClassId:
+          type: integer
+          description: The internal asset class ID.
+        internalInstrumentDisplayName:
+          type: string
+          description: The internal display name of the instrument.
+        isInternalInstrument:
+          type: boolean
+          description: Indicates whether the instrument is internal.
+        internalSymbolFull:
+          type: string
+          description: The full internal symbol of the instrument.
+        isHiddenFromClient:
+          type: boolean
+          description: Indicates whether the instrument is hidden from clients.
+        internalInstrumentId:
+          type: integer
+          description: The internal instrument ID.
+        internalCryptoTypeId:
+          type: integer
+          description: The internal crypto type ID.
+        internalExchangeId:
+          type: integer
+          description: The internal exchange ID.
+        internalExchangeName:
+          type: string
+          description: The internal exchange name.
+        internalAssetClassName:
+          type: string
+          description: The internal asset class name.
+        logo35x35:
+          type: string
+          description: The URL of the 35x35 logo.
+        logo50x50:
+          type: string
+          description: The URL of the 50x50 logo.
+        logo150x150:
+          type: string
+          description: The URL of the 150x150 logo.
+        dailyPriceChange:
+          type: number
+          description: The daily price change.
+        absDailyPriceChange:
+          type: number
+          description: The absolute daily price change.
+        weeklyPriceChange:
+          type: number
+          description: The weekly price change.
+        monthlyPriceChange:
+          type: number
+          description: The monthly price change.
+        isDelisted:
+          type: boolean
+          description: Indicates whether the instrument is delisted.
+        isCurrentlyTradable:
+          type: boolean
+          description: Indicates whether the instrument is currently tradable.
+        isExchangeOpen:
+          type: boolean
+          description: Indicates whether the exchange is open.
+        internalClosingPrice:
+          type: number
+          description: The internal closing price.
+        isActiveInPlatform:
+          type: boolean
+          description: Indicates whether the instrument is active in the platform.
+        isBuyEnabled:
+          type: boolean
+          description: Indicates whether buying is enabled for the instrument.
+        currentRate:
+          type: number
+          description: The current rate of the instrument.
+        threeMonthPriceChange:
+          type: number
+          description: The three-month price change.
+        sixMonthPriceChange:
+          type: number
+          description: The six-month price change.
+        oneYearPriceChange:
+          type: number
+          description: The one-year price change.
+        currMonthPriceChange:
+          type: number
+          description: The current month price change.
+        currQuarterPriceChange:
+          type: number
+          description: The current quarter price change.
+        currYearPriceChange:
+          type: number
+          description: The current year price change.
+        lastYearPriceChange:
+          type: number
+          description: The last year price change.
+        lastTwoYearsPriceChange:
+          type: number
+          description: The last two years price change.
+        oneMonthAgoPriceChange:
+          type: number
+          description: The price change from one month ago.
+        twoMonthsAgoPriceChange:
+          type: number
+          description: The price change from two months ago.
+        threeMonthsAgoPriceChange:
+          type: number
+          description: The price change from three months ago.
+        sixMonthsAgoPriceChange:
+          type: number
+          description: The price change from six months ago.
+        oneYearAgoPriceChange:
+          type: number
+          description: The price change from one year ago.
+        cvtBid:
+          type: number
+          description: The converted bid price.
+        cvtAsk:
+          type: number
+          description: The converted ask price.
+        cvtBiNoSpread:
+          type: number
+          description: The converted bid price without spread.
+        cvtAskNoSpread:
+          type: number
+          description: The converted ask price without spread.
+        traders7DayChange:
+          type: number
+          description: The change in the number of traders over the last 7 days.
+        traders14DayChange:
+          type: number
+          description: The change in the number of traders over the last 14 days.
+        traders30DayChange:
+          type: number
+          description: The change in the number of traders over the last 30 days.
+        popularityUniques14Day:
+          type: integer
+          description: >-
+            The number of unique users who viewed this instrument in the last 14
+            days.
+        popularityUniques30Day:
+          type: integer
+          description: >-
+            The number of unique users who viewed this instrument in the last 30
+            days.
+
+````
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Gets data on available stocks industries
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/market-data/stocks-industries
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/market-data/stocks-industries:
+    get:
+      tags:
+        - Market Data
+      summary: Gets data on available stocks industries
+      operationId: GetStocksIndustries
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 9a9f2ef6-d702-41e0-9339-070b74f0dcae
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: stocksIndustryIds
+          in: query
+          description: A comma seperated list of stock industry ids to retrieves
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StocksIndustriesResponse'
+components:
+  schemas:
+    StocksIndustriesResponse:
+      type: object
+      properties:
+        StocksIndustries:
+          type: array
+          items:
+            type: object
+            properties:
+              industryId:
+                type: integer
+              industryName:
+                type: string
+
+````

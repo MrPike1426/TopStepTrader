@@ -1,0 +1,299 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Build & Test Commands
+
+```bash
+# Restore and build
+dotnet restore
+dotnet build
+
+# Run all tests
+dotnet test
+
+# Run a specific test class
+dotnet test --filter "FullyQualifiedName~TopStepXTick"
+dotnet test --filter "FullyQualifiedName~CryptoStrategyEngine"
+
+# Run the UI application
+dotnet run --project src/TopStepTrader.UI/TopStepTrader.UI.vbproj
+```
+
+The solution targets `net10.0-windows` and requires x64. All projects are VB.NET. The test framework is xUnit.
+
+## Self-Verification — Required After Every Code Change
+
+After **every** file edit, run these two commands and fix any failures before responding "done":
+
+```bash
+# Step 1 — if the app is running and DLLs are locked, build Services only:
+dotnet build src/TopStepTrader.Services/TopStepTrader.Services.vbproj --no-restore -v q
+
+# Step 2 — otherwise build the full solution:
+dotnet build --no-restore -v q
+
+# Step 3 — always run the full test suite:
+dotnet test --no-build -v q
+```
+
+**Expected output:** `221 passed, 0 failed` (as of 2026-04-14). If the count changes after adding new tests, update this number.
+
+**Rules:**
+- Never leave the project in a broken build state.
+- Never report a task complete until both build and test pass.
+- If a test failure is pre-existing (not caused by the current change), flag it explicitly — do not silently ignore it.
+
+## Project Structure
+
+Seven projects in `src/`:
+
+| Project | Role |
+|---|---|
+| `TopStepTrader.Core` | Domain models, interfaces, enums, settings, pure trading logic (TickMath, FavouriteContracts) |
+| `TopStepTrader.API` | HTTP/SignalR clients for TopStepX/ProjectX and Yahoo Finance; ProjectX token manager |
+| `TopStepTrader.Data` | EF Core + SQLite (`TopStepTrader.db`); repositories |
+| `TopStepTrader.ML` | ML model loading and technical indicators |
+| `TopStepTrader.Services` | Business logic — trading engines, market data, backtest, background workers |
+| `TopStepTrader.UI` | WPF MVVM desktop app |
+| `TopStepTrader.Tests` | xUnit tests |
+
+Dependency flow: UI → Services → (Core, Data, API, ML)
+
+## Architecture
+
+### Composition Root (`AppBootstrapper.vb`)
+`src/TopStepTrader.UI/Infrastructure/AppBootstrapper.vb` is the single DI composition root. It:
+- Loads `appsettings.json` for all configuration (credentials are managed separately by `ApiKeyStore`)
+- Registers all layers via `AddDataServices()`, `AddApiServices()`, `AddApplicationServices()`
+- Runs `EnsureCreated()` + `EnsureSchemaCurrent()` on first launch
+- Starts the ML `ModelManager` with a `FileSystemWatcher` for hot-reload
+
+### DI Registration
+- `ServicesExtensions.vb` — business services
+- `ApiServiceExtensions.vb` — HTTP clients and SignalR hubs
+
+**Lifetime conventions:**
+- **Singleton:** stateless/long-lived — `TopStepXInstrumentCatalog`, `TradingSessionContext`, `ApiKeyStore`, token manager, background workers
+- **Scoped:** EF Core repositories and services that touch DbContext
+- **Transient:** execution engines (`StrategyExecutionEngine`, `CryptoStrategyExecutionEngine`), `DiagnosticLogger`
+
+### ViewModelLocator (MVVM Scoping)
+`src/TopStepTrader.UI/ViewModels/ViewModelLocator.vb` creates a per-view `IServiceScope` for each ViewModel to ensure EF Core scoped services are resolved correctly. VMs are created on first property access and reused.
+
+### Broker
+`IOrderService` is the unified broker interface. `ProjectXOrderService` is registered directly as `IOrderService` — there is no dispatcher. All engines call `IOrderService` which routes to TopStepX via the ProjectX REST API.
+
+`FavouriteContracts.vb` holds the master instrument list with TopStepX specs (ProjectX contract IDs, tick sizes, tick values). The `EToroContractId` and related eToro fields are retained in source for potential future use but are not active.
+
+**TopStepX is the sole trading platform.** `FavouriteContract.GetPointValue(broker)` and `GetTickSize(broker)` return the correct TopStepX values (e.g. MGC = $10/pt, MES = $5/pt). Always call these via `_session.ActiveBroker` — never hardcode tick specs.
+
+### TopStepX / ProjectX Specifics
+- **No take-profit brackets** — `ProjectXOrderService` never sends `takeProfitBracket` when `ManageTakeProfit = False` (the default)
+- **Tick-based stops** — SL is always expressed in ticks, not price. `TickMath.vb` handles all tick↔price conversion
+- **Min-stop enforcement** — `TopStepXInstrumentCatalog.ClampStopTicksAsync()` enforces API-provided minimums (15-min TTL cache, falls back to `FavouriteContracts` local defaults)
+- **Synthetic OCO** — `FlattenContractAsync()` cancels resting SL bracket orders (type=4) before closing the position to prevent double-trigger
+- **Bracket tick sign convention** — long SL ticks are negative, short SL ticks are positive (ProjectX convention)
+- **Stale bar guard** — `StrategyExecutionEngine` declares a bar stale when `barAgeMins > TimeframeMinutes × 3` (e.g. 15 min for 5-min bars). The 3× multiplier accounts for the bar timestamp being the *start* of the period, Yahoo's 1–5 min API propagation lag, and the 30-second engine poll jitter — a stale threshold of 1× or 2× would produce false market-closed events during normal active trading. On the fresh→stale transition (market close) it fires exactly one `ConfidenceUpdated` event with `IsMarketClosed = True` and suppresses all entry signals. Position monitoring (broker sync + trail) continues. The `IsMarketClosed` flag causes Hydra/AssetBassett tiles to show `"⏸ Closed"`. The guard resets (`_lastBarWasStale = False`) on engine `Start()`.
+- **Live P&L — `GetLatestPriceAsync`** — TopStepX REST and SignalR both return `openPnL = 0` for futures. Real-time P&L is computed from `(_lastBarClose - entryPrice) × DollarPerPoint`. `_lastBarClose` is upgraded on every tick (when a position is open) by calling `IBarIngestionService.GetLatestPriceAsync`, which fetches a 15-second bar from `PXHistoryClient.RetrieveBarsAsync(unit:=1, unitNumber:=15, limit:=5)`. `unit=1` means Second; `unitNumber=15` means 15-second bars. The same `_lastBarClose` field is used by both the 30-second REST sync path and the real-time SignalR `GatewayUserPosition` handler so both tile updates are consistent.
+
+### Configuration
+Copy `appsettings.template.json` → `appsettings.json`. Key sections: `ProjectX` (TopStepX endpoints), `Risk`, `Trading`, `ML`, `Ingestion`, `Personas`.
+
+Settings are bound via `IOptions<T>`:
+- `ProjectXSettings` → `"ProjectX"` section
+- `RiskSettings` → `"Risk"` section
+- `PersonasSettings` → `"Personas"` section (factory defaults for Lewis/Damian/Joe; used by "Reset to Defaults" on the Persona config page)
+
+### Background Services
+Two `IHostedService` workers run continuously:
+- `TokenRefreshWorker` — proactively refreshes the ProjectX JWT token before expiry
+- `BarIngestionWorker` — polls market data at configurable intervals and persists bars to SQLite
+
+## Key Files for Common Tasks
+
+| Task | File |
+|---|---|
+| Add a new view/screen | Create `Views/XView.xaml` + `ViewModels/XViewModel.vb`, register in `ViewModelLocator.vb` |
+| Add a new service | Implement interface in `Core/Interfaces/`, add to `ServicesExtensions.vb` |
+| Add a new broker client | Add HTTP client in `API/Http/`, register in `ApiServiceExtensions.vb` |
+| Instrument tick specs | `Core/Trading/FavouriteContracts.vb` |
+| Tick math | `Core/Trading/TickMath.vb` |
+| Risk profiles (hardcoded defaults) | `Core/Trading/RiskProfile.vb` |
+| Persona profiles (runtime, editable) | `Core/Models/PersonaProfile.vb` · `Core/Interfaces/IPersonaService.vb` · `Services/Personas/PersonaService.vb` |
+| Persona default values (appsettings) | `Core/Settings/PersonasSettings.vb` · `appsettings.json "Personas"` section |
+| Persona SQLite persistence | `Data/Entities/PersonaSettingsEntity.vb` · `Data/AppDbContext.vb` (DbSet + EnsureSchemaCurrent) |
+| Strategy defaults | `Core/Trading/StrategyDefaults.vb` |
+| Test tick/stop logic | `Tests/Trading/TopStepXTickTests.vb` — comprehensive test helpers (`FakeCatalogLocalOnly`, `FakeCatalogWithMinStop`) |
+| Bar timeframe enum | `Core/Enums/BarTimeframe.vb` |
+| Bar download + cache | `Services/Market/BarCollectionService.vb` |
+| Backtest engine | `Services/Backtest/BacktestEngine.vb` |
+| Claude AI integration | `Services/AI/ClaudeReviewService.vb` |
+
+## Persona System
+
+### Overview
+Personas are the primary way to control risk behaviour across the entire app. There are three: **Lewis** (Risk Averse), **Damian** (Moderate), and **Joe** (Aggressive).
+
+**Two layers:**
+1. **`RiskProfile.vb`** (`Core/Trading/`) — hardcoded `Shared ReadOnly` instances. These are the absolute fallback and are never modified at runtime.
+2. **`PersonaService`** (`Services/Personas/PersonaService.vb`) — Singleton that holds the _current effective_ values. On startup it loads from SQLite; if no saved row exists it falls back to `appsettings.json "Personas"` section. All ViewModels call `_personaService.GetProfile(name)` — **never** `RiskProfile.Lewis/Damian/Joe` directly.
+
+**Where personas are applied:**
+- `HydraViewModel.ApplyRiskProfile()` — pre-fills Hydra form fields
+- `AssetBassettViewModel.ApplyRiskProfile()` — pre-fills AssetBassett form fields
+- `BacktestViewModel.ApplyPersona()` — pre-fills backtest config form
+- `BacktestViewModel.ExecuteMaximumEffort()` — iterates `_personaService.GetAllProfiles()` (all 3)
+
+Changes saved on the Persona config page update the global cache immediately. Running engines are **not** affected mid-session — changes take effect on the next persona button tap.
+
+### Persona Config Page (CONFIG → Personas)
+Navigate via sidebar **👤 Personas** (under the CONFIG section). Shows three side-by-side cards.
+
+- **💾 Save Persona** — writes to `PersonaSettings` SQLite table; updates in-memory cache
+- **↺ Reset to Defaults** — deletes the SQLite row; reverts to `appsettings.json` values
+
+Default values in `appsettings.json` (the factory reset target):
+
+### Risk Profiles — Lewis / Damian / Joe
+
+The values below are the factory defaults (from `appsettings.json`). They may be overridden via the Persona page and persisted in SQLite.
+
+Three built-in personas. Each controls capital, ADX gate, signal confidence, and ATR bracket width. They are **independent** of the ATR tier selector (Tight/Standard/Wide), which only adjusts bracket elasticity.
+
+The `Leverage` field is carried in `PersonaProfile` and `StrategyDefinition` but is **not used by `StrategyExecutionEngine`** for TopStepX order sizing — futures position size is always `Quantity` contracts (typically 1). The `Leverage` UI input has been removed from CryptoJoeView and AssetBassettView. It remains editable on the Persona config page for potential future brokers.
+
+| Property | Lewis (Averse) | Damian (Moderate) | Joe (Aggressive) |
+|---|---|---|---|
+| Capital per trade | $200 | $500 | $1,000 |
+| Leverage (inactive for TopStepX) | 5× | 5× | 10× |
+| Max scale-ins | 1 | 2 | 3 |
+| SL multiple of N | 1.5 | 1.0 | 0.75 |
+| Leveraged SL multiple of N | 2.5 | 2.0 | 1.5 |
+| TP multiple of N | 3.0 | 2.5 | 2.0 |
+| R:R ratio | 1:2.0 | 1:2.5 | 1:2.67 |
+| Min ADX | 25 | 20 | 15 |
+| Min confidence | 90% | 80% | 70% |
+
+**N** = ATR(14) × dollar-per-point for the instrument. SL/TP distances are expressed as multiples of N so brackets automatically scale with market volatility.
+
+### How Lewis Identifies and Manages a Trade (plain-English)
+
+Lewis is the most patient and defensive of the three personas. Here is his full trade lifecycle:
+
+**1. The trend gate — ADX ≥ 25**
+Before considering any trade, the system checks ADX (a 0–100 score of how strongly the market is trending). Lewis only acts when ADX ≥ 25 — a clear, committed directional move. Sideways or choppy markets are ignored entirely. Most of the time, nothing happens.
+
+**2. Signal scoring — 90% minimum**
+When the trend gate passes, the selected strategy scores the current bar across multiple indicators (moving averages, momentum, volume, etc.) on a 0–100 scale. Lewis requires a score of **90 or above** before entering. This means the evidence must be overwhelming — most signals that Damian or Joe would take, Lewis will not.
+
+**3. Position sizing — $200 capital, 1 contract**
+Lewis commits $200 per trade as a risk budget. For TopStepX futures, the engine trades 1 contract (defined by `StrategyDefinition.Quantity`). The ATR-based SL in ticks is derived from `SlMultipleOfN × ATR × (tickValue / tickSize)`.
+
+**4. Stop loss — 1.5 × ATR below entry**
+The moment the trade opens, a stop loss is placed automatically at **1.5 × ATR(14)** below the entry price. ATR is the instrument's average daily price range. If Gold normally moves $8/day, Lewis's stop sits $12 away. The trade is automatically closed at a small loss if price reaches this level — no manual intervention required.
+
+**5. Take profit — 3.0 × ATR above entry**
+The take-profit target is set at **3.0 × ATR(14)** above entry — twice the stop distance. This 1:2 risk-to-reward ratio means Lewis can be wrong nearly half the time and still profit overall across many trades.
+
+**6. One scale-in allowed**
+If the trade moves in Lewis's favour, the system may add one additional position (`MaxScaleIns = 1`), effectively doubling down while the market is proving him right. Damian can do this twice; Joe three times.
+
+**7. Trade management until close**
+The trade runs on autopilot. If the ATR tier is Standard or Wide, the stop loss trails upward as price rises (locking in profit). The stop only ever moves in the trade's favour — it never widens. When price reaches the take-profit level, the trade closes automatically and the system returns to watching.
+
+**Summary:** Lewis trades infrequently, requires strong conviction before entering, risks a small fixed amount, targets twice that amount in profit, and lets the computer handle everything from entry to exit.
+
+## Backtest Architecture
+
+### Bar Collection (`BarCollectionService.vb`)
+Downloads historical bars from Yahoo Finance and caches them in SQLite. Key behaviours:
+
+- **Cache hit**: returns immediately if ≥ 50 bars exist, span ≥ 80% of requested range, **and latest bar is less than 24 hours old**. The staleness check ensures weekly runs accumulate fresh bars over time (new bars appended via `INSERT OR IGNORE`).
+- **Yahoo Finance symbol translation**: `BarCollectionService` translates contract symbol keys (e.g. `"GOLD.24-7"`) to Yahoo tickers (e.g. `"GC=F"`) before calling the API, using `FavouriteContracts.TryGetBySymbol(contractId)?.YahooSymbol`. Storage keys remain stable instrument IDs (do not roll quarterly). Falls back to the raw contractId so direct Yahoo codes also work.
+- **Yahoo Finance limits** (enforced in `BacktestViewModel.GetYahooMaxDays`):
+  - 1-min → 7 days
+  - 5-min, 10-min, 15-min, 30-min → 60 days
+  - 1-hr, 2-hr, 4-hr → 730 days
+- **Non-native timeframes** — `TenMinute` uses 5-min source data; `TwoHour`/`FourHour` use 1-hr source data. Bars are stored under their own `BarTimeframe` key in SQLite, so they accumulate independently.
+
+### BarTimeframe Enum (`Core/Enums/BarTimeframe.vb`)
+Values are the DB discriminator (integer minutes):
+`OneMinute=1`, `ThreeMinute=3`, `FiveMinute=5`, `TenMinute=10`, `FifteenMinute=15`, `ThirtyMinute=30`, `OneHour=60`, `TwoHour=120`, `FourHour=240`, `Daily=1440`
+
+### Strategy Defaults (`Core/Trading/StrategyDefaults.vb`)
+Only combined multi-indicator strategies are registered (design rule: single-indicator strategies excluded).
+Default parameters: **Capital = $1,000 · Qty = 1 · TP = $20 (2%) · SL = $15 (1.5%)** — 2:1.5 reward-to-risk ratio.
+`MinConfidence` is stored in the ViewModel as a whole-number percentage (e.g. `"90"`) and divided by 100 before being passed to the engine.
+
+### ATR-Based SL/TP Mode (`BacktestConfiguration.UseAtrMode`)
+When `UseAtrMode = True`, stop loss and take profit are expressed as ATR multiples rather than fixed dollar amounts. At each entry the engine pre-calculates `ATR(14)` across all bars and sets:
+- `stopDelta = ATR(14) × config.SlAtrMultiple`
+- `tpDelta   = ATR(14) × config.TpAtrMultiple`
+
+This allows meaningful cross-instrument comparison — a fixed $15 SL is inadequate for Gold or Crude, but 1.5 × ATR scales correctly for any instrument. ATR mode is always active in Maximum Effort runs (each persona supplies its own multiples). Single-run backtests toggle ATR mode via the "ATR × Stops" checkbox on the Run Backtest tab.
+
+`dynEnabled` in the engine is True whenever `UseAtrMode` is True or any of `TrailingStopEnabled`, `BreakEvenOnHalfTpEnabled`, `ExtendTpEnabled` is True.
+
+### ATR Elasticity Tiers (Hydra and AssetBassett)
+Both views expose three ATR bracket tier buttons — **Tight**, **Standard**, **Wide** — that adjust `SlMultipleOfN` / `TpMultipleOfN` independently of the persona. All three tiers maintain a 1:2 R:R ratio:
+
+| Tier | SL multiple | TP multiple |
+|---|---|---|
+| Tight | 0.75 × N | 1.5 × N |
+| Standard | 1.5 × N | 3.0 × N |
+| Wide | 2.5 × N | 5.0 × N |
+
+Persona controls capital, leverage, ADX gate, and confidence. Tier controls bracket elasticity (how many ATR units the stops span).
+
+### BacktestView — Three Tabs
+
+**Tab 1 — Run Backtest**: Persona selector (Lewis / Damian / Joe) at the top of the config form pre-fills Capital, Min ADX, Min Confidence, and ATR multiples (when ATR mode is on). Runs the selected strategy across **8 timeframes** (1min, 5min, 10min, 15min, 30min, 1hr, 2hr, 4hr) simultaneously. Each timeframe's effective date range is clamped to Yahoo's limit. Results appear in a live-filling grid sorted by timeframe. Default date range: today − 180 days (clamped per timeframe).
+
+**Tab 2 — Previous Runs**: DataGrid of saved `BacktestRunEntity` records from SQLite.
+
+**Tab 3 — Maximum Effort!** (Deadpool button): Runs every combination of **3 personas × 12 instruments × 6 strategies × 8 timeframes = 1,728 backtest runs**. Each run uses its persona's capital, ADX threshold, confidence, and ATR SL/TP multiples — sourced from `IPersonaService.GetAllProfiles()` so any saved overrides from the Persona config page are automatically reflected. Results populate a sortable DataGrid in real time (with a Persona column), sorted by P&L descending as each run completes. On completion, the top 20 results are sent to **Claude Haiku** (`claude-haiku-4-5-20251001`) for a concise analysis covering top persona/instrument/strategy combinations, overfitting warnings, and a live-trade recommendation. Requires Claude API key configured on the API Keys page.
+
+**TopStepX P&L**: Both single-run (`ExecuteRun`) and Maximum Effort (`ExecuteMaximumEffort`) resolve tick size and point value via `contract.GetTickSize(_session.ActiveBroker)` / `contract.GetPointValue(_session.ActiveBroker)`. This correctly returns MGC=$10/pt, MES=$5/pt, MNQ=$2/pt, MCL=$100/pt, M6E=$12,500/pt. `BacktestViewModel` receives `ITradingSessionContext` as a constructor parameter for this purpose.
+
+### Extend TP on Close (Live Engine)
+
+`StrategyDefinition.ExtendTpOnClose` (default `False`; Hydra and AssetBassett default to `True`) enables the live equivalent of the backtest "Extend TP on close" feature.
+
+**How it works:** After each 30-second bar-check tick, `StrategyExecutionEngine.ExtendTpIfClosedBeyondTargetAsync()` checks whether the last completed bar closed at or beyond the current TP price. If so, it advances the TP by `TpMultipleOfN × currentATR` in the trade direction (tick-snapped to the instrument's tick size) and calls `EditPositionSlTpAsync` to push the new target to the broker. Up to **3 advances** per trade; counter resets in `ResetTrailState()` on every position close.
+
+- Independent of the ATR trailing SL — the SL ratchet is not touched.
+- UI toggle: "Extend TP on close" checkbox in the ATR tier panel on both Hydra and AssetBassett.
+- Backtest winner config had this **ON**: Multi-Confluence · Damian · OIL · 5-min.
+
+**Key field:** `_tpAdvanceCount As Integer` (per-engine instance, reset on close). Max = 3.
+
+### Hydra View — Bracket Management
+
+Each `StrategyExecutionEngine` raises `TurtleBracketChanged` (`TurtleBracketChangedEventArgs`: `SlPrice`, `TpPrice`, `IsAdvance`, `IsFreeRide`, `BracketNumber`) whenever a bracket is placed, reattached on restart, or advanced. `HydraViewModel.WireEngineEvents` handles this event and calls `HydraAssetViewModel.ApplySl(slPrice, tpPrice, isAdvance, isFreeRide)`, which:
+
+- Stores numeric `_currentSlPrice` / `_currentTpPrice` (used by the Nudge command)
+- Updates `BracketPriceDisplay` to `"SL: X.XX  TP: Y.YY"` (or just `"SL: X.XX"` if no TP)
+- Sets `IsFreeRide` (shows the Free Ride badge once SL clears entry)
+- Plays the Turtle click sound on genuine advances (`IsAdvance = True`)
+
+`ClearSlStatus()` zeros all three fields and clears the display on position close.
+
+**Per-asset manual controls** — `HydraAssetViewModel` exposes two `ICommand` properties wired by `HydraViewModel` in the constructor loop:
+
+| Command | What it does |
+|---|---|
+| `CloseCommand` | Calls `FlattenContractAsync` on the asset's scoped `IOrderService`, then resets the tile via `CloseTrade()` |
+| `NudgeBracketCommand` | Fetches a live snapshot, tightens SL by 10% of its distance to entry (min 1 tick), nudges TP inward by same step if tracked, calls `EditPositionSlTpAsync`, updates tile via `ApplySl()` |
+
+Both buttons are only visible when `HasOpenPosition` is `True` (derived from `_positionCount > 0`; notified in `OpenTrade`/`CloseTrade`). The Nudge command falls back to a 20-tick estimate from the broker snapshot entry price when `_currentSlPrice = 0` (no bracket recorded yet).
+
+**Note:** `ApplySl` signature is `(slPrice As Decimal, tpPrice As Decimal, isAdvance As Boolean, isFreeRide As Boolean)`. Do not call the old 3-parameter version.
+
+### Claude AI Integration (`Services/AI/ClaudeReviewService.vb`)
+Three methods, all using the API key from `ApiKeyStore` (falls back to `appsettings.json`):
+- `ReviewStrategyAsync` — strategy improvement suggestions (used by HydraView)
+- `ConfidenceCheckAsync` — macro/session bias for a contract
+- `AnalyseBacktestResultsAsync` — quantitative analysis of a backtest results table (used by Maximum Effort tab). Always uses `claude-haiku-4-5-20251001` regardless of the model setting, for cost efficiency.
+
+`ClaudeSettings.Model` defaults to `claude-haiku-4-5`. Registered as **Scoped** in `ServicesExtensions.vb`. Injected into `BacktestViewModel` via constructor.

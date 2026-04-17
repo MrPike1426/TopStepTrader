@@ -1,0 +1,141 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get copiers public info
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/pi-data/copiers
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/pi-data/copiers:
+    get:
+      tags:
+        - PI Data
+      summary: Get copiers public info
+      operationId: get_api_v1_pi-data_copiers
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 29bf8a58-3706-4c16-b97e-4a6382b6e1df
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+      responses:
+        '200':
+          description: A list of copiers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeCopiersResponse'
+components:
+  schemas:
+    GeCopiersResponse:
+      type: object
+      description: Response object containing a list of portfolio copiers.
+      properties:
+        copiers:
+          type: array
+          nullable: true
+          description: >-
+            List of users copying your portfolio, with demographic and financial
+            info.
+          items:
+            type: object
+            properties:
+              Gender:
+                type: string
+                example: M
+                description: Gender of the copier
+              Club:
+                type: string
+                example: Gold
+                description: Membership club level
+              Country:
+                type: string
+                example: Germany
+                description: Country of residence
+              CopyStartedAtCategory:
+                type: string
+                enum:
+                  - less than 1 day
+                  - less than 1 week
+                  - less than 1 month
+                  - less than 1 year
+                  - more than 1 year
+                description: How long ago the copy relationship started
+                example: more than 1 year
+              AmountCategory:
+                type: string
+                enum:
+                  - <100
+                  - 100-500
+                  - 500-1000
+                  - 1000-5000
+                  - '>5000'
+                description: Amount being copied
+                example: 100-500
+              AgeCategory:
+                type: string
+                enum:
+                  - Under 18
+                  - 18-29
+                  - 30-44
+                  - 45-59
+                  - 60+
+                description: Age range of the copier
+                example: 30-44
+              CopyRealizedEquity_pnl:
+                type: string
+                description: Total realized equity PnL of the copier
+                example: '1589.2'
+              AvailableCopyBalance:
+                type: string
+                description: Available copy balance of the copier
+                example: '55.2'
+            additionalProperties: false
+      additionalProperties: false
+
+````

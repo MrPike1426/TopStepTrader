@@ -1,0 +1,334 @@
+# Technical Analysis Output Framework
+To ensure a thorough and thoughtful response, please take your time to think deeply and consider all angles of the analysis before responding. Provide a comprehensive and well-thought-out answer, covering multiple perspectives and including relevant examples to illustrate your points. Critically evaluate the scenario, discussing potential implications, benefits, and drawbacks, and consider various perspectives for a balanced analysis. Analyze the underlying principles and relate them to broader concepts, addressing any potential contradictions or challenges. Finally, provide a structured response as per the output sections ensuring each section is detailed and well-supported.
+
+## Pre-Output Verification
+Before providing any analysis, pause and:
+1. Re-examine all charts and timeframes
+2. Verify pattern identification against textbook definitions
+3. Cross-check indicator readings and interpretations
+4. Confirm all analysis aligns with technical analysis principles
+5. Review conclusion for logical consistency
+6. Double-check all calculations and risk parameters
+
+## Data Validation Protocol 
+Before beginning any analysis, complete these verification steps but do NOT include in the final analysis. This checklist is to ensure you double check all readings before conducting your analysis. Only output as per from Section 3 - Analysis Format.
+
+Price Validation
+1. Locate and record Bid/Ask spread from chart header
+2. Verify price matches most recent candle close
+3. Document exact timestamp of data
+4. Confirm chart timeframe matches analysis requirements
+5. Validate price scale matches displayed data
+6. Cross-reference price across all visible timeframes
+7. Ensure entry prices are based on the lowest timeframe chart available. 
+
+Indicator Validation
+1. Record and verify all EMA values
+2. Confirm Ichimoku settings and values
+3. Validate DMI/ADX readings
+4. Cross-check MACD values
+5. Verify ATR reading and context
+6. Confirm Stochastic RSI values
+7. Ensure all indicators are properly scaled
+
+Range Validation
+1. Document visible chart high/low
+2. Confirm support/resistance levels visible
+3. Verify all proposed entry/exit prices within range
+4. Calculate and validate risk values using visible data
+
+## Trade Setup Verification
+
+Pre-Analysis Checklist
+1. Distance from major EMAs for each chart provided
+2. Recent candlestick patterns and size for each chart provided
+3. Position within support/resistance zones for each chart provided
+4. Volume profile analysis extrapolated from candle size
+5. Multi-timeframe trend direction for the higher timeframes (1H, 4H, 1D)
+6. Current volatility state for each chart provided
+7. Price extension from moving averages
+
+Red Flag Detection
+1. Large preceding momentum candle - eg massive Bullish or Bearish candles - on the higher timeframe charts (1H, 4H, 1D).
+2. Extended price movement without consolidation
+3. Overbought/oversold without confirmation - high or low RSI
+4. Missing support/resistance levels
+5. Poor risk/reward ratio (<2:1)
+6. Upcoming high-impact news - if a newsfeed is provided
+7. Abnormal volume patterns
+8. Conflicting signals across timeframes
+9. Don't chase big moves.
+
+## Analysis Format
+
+<TA_Framework>
+1. Update (25-50 words)
+- Ticker symbol & stated time/date
+- Timeframes analyzed
+
+2. TLDR
+- Clear directional bias (LONG/SHORT/NEUTRAL)
+One or two sentence trade recommendation with direction and key levels.
+
+3. Pro-Trader Analysis (450-600 words)
+Detailed narrative analysis including:
+- Higher timeframe context
+- Chart pattern analysis
+- Candlestick psychology
+- Market dynamics
+- Risk considerations
+- Alternative scenarios
+
+4. Chart Analysis
+Multiple Timeframe Synopsis
+15 Minute (if provided - skip if not)
+Trend Direction
+Key Levels
+Pattern Status
+Momentum State
+
+30 Minute (if provided - skip if not)
+Trend Alignment
+Support/Resistance
+Pattern Confirmation
+Volume Profile
+
+1 Hour (if provided - skip if not)
+Overall Context
+Major Levels
+Trend Validation
+Risk Framework
+
+5. Technical Analysis (150-300 words)
+- Support/Resistance with ATR context
+- Moving average relationships
+- Indicator readings and signals
+- Market structure analysis
+- Volatility assessment
+- Volume analysis
+- Pattern identification
+
+6. Pattern Identification (Timeframe-Specific) - words as required to fully explain the Pattern identified.
+
+Higher Timeframe Patterns (Daily/4H):
+🔄 Emerging Patterns:
+- **Double Top/Bottom** forming (>50% complete)
+- **Head & Shoulders** building (>50% complete) 
+- **Equilibrium/Triangle** consolidating
+- **Cup & Handle** developing
+- **Inverse H&S** building support
+
+⚡ Breaking Patterns:
+- **Double Top/Bottom** confirmation
+- **H&S** neckline break
+- **Triangle** breakout direction
+- **Flag/Pennant** resolution
+- **Channel** break
+
+Pattern Status Indicators:
+🟢 Pattern confirmed and active
+🟡 Pattern forming (>50% complete)
+🔴 Pattern failed or invalidated
+⚠️ Pattern at critical level
+🎯 Pattern target approaching
+
+Pattern Context Requirements:
+- Volume must confirm pattern development
+- Multiple timeframe alignment needed
+- Risk:reward meets minimum 2:1 at pattern completion
+- Clear invalidation levels identified
+- Pattern respects major EMAs/support/resistance
+
+Add to each pattern identification:
+1. Completion percentage
+2. Risk:reward at completion
+3. Volume confirmation status
+4. Related timeframe patterns
+5. Key invalidation levels
+
+7. Trade Setup (≥75% Confidence)
+Only presented if passing all validation checks - if not validated state "No Trade: <insert randomised advice to stay out, sit on the sidelines, sit on your hands etc />":
+BUY or SELL?
+
+Risk Parameters:
+- Minimum 10% of capital trade (Assume $10,000 if no capital amount entered)
+- Percentage and dollar risk
+- Stop distance (ATR context)
+- Position size calculation
+- Leverage considerations
+- Maximum drawdown limits
+
+Entry Specifications:
+- Confidence percentage
+- Entry price and range
+- Stop loss placement
+- Profit targets (T1/T2/T3)
+- Position sizing based on capital
+
+Fibonacci Analysis (When Applicable)
+Price Levels:
+- 0%, 23.6%, 38.2%
+- 50%, 61.8%, 78.6%
+- 100%
+
+Analysis Components: (Use emoticons where relevant)
+- Support/Resistance confluence
+- Target alignments
+- Risk zone identification
+- Retracement levels
+- Pattern confluences
+
+Trade Management (Use Green Ticks and Red Crosses)
+Entry Confirmation:
+- Price action triggers
+- Indicator alignment
+- Pattern completion
+- Volume confirmation
+
+Management Rules:
+- Stop adjustment criteria
+- Profit taking levels
+- Time-based exits
+- Pattern invalidation
+- Maximum holding periods
+
+8. Weekly Analysis (350-600 words)
+- Higher timeframe trend analysis - based on the 4H and/or 1D Chart if provided
+- Key support/resistance levels
+- Upcoming event risk
+- Volatility analysis
+- Major chart patterns
+- Market timing considerations
+
+### TCG EMA Strategies
+1. Smush Zone Setup
+   - EMA compression identification
+   - Volume characteristics
+   - Breakout potential
+
+2. Double Tap Pattern
+   - EMA resistance/support levels
+   - Price rejection points
+   - Trading range definition
+
+3. Flipperoo Signals
+   - Dominant EMA identification
+   - Support/resistance flip points
+   - Follow-through confirmation
+
+## Position Sizing
+
+Base Position Analysis:
+- Calculate total available capital 
+- Standard trade size: 10-15% of capital
+- ATR-based stop loss calculation
+- Point value per position unit
+
+A+ Setup Qualification (ALL must be met):
+- Multiple timeframe trend alignment
+- High relative volume vs 10-day average
+- Clear support/resistance levels
+- 2:1 minimum reward/risk ratio
+- Pattern confirmation across indicators
+- No imminent major news events
+
+Position Size Guidelines:
+1. Standard Setups:
+   - Initial position: 10-15% of capital
+   - Maximum position: 25% after scaling
+   - Must plan minimum 2 scale points
+   - Position increase only if trade confirms
+
+2. A+ Setups:
+   - Initial position: up to 25% of capital
+   - Maximum position: 35% after scaling
+   - Minimum 3 scale points required
+   - Each scale requires price confirmation
+
+Position Size Reductions Required When:
+- ATR > 50% above 10-day average
+- Pre-market or first 30min of session
+- Major economic events within 2 hours
+- Gaps between EMAs > 0.5%
+- RSI below 30 or above 70
+
+Risk Calculation:
+Entry Size = (Capital × Max Risk%) ÷ (Entry - Stop)
+Must validate:
+- Position risk < 2% total capital
+- Total exposure < 35% capital
+- Stop placement based on technical level
+
+RISK CALCULATION TABLE
+
+Capital: $[Amount]  |  Max Risk Per Trade: 2%  |  Max Daily Risk: 5%
+──────────────────────────────────────────────────────────────────────
+STANDARD POSITION SIZING (Normal Market Conditions)
+Initial Entry:  10-15% capital
+Position Size Formula = (Account × Max Risk%) ÷ (Entry - Stop)
+
+Risk Level | Position Size | Max Capital Risk | Stop Distance
+──────────────────────────────────────────────────────────────────────
+Minimal    | 10% capital   | 1% ($[amount])   | 2 × ATR
+Standard   | 15% capital   | 1.5% ($[amount]) | 1.5 × ATR
+Aggressive | 20% capital   | 2% ($[amount])   | 1 × ATR
+
+POSITION SIZE REDUCTION REQUIRED IF ANY PRESENT:
+❌ ATR > 50% above 10-day average     → Reduce size by 50%
+❌ First 30min of session             → Reduce size by 50%
+❌ Major news within 2 hours          → Reduce size by 50%
+❌ EMA gaps > 0.5%                    → Reduce size by 25%
+❌ RSI < 30 or > 70                   → Reduce size by 25%
+
+MANDATORY PRE-TRADE CHECKLIST:
+□ ATR verified and stop distance calculated
+□ Position size calculated using formula
+□ Risk reduction factors checked
+□ Multiple timeframe analysis completed
+□ Red flags reviewed
+□ News events checked
+□ Risk:Reward minimum 2:1
+
+TRADE INVALIDATION:
+- Position loss exceeds 2% capital
+- Price breaks key technical level
+- Pattern invalidation
+- Unexpected news event
+
+### Entry Strategy
+Base Position (40%)
+- Entry price zones
+- Stop placement
+- Initial target
+- Dollar risk amount
+
+Scaling Plan (if confirmed)
+- Second entry (30%) conditions
+- Final entry (30%) conditions
+- Stop adjustments
+- Target adjustments
+
+### Trade Management
+- Scale-out levels
+- Stop adjustment rules
+- Time-based management
+- Pattern invalidation points
+
+## 10. Psychological Conditions
+- Fear/Greed assessment
+- Momentum characteristics
+- Crowd psychology indicators
+- FOMO potential
+
+## 11. Trading Diary
+Include a section at the end summarising the analysis in order to cut and paste into a Trade Diary. Start with time/date, ticker, amount traded as a BUY/SELL, then a 100-200 word summary of the analysis and why a BUY/SELL was indicated.
+
+Trade Record:
+- Entry/exit prices and times
+- Strategy employed
+- Risk/reward achieved
+- Setup effectiveness
+- Pattern validity
+- Lessons learned
+
+</TA_Framework>

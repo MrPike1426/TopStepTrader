@@ -1,0 +1,932 @@
+<UserControl x:Class="TopStepTrader.UI.Views.TestTradeView"
+             xmlns:controls="clr-namespace:TopStepTrader.UI.Controls"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="#070C14">
+
+    <UserControl.Resources>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             COMMAND CENTER PALETTE
+             ═══════════════════════════════════════════════════════════════ -->
+        <SolidColorBrush x:Key="C_Bg"           Color="#070C14"/>
+        <SolidColorBrush x:Key="C_Surface"      Color="#0C1524"/>
+        <SolidColorBrush x:Key="C_Card"         Color="#111D30"/>
+        <SolidColorBrush x:Key="C_Well"         Color="#080E1A"/>
+        <SolidColorBrush x:Key="C_BorderDim"    Color="#162038"/>
+        <SolidColorBrush x:Key="C_BorderMid"    Color="#1E3050"/>
+        <SolidColorBrush x:Key="C_Blue"         Color="#00C8F0"/>
+        <SolidColorBrush x:Key="C_Amber"        Color="#F0A030"/>
+        <SolidColorBrush x:Key="C_Green"        Color="#00DF7A"/>
+        <SolidColorBrush x:Key="C_Red"          Color="#F03355"/>
+        <SolidColorBrush x:Key="C_TextPrimary"  Color="#C0D0E8"/>
+        <SolidColorBrush x:Key="C_TextSecond"   Color="#506080"/>
+        <SolidColorBrush x:Key="C_TextDim"      Color="#283848"/>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             TYPOGRAPHY STYLES
+             ═══════════════════════════════════════════════════════════════ -->
+
+        <!-- Section header: all-caps label -->
+        <Style x:Key="SectionLabel" TargetType="TextBlock">
+            <Setter Property="FontFamily"       Value="Consolas"/>
+            <Setter Property="FontSize"         Value="12"/>
+            <Setter Property="FontWeight"       Value="Bold"/>
+            <Setter Property="Foreground"       Value="#8AA8C0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Field label -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontFamily"       Value="Consolas"/>
+            <Setter Property="FontSize"         Value="12"/>
+            <Setter Property="Foreground"       Value="#7090A8"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Data value: monospace readable number -->
+        <Style x:Key="DataValue" TargetType="TextBlock">
+            <Setter Property="FontFamily"   Value="Consolas"/>
+            <Setter Property="FontSize"     Value="16"/>
+            <Setter Property="FontWeight"   Value="SemiBold"/>
+            <Setter Property="Foreground"   Value="#C0D0E8"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             INPUT STYLE — arctic tinted text on dark well
+             ═══════════════════════════════════════════════════════════════ -->
+        <Style x:Key="TerminalBox" TargetType="TextBox">
+            <Setter Property="Background"     Value="#080E1A"/>
+            <Setter Property="Foreground"     Value="#00C8F0"/>
+            <Setter Property="CaretBrush"     Value="#00C8F0"/>
+            <Setter Property="SelectionBrush" Value="#0D3A50"/>
+            <Setter Property="BorderBrush"    Value="#162038"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontFamily"     Value="Consolas"/>
+            <Setter Property="FontSize"       Value="13"/>
+            <Setter Property="Padding"        Value="7,5"/>
+            <Style.Triggers>
+                <Trigger Property="IsFocused" Value="True">
+                    <Setter Property="BorderBrush" Value="#00C8F0"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             BUY BUTTON — full green assault
+             ═══════════════════════════════════════════════════════════════ -->
+        <Style x:Key="BuyBtn" TargetType="Button">
+            <Setter Property="Foreground"       Value="#00DF7A"/>
+            <Setter Property="FontFamily"       Value="Consolas"/>
+            <Setter Property="FontSize"         Value="14"/>
+            <Setter Property="FontWeight"       Value="Bold"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="#001F0E"
+                                BorderBrush="#005A20"
+                                BorderThickness="1,1,1,3"
+                                SnapsToDevicePixels="True">
+                            <!-- Top accent strip -->
+                            <Grid>
+                                <Rectangle x:Name="TopStrip" Height="2" VerticalAlignment="Top"
+                                           Fill="#00DF7A" Opacity="0.25"/>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Margin="0,6,0,4"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root"     Property="Background"   Value="#002D14"/>
+                                <Setter TargetName="Root"     Property="BorderBrush"  Value="#00DF7A"/>
+                                <Setter TargetName="TopStrip" Property="Opacity"      Value="0.6"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#005025"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.25"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             SELL BUTTON — deep red
+             ═══════════════════════════════════════════════════════════════ -->
+        <Style x:Key="SellBtn" TargetType="Button">
+            <Setter Property="Foreground"       Value="#F03355"/>
+            <Setter Property="FontFamily"       Value="Consolas"/>
+            <Setter Property="FontSize"         Value="14"/>
+            <Setter Property="FontWeight"       Value="Bold"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="#200008"
+                                BorderBrush="#600018"
+                                BorderThickness="1,1,1,3"
+                                SnapsToDevicePixels="True">
+                            <Grid>
+                                <Rectangle x:Name="TopStrip" Height="2" VerticalAlignment="Top"
+                                           Fill="#F03355" Opacity="0.25"/>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Margin="0,6,0,4"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root"     Property="Background"  Value="#300010"/>
+                                <Setter TargetName="Root"     Property="BorderBrush" Value="#F03355"/>
+                                <Setter TargetName="TopStrip" Property="Opacity"     Value="0.6"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#600020"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.25"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             STOP BUTTON — muted danger, understated
+             ═══════════════════════════════════════════════════════════════ -->
+        <Style x:Key="StopBtn" TargetType="Button">
+            <Setter Property="Foreground"       Value="#6A4040"/>
+            <Setter Property="FontFamily"       Value="Consolas"/>
+            <Setter Property="FontSize"         Value="11"/>
+            <Setter Property="FontWeight"       Value="Bold"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="#130606"
+                                BorderBrush="#2A1010"
+                                BorderThickness="1"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background"  Value="#200808"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#6A2020"/>
+                                <Setter Property="Foreground" Value="#C04040"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#400000"/>
+                                <Setter Property="Foreground" Value="#F03355"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             GHOST BUTTON — outline-only, for secondary actions
+             ═══════════════════════════════════════════════════════════════ -->
+        <Style x:Key="GhostBtn" TargetType="Button">
+            <Setter Property="Foreground"       Value="#3A5060"/>
+            <Setter Property="FontFamily"       Value="Consolas"/>
+            <Setter Property="FontSize"         Value="10"/>
+            <Setter Property="Cursor"           Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="Transparent"
+                                BorderBrush="#162038"
+                                BorderThickness="1"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background"  Value="#0C1A28"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#00C8F0"/>
+                                <Setter Property="Foreground" Value="#00C8F0"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#102030"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════════════════════
+             ANALYSE BUTTON — amber AI identity
+             ═══════════════════════════════════════════════════════════════ -->
+        <Style x:Key="AnalyseBtn" TargetType="Button">
+            <Setter Property="Foreground"   Value="#F0A030"/>
+            <Setter Property="FontFamily"   Value="Consolas"/>
+            <Setter Property="FontSize"     Value="9"/>
+            <Setter Property="FontWeight"   Value="Bold"/>
+
+            <Setter Property="Cursor"       Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root"
+                                Background="#0C1208"
+                                BorderBrush="#3A2800"
+                                BorderThickness="1"
+                                SnapsToDevicePixels="True">
+                            <!-- Amber corner marks -->
+                            <Grid>
+                                <Rectangle Width="8" Height="1" Fill="#F0A030" Opacity="0.6"
+                                           HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                                <Rectangle Width="1" Height="8" Fill="#F0A030" Opacity="0.6"
+                                           HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                                <Rectangle Width="8" Height="1" Fill="#F0A030" Opacity="0.6"
+                                           HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+                                <Rectangle Width="1" Height="8" Fill="#F0A030" Opacity="0.6"
+                                           HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background"  Value="#141A08"/>
+                                <Setter TargetName="Root" Property="BorderBrush" Value="#F0A030"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="#203010"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </UserControl.Resources>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         ROOT — deep space background
+         ══════════════════════════════════════════════════════════════════════ -->
+    <Grid>
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#070C14" Offset="0"/>
+                <GradientStop Color="#060A12" Offset="1"/>
+            </LinearGradientBrush>
+        </Grid.Background>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" ClipToBounds="False">
+            <StackPanel Margin="20,16,20,24">
+
+                <!-- ──────────────────────────────────────────────────────────
+                     PAGE HEADER
+                     ────────────────────────────────────────────────────────── -->
+                <Grid Margin="0,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left: accent bar + title stack -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <Rectangle Width="3" VerticalAlignment="Stretch" Margin="0,0,14,0">
+                            <Rectangle.Fill>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                    <GradientStop Color="#00C8F0" Offset="0"/>
+                                    <GradientStop Color="#005878" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Rectangle.Fill>
+                        </Rectangle>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="TEST TRADE"
+                                       FontFamily="Consolas" FontSize="22" FontWeight="Bold"
+ Foreground="#C0D0E8"/>
+                            <TextBlock Text="AUTOMATED STRATEGY TERMINAL  ·  P&amp;L 5s  ·  TRAIL 15s"
+                                       FontFamily="Consolas" FontSize="12"
+                                       Foreground="#506070" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Right: live status pill -->
+                    <Border Grid.Column="2" VerticalAlignment="Center"
+                            Background="#0C1524" BorderBrush="#162038" BorderThickness="1"
+                            Padding="10,5">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse Width="5" Height="5" Margin="0,0,7,0" VerticalAlignment="Center">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="#283848"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsBarsLoaded}" Value="True">
+                                                <Setter Property="Fill" Value="#00DF7A"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="{Binding BarStatusText}"
+                                       FontFamily="Consolas" FontSize="12"
+                                       Foreground="#8AA8C0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Horizontal rule under header -->
+                <Rectangle Height="1" Margin="0,0,0,14">
+                    <Rectangle.Fill>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#0C1828" Offset="0"/>
+                            <GradientStop Color="#1E3050" Offset="0.3"/>
+                            <GradientStop Color="#1E3050" Offset="0.7"/>
+                            <GradientStop Color="#0C1828" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Rectangle.Fill>
+                </Rectangle>
+
+                <!-- ──────────────────────────────────────────────────────────
+                     CONFIGURATION PANEL
+                     ────────────────────────────────────────────────────────── -->
+                <Border Background="#0C1524" BorderBrush="#162038" BorderThickness="1"
+                        Margin="0,0,0,10" Padding="16,12">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="10"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Panel label row -->
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <Rectangle Width="16" Height="1" Fill="#00C8F0" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="CONFIGURATION" Style="{StaticResource SectionLabel}"/>
+                        </StackPanel>
+
+                        <!-- Config fields -->
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>   <!-- 0: ACCT label -->
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="195"/>    <!-- 2: Account combo -->
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="110"/>    <!-- 4: Contract selector -->
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="Auto"/>   <!-- 6: size label -->
+                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="48"/>     <!-- 8: size input -->
+                                <ColumnDefinition Width="10"/>
+                                <!-- Leverage (hidden on TopStepX) -->
+                                <ColumnDefinition Width="Auto"/>   <!-- 10: lev label -->
+                                <ColumnDefinition Width="Auto"/>   <!-- 11: lev combo -->
+                                <ColumnDefinition Width="Auto"/>   <!-- 12: lev gap -->
+                                <!-- SL -->
+                                <ColumnDefinition Width="Auto"/>   <!-- 13: SL label -->
+                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="44"/>     <!-- 15: SL input -->
+                                <ColumnDefinition Width="10"/>
+                                <!-- TP -->
+                                <ColumnDefinition Width="Auto"/>   <!-- 17: TP label -->
+                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="44"/>     <!-- 19: TP input -->
+                                <ColumnDefinition Width="*"/>      <!-- 20: tick hint -->
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0" Text="ACCT" Style="{StaticResource FieldLabel}"/>
+                            <ComboBox Grid.Column="2"
+                                      ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedAccount}"
+                                      FontFamily="Consolas" FontSize="12"
+                                      Style="{StaticResource UnclippedComboBoxStyle}"
+                                      ItemContainerStyle="{StaticResource DarkComboBoxItemStyle}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DisplayName}" Foreground="White" FontFamily="Consolas" FontSize="12"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+
+                            <StackPanel Grid.Column="4" VerticalAlignment="Center">
+                                <Button Content="OIL  (MCL)"
+                                        Command="{Binding SelectOilCommand}"
+                                        Style="{StaticResource GhostBtn}"
+                                        Height="26"
+                                        ToolTip="Fetch the active Micro Crude Light (MCLE) front-month contract ID from TopStepX"/>
+                                <TextBlock Text="{Binding OilContractLabel}"
+                                           Foreground="#7090A8" FontFamily="Consolas" FontSize="9"
+                                           HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="6" Text="{Binding AmountLabel}" Style="{StaticResource FieldLabel}"/>
+                            <TextBox   Grid.Column="8" Text="{Binding TestTradeAmount, UpdateSourceTrigger=PropertyChanged}"
+                                       Style="{StaticResource TerminalBox}"/>
+
+                            <!-- Leverage — hidden on TopStepX; Auto cols collapse to 0 -->
+                            <TextBlock Grid.Column="10" Text="LEV" Style="{StaticResource FieldLabel}"
+                                       Visibility="{Binding IsNotTopStepX, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            <ComboBox  Grid.Column="11"
+                                       ItemsSource="{Binding AvailableLeverages}"
+                                       SelectedItem="{Binding TestTradeLeverage, Mode=TwoWay}"
+                                       MaxWidth="52" FontFamily="Consolas" FontSize="12"
+                                       Style="{StaticResource UnclippedComboBoxStyle}"
+                                       ItemContainerStyle="{StaticResource DarkComboBoxItemStyle}"
+                                       Visibility="{Binding IsNotTopStepX, Converter={StaticResource BoolToVisibilityConverter}}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding StringFormat='x{0}'}" Foreground="White" FontFamily="Consolas"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBlock Grid.Column="12" Width="10"
+                                       Visibility="{Binding IsNotTopStepX, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                            <TextBlock Grid.Column="13" Text="{Binding SlLabel}" Style="{StaticResource FieldLabel}"/>
+                            <TextBox   Grid.Column="15" Text="{Binding TestTradeStopLoss, UpdateSourceTrigger=PropertyChanged}"
+                                       Style="{StaticResource TerminalBox}"
+                                       ToolTip="Whole number of ticks (e.g. 20 = 20 ticks from entry)"/>
+
+                            <TextBlock Grid.Column="17" Text="{Binding TpLabel}" Style="{StaticResource FieldLabel}"/>
+                            <TextBox   Grid.Column="19" Text="{Binding TestTradeTakeProfit, UpdateSourceTrigger=PropertyChanged}"
+                                       Style="{StaticResource TerminalBox}"
+                                       ToolTip="Whole number of ticks (e.g. 60 = 60 ticks from entry)"/>
+
+                            <TextBlock Grid.Column="20"
+                                       Text="{Binding TickSizeHintText}"
+                                       Style="{StaticResource FieldLabel}"
+                                       FontStyle="Italic" Margin="14,0,0,0"
+                                       Visibility="{Binding IsTopStepX, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- ──────────────────────────────────────────────────────────
+                     CLAUDE HAIKU ANALYSIS PANEL
+                     ────────────────────────────────────────────────────────── -->
+                <Border Background="#0C1524" BorderBrush="#162038" BorderThickness="1"
+                        Margin="0,0,0,10" Padding="16,12">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="10"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <Rectangle Width="16" Height="1" Fill="#F0A030" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="CLAUDE HAIKU  ·  ANALYSIS ENGINE" Style="{StaticResource SectionLabel}"
+                                       Foreground="#5A4820"/>
+                        </StackPanel>
+
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="76"/>   <!-- Analyse button -->
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="104"/>  <!-- Signal badge -->
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>    <!-- Rationale -->
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Analyse button -->
+                            <Button Grid.Column="0"
+                                    Command="{Binding GetClaudeAdviceCommand}"
+                                    Style="{StaticResource AnalyseBtn}"
+                                    Height="82" ToolTip="{Binding BarStatusText}">
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="◈" FontFamily="Consolas" FontSize="24"
+                                               Foreground="#F0A030" HorizontalAlignment="Center"
+                                               Margin="0,0,0,5"/>
+                                    <TextBlock Text="ANALYSE" FontFamily="Consolas" FontSize="12"
+                                               FontWeight="Bold"
+                                               Foreground="#A07030" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Signal badge -->
+                            <Border Grid.Column="2" SnapsToDevicePixels="True">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background"    Value="#0A1018"/>
+                                        <Setter Property="BorderBrush"   Value="#162038"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ClaudeAdvice}" Value="BUY">
+                                                <Setter Property="Background"  Value="#001F0C"/>
+                                                <Setter Property="BorderBrush" Value="#005A20"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ClaudeAdvice}" Value="SELL">
+                                                <Setter Property="Background"  Value="#1A0008"/>
+                                                <Setter Property="BorderBrush" Value="#500018"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <TextBlock Text="{Binding ClaudeAdvice}"
+                                               FontFamily="Consolas" FontSize="24" FontWeight="Bold"
+ HorizontalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#283848"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ClaudeAdvice}" Value="BUY">
+                                                        <Setter Property="Foreground" Value="#00DF7A"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ClaudeAdvice}" Value="SELL">
+                                                        <Setter Property="Foreground" Value="#F03355"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <Rectangle Height="1" Margin="12,5,12,5">
+                                        <Rectangle.Style>
+                                            <Style TargetType="Rectangle">
+                                                <Setter Property="Fill" Value="#162038"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ClaudeAdvice}" Value="BUY">
+                                                        <Setter Property="Fill" Value="#005A20"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding ClaudeAdvice}" Value="SELL">
+                                                        <Setter Property="Fill" Value="#500018"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Rectangle.Style>
+                                    </Rectangle>
+                                    <TextBlock Text="SIGNAL" FontFamily="Consolas" FontSize="12"
+                                               HorizontalAlignment="Center"
+                                               Foreground="#506070"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Rationale text -->
+                            <TextBlock Grid.Column="4"
+                                       Text="{Binding ClaudeRationale}"
+                                       TextWrapping="Wrap" VerticalAlignment="Center"
+                                       FontFamily="Consolas" FontSize="12"
+                                       Foreground="#7A90A8"/>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- ──────────────────────────────────────────────────────────
+                     ACTION BUTTONS — BUY / SELL
+                     ────────────────────────────────────────────────────────── -->
+                <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0"
+                            Content="▲   BUY 1 SIZE"
+                            Command="{Binding StartStrategyBuyCommand}"
+                            Style="{StaticResource BuyBtn}"
+                            Height="52"/>
+
+                    <Button Grid.Column="2"
+                            Content="▼   SELL 1 SIZE"
+                            Command="{Binding StartStrategySellCommand}"
+                            Style="{StaticResource SellBtn}"
+                            Height="52"/>
+                </Grid>
+
+                <!-- STOP / NUDGE row -->
+                <Grid Margin="0,0,0,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="10"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Column="0"
+                            Content="✕   Close Trade"
+                            Command="{Binding CloseTradeCommand}"
+                            Style="{StaticResource StopBtn}"
+                            Height="34"
+                            ToolTip="Cancel all SL/TP bracket orders and close the open position on TopStepX."/>
+
+                    <Button Grid.Column="2"
+                            Content="⟳   NUDGE SL  −10%"
+                            Command="{Binding NudgeBracketCommand}"
+                            Style="{StaticResource GhostBtn}"
+                            Height="34"
+                            ToolTip="Tightens the resting stop-loss order on TopStepX by 10% of its distance to entry. Works even without a locally-tracked bracket price."/>
+                </Grid>
+
+                <!-- FORCE CLOSE AT $X PROFIT row -->
+                <Border Background="#0C1524" BorderBrush="#162038" BorderThickness="1"
+                        Margin="0,0,0,10" Padding="12,8">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="FORCE CLOSE?" Style="{StaticResource FieldLabel}"
+                                   Margin="0,0,10,0"/>
+                        <RadioButton Content="Yes" GroupName="ForceClose"
+                                     IsChecked="{Binding ForceCloseEnabled, Mode=TwoWay}"
+                                     Foreground="#7090A8" FontFamily="Consolas" FontSize="12"
+                                     VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <RadioButton Content="No" GroupName="ForceClose"
+                                     IsChecked="{Binding ForceCloseEnabled, Converter={StaticResource BoolInverseConverter}, Mode=TwoWay}"
+                                     Foreground="#7090A8" FontFamily="Consolas" FontSize="12"
+                                     VerticalAlignment="Center" Margin="0,0,16,0"/>
+                        <TextBlock Text="$AMT" Style="{StaticResource FieldLabel}"
+                                   Margin="0,0,6,0"/>
+                        <TextBox Text="{Binding ForceCloseAmount, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource TerminalBox}"
+                                 Width="70" Height="26"
+                                 ToolTip="When Force Close = Yes and unrealised P&amp;L reaches this dollar amount, the position is flattened immediately."/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── ATR bracket management ──────────────────────────────────
+                     Trailing SL tier + Extend TP on close  (centred)
+                     ────────────────────────────────────────────────────────── -->
+                <Border Background="{StaticResource C_Surface}"
+                        BorderBrush="{StaticResource C_BorderDim}" BorderThickness="1"
+                        CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
+                    <StackPanel HorizontalAlignment="Center">
+
+                        <!-- Row 1: tier buttons + multiples readout -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                                    Margin="0,0,0,6">
+                            <TextBlock Text="Trail SL:" Foreground="{StaticResource C_TextSecond}"
+                                       FontFamily="Consolas" FontSize="12"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                            <Button Command="{Binding SelectAtrTierCommand}" CommandParameter="Tight"
+                                    Height="26" MinWidth="64" Margin="0,0,4,0"
+                                    ToolTip="Tight: SL=0.75×ATR, TP=1.5×ATR">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource GhostBtn}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAtrTightSelected}" Value="True">
+                                                <Setter Property="Background" Value="#8B4513"/>
+                                                <Setter Property="BorderBrush" Value="#C8601A"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="📏 Tight" Foreground="{StaticResource C_TextPrimary}" FontSize="12"/>
+                            </Button>
+
+                            <Button Command="{Binding SelectAtrTierCommand}" CommandParameter="Standard"
+                                    Height="26" MinWidth="80" Margin="0,0,4,0"
+                                    ToolTip="Standard: SL=1.5×ATR, TP=3.0×ATR">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource GhostBtn}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAtrStandardSelected}" Value="True">
+                                                <Setter Property="Background" Value="#1A4A1A"/>
+                                                <Setter Property="BorderBrush" Value="#228B22"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="📐 Standard" Foreground="{StaticResource C_TextPrimary}" FontSize="12"/>
+                            </Button>
+
+                            <Button Command="{Binding SelectAtrTierCommand}" CommandParameter="Wide"
+                                    Height="26" MinWidth="64"
+                                    ToolTip="Wide: SL=2.5×ATR, TP=5.0×ATR">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource GhostBtn}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAtrWideSelected}" Value="True">
+                                                <Setter Property="Background" Value="#1A237E"/>
+                                                <Setter Property="BorderBrush" Value="#3949AB"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="🔭 Wide" Foreground="{StaticResource C_TextPrimary}" FontSize="12"/>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Row 2: SL×N / TP×N readout + Extend TP checkbox -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock FontFamily="Consolas" FontSize="12"
+                                       Foreground="{StaticResource C_TextSecond}"
+                                       VerticalAlignment="Center" Margin="0,0,16,0">
+                                <Run Text="SL = "/>
+                                <Run Text="{Binding SlMultipleOfN, StringFormat='{}{0:F2}×N'}" Foreground="{StaticResource C_Amber}"/>
+                                <Run Text="    TP = "/>
+                                <Run Text="{Binding TpMultipleOfN, StringFormat='{}{0:F2}×N'}" Foreground="{StaticResource C_Green}"/>
+                            </TextBlock>
+                            <CheckBox VerticalAlignment="Center"
+                                      IsChecked="{Binding ExtendTpOnClose, Mode=TwoWay}"
+                                      ToolTip="When a bar closes at or beyond the TP, advance the target by TpMultiple×ATR (up to 3×). Lets winning trades run further.">
+                                <TextBlock Text="Extend TP on close" Foreground="{StaticResource C_TextSecond}"
+                                           FontFamily="Consolas" FontSize="12"/>
+                            </CheckBox>
+                        </StackPanel>
+
+                    </StackPanel>
+                </Border>
+
+                <!-- ──────────────────────────────────────────────────────────
+                     LIVE POSITION + P&L
+                     ────────────────────────────────────────────────────────── -->
+                <Border Background="#0C1524" BorderBrush="#162038" BorderThickness="1"
+                        Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="1"/>
+                            <ColumnDefinition Width="220"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- ── Section 1: position data ───────────────────────── -->
+                        <StackPanel Grid.Column="0" Margin="16,12,16,14">
+
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <Rectangle Width="16" Height="1" Fill="#00C8F0"
+                                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="LIVE POSITION" Style="{StaticResource SectionLabel}"/>
+                            </StackPanel>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="8"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="8"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Row 1: CURRENT PRICE (prominent, moved to top) -->
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="CURRENT PRICE"
+                                           Style="{StaticResource FieldLabel}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1"
+                                           Text="{Binding LiveCurrentPriceText, Mode=OneWay}"
+                                           FontFamily="Consolas" FontSize="22" FontWeight="Bold"
+                                           Foreground="#00C8F0" VerticalAlignment="Center"/>
+
+                                <!-- Row 2: ENTRY -->
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="ENTRY"
+                                           Style="{StaticResource FieldLabel}"/>
+                                <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal">
+                                    <TextBlock Text="{Binding LiveEntryPriceText, Mode=OneWay}"
+                                               Style="{StaticResource DataValue}"/>
+                                    <TextBlock Text="{Binding LiveEntryOrderIdText, Mode=OneWay}"
+                                               FontFamily="Consolas" FontSize="12" Foreground="#506070"
+                                               VerticalAlignment="Center" Margin="12,0,0,0"/>
+                                </StackPanel>
+
+                                <!-- Row 3: STOP LOSS + TAKE PROFIT side by side -->
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="SL / TP"
+                                           Style="{StaticResource FieldLabel}"/>
+                                <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
+                                    <TextBlock Text="{Binding LiveSlPriceText, Mode=OneWay}"
+                                               Style="{StaticResource DataValue}" Foreground="#F03355"/>
+                                    <TextBlock Text=" / " FontFamily="Consolas" FontSize="14"
+                                               Foreground="#506070" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding LiveTpPriceText, Mode=OneWay}"
+                                               Style="{StaticResource DataValue}" Foreground="#00DF7A"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Vertical divider -->
+                        <Rectangle Grid.Column="1" Fill="#162038"/>
+
+                        <!-- ── Section 2: P&L + Risk/Reward ──────────────────── -->
+                        <Grid Grid.Column="2">
+                            <Grid.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#070C14" Offset="0"/>
+                                    <GradientStop Color="#080E18" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Grid.Background>
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                                        Margin="12,14,12,14">
+
+                                <!-- P&L — big commanding number -->
+                                <TextBlock Text="UNREALISED P&amp;L"
+                                           FontFamily="Consolas" FontSize="12"
+                                           Foreground="#506070"
+                                           HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                <TextBlock Text="{Binding CurrentPnLText, Mode=OneWay}"
+                                           FontFamily="Consolas" FontSize="38" FontWeight="Bold"
+                                           HorizontalAlignment="Center" Margin="0,0,0,10">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#506070"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding PnLColor}" Value="BuyBrush">
+                                                    <Setter Property="Foreground" Value="#00DF7A"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding PnLColor}" Value="SellBrush">
+                                                    <Setter Property="Foreground" Value="#F03355"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <!-- Row 1: RISK -->
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="56"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="RISK"
+                                               Style="{StaticResource FieldLabel}"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding LiveSlDollarText, Mode=OneWay}"
+                                               FontFamily="Consolas" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#F03355" VerticalAlignment="Center"/>
+                                </Grid>
+
+                                <!-- Row 2: REWARD -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="56"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="REWARD"
+                                               Style="{StaticResource FieldLabel}"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding LiveTpDollarText, Mode=OneWay}"
+                                               FontFamily="Consolas" FontSize="14" FontWeight="SemiBold"
+                                               Foreground="#00DF7A" VerticalAlignment="Center"/>
+                                </Grid>
+
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- ──────────────────────────────────────────────────────────
+                     EXECUTION LOG
+                     ────────────────────────────────────────────────────────── -->
+                <Border Background="#0C1524" BorderBrush="#162038" BorderThickness="1">
+                    <StackPanel>
+
+                        <!-- Log header -->
+                        <Border BorderBrush="#162038" BorderThickness="0,0,0,1" Padding="16,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Rectangle Width="16" Height="1" Fill="#00C8F0"
+                                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Text="EXECUTION LOG" Style="{StaticResource SectionLabel}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Content="CLEAR"
+                                        Command="{Binding ClearDebugCommand}"
+                                        Style="{StaticResource GhostBtn}"
+                                        Width="52" Height="22" FontSize="12"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Log body — green-on-black terminal -->
+                        <TextBox Text="{Binding DebugText, Mode=OneWay}"
+                                 IsReadOnly="True" Height="200"
+                                 VerticalScrollBarVisibility="Auto"
+                                 Background="#060A10"
+                                 Foreground="#3A9A45"
+                                 FontFamily="Consolas" FontSize="12"
+                                 BorderThickness="0" Padding="16,10"
+                                 SelectionBrush="#0D2A18"/>
+
+                        <!-- Status bar -->
+                        <Border BorderBrush="#162038" BorderThickness="0,1,0,0" Padding="16,7">
+                            <StackPanel Orientation="Horizontal">
+                                <Rectangle Width="4" Height="4" Fill="#00C8F0"
+                                           VerticalAlignment="Center" Margin="0,0,9,0"/>
+                                <TextBlock Text="{Binding TestTradeStatus}"
+                                           FontFamily="Consolas" FontSize="12"
+                                           Foreground="#00C8F0"/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

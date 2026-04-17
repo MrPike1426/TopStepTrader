@@ -1,0 +1,5 @@
+<!-- Converters are declared inline in App.xaml to avoid XAML compiler ordering issues.
+     This file is kept as a placeholder for reference only. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+</ResourceDictionary>

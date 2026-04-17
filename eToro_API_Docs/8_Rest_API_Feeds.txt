@@ -1,0 +1,1438 @@
+> ## Documentation Index
+> Fetch the complete documentation index at: https://api-portal.etoro.com/llms.txt
+> Use this file to discover all available pages before exploring further.
+
+# Get instrument feed posts
+
+> Retrieves feed posts associated with a specific financial instrument. The feed includes discussions, analyses, and other content related to the instrument.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/feeds/instrument/{marketId}
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/feeds/instrument/{marketId}:
+    get:
+      tags:
+        - Feeds
+      summary: Get instrument feed posts
+      description: >-
+        Retrieves feed posts associated with a specific financial instrument.
+        The feed includes discussions, analyses, and other content related to
+        the instrument.
+      operationId: get_api_v1_feeds_instrument_marketId
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 24967996-7a84-4e24-aed0-5075d195d5f8
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: marketId
+          in: path
+          description: >-
+            Unique identifier of the financial instrument/market to retrieve
+            feed posts for
+          required: true
+          schema:
+            type: string
+          example: '123456'
+        - name: requesterUserId
+          in: query
+          description: >-
+            ID of the user making the request. Used for personalization and
+            permission checks.
+          schema:
+            type: string
+          example: '7890'
+        - name: take
+          in: query
+          description: Number of feed posts to retrieve. Used for pagination.
+          schema:
+            type: integer
+            format: int32
+            default: 20
+            minimum: 1
+            maximum: 100
+          example: 20
+        - name: badgesExperimentIsEnabled
+          in: query
+          description: >-
+            Flag indicating whether to include user badges in the response. Part
+            of badges feature experiment.
+          schema:
+            type: boolean
+            default: false
+        - name: offset
+          in: query
+          description: >-
+            Number of feed posts to skip. Used for pagination in combination
+            with take parameter.
+          schema:
+            type: integer
+            format: int32
+            default: 0
+            minimum: 0
+        - name: reactionsPageSize
+          in: query
+          description: >-
+            Number of reactions to include per post. Controls the pagination of
+            post reactions.
+          schema:
+            type: integer
+            format: int32
+            default: 10
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Successfully retrieved instrument feed posts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeedResponse'
+components:
+  schemas:
+    FeedResponse:
+      type: object
+      description: Response containing a paginated list of feed posts
+      properties:
+        posts:
+          type: array
+          description: List of feed posts
+          items:
+            $ref: '#/components/schemas/Post'
+        pagination:
+          type: object
+          description: Pagination information for the feed
+          properties:
+            total:
+              type: integer
+              description: Total number of posts available
+            hasMore:
+              type: boolean
+              description: Indicates if more posts are available beyond this page
+    Post:
+      type: object
+      description: Represents a feed post with its content and metadata
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the post
+        owner:
+          $ref: '#/components/schemas/User'
+        obsoleteId:
+          type: string
+          description: Obsolete identifier for backward compatibility
+        created:
+          type: string
+          format: date-time
+          description: Timestamp when the post was created
+        message:
+          type: object
+          properties:
+            text:
+              type: string
+              description: Main text content of the post
+            languageCode:
+              type: string
+              description: Language code of the post content
+        updated:
+          type: string
+          format: date-time
+          description: Timestamp when the post was last updated
+        isDeleted:
+          type: boolean
+          description: Indicates if the post is deleted
+        type:
+          type: string
+          description: Type of the post
+          enum:
+            - Default
+        metadata:
+          type: object
+          properties:
+            share:
+              type: object
+              properties:
+                sharedPost:
+                  type: string
+                sharedOriginPost:
+                  type: string
+            marketEvent:
+              type: object
+              properties:
+                earningReportId:
+                  type: integer
+                market:
+                  $ref: '#/components/schemas/Market'
+                stocksIndustryId:
+                  type: integer
+                earningsDate:
+                  type: string
+                  format: date-time
+                isBeforeMarketOpen:
+                  type: boolean
+                earningsYear:
+                  type: integer
+                earningsQuarter:
+                  type: integer
+                verified:
+                  type: boolean
+                marketCap:
+                  type: integer
+                estimatedEps:
+                  type: integer
+                estimatedSales:
+                  type: integer
+                tagName:
+                  type: string
+                textKey:
+                  type: integer
+            trade:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - Open
+                positionId:
+                  type: integer
+                market:
+                  $ref: '#/components/schemas/Market'
+                gain:
+                  type: integer
+                rate:
+                  type: integer
+                direction:
+                  type: string
+                  enum:
+                    - Long
+            order:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - Open
+                orderId:
+                  type: integer
+                market:
+                  $ref: '#/components/schemas/Market'
+                rate:
+                  type: integer
+                direction:
+                  type: string
+                  enum:
+                    - Long
+            copy:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - Start
+                user:
+                  $ref: '#/components/schemas/User'
+            poll:
+              type: object
+              properties:
+                id:
+                  type: integer
+                title:
+                  type: string
+                gcid:
+                  type: integer
+                options:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      index:
+                        type: integer
+                      text:
+                        type: string
+                      isUserVoted:
+                        type: boolean
+                      votesCount:
+                        type: integer
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              market:
+                $ref: '#/components/schemas/Market'
+        mentions:
+          type: array
+          items:
+            type: object
+            properties:
+              user:
+                $ref: '#/components/schemas/User'
+              isDirect:
+                type: boolean
+        isSpam:
+          type: boolean
+          description: Indicates if the post is marked as spam
+        editStatus:
+          type: string
+          description: Edit status of the post
+          enum:
+            - None
+            - Edited
+            - Moderated
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        avatar:
+          type: object
+          properties:
+            small:
+              type: string
+              format: uri
+            medium:
+              type: string
+              format: uri
+            large:
+              type: string
+              format: uri
+        roles:
+          type: array
+          items:
+            type: string
+        isBlocked:
+          type: boolean
+        isPrivate:
+          type: boolean
+        countryCode:
+          type: integer
+        piLevel:
+          type: integer
+    Market:
+      type: object
+      properties:
+        id:
+          type: string
+          nullable: true
+        symbolName:
+          type: string
+          nullable: true
+        displayName:
+          type: string
+          nullable: true
+        updated:
+          type: string
+          format: date-time
+          nullable: true
+        assetType:
+          $ref: '#/components/schemas/MarketAssetType'
+        internalId:
+          type: integer
+          format: int32
+        avatar:
+          $ref: '#/components/schemas/Avatar'
+        application:
+          $ref: '#/components/schemas/ApplicationSource'
+        metadata:
+          type: string
+          nullable: true
+        assetTypeId:
+          type: integer
+          format: int32
+          nullable: true
+        assetTypeSubCategoryId:
+          type: integer
+          format: int32
+          nullable: true
+      additionalProperties: false
+    Attachment:
+      type: object
+      description: Represents a media attachment in a post
+      properties:
+        type:
+          type: string
+          enum:
+            - image
+            - video
+            - link
+          description: Type of the attachment
+        url:
+          type: string
+          description: URL where the attachment content can be accessed
+        thumbnailUrl:
+          type: string
+          description: URL of a thumbnail image for video attachments
+        metadata:
+          type: object
+          description: Additional metadata about the attachment
+          properties:
+            width:
+              type: integer
+              description: Width of the media in pixels
+            height:
+              type: integer
+              description: Height of the media in pixels
+            duration:
+              type: integer
+              description: Duration in seconds for video attachments
+    MarketAssetType:
+      enum:
+        - Stocks
+        - Bonds
+        - ETF
+        - Index
+        - Warrants
+        - Options
+        - Futures
+        - CFD
+        - TRS
+        - FOREX
+        - CommodityMetals
+        - CommodityEnergyAgriculture
+        - CryptoCoin
+        - NFT
+      type: integer
+      format: int32
+    Avatar:
+      type: object
+      properties:
+        small:
+          type: string
+          nullable: true
+        medium:
+          type: string
+          nullable: true
+        large:
+          type: string
+          nullable: true
+        svg:
+          $ref: '#/components/schemas/Svg'
+      additionalProperties: false
+    ApplicationSource:
+      enum:
+        - eToro
+        - Delta
+        - Gatsby
+      type: integer
+      format: int32
+    Svg:
+      type: object
+      properties:
+        url:
+          type: string
+          nullable: true
+        backgroundColor:
+          type: string
+          nullable: true
+        textColor:
+          type: string
+          nullable: true
+      additionalProperties: false
+
+````
+
+
+# Create a new discussion post
+
+> Creates a new discussion post in the feed system. This endpoint allows users to create posts that can be associated with instruments, users, or general discussions.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json post /api/v1/feeds/post
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/feeds/post:
+    post:
+      tags:
+        - Feeds
+      summary: Create a new discussion post
+      description: >-
+        Creates a new discussion post in the feed system. This endpoint allows
+        users to create posts that can be associated with instruments, users, or
+        general discussions.
+      operationId: post_api_v1_feeds_post
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 749f9e15-a598-4657-acd6-92a9ed3c45d2
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+      requestBody:
+        description: Discussion post creation details
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DiscussionCreateRequest'
+      responses:
+        '201':
+          description: Post accepted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+components:
+  schemas:
+    DiscussionCreateRequest:
+      type: object
+      description: Request model for creating a new discussion post
+      properties:
+        owner:
+          type: integer
+          description: ID of the owner creating the discussion
+          example: 0
+        message:
+          type: string
+          description: The main text content of the discussion post
+          example: string
+        tags:
+          $ref: '#/components/schemas/Tags'
+        mentions:
+          $ref: '#/components/schemas/Mentions'
+        attachments:
+          $ref: '#/components/schemas/Attachments'
+    Post:
+      type: object
+      description: Represents a feed post with its content and metadata
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the post
+        owner:
+          $ref: '#/components/schemas/User'
+        obsoleteId:
+          type: string
+          description: Obsolete identifier for backward compatibility
+        created:
+          type: string
+          format: date-time
+          description: Timestamp when the post was created
+        message:
+          type: object
+          properties:
+            text:
+              type: string
+              description: Main text content of the post
+            languageCode:
+              type: string
+              description: Language code of the post content
+        updated:
+          type: string
+          format: date-time
+          description: Timestamp when the post was last updated
+        isDeleted:
+          type: boolean
+          description: Indicates if the post is deleted
+        type:
+          type: string
+          description: Type of the post
+          enum:
+            - Default
+        metadata:
+          type: object
+          properties:
+            share:
+              type: object
+              properties:
+                sharedPost:
+                  type: string
+                sharedOriginPost:
+                  type: string
+            marketEvent:
+              type: object
+              properties:
+                earningReportId:
+                  type: integer
+                market:
+                  $ref: '#/components/schemas/Market'
+                stocksIndustryId:
+                  type: integer
+                earningsDate:
+                  type: string
+                  format: date-time
+                isBeforeMarketOpen:
+                  type: boolean
+                earningsYear:
+                  type: integer
+                earningsQuarter:
+                  type: integer
+                verified:
+                  type: boolean
+                marketCap:
+                  type: integer
+                estimatedEps:
+                  type: integer
+                estimatedSales:
+                  type: integer
+                tagName:
+                  type: string
+                textKey:
+                  type: integer
+            trade:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - Open
+                positionId:
+                  type: integer
+                market:
+                  $ref: '#/components/schemas/Market'
+                gain:
+                  type: integer
+                rate:
+                  type: integer
+                direction:
+                  type: string
+                  enum:
+                    - Long
+            order:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - Open
+                orderId:
+                  type: integer
+                market:
+                  $ref: '#/components/schemas/Market'
+                rate:
+                  type: integer
+                direction:
+                  type: string
+                  enum:
+                    - Long
+            copy:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - Start
+                user:
+                  $ref: '#/components/schemas/User'
+            poll:
+              type: object
+              properties:
+                id:
+                  type: integer
+                title:
+                  type: string
+                gcid:
+                  type: integer
+                options:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      index:
+                        type: integer
+                      text:
+                        type: string
+                      isUserVoted:
+                        type: boolean
+                      votesCount:
+                        type: integer
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Attachment'
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              market:
+                $ref: '#/components/schemas/Market'
+        mentions:
+          type: array
+          items:
+            type: object
+            properties:
+              user:
+                $ref: '#/components/schemas/User'
+              isDirect:
+                type: boolean
+        isSpam:
+          type: boolean
+          description: Indicates if the post is marked as spam
+        editStatus:
+          type: string
+          description: Edit status of the post
+          enum:
+            - None
+            - Edited
+            - Moderated
+    Tags:
+      type: object
+      description: Tags associated with a post or comment
+      properties:
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: Name of the tag
+                example: string
+              id:
+                type: string
+                description: ID of the tag
+                example: string
+    Mentions:
+      type: object
+      description: Mentions included in a post or comment
+      properties:
+        mentions:
+          type: array
+          items:
+            type: object
+            properties:
+              userName:
+                type: string
+                description: Username of the mentioned user
+                example: string
+              id:
+                type: string
+                description: ID of the mentioned user
+                example: string
+              isDirect:
+                type: boolean
+                description: Indicates if the mention is direct
+                example: true
+    Attachments:
+      type: array
+      description: List of attachments for a post or comment
+      items:
+        type: object
+        properties:
+          url:
+            type: string
+            description: URL of the attachment
+            example: string
+          title:
+            type: string
+            description: Title of the attachment
+            example: string
+          host:
+            type: string
+            description: Host of the attachment
+            example: string
+          description:
+            type: string
+            description: Description of the attachment
+            example: string
+          mediaType:
+            type: string
+            description: Type of media in the attachment
+            enum:
+              - None
+              - Image
+              - Video
+            example: None
+          media:
+            type: object
+            properties:
+              image:
+                type: object
+                properties:
+                  width:
+                    type: integer
+                    description: Width of the image
+                    example: 0
+                  height:
+                    type: integer
+                    description: Height of the image
+                    example: 0
+                  url:
+                    type: string
+                    description: URL of the image
+                    example: string
+              video:
+                type: object
+                properties:
+                  videoSourceId:
+                    type: string
+                    description: ID of the video source
+                    example: string
+                  videoSource:
+                    type: string
+                    description: Source of the video
+                    enum:
+                      - None
+                      - YouTube
+                      - Vimeo
+                    example: None
+                  image:
+                    type: object
+                    properties:
+                      width:
+                        type: integer
+                        description: Width of the video thumbnail
+                        example: 0
+                      height:
+                        type: integer
+                        description: Height of the video thumbnail
+                        example: 0
+                      url:
+                        type: string
+                        description: URL of the video thumbnail
+                        example: string
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        avatar:
+          type: object
+          properties:
+            small:
+              type: string
+              format: uri
+            medium:
+              type: string
+              format: uri
+            large:
+              type: string
+              format: uri
+        roles:
+          type: array
+          items:
+            type: string
+        isBlocked:
+          type: boolean
+        isPrivate:
+          type: boolean
+        countryCode:
+          type: integer
+        piLevel:
+          type: integer
+    Market:
+      type: object
+      properties:
+        id:
+          type: string
+          nullable: true
+        symbolName:
+          type: string
+          nullable: true
+        displayName:
+          type: string
+          nullable: true
+        updated:
+          type: string
+          format: date-time
+          nullable: true
+        assetType:
+          $ref: '#/components/schemas/MarketAssetType'
+        internalId:
+          type: integer
+          format: int32
+        avatar:
+          $ref: '#/components/schemas/Avatar'
+        application:
+          $ref: '#/components/schemas/ApplicationSource'
+        metadata:
+          type: string
+          nullable: true
+        assetTypeId:
+          type: integer
+          format: int32
+          nullable: true
+        assetTypeSubCategoryId:
+          type: integer
+          format: int32
+          nullable: true
+      additionalProperties: false
+    Attachment:
+      type: object
+      description: Represents a media attachment in a post
+      properties:
+        type:
+          type: string
+          enum:
+            - image
+            - video
+            - link
+          description: Type of the attachment
+        url:
+          type: string
+          description: URL where the attachment content can be accessed
+        thumbnailUrl:
+          type: string
+          description: URL of a thumbnail image for video attachments
+        metadata:
+          type: object
+          description: Additional metadata about the attachment
+          properties:
+            width:
+              type: integer
+              description: Width of the media in pixels
+            height:
+              type: integer
+              description: Height of the media in pixels
+            duration:
+              type: integer
+              description: Duration in seconds for video attachments
+    MarketAssetType:
+      enum:
+        - Stocks
+        - Bonds
+        - ETF
+        - Index
+        - Warrants
+        - Options
+        - Futures
+        - CFD
+        - TRS
+        - FOREX
+        - CommodityMetals
+        - CommodityEnergyAgriculture
+        - CryptoCoin
+        - NFT
+      type: integer
+      format: int32
+    Avatar:
+      type: object
+      properties:
+        small:
+          type: string
+          nullable: true
+        medium:
+          type: string
+          nullable: true
+        large:
+          type: string
+          nullable: true
+        svg:
+          $ref: '#/components/schemas/Svg'
+      additionalProperties: false
+    ApplicationSource:
+      enum:
+        - eToro
+        - Delta
+        - Gatsby
+      type: integer
+      format: int32
+    Svg:
+      type: object
+      properties:
+        url:
+          type: string
+          nullable: true
+        backgroundColor:
+          type: string
+          nullable: true
+        textColor:
+          type: string
+          nullable: true
+      additionalProperties: false
+
+````
+
+
+# Get user feed posts
+
+> Retrieves feed posts associated with a specific user. The feed includes the user's discussions, analyses, and other content they have posted.
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/feeds/user/{userId}
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/feeds/user/{userId}:
+    get:
+      tags:
+        - Feeds
+      summary: Get user feed posts
+      description: >-
+        Retrieves feed posts associated with a specific user. The feed includes
+        the user's discussions, analyses, and other content they have posted.
+      operationId: get_api_v1_feeds_user_userId
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: f5c5fbd4-f368-417c-a395-c5cd8fdc7bb0
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: userId
+          in: path
+          description: ID of the user whose feed posts should be retrieved
+          required: true
+          schema:
+            type: string
+          example: '7890'
+        - name: requesterUserId
+          in: query
+          description: >-
+            ID of the user making the request. Used for personalization and
+            permission checks.
+          schema:
+            type: string
+          example: '1111'
+        - name: take
+          in: query
+          description: Number of feed posts to retrieve. Used for pagination.
+          schema:
+            type: integer
+            format: int32
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: badgesExperimentIsEnabled
+          in: query
+          description: >-
+            Flag indicating whether to include user badges in the response. Part
+            of badges feature experiment.
+          schema:
+            type: boolean
+            default: false
+        - name: offset
+          in: query
+          description: >-
+            Number of feed posts to skip. Used for pagination in combination
+            with take parameter.
+          schema:
+            type: integer
+            format: int32
+            default: 0
+            minimum: 0
+        - name: reactionsPageSize
+          in: query
+          description: >-
+            Number of reactions to include per post. Controls the pagination of
+            post reactions.
+          schema:
+            type: integer
+            format: int32
+            default: 10
+            minimum: 1
+            maximum: 50
+      responses:
+        '200':
+          description: Successfully retrieved user feed posts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscussionsResponse'
+components:
+  schemas:
+    DiscussionsResponse:
+      type: object
+      properties:
+        discussions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Discussion'
+        paging:
+          type: object
+          properties:
+            next:
+              type: string
+            offSet:
+              type: integer
+            take:
+              type: integer
+            version:
+              type: string
+        metadata:
+          type: object
+          properties:
+            experimentName:
+              type: string
+            streamType:
+              type: string
+            designatedStreamType:
+              type: string
+    Discussion:
+      type: object
+      properties:
+        id:
+          type: string
+        post:
+          $ref: '#/components/schemas/DiscussionsPost'
+        commentsData:
+          type: object
+          properties:
+            reactionPaging:
+              type: object
+              properties:
+                totalCount:
+                  type: integer
+            comments:
+              type: array
+              items:
+                $ref: '#/components/schemas/Comment'
+        emotionsData:
+          type: object
+        requesterContext:
+          type: object
+        summary:
+          type: object
+          properties:
+            totalCommentsAndReplies:
+              type: integer
+            sharedCount:
+              type: integer
+    DiscussionsPost:
+      type: object
+      properties:
+        id:
+          type: string
+        owner:
+          $ref: '#/components/schemas/User'
+        message:
+          type: object
+          properties:
+            text:
+              type: string
+            languageCode:
+              type: string
+        created:
+          type: string
+          format: date-time
+        updated:
+          type: string
+          format: date-time
+        type:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: object
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              market:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  symbolName:
+                    type: string
+                  displayName:
+                    type: string
+                  updated:
+                    type: string
+                  assetType:
+                    type: string
+                  internalId:
+                    type: integer
+                  avatar:
+                    type: object
+                  application:
+                    type: string
+                  metadata:
+                    type: string
+    Comment:
+      type: object
+      properties:
+        entity:
+          type: object
+          properties:
+            message:
+              type: object
+              properties:
+                text:
+                  type: string
+                languageCode:
+                  type: string
+            id:
+              type: string
+            owner:
+              $ref: '#/components/schemas/User'
+            created:
+              type: string
+              format: date-time
+        repliesCount:
+          type: integer
+        emotionsData:
+          type: object
+        requesterContext:
+          type: object
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        avatar:
+          type: object
+          properties:
+            small:
+              type: string
+              format: uri
+            medium:
+              type: string
+              format: uri
+            large:
+              type: string
+              format: uri
+        roles:
+          type: array
+          items:
+            type: string
+        isBlocked:
+          type: boolean
+        isPrivate:
+          type: boolean
+        countryCode:
+          type: integer
+        piLevel:
+          type: integer
+
+````
+
+
+# Gets data on available stocks industries
+
+
+
+## OpenAPI
+
+````yaml api-reference/openapi.json get /api/v1/market-data/stocks-industries
+openapi: 3.0.1
+info:
+  title: eToro Api
+  version: v1.138.0
+  description: >-
+    eToro’s public API provides access to real-time financial data, trading
+    insights, and account management features, allowing developers to integrate
+    eToro’s services into their applications. With access to market prices,
+    historical data, and social trading information, the API empowers users to
+    enhance their trading strategies. Designed for security and scalability, the
+    eToro API ensures smooth and reliable integration for a variety of financial
+    applications.
+
+
+    For more details on integrating with eToro's public WebSocket service,
+    please refer to the dedicated [WebSocket
+    documentation](./websocket/websocket-doc.html).
+servers:
+  - url: https://public-api.etoro.com
+    description: eToro API
+security: []
+paths:
+  /api/v1/market-data/stocks-industries:
+    get:
+      tags:
+        - Market Data
+      summary: Gets data on available stocks industries
+      operationId: GetStocksIndustries
+      parameters:
+        - name: x-request-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: 9a9f2ef6-d702-41e0-9339-070b74f0dcae
+          description: A unique request identifier.
+        - name: x-api-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: lhgfaslk21490FAScVPkdsb53F9dNkfHG4faZSG5vfjndfcfgdssdgsdHF4663
+          description: API key for authentication.
+        - name: x-user-key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: password
+            example: >-
+              eyJlYW4iOiJVbnJlZ2lzdGVyZWRBcHBsaWNhdGlvbiIsImVrIjoiOE5sZ2cwcW5EUVdROUFNWGpXT2lmOWktZnpidG5KcUlqWGJ3WHJZZkpZcldrbG90ZEhvLVBjSWhQaU8xU1ZtMW84aU1WZGZqN2xWNzFjLXFxLmcybXE1dnh4Q1hUT25xaWRUaTFlcEhmVk1fIn0_
+          description: User-specific authentication key.
+        - name: stocksIndustryIds
+          in: query
+          description: A comma seperated list of stock industry ids to retrieves
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: integer
+              format: int32
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StocksIndustriesResponse'
+components:
+  schemas:
+    StocksIndustriesResponse:
+      type: object
+      properties:
+        StocksIndustries:
+          type: array
+          items:
+            type: object
+            properties:
+              industryId:
+                type: integer
+              industryName:
+                type: string
+
+````
