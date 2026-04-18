@@ -146,17 +146,35 @@ Namespace TopStepTrader.Services.Backtest
                 qlBbLower = bb20.Lower
             End If
 
+            ' DoubleBubbleButt (=17): BB(20, 1.0 SD) inner + BB(20, 2.0 SD) outer + ATR(20) for TP
+            Dim dbbInnerUpper As Single() = Nothing
+            Dim dbbInnerLower As Single() = Nothing
+            Dim dbbOuterUpper As Single() = Nothing
+            Dim dbbOuterLower As Single() = Nothing
+            Dim dbbAtr20 As Single() = Nothing
+            If config.StrategyCondition = StrategyConditionType.DoubleBubbleButt Then
+                Dim dbbInner = TechnicalIndicators.BollingerBands(allCloses, 20, 1.0)
+                dbbInnerUpper = dbbInner.Upper
+                dbbInnerLower = dbbInner.Lower
+                Dim dbbOuter = TechnicalIndicators.BollingerBands(allCloses, 20, 2.0)
+                dbbOuterUpper = dbbOuter.Upper
+                dbbOuterLower = dbbOuter.Lower
+                dbbAtr20 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 20)
+            End If
+
             ' State: open SuperTrend SL/TP prices (price-level exit, like MultiConfluence)
             Dim qlStOpenSlPrice As Decimal = 0D
             Dim qlStOpenTpPrice As Decimal = 0D
             Dim qlStIsLong As Boolean = True
             Dim qlStPrevDir As Single = 0.0F   ' previous SuperTrend direction for flip detection
 
-            ' State: open Donchian / BbRsi exit levels
+            ' State: open Donchian / BbRsi / DoubleBubbleButt exit levels
             Dim qlDonOpenMidExit As Decimal = 0D    ' adverse mid-channel level at entry
             Dim qlDonIsLong As Boolean = True
             Dim qlBbOpenMidExit As Decimal = 0D     ' BB middle band (SMA20) at entry
             Dim qlBbIsLong As Boolean = True
+            Dim dbbIsLong As Boolean = True          ' DoubleBubbleButt position direction
+            Dim dbbInner1SdExit As Decimal = 0D     ' inner 1-SD band level at entry (neutral-zone exit trigger)
 
             ' MultiConfluence — pre-calculate full indicator series once for all bars.
             ' Senkou Span B needs senkouBPeriod(52) + displacement(26) = 78 bars minimum.
@@ -253,7 +271,7 @@ Namespace TopStepTrader.Services.Backtest
                 bbsRsi7 = TechnicalIndicators.RSI(allCloses, 7)
                 bbsEma5 = TechnicalIndicators.EMA(allCloses, 5)
                 bbsBbwSma = TechnicalIndicators.SMA(
-                    bbsBbwArr.Select(Function(v) If(Single.IsNaN(v), 0D, CDec(v))).ToList(), 20)
+                    bbsBbwArr.Select(Function(v) SafeD(v)).ToList(), 20)
                 bbsAtr10 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 10)
             End If
 
@@ -267,6 +285,8 @@ Namespace TopStepTrader.Services.Backtest
                     warmUp = 80
                 Case StrategyConditionType.ConnorsRsi2
                     warmUp = 205
+                Case StrategyConditionType.DoubleBubbleButt
+                    warmUp = 25   ' BB(20) needs 20 bars; ATR(20) needs 20 bars
                 Case StrategyConditionType.LultDivergence
                     warmUp = 100  ' WaveTrend warm-up + anchor lookback
                 Case StrategyConditionType.NakedTrader
@@ -297,7 +317,9 @@ Namespace TopStepTrader.Services.Backtest
             ' Tracks the bar index of the most recent ForceClose exit.
             ' Used to suppress re-entry for 3 bars after a profit-cap close,
             ' preventing artificial churn where a position is closed and immediately re-entered.
-            Dim lastForceCloseBarIndex As Integer = Integer.MinValue
+            ' Sentinel is -1000 (not Integer.MinValue) to avoid Int32 overflow in the
+            ' (i - lastForceCloseBarIndex) subtraction at the cooldown check below.
+            Dim lastForceCloseBarIndex As Integer = -1000
 
             ' MultiConfluence ATR-based SL/TP prices — set at entry, cleared on exit.
             ' Used instead of tick-based config values for MultiConfluence positions.
@@ -393,6 +415,7 @@ Namespace TopStepTrader.Services.Backtest
                             mcOpenSlPrice = 0D : mcOpenTpPrice = 0D
                             qlStOpenSlPrice = 0D : qlStOpenTpPrice = 0D
                             qlDonOpenMidExit = 0D : qlBbOpenMidExit = 0D
+                            dbbInner1SdExit = 0D
                             dynStop = 0D : dynTp = 0D : dynStopDelta = 0D : dynTpDelta = 0D
                             lastForceCloseBarIndex = i  ' arm 3-bar re-entry cooldown
                             Continue For  ' ForceClose handled exit — skip remaining checks for this bar
@@ -451,6 +474,19 @@ Namespace TopStepTrader.Services.Backtest
                         End If
                     End If
 
+                    ' ── DoubleBubbleButt neutral-zone exit ─────────────────────────
+                    ' Exit Long  when close drops back below the upper 1.0 SD band (neutral zone).
+                    ' Exit Short when close rises back above the lower 1.0 SD band (neutral zone).
+                    If exitReason Is Nothing AndAlso
+                       config.StrategyCondition = StrategyConditionType.DoubleBubbleButt AndAlso
+                       dbbInner1SdExit <> 0D Then
+                        If dbbIsLong AndAlso bar.Close < dbbInner1SdExit Then
+                            exitReason = "NeutralExit"
+                        ElseIf Not dbbIsLong AndAlso bar.Close > dbbInner1SdExit Then
+                            exitReason = "NeutralExit"
+                        End If
+                    End If
+
                     ' ── ConnorsRsi2 RSI-based exit ─────────────────────────────────
                     ' Exit Long when close > SMA(5) or RSI(2) > 65.
                     ' Exit Short when close < SMA(5) or RSI(2) < 35.
@@ -459,11 +495,11 @@ Namespace TopStepTrader.Services.Backtest
                        qlRsi2 IsNot Nothing AndAlso qlSma5 IsNot Nothing Then
                         If Not (Single.IsNaN(qlRsi2(i)) OrElse Single.IsNaN(qlSma5(i))) Then
                             If openLegs(0).Side = "Buy" Then
-                                If bar.Close > CDec(qlSma5(i)) OrElse qlRsi2(i) > 65.0F Then
+                                If bar.Close > SafeD(qlSma5(i)) OrElse qlRsi2(i) > 65.0F Then
                                     exitReason = "TakeProfit"
                                 End If
                             Else
-                                If bar.Close < CDec(qlSma5(i)) OrElse qlRsi2(i) < 35.0F Then
+                                If bar.Close < SafeD(qlSma5(i)) OrElse qlRsi2(i) < 35.0F Then
                                     exitReason = "TakeProfit"
                                 End If
                             End If
@@ -534,6 +570,7 @@ Namespace TopStepTrader.Services.Backtest
                         qlStOpenTpPrice = 0D
                         qlDonOpenMidExit = 0D
                         qlBbOpenMidExit = 0D
+                        dbbInner1SdExit = 0D
                         ' Clear dynamic exit state
                         dynStop      = 0D
                         dynTp        = 0D
@@ -589,9 +626,9 @@ Namespace TopStepTrader.Services.Backtest
                         Dim ema50Falling = ema50CascNow < ema50CascPrev
 
                         Dim cascadeSide As String = Nothing
-                        If crossedAbove AndAlso lastCascadeClose > CDec(ema50CascNow) AndAlso ema50Rising Then
+                        If crossedAbove AndAlso lastCascadeClose > SafeD(ema50CascNow) AndAlso ema50Rising Then
                             cascadeSide = "Buy"
-                        ElseIf crossedBelow AndAlso lastCascadeClose < CDec(ema50CascNow) AndAlso ema50Falling Then
+                        ElseIf crossedBelow AndAlso lastCascadeClose < SafeD(ema50CascNow) AndAlso ema50Falling Then
                             cascadeSide = "Sell"
                         End If
 
@@ -609,8 +646,8 @@ Namespace TopStepTrader.Services.Backtest
                                 Dim atrCasc As Single = If(universalAtr14 IsNot Nothing AndAlso i < universalAtr14.Length AndAlso
                                                             Not Single.IsNaN(universalAtr14(i)), universalAtr14(i), 0.0F)
                                 If config.UseAtrMode AndAlso atrCasc > 0.0F Then
-                                    dynStopDelta = CDec(atrCasc) * config.SlAtrMultiple
-                                    dynTpDelta   = CDec(atrCasc) * config.TpAtrMultiple
+                                    dynStopDelta = SafeD(atrCasc) * config.SlAtrMultiple
+                                    dynTpDelta   = SafeD(atrCasc) * config.TpAtrMultiple
                                 Else
                                     Dim dpp = config.PointValue * config.Quantity
                                     If dpp > 0D Then
@@ -656,14 +693,14 @@ Namespace TopStepTrader.Services.Backtest
                             Single.IsNaN(mcHistPrev) OrElse Single.IsNaN(mcStochK) OrElse
                             Single.IsNaN(mcEma21Val)) Then
 
-                        Dim mcCloudTop = CDec(Math.Max(mcSpanA, mcSpanB))
-                        Dim mcCloudBottom = CDec(Math.Min(mcSpanA, mcSpanB))
+                        Dim mcCloudTop = SafeD(Math.Max(mcSpanA, mcSpanB))
+                        Dim mcCloudBottom = SafeD(Math.Min(mcSpanA, mcSpanB))
                         Dim mcLagIdx = i - 26
                         Dim mcLagClose = If(mcLagIdx >= 0, filteredBars(mcLagIdx).Close, Decimal.MinValue)
 
                         ' ── Long: all 7 conditions ────────────────────────────────
                         Dim lcl1 = (mcLastClose > mcCloudTop)
-                        Dim lcl2 = (mcLastClose > CDec(mcEma21Val))
+                        Dim lcl2 = (mcLastClose > SafeD(mcEma21Val))
                         Dim lcl3 = (mcTenkan > mcKijun)
                         Dim lcl4 = (mcLagIdx >= 0 AndAlso mcLastClose > mcLagClose)
                         Dim lcl5 = ((config.MinAdxThreshold <= 0.0F OrElse mcAdxVal >= config.MinAdxThreshold) AndAlso mcPlusDIVal > mcMinusDIVal)
@@ -672,7 +709,7 @@ Namespace TopStepTrader.Services.Backtest
 
                         ' ── Short: all 7 conditions ───────────────────────────────
                         Dim scl1 = (mcLastClose < mcCloudBottom)
-                        Dim scl2 = (mcLastClose < CDec(mcEma21Val))
+                        Dim scl2 = (mcLastClose < SafeD(mcEma21Val))
                         Dim scl3 = (mcTenkan < mcKijun)
                         Dim scl4 = (mcLagIdx >= 0 AndAlso mcLastClose < mcLagClose)
                         Dim scl5 = ((config.MinAdxThreshold <= 0.0F OrElse mcAdxVal >= config.MinAdxThreshold) AndAlso mcMinusDIVal > mcPlusDIVal)
@@ -688,13 +725,13 @@ Namespace TopStepTrader.Services.Backtest
                             If lcl1 AndAlso lcl2 AndAlso lcl3 AndAlso lcl4 AndAlso lcl5 AndAlso lcl6 AndAlso lcl7 Then
                                 mcSide = "Buy"
                                 ' SL = min(1.5×ATR, cloud bottom); TP = 2:1 R:R from actual SL
-                                mcAtrSlLevel = mcLastClose - CDec(mcAtrVal * 1.5F)
+                                mcAtrSlLevel = mcLastClose - SafeD(mcAtrVal * 1.5F)
                                 mcSlCand = If(mcCloudBottom > mcAtrSlLevel, mcCloudBottom, mcAtrSlLevel)
                                 mcTpCand = mcLastClose + (mcLastClose - mcSlCand) * 2D
                             ElseIf scl1 AndAlso scl2 AndAlso scl3 AndAlso scl4 AndAlso scl5 AndAlso scl6 AndAlso scl7 Then
                                 mcSide = "Sell"
                                 ' SL = min(1.5×ATR, cloud top); TP = 2:1 R:R from actual SL
-                                mcAtrSlLevel = mcLastClose + CDec(mcAtrVal * 1.5F)
+                                mcAtrSlLevel = mcLastClose + SafeD(mcAtrVal * 1.5F)
                                 mcSlCand = If(mcCloudTop < mcAtrSlLevel, mcCloudTop, mcAtrSlLevel)
                                 mcTpCand = mcLastClose - (mcSlCand - mcLastClose) * 2D
                             End If
@@ -736,9 +773,9 @@ Namespace TopStepTrader.Services.Backtest
                         Dim sma200Val = qlSma200(i)
                         If Not (Single.IsNaN(rsi2Val) OrElse Single.IsNaN(sma200Val)) Then
                             Dim crSide As String = Nothing
-                            If rsi2Val < 10.0F AndAlso bar.Close > CDec(sma200Val) Then
+                            If rsi2Val < 10.0F AndAlso bar.Close > SafeD(sma200Val) Then
                                 crSide = "Buy"
-                            ElseIf rsi2Val > 90.0F AndAlso bar.Close < CDec(sma200Val) Then
+                            ElseIf rsi2Val > 90.0F AndAlso bar.Close < SafeD(sma200Val) Then
                                 crSide = "Sell"
                             End If
                             If crSide IsNot Nothing Then
@@ -755,8 +792,8 @@ Namespace TopStepTrader.Services.Backtest
                                     Dim atrCr As Single = If(universalAtr14 IsNot Nothing AndAlso i < universalAtr14.Length AndAlso
                                                               Not Single.IsNaN(universalAtr14(i)), universalAtr14(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrCr > 0.0F Then
-                                        dynStopDelta = CDec(atrCr) * config.SlAtrMultiple
-                                        dynTpDelta   = CDec(atrCr) * config.TpAtrMultiple
+                                        dynStopDelta = SafeD(atrCr) * config.SlAtrMultiple
+                                        dynTpDelta   = SafeD(atrCr) * config.TpAtrMultiple
                                     Else
                                         Dim dppCr = config.PointValue * config.Quantity
                                         If dppCr > 0D Then
@@ -797,7 +834,7 @@ Namespace TopStepTrader.Services.Backtest
                                     Dim stAtrVal = If(qlStAtr10 IsNot Nothing AndAlso
                                                       i < qlStAtr10.Length AndAlso
                                                       Not Single.IsNaN(qlStAtr10(i)),
-                                                      CDec(qlStAtr10(i)), 0D)
+                                                      SafeD(qlStAtr10(i)), 0D)
                                     positionGroupCounter += 1
                                     openLegs.Add(New BacktestTrade With {
                                         .PositionGroupId = positionGroupCounter,
@@ -810,12 +847,12 @@ Namespace TopStepTrader.Services.Backtest
                                     qlStIsLong = (stSide = "Buy")
                                     ' SL = SuperTrend line; TP = 2× ATR reward
                                     If qlStIsLong Then
-                                        qlStOpenSlPrice = CDec(stLineNow)
+                                        qlStOpenSlPrice = SafeD(stLineNow)
                                         qlStOpenTpPrice = If(stAtrVal > 0D,
                                                              bar.Close + stAtrVal * 2D,
                                                              bar.Close * 1.02D)
                                     Else
-                                        qlStOpenSlPrice = CDec(stLineNow)
+                                        qlStOpenSlPrice = SafeD(stLineNow)
                                         qlStOpenTpPrice = If(stAtrVal > 0D,
                                                              bar.Close - stAtrVal * 2D,
                                                              bar.Close * 0.98D)
@@ -851,10 +888,10 @@ Namespace TopStepTrader.Services.Backtest
                                 Single.IsNaN(prevDonLowerVal)) Then
                             Dim donSide As String = Nothing
                             ' Break above prior bar's upper = new breakout long
-                            If bar.Close > CDec(prevDonUpperVal) Then
+                            If bar.Close > SafeD(prevDonUpperVal) Then
                                 donSide = "Buy"
                             ' Break below prior bar's lower = new breakout short
-                            ElseIf bar.Close < CDec(prevDonLowerVal) Then
+                            ElseIf bar.Close < SafeD(prevDonLowerVal) Then
                                 donSide = "Sell"
                             End If
                             If donSide IsNot Nothing Then
@@ -874,8 +911,8 @@ Namespace TopStepTrader.Services.Backtest
                                     Dim atrDon As Single = If(universalAtr14 IsNot Nothing AndAlso i < universalAtr14.Length AndAlso
                                                                Not Single.IsNaN(universalAtr14(i)), universalAtr14(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrDon > 0.0F Then
-                                        dynStopDelta = CDec(atrDon) * config.SlAtrMultiple
-                                        dynTpDelta   = CDec(atrDon) * config.TpAtrMultiple
+                                        dynStopDelta = SafeD(atrDon) * config.SlAtrMultiple
+                                        dynTpDelta   = SafeD(atrDon) * config.TpAtrMultiple
                                     Else
                                         Dim dppDon = config.PointValue * config.Quantity
                                         If dppDon > 0D Then
@@ -890,7 +927,7 @@ Namespace TopStepTrader.Services.Backtest
                                     End If
                                 End If
                                 ' Exit when close crosses the 10-bar mid-channel (adverse direction)
-                                qlDonOpenMidExit = CDec(donMidVal)
+                                qlDonOpenMidExit = SafeD(donMidVal)
                             End If
                         End If
                     End If
@@ -911,9 +948,9 @@ Namespace TopStepTrader.Services.Backtest
                         If Not (Single.IsNaN(bbUpperVal) OrElse Single.IsNaN(bbLowerVal) OrElse
                                 Single.IsNaN(bbMidVal) OrElse Single.IsNaN(rsiMrVal)) Then
                             Dim mrSide As String = Nothing
-                            If bar.Close < CDec(bbLowerVal) AndAlso rsiMrVal < 30.0F Then
+                            If bar.Close < SafeD(bbLowerVal) AndAlso rsiMrVal < 30.0F Then
                                 mrSide = "Buy"
-                            ElseIf bar.Close > CDec(bbUpperVal) AndAlso rsiMrVal > 70.0F Then
+                            ElseIf bar.Close > SafeD(bbUpperVal) AndAlso rsiMrVal > 70.0F Then
                                 mrSide = "Sell"
                             End If
                             If mrSide IsNot Nothing Then
@@ -928,13 +965,13 @@ Namespace TopStepTrader.Services.Backtest
                                 })
                                 qlBbIsLong = (mrSide = "Buy")
                                 ' Exit when price returns to middle BB (SMA20)
-                                qlBbOpenMidExit = CDec(bbMidVal)
+                                qlBbOpenMidExit = SafeD(bbMidVal)
                                 If dynEnabled Then
                                     Dim atrBb As Single = If(universalAtr14 IsNot Nothing AndAlso i < universalAtr14.Length AndAlso
                                                               Not Single.IsNaN(universalAtr14(i)), universalAtr14(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrBb > 0.0F Then
-                                        dynStopDelta = CDec(atrBb) * config.SlAtrMultiple
-                                        dynTpDelta   = CDec(atrBb) * config.TpAtrMultiple
+                                        dynStopDelta = SafeD(atrBb) * config.SlAtrMultiple
+                                        dynTpDelta   = SafeD(atrBb) * config.TpAtrMultiple
                                     Else
                                         Dim dppBb = config.PointValue * config.Quantity
                                         If dppBb > 0D Then
@@ -946,6 +983,64 @@ Namespace TopStepTrader.Services.Backtest
                                         Dim isBbBuy = (mrSide = "Buy")
                                         dynStop = If(isBbBuy, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
                                         dynTp   = If(isBbBuy, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
+                                    End If
+                                End If
+                            End If
+                        End If
+                    End If
+                    Continue For
+                End If
+
+                ' ── DoubleBubbleButt signal ────────────────────────────────────────
+                ' Long  when close > upper inner 1.0 SD band (enters Buy Zone).
+                ' Short when close < lower inner 1.0 SD band (enters Sell Zone).
+                ' Hard SL = outer 2.0 SD band at entry; TP = 2× ATR(20) from entry.
+                ' Exit is handled above via neutral-zone re-entry (dbbInner1SdExit).
+                If openLegs.Count = 0 AndAlso
+                   config.StrategyCondition = StrategyConditionType.DoubleBubbleButt Then
+                    If dbbInnerUpper IsNot Nothing AndAlso dbbInnerLower IsNot Nothing AndAlso
+                       dbbOuterUpper IsNot Nothing AndAlso dbbOuterLower IsNot Nothing Then
+                        Dim dbbIU = dbbInnerUpper(i)
+                        Dim dbbIL = dbbInnerLower(i)
+                        Dim dbbOU = dbbOuterUpper(i)
+                        Dim dbbOL = dbbOuterLower(i)
+                        Dim dbbAtrVal = If(dbbAtr20 IsNot Nothing AndAlso i < dbbAtr20.Length, dbbAtr20(i), Single.NaN)
+                        If Not (Single.IsNaN(dbbIU) OrElse Single.IsNaN(dbbIL) OrElse
+                                Single.IsNaN(dbbOU) OrElse Single.IsNaN(dbbOL)) Then
+                            Dim dbbSide As String = Nothing
+                            ' Long: close enters Buy Zone (above upper 1-SD band)
+                            If bar.Close > SafeD(dbbIU) Then
+                                dbbSide = "Buy"
+                            ' Short: close enters Sell Zone (below lower 1-SD band)
+                            ElseIf bar.Close < SafeD(dbbIL) Then
+                                dbbSide = "Sell"
+                            End If
+                            If dbbSide IsNot Nothing Then
+                                positionGroupCounter += 1
+                                openLegs.Add(New BacktestTrade With {
+                                    .PositionGroupId = positionGroupCounter,
+                                    .EntryTime = bar.Timestamp,
+                                    .EntryPrice = bar.Close,
+                                    .Side = dbbSide,
+                                    .Quantity = config.Quantity,
+                                    .SignalConfidence = 1.0F
+                                })
+                                dbbIsLong = (dbbSide = "Buy")
+                                ' Record inner 1-SD level for neutral-zone exit trigger
+                                dbbInner1SdExit = If(dbbIsLong, SafeD(dbbIU), SafeD(dbbIL))
+                                ' SL = outer 2.0 SD band at entry; TP = 2× ATR(20) from entry
+                                Dim dbbAtr = If(Not Single.IsNaN(dbbAtrVal), SafeD(dbbAtrVal), 0D)
+                                If dynEnabled Then
+                                    ' ATR mode: SL = outer band distance, TP = 2× ATR
+                                    Dim outerBandDist = If(dbbIsLong,
+                                        bar.Close - SafeD(dbbOL),   ' long SL = outer lower band
+                                        SafeD(dbbOU) - bar.Close)   ' short SL = outer upper band
+                                    dynStopDelta = If(outerBandDist > 0D, outerBandDist,
+                                                     If(dbbAtr > 0D, dbbAtr * 2D, 0D))
+                                    dynTpDelta = If(dbbAtr > 0D, dbbAtr * 2D, dynStopDelta)
+                                    If dynStopDelta > 0D Then
+                                        dynStop = If(dbbIsLong, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
+                                        dynTp   = If(dbbIsLong, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
                                     End If
                                 End If
                             End If
@@ -968,10 +1063,10 @@ Namespace TopStepTrader.Services.Backtest
                             Dim prevClose = filteredBars(i - 1).Close
                             Dim vcSide As String = Nothing
                             ' Cross above VIDYA + positive volume delta ≥ 20%
-                            If prevClose <= CDec(vidyaPrev) AndAlso bar.Close > CDec(vidyaNow) AndAlso deltaVol >= 0.2F Then
+                            If prevClose <= SafeD(vidyaPrev) AndAlso bar.Close > SafeD(vidyaNow) AndAlso deltaVol >= 0.2F Then
                                 vcSide = "Buy"
                             ' Cross below VIDYA + negative volume delta ≤ -20%
-                            ElseIf prevClose >= CDec(vidyaPrev) AndAlso bar.Close < CDec(vidyaNow) AndAlso deltaVol <= -0.2F Then
+                            ElseIf prevClose >= SafeD(vidyaPrev) AndAlso bar.Close < SafeD(vidyaNow) AndAlso deltaVol <= -0.2F Then
                                 vcSide = "Sell"
                             End If
                             If vcSide IsNot Nothing Then
@@ -993,8 +1088,8 @@ Namespace TopStepTrader.Services.Backtest
                                     Dim atrVc As Single = If(vcAtr14 IsNot Nothing AndAlso i < vcAtr14.Length AndAlso
                                                               Not Single.IsNaN(vcAtr14(i)), vcAtr14(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrVc > 0.0F Then
-                                        dynStopDelta = CDec(atrVc) * config.SlAtrMultiple
-                                        dynTpDelta   = CDec(atrVc) * config.TpAtrMultiple
+                                        dynStopDelta = SafeD(atrVc) * config.SlAtrMultiple
+                                        dynTpDelta   = SafeD(atrVc) * config.TpAtrMultiple
                                     Else
                                         Dim dppVc = config.PointValue * config.Quantity
                                         If dppVc > 0D Then
@@ -1081,7 +1176,7 @@ Namespace TopStepTrader.Services.Backtest
                                 If nAdx >= 25.0F AndAlso ntAligned = ntTotal AndAlso ntTotal >= 3 Then
                                     ' High confidence: all votes aligned + ADX≥25
                                     Dim volOk = (ntVolMa20 IsNot Nothing AndAlso Not Single.IsNaN(ntVolMa20(i)) AndAlso
-                                                  i < filteredBars.Count AndAlso filteredBars(i).Volume > CDec(ntVolMa20(i)))
+                                                  i < filteredBars.Count AndAlso filteredBars(i).Volume > SafeD(ntVolMa20(i)))
                                     ntConf = If(volOk, 0.9F, 0.6F)
                                     ntFireable = True
                                 ElseIf ntAligned >= ntTotal - 1 AndAlso ntTotal >= 3 Then
@@ -1105,8 +1200,8 @@ Namespace TopStepTrader.Services.Backtest
                                     Dim atrNt As Single = If(ntAtr14 IsNot Nothing AndAlso i < ntAtr14.Length AndAlso
                                                               Not Single.IsNaN(ntAtr14(i)), ntAtr14(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrNt > 0.0F Then
-                                        dynStopDelta = CDec(atrNt) * config.SlAtrMultiple
-                                        dynTpDelta   = CDec(atrNt) * config.TpAtrMultiple
+                                        dynStopDelta = SafeD(atrNt) * config.SlAtrMultiple
+                                        dynTpDelta   = SafeD(atrNt) * config.TpAtrMultiple
                                     Else
                                         Dim dppNt = config.PointValue * config.Quantity
                                         If dppNt > 0D Then
@@ -1278,9 +1373,9 @@ Namespace TopStepTrader.Services.Backtest
                             Dim bbEma5Rising = (bEma5Now > bEma5Prev)
                             If sqzActive Then
                                 ' Mode A: Squeeze Breakout
-                                If bar.Close > CDec(bUpper) * 1.0025D AndAlso bbEma5Rising AndAlso bRsi7 >= 60.0F Then
+                                If bar.Close > SafeD(bUpper) * 1.0025D AndAlso bbEma5Rising AndAlso bRsi7 >= 60.0F Then
                                     bbSide = "Buy"
-                                ElseIf bar.Close < CDec(bLower) * 0.9975D AndAlso Not bbEma5Rising AndAlso bRsi7 <= 40.0F Then
+                                ElseIf bar.Close < SafeD(bLower) * 0.9975D AndAlso Not bbEma5Rising AndAlso bRsi7 <= 40.0F Then
                                     bbSide = "Sell"
                                 End If
                             Else
@@ -1315,8 +1410,8 @@ Namespace TopStepTrader.Services.Backtest
                                     Dim atrBbs As Single = If(bbsAtr10 IsNot Nothing AndAlso i < bbsAtr10.Length AndAlso
                                                                Not Single.IsNaN(bbsAtr10(i)), bbsAtr10(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrBbs > 0.0F Then
-                                        dynStopDelta = CDec(atrBbs) * config.SlAtrMultiple
-                                        dynTpDelta   = CDec(atrBbs) * config.TpAtrMultiple
+                                        dynStopDelta = SafeD(atrBbs) * config.SlAtrMultiple
+                                        dynTpDelta   = SafeD(atrBbs) * config.TpAtrMultiple
                                     Else
                                         Dim dppBbs = config.PointValue * config.Quantity
                                         If dppBbs > 0D Then
@@ -1349,7 +1444,8 @@ Namespace TopStepTrader.Services.Backtest
                    config.StrategyCondition <> StrategyConditionType.VidyaCross AndAlso
                    config.StrategyCondition <> StrategyConditionType.NakedTrader AndAlso
                    config.StrategyCondition <> StrategyConditionType.LultDivergence AndAlso
-                   config.StrategyCondition <> StrategyConditionType.BbSqueezeScalper Then
+                   config.StrategyCondition <> StrategyConditionType.BbSqueezeScalper AndAlso
+                   config.StrategyCondition <> StrategyConditionType.DoubleBubbleButt Then
                     Dim ema21Now = ema21Series(i)
                     Dim ema21Prev = ema21Series(i - 1)
                     Dim ema50Now = ema50Series(i)
@@ -1366,10 +1462,10 @@ Namespace TopStepTrader.Services.Backtest
                     If ema21Now > ema50Now * 1.0005 Then bullScore += 25
 
                     ' 2. Close vs EMA21 — 20 pts
-                    If lastClose > CDec(ema21Now) Then bullScore += 20
+                    If lastClose > SafeD(ema21Now) Then bullScore += 20
 
                     ' 3. Close vs EMA50 — 15 pts
-                    If lastClose > CDec(ema50Now) Then bullScore += 15
+                    If lastClose > SafeD(ema50Now) Then bullScore += 15
 
                     ' 4. RSI trending zone — 20 pts
                     ' Mirrors live StrategyExecutionEngine: awards 20 pts when RSI is in the
@@ -1456,8 +1552,8 @@ Namespace TopStepTrader.Services.Backtest
                                 Dim atrEma As Single = If(universalAtr14 IsNot Nothing AndAlso i < universalAtr14.Length AndAlso
                                                            Not Single.IsNaN(universalAtr14(i)), universalAtr14(i), 0.0F)
                                 If config.UseAtrMode AndAlso atrEma > 0.0F Then
-                                    dynStopDelta = CDec(atrEma) * config.SlAtrMultiple
-                                    dynTpDelta   = CDec(atrEma) * config.TpAtrMultiple
+                                    dynStopDelta = SafeD(atrEma) * config.SlAtrMultiple
+                                    dynTpDelta   = SafeD(atrEma) * config.TpAtrMultiple
                                 Else
                                     Dim dpp = config.PointValue * config.Quantity
                                     If dpp > 0D Then
@@ -1579,6 +1675,14 @@ Namespace TopStepTrader.Services.Backtest
             }
         End Function
 
-    End Class
+            ''' <summary>
+            ''' Safe CDec for Single values: returns 0D when the value is NaN or Infinity,
+            ''' preventing OverflowException from CDec(Single.PositiveInfinity).
+            ''' </summary>
+            Private Shared Function SafeD(v As Single) As Decimal
+                Return If(Single.IsNaN(v) OrElse Single.IsInfinity(v), 0D, CDec(v))
+            End Function
 
-End Namespace
+        End Class
+
+    End Namespace

@@ -555,10 +555,22 @@
                                 <ContentControl Template="{StaticResource NakedTraderCardContent}"/>
                             </Button>
 
-                            <!-- 7. Placeholder -->
-                            <Button IsEnabled="False" Margin="0,0,6,0"
-                                    Style="{StaticResource StrategyCardStyle}">
-                                <ContentControl Template="{StaticResource PlaceholderCardContent}"/>
+                            <!-- 7. Double Bubble Butt -->
+                            <Button Command="{Binding SelectDoubleBubbleButtCommand}"
+                                    Margin="0,0,6,0"
+                                    ToolTip="Double Bollinger Band (Kathy Lien): BB(20,1.0 SD) inner + BB(20,2.0 SD) outer define Buy/Sell/Neutral zones. Long when close enters Buy Zone (above upper 1.0 SD). Short when close enters Sell Zone (below lower 1.0 SD). Exit when price returns to Neutral Zone.">
+                                <Button.Style>
+                                    <Style BasedOn="{StaticResource StrategyCardStyle}" TargetType="Button">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsDoubleBubbleButtActive}" Value="True">
+                                                <Setter Property="Background"      Value="{StaticResource NavSelectedBrush}"/>
+                                                <Setter Property="BorderBrush"     Value="{StaticResource AccentBrush}"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <ContentControl Template="{StaticResource DoubleBubbleButtCardContent}"/>
                             </Button>
 
                             <!-- 8. Placeholder -->

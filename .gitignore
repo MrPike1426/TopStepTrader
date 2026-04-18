@@ -21,12 +21,6 @@ BinanceAPIKey.txt
 *APIKey*.txt
 *ApiKey*.txt
 
-# Ticket database (binary — export CSV instead for history)
-Tickets/tickets.db
-Tickets/tickets_export.csv
-Tickets/DbQuery/bin/
-Tickets/DbQuery/obj/
-
 # Keep the template (no secrets)
 !**/appsettings.template.json
 

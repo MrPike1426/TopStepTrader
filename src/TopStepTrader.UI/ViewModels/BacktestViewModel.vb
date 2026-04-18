@@ -718,6 +718,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property SelectBbSqueezeScalperCommand As RelayCommand
         Public ReadOnly Property SelectVidyaCommand As RelayCommand
         Public ReadOnly Property SelectNakedTraderCommand As RelayCommand
+        Public ReadOnly Property SelectDoubleBubbleButtCommand As RelayCommand
         Public ReadOnly Property RunCommand As RelayCommand
         Public ReadOnly Property CancelCommand As RelayCommand
         Public ReadOnly Property LoadHistoryCommand As RelayCommand
@@ -727,6 +728,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property MaximumEffortCancelCommand As RelayCommand
         Public ReadOnly Property SelectPersonaCommand As RelayCommand
         Public ReadOnly Property CopyAiAnalysisCommand As RelayCommand
+        Public ReadOnly Property CopyPinnedAnalysisCommand As RelayCommand
 
         ' ══════════════════════════════════════════════════════════════════════
         ' CONSTRUCTOR
@@ -759,6 +761,7 @@ Namespace TopStepTrader.UI.ViewModels
             AvailableStrategies.Add("BB Squeeze Scalper")
             AvailableStrategies.Add("VIDYA Cross")
             AvailableStrategies.Add("Naked Trader")
+            AvailableStrategies.Add("Double Bubble Butt")
 
             ' Populate interval dropdown — only natively-supported ProjectX API timeframes.
             ' Removed: "3 min" (API falls back to 1-min), "10 min" (no API code), "4 hours" (no API code).
@@ -775,6 +778,7 @@ Namespace TopStepTrader.UI.ViewModels
             SelectBbSqueezeScalperCommand = New RelayCommand(AddressOf ApplyBbSqueezeScalper)
             SelectVidyaCommand = New RelayCommand(AddressOf ApplyVidya)
             SelectNakedTraderCommand = New RelayCommand(AddressOf ApplyNakedTrader)
+            SelectDoubleBubbleButtCommand = New RelayCommand(AddressOf ApplyDoubleBubbleButt)
             RunCommand = New RelayCommand(AddressOf ExecuteRun, Function() CanRun)
             CancelCommand = New RelayCommand(AddressOf ExecuteCancel, Function() CanCancel)
             LoadHistoryCommand = New RelayCommand(AddressOf LoadPreviousRuns)
@@ -790,8 +794,27 @@ Namespace TopStepTrader.UI.ViewModels
                     End If
                 End Sub,
                 Function() Not String.IsNullOrEmpty(_maxEffortAiAnalysis))
+            CopyPinnedAnalysisCommand = New RelayCommand(
+                Sub()
+                    If Not String.IsNullOrEmpty(_pinnedAiAnalysis) Then
+                        Clipboard.SetText(_pinnedAiAnalysis)
+                    End If
+                End Sub,
+                Function() Not String.IsNullOrEmpty(_pinnedAiAnalysis))
 
             AddHandler _backtestService.ProgressUpdated, AddressOf OnProgress
+
+            ' ── Pinned top-3 Maximum Effort results (Gold · Multi-Confluence · 1 hr)
+            '    Recorded 2025-07 — permanent baseline; never cleared by a new run.
+            PinnedResults.Add(New MaxEffortRowVm("Damian", "Gold", "Multi-Confluence", "1 hr",
+                                                 trades:=34, winRatePct:=56.0, totalPnLRaw:=17746D,
+                                                 sharpe:=7.71, avgPnL:=522D, maxDD:=-1200D))
+            PinnedResults.Add(New MaxEffortRowVm("Joe",    "Gold", "Multi-Confluence", "1 hr",
+                                                 trades:=39, winRatePct:=54.0, totalPnLRaw:=17534D,
+                                                 sharpe:=6.93, avgPnL:=450D, maxDD:=-1500D))
+            PinnedResults.Add(New MaxEffortRowVm("Lewis",  "Gold", "Multi-Confluence", "1 hr",
+                                                 trades:=29, winRatePct:=52.0, totalPnLRaw:=15744D,
+                                                 sharpe:=7.55, avgPnL:=543D, maxDD:=-900D))
 
             ' Elapsed-time ticker — must be created on the UI thread with Normal priority
             ' so ticks are not starved behind rendering/layout work.
@@ -1020,6 +1043,30 @@ Namespace TopStepTrader.UI.ViewModels
             HasStrategyDescription = True
         End Sub
 
+        Private Sub ApplyDoubleBubbleButt()
+            SelectedStrategyName = "Double Bubble Butt"
+            ActiveStrategyText = "✔  Double Bubble Butt  (5-min bars · BB(20,1.0 SD) inner · BB(20,2.0 SD) outer)"
+            SelectedInterval = "5 min"
+
+            StrategyNakedDescription =
+                "Double Bubble Butt (Double Bollinger Band) plots two concurrent BB sets over the same SMA(20) — " &
+                "an inner set at ±1.0 SD and an outer set at ±2.0 SD — creating three distinct trading zones." & vbLf & vbLf &
+                "THE THREE ZONES:" & vbLf &
+                "Buy Zone  — between upper 1.0 SD and upper 2.0 SD: strong uptrend / high momentum." & vbLf &
+                "Sell Zone — between lower 1.0 SD and lower 2.0 SD: strong downtrend / high momentum." & vbLf &
+                "Neutral Zone — between upper 1.0 SD and lower 1.0 SD: ranging / no clear direction." & vbLf & vbLf &
+                "ENTRY RULES:" & vbLf &
+                "Long  — close above the upper 1.0 SD band (enters Buy Zone)." & vbLf &
+                "Short — close below the lower 1.0 SD band (enters Sell Zone)." & vbLf & vbLf &
+                "EXIT RULES:" & vbLf &
+                "Exit Long  — close back below the upper 1.0 SD band (returns to Neutral Zone)." & vbLf &
+                "Exit Short — close back above the lower 1.0 SD band (returns to Neutral Zone)." & vbLf &
+                "Hard SL = outer 2.0 SD band level at entry. TP = 2× ATR(20) from entry." & vbLf & vbLf &
+                "Developed by Kathy Lien. Works across Forex, equities and crypto. Recommended: 5-min or 15-min bars."
+
+            HasStrategyDescription = True
+        End Sub
+
         ''' <summary>
         ''' contract and date range.  Calls BarCollectionService.EnsureBarsAsync() which:
         '''   - Returns immediately if ≥ 50 bars already exist (cache hit)
@@ -1153,6 +1200,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Case "BB Squeeze Scalper"      : strategyCondition = StrategyConditionType.BbSqueezeScalper
                 Case "VIDYA Cross"             : strategyCondition = StrategyConditionType.VidyaCross
                 Case "Naked Trader"            : strategyCondition = StrategyConditionType.NakedTrader
+                Case "Double Bubble Butt"      : strategyCondition = StrategyConditionType.DoubleBubbleButt
                 Case Else                      : strategyCondition = StrategyConditionType.EmaRsiWeightedScore
             End Select
 
@@ -1276,9 +1324,38 @@ Namespace TopStepTrader.UI.ViewModels
                                  Dispatch(Sub() TimeframeResults.Add(New TimeframeResultRowVm(label, "Cancelled")))
                                  Exit For
                              Catch ex As Exception
-                                 Dim msg = ex.Message
-                                 If msg.Length > 40 Then msg = msg.Substring(0, 40) & "..."
-                                 Dispatch(Sub() TimeframeResults.Add(New TimeframeResultRowVm(label, msg)))
+                                 ' Diagnostic dump — write full stack trace to a file so we can pinpoint the
+                                 ' failing line (the UI cell can only fit ~40 chars).
+                                 Try
+                                     Dim logDir = Path.Combine(
+                                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                                         "TopStepTrader", "Logs")
+                                     Directory.CreateDirectory(logDir)
+                                     Dim logPath = Path.Combine(logDir, "backtest-errors.log")
+                                     Dim sb As New StringBuilder()
+                                     sb.AppendLine($"==== {DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  Timeframe={label} ====")
+                                     sb.AppendLine($"Contract={capContractId}  Strategy={capStrategy}  Persona={_selectedPersona}")
+                                     sb.AppendLine($"Range={capStart:yyyy-MM-dd}..{capEnd:yyyy-MM-dd}  Capital={capCapital}  Qty={capQty}  PointValue={capPoint}")
+                                     Dim cur As Exception = ex
+                                     Dim depth As Integer = 0
+                                     While cur IsNot Nothing
+                                         sb.AppendLine($"--- Exception[{depth}]: {cur.GetType().FullName} ---")
+                                         sb.AppendLine(cur.Message)
+                                         sb.AppendLine(cur.StackTrace)
+                                         cur = cur.InnerException
+                                         depth += 1
+                                     End While
+                                     sb.AppendLine()
+                                     File.AppendAllText(logPath, sb.ToString())
+                                 Catch
+                                     ' Never let logging break the loop.
+                                 End Try
+
+                                 ' Show exception type + message in the UI cell so the user can see at a glance
+                                 ' which exception is fired (still truncated for layout).
+                                 Dim full = $"{ex.GetType().Name}: {ex.Message}"
+                                 If full.Length > 40 Then full = full.Substring(0, 40) & "..."
+                                 Dispatch(Sub() TimeframeResults.Add(New TimeframeResultRowVm(label, full)))
                              End Try
 
                              Dispatch(Sub() Progress = CInt(((idx + 1) * 100.0) / total))
@@ -1434,6 +1511,35 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public ReadOnly Property MaxEffortResults As New ObservableCollection(Of MaxEffortRowVm)()
 
+        ''' <summary>
+        ''' Permanently pinned best-known combinations — never cleared by a new run.
+        ''' Populated once in the constructor from hard-coded data recorded 2025-07.
+        ''' </summary>
+        Public ReadOnly Property PinnedResults As New ObservableCollection(Of MaxEffortRowVm)()
+
+        Private _pinnedAiAnalysis As String =
+            "Top 3 Legitimate Combinations (recorded 2025-07 · Gold · Multi-Confluence · 1 hr)" &
+            vbCrLf & vbCrLf &
+            "1. Damian / Gold / Multi-Confluence / 1 hr" & vbCrLf &
+            "   34 trades · 56% win rate · £17,746 P&L · Sharpe 7.71" & vbCrLf &
+            "   Robust sample size; consistent edge; highest Sharpe of all 720 combinations." & vbCrLf & vbCrLf &
+            "2. Joe / Gold / Multi-Confluence / 1 hr" & vbCrLf &
+            "   39 trades · 54% win rate · £17,534 P&L · Sharpe 6.93" & vbCrLf &
+            "   Largest trade count among top performers; high Sharpe; stable avg P&L (£450)." & vbCrLf & vbCrLf &
+            "3. Lewis / Gold / Multi-Confluence / 1 hr" & vbCrLf &
+            "   29 trades · 52% win rate · £15,744 P&L · Sharpe 7.55" & vbCrLf &
+            "   Highest avg P&L per trade (£543); solid consistency." & vbCrLf & vbCrLf &
+            "All three dominate via Multi-Confluence on 1-hr Gold. Clear signal."
+
+        Public Property PinnedAiAnalysis As String
+            Get
+                Return _pinnedAiAnalysis
+            End Get
+            Set(value As String)
+                SetProperty(_pinnedAiAnalysis, value)
+            End Set
+        End Property
+
         Private _maxEffortIsRunning As Boolean
         Public Property MaxEffortIsRunning As Boolean
             Get
@@ -1513,7 +1619,8 @@ Namespace TopStepTrader.UI.ViewModels
                 ("BB Squeeze",             StrategyConditionType.BbSqueezeScalper),
                 ("VIDYA Cross",            StrategyConditionType.VidyaCross),
                 ("Naked Trader",           StrategyConditionType.NakedTrader),
-                ("LULT Divergence",        StrategyConditionType.LultDivergence)
+                ("LULT Divergence",        StrategyConditionType.LultDivergence),
+                ("Double Bubble Butt",     StrategyConditionType.DoubleBubbleButt)
             }
 
             Dim timeframes = New (BarTimeframe, String)() {
@@ -1746,6 +1853,24 @@ Namespace TopStepTrader.UI.ViewModels
             Sharpe = If(result.SharpeRatio.HasValue, result.SharpeRatio.Value.ToString("F2"), "—")
             AvgPnL = result.AveragePnLPerTrade.ToString("C0")
             MaxDD = result.MaxDrawdown.ToString("C0")
+        End Sub
+
+        ''' <summary>Pinned / pre-seeded row — accepts raw display values directly.</summary>
+        Public Sub New(personaName As String, contractName As String, strategyName As String,
+                       timeframeLabel As String, trades As Integer, winRatePct As Double,
+                       totalPnLRaw As Decimal, sharpe As Double, avgPnL As Decimal, maxDD As Decimal)
+            Persona = personaName
+            Contract = contractName
+            Strategy = strategyName
+            Timeframe = timeframeLabel
+            Me.Trades = trades.ToString()
+            WinRate = (winRatePct / 100.0).ToString("P0")
+            TotalPnLRaw = totalPnLRaw
+            TotalPnL = totalPnLRaw.ToString("C0")
+            TotalPnLColor = If(totalPnLRaw >= 0, "BuyBrush", "SellBrush")
+            Me.Sharpe = sharpe.ToString("F2")
+            AvgPnL = avgPnL.ToString("C0")
+            MaxDD = maxDD.ToString("C0")
         End Sub
     End Class
 

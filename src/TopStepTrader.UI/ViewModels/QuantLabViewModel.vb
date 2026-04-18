@@ -8,6 +8,7 @@ Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Events
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
+Imports TopStepTrader.Services.AI
 Imports TopStepTrader.UI.ViewModels.Base
 
 Namespace TopStepTrader.UI.ViewModels
@@ -66,6 +67,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private ReadOnly _backtestService As IBacktestService
         Private ReadOnly _barCollectionService As IBarCollectionService
+        Private ReadOnly _claudeReviewService As ClaudeReviewService
 
         Private _cancelSource As CancellationTokenSource
 
@@ -330,15 +332,54 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property CancelCommand As RelayCommand
         Public ReadOnly Property SelectCardCommand As RelayCommand(Of QuantLabStrategyCard)
         Public ReadOnly Property ExportCsvCommand As RelayCommand
+        Public ReadOnly Property AskClaudeCommand As RelayCommand
 
         ' ══════════════════════════════════════════════════════════════════════
         ' CONSTRUCTOR
         ' ══════════════════════════════════════════════════════════════════════
 
+        ' ══════════════════════════════════════════════════════════════════════
+        ' CLAUDE ANALYSIS
+        ' ══════════════════════════════════════════════════════════════════════
+
+        Private _claudeAnalysis As String = String.Empty
+        Public Property ClaudeAnalysis As String
+            Get
+                Return _claudeAnalysis
+            End Get
+            Set(value As String)
+                SetProperty(_claudeAnalysis, value)
+            End Set
+        End Property
+
+        Private _isClaudeAnalysing As Boolean = False
+        Public Property IsClaudeAnalysing As Boolean
+            Get
+                Return _isClaudeAnalysing
+            End Get
+            Set(value As Boolean)
+                If SetProperty(_isClaudeAnalysing, value) Then
+                    RelayCommand.RaiseCanExecuteChanged()
+                End If
+            End Set
+        End Property
+
+        Private _hasClaudeAnalysis As Boolean = False
+        Public Property HasClaudeAnalysis As Boolean
+            Get
+                Return _hasClaudeAnalysis
+            End Get
+            Set(value As Boolean)
+                SetProperty(_hasClaudeAnalysis, value)
+            End Set
+        End Property
+
         Public Sub New(backtestService As IBacktestService,
-                       barCollectionService As IBarCollectionService)
+                       barCollectionService As IBarCollectionService,
+                       claudeReviewService As ClaudeReviewService)
             _backtestService = backtestService
             _barCollectionService = barCollectionService
+            _claudeReviewService = claudeReviewService
 
             Trades = New ObservableCollection(Of BacktestTrade)()
 
@@ -387,6 +428,18 @@ Namespace TopStepTrader.UI.ViewModels
                     .SharpeRange = "0.6–1.2",
                     .StrategyType = "BbRsiMeanReversion",
                     .ConditionType = StrategyConditionType.BbRsiMeanReversion
+                },
+                New QuantLabStrategyCard With {
+                    .Name = "Double Bubble Butt",
+                    .Subtitle = "Momentum / Zone",
+                    .Description = "Two BB sets over SMA(20): inner ±1.0 SD and outer ±2.0 SD define three zones. " &
+                                   "Long when close enters Buy Zone (above upper 1-SD). Short in Sell Zone. " &
+                                   "Exit when price returns to Neutral Zone. Kathy Lien DBB system.",
+                    .Emoji = "🫧",
+                    .WinRateRange = "45–60%",
+                    .SharpeRange = "0.6–1.1",
+                    .StrategyType = "DoubleBubbleButt",
+                    .ConditionType = StrategyConditionType.DoubleBubbleButt
                 }
             }
 
@@ -409,6 +462,10 @@ Namespace TopStepTrader.UI.ViewModels
             ExportCsvCommand = New RelayCommand(
                 Sub() ExportCsv(),
                 Function() _hasResults AndAlso Trades.Count > 0)
+
+            AskClaudeCommand = New RelayCommand(
+                AddressOf ExecuteAskClaude,
+                Function() _hasResults AndAlso Not _isClaudeAnalysing)
 
             AddHandler _backtestService.ProgressUpdated,
                 Sub(sender, args)
@@ -487,6 +544,33 @@ Namespace TopStepTrader.UI.ViewModels
             End Try
         End Sub
 
+        Private Async Sub ExecuteAskClaude()
+            If Not _hasResults OrElse _selectedCard Is Nothing Then Return
+
+            IsClaudeAnalysing = True
+            HasClaudeAnalysis = False
+            ClaudeAnalysis = "🤖 Asking Claude Haiku…"
+
+            Dim sb As New StringBuilder()
+            sb.AppendLine($"QuantLab Backtest Results — {_selectedCard.Name} ({_selectedCard.Subtitle})")
+            sb.AppendLine($"Contract: {_contractIdText}  |  Interval: {_selectedInterval}")
+            sb.AppendLine($"Date range: {_startDate:yyyy-MM-dd} to {_endDate:yyyy-MM-dd}")
+            sb.AppendLine($"Trades: {_totalTrades}  |  Win Rate: {_winRate}  |  Total P&L: {_totalPnL}")
+            sb.AppendLine($"Sharpe: {_sharpe}  |  Max Drawdown: {_maxDrawdown}  |  Avg P&L/Trade: {_avgPnL}")
+            sb.AppendLine()
+            sb.AppendLine($"Strategy description: {_selectedCard.Description}")
+            sb.AppendLine("Provide a concise assessment: what these numbers say about this strategy on this instrument,")
+            sb.AppendLine("any overfitting warnings, and one specific improvement recommendation.")
+
+            Dim analysis = Await _claudeReviewService.AnalyseBacktestResultsAsync(sb.ToString())
+            Application.Current?.Dispatcher.Invoke(
+                Sub()
+                    ClaudeAnalysis = analysis
+                    HasClaudeAnalysis = True
+                    IsClaudeAnalysing = False
+                End Sub)
+        End Sub
+
         Private Sub PopulateResults(result As BacktestResult)
             TotalTrades = result.TotalTrades.ToString()
             WinRate = result.WinRate.ToString("P1")
@@ -506,6 +590,9 @@ Namespace TopStepTrader.UI.ViewModels
             Next
 
             HasResults = True
+            HasClaudeAnalysis = False
+            ClaudeAnalysis = String.Empty
+            RelayCommand.RaiseCanExecuteChanged()
             Dim pnlSign = If(result.TotalPnL >= 0, "+", "")
             StatusText = $"Complete — {result.TotalTrades} trades | " &
                          $"Win {result.WinRate:P1} | " &
@@ -525,6 +612,9 @@ Namespace TopStepTrader.UI.ViewModels
             PnlColour = "#AAAAAA"
             Trades.Clear()
             HasResults = False
+            HasClaudeAnalysis = False
+            ClaudeAnalysis = String.Empty
+            RelayCommand.RaiseCanExecuteChanged()
         End Sub
 
         Private Sub ExportCsv()

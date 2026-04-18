@@ -191,6 +191,8 @@ Namespace TopStepTrader.Services.Market
                 End Select
 
                 Dim rawBars = yahooResponse.Bars _
+                    .Where(Function(b) IsValidOhlc(b.Open) AndAlso IsValidOhlc(b.High) AndAlso
+                                       IsValidOhlc(b.Low) AndAlso IsValidOhlc(b.Close)) _
                     .Select(Function(b) New MarketBar With {
                         .ContractId = contractId,
                         .Timeframe = sourceTimeframe,
@@ -413,6 +415,15 @@ Namespace TopStepTrader.Services.Market
                 .ContractId = contractId,
                 .Message = message
             }
+        End Function
+
+        ''' <summary>
+        ''' Returns True when a Yahoo Finance OHLC double value is safe to convert to Decimal.
+        ''' Yahoo Finance occasionally returns NaN or zero for bars during closed-market periods;
+        ''' CDec(Double.NaN) and CDec(Double.PositiveInfinity) both throw OverflowException.
+        ''' </summary>
+        Private Shared Function IsValidOhlc(v As Double) As Boolean
+            Return Not Double.IsNaN(v) AndAlso Not Double.IsInfinity(v) AndAlso v > 0
         End Function
 
     End Class

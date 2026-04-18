@@ -158,6 +158,21 @@
         </StackPanel>
     </ControlTemplate>
 
+    <!-- 9. Double Bubble Butt (Double Bollinger Band) -->
+    <ControlTemplate x:Key="DoubleBubbleButtCardContent" TargetType="ContentControl">
+        <StackPanel>
+            <TextBlock Text="🫧  Double Bubble Butt"
+                       FontWeight="SemiBold" FontSize="14"
+                       Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Text="BB(20,1.0 SD) inner · BB(20,2.0 SD) outer"
+                       FontSize="10" Margin="0,2,0,0"
+                       Foreground="GhostWhite"/>
+            <TextBlock Text="Buy/Sell/Neutral zones · Kathy Lien DBB"
+                       FontSize="10" Margin="0,1,0,0"
+                       Foreground="GhostWhite"/>
+        </StackPanel>
+    </ControlTemplate>
+
     <!-- Placeholder (coming soon) -->
     <ControlTemplate x:Key="PlaceholderCardContent" TargetType="ContentControl">
         <StackPanel>

@@ -107,6 +107,16 @@ Namespace TopStepTrader.Core.Enums
         ''' Uses 5-minute bars; minimum 28 bars required, 40 recommended.
         ''' </summary>
         NakedTrader = 16
+
+        ''' <summary>
+        ''' Double Bubble Butt (Double Bollinger Band): Two BB sets over SMA(20) — inner at 1.0 SD,
+        ''' outer at 2.0 SD — define three trading zones.
+        ''' Buy Zone  (uptrend):   price closes above upper 1.0 SD band → Long entry.
+        ''' Sell Zone (downtrend): price closes below lower 1.0 SD band → Short entry.
+        ''' Neutral Zone:          price closes back inside the 1.0 SD bands → Exit signal.
+        ''' Hard SL = outer 2.0 SD band at entry; TP = 2× ATR(20) from entry.
+        ''' </summary>
+        DoubleBubbleButt = 17
     End Enum
 
 End Namespace

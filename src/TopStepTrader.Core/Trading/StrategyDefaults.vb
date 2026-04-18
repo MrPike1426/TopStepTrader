@@ -26,7 +26,8 @@ Namespace TopStepTrader.Core.Trading
                 {"BB Squeeze Scalper", New StrategyParameterSet("1000", "1", "8", "4")},
                 {"LULT Divergence", New StrategyParameterSet("1000", "1", "20", "10")},
                 {"VIDYA Cross", New StrategyParameterSet("1000", "1", "20", "10")},
-                {"Naked Trader", New StrategyParameterSet("1000", "1", "20", "10")}
+                {"Naked Trader", New StrategyParameterSet("1000", "1", "20", "10")},
+                {"Double Bubble Butt", New StrategyParameterSet("1000", "1", "20", "10")}
             }
 
         ''' <summary>

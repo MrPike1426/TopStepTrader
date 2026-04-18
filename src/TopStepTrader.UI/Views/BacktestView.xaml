@@ -702,10 +702,21 @@
                                         <ContentControl Template="{StaticResource NakedTraderCardContent}"/>
                                     </Button>
 
-                                    <!-- 7. Placeholder -->
-                                    <Button IsEnabled="False" Margin="0,0,6,0"
-                                            Style="{StaticResource StrategyCardStyle}">
-                                        <ContentControl Template="{StaticResource PlaceholderCardContent}"/>
+                                    <!-- 7. Double Bubble Butt -->
+                                    <Button Command="{Binding SelectDoubleBubbleButtCommand}"
+                                            Margin="0,0,6,0"
+                                            ToolTip="Double Bollinger Band (Kathy Lien): BB(20,1.0 SD) inner + BB(20,2.0 SD) outer. Long when close enters Buy Zone (above upper 1-SD). Short when close enters Sell Zone (below lower 1-SD). Exit on neutral-zone close.">
+                                        <Button.Style>
+                                            <Style BasedOn="{StaticResource StrategyCardStyle}" TargetType="Button">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedStrategyName}" Value="Double Bubble Butt">
+                                                        <Setter Property="Background"  Value="#1B4332"/>
+                                                        <Setter Property="BorderBrush" Value="#52B788"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                        <ContentControl Template="{StaticResource DoubleBubbleButtCardContent}"/>
                                     </Button>
 
                                     <!-- 8. Placeholder -->
@@ -926,7 +937,7 @@
 
                     <!-- Maximum Effort! button with Deadpool logo -->
                     <Button Command="{Binding MaximumEffortCommand}"
-                            ToolTip="Run every persona × every contract × every strategy × every timeframe (720 combinations). Results sorted by P&amp;L. Grabs Claude Haiku analysis of the top 20.">
+                            ToolTip="Run every persona × every contract × every strategy × every timeframe (720 combinations). ATR stops always ON. Trailing stop / break-even / extend-TP always OFF. ForceClose inherits current tab setting. 180-day lookback window. Results sorted by P&amp;L. Top 20 sent to Claude Haiku for analysis.">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="Background"    Value="#111111"/>
@@ -996,10 +1007,31 @@
                     <StackPanel Margin="20,0,0,0" VerticalAlignment="Center">
                         <TextBlock FontSize="14" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextPrimaryBrush}"
-                                   Text="Tests every instrument against every strategy across every timeframe — results ranked by P&amp;L. Top 20 sent to Claude for analysis."/>
-                        <TextBlock Text="3 personas × 5 instruments × 6 strategies × 8 timeframes = 720 combinations"
-                                   FontSize="11" FontFamily="Consolas" Margin="0,4,0,0"
-                                   Foreground="{StaticResource TextSecondaryBrush}"/>
+                                   Text="Tests every instrument against every strategy across every timeframe — results ranked by P&amp;L. Top 20 sent to Claude Haiku for analysis. ATR stops always ON · trailing stop / break-even / extend-TP always OFF · ForceClose inherits current tab setting · 180-day lookback · 1-tick slippage."/>
+                        <!-- Combination count + persona summary -->
+                        <TextBlock FontSize="11" FontFamily="Consolas" Margin="0,5,0,0"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Text="3 personas × 5 instruments × 6 strategies × 8 timeframes = 720 combinations"/>
+                        <!-- Per-persona detail: capital · ADX gate · confidence · ATR stop multiples · max scale-ins -->
+                        <TextBlock FontSize="10" FontFamily="Consolas" Margin="0,3,0,0"
+                                   Foreground="{StaticResource TextSecondaryBrush}">
+                            <Run Text="Lewis  " FontWeight="SemiBold" Foreground="#90CAF9"/>
+                            <Run Text="$200 · 1 qty · ADX≥25 · 90% conf · SL=1.5×ATR · TP=3.0×ATR · scale-ins=1  "/>
+                            <Run Text="Damian " FontWeight="SemiBold" Foreground="#9AE6B4"/>
+                            <Run Text="$500 · 1 qty · ADX≥20 · 80% conf · SL=1.0×ATR · TP=2.5×ATR · scale-ins=2  "/>
+                            <Run Text="Joe    " FontWeight="SemiBold" Foreground="#FEB2B2"/>
+                            <Run Text="$1000 · 1 qty · ADX≥15 · 70% conf · SL=0.75×ATR · TP=2.0×ATR · scale-ins=3"/>
+                        </TextBlock>
+                        <!-- Contracts and strategies enumerated -->
+                        <TextBlock FontSize="10" FontFamily="Consolas" Margin="0,2,0,0"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Text="Instruments: Oil (MCLE) · Gold (MGC) · S&amp;P 500 (MES) · EUR/USD (M6E) · Bitcoin (MBT)"/>
+                        <TextBlock FontSize="10" FontFamily="Consolas" Margin="0,2,0,0"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Text="Strategies: EMA/RSI Combined · Multi-Confluence · BB Squeeze Scalper · VIDYA Cross · Naked Trader · LULT Divergence"/>
+                        <TextBlock FontSize="10" FontFamily="Consolas" Margin="0,2,0,0"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Text="Timeframes: 1 min · 5 min · 10 min · 15 min · 30 min · 1 hr · 2 hr · 4 hr"/>
                     </StackPanel>
                 </StackPanel>
 
@@ -1096,6 +1128,132 @@
                                  TextWrapping="Wrap"
                                  FontSize="11"
                                  MaxHeight="340"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Disabled"
+                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 Padding="0"
+                                 FontFamily="{StaticResource {x:Static SystemFonts.MessageFontFamilyKey}}"/>
+                    </StackPanel>
+                </Border>
+
+            </Grid>
+        </TabItem>
+
+        <!-- ══ Tab: Pinned Results ══════════════════════════════════════════ -->
+        <TabItem Header="📌  Pinned">
+            <Grid Margin="24,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>   <!-- Row 0: heading + caption -->
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="Auto"/>   <!-- Row 2: pinned DataGrid -->
+                    <RowDefinition Height="12"/>
+                    <RowDefinition Height="Auto"/>   <!-- Row 4: analysis panel -->
+                </Grid.RowDefinitions>
+
+                <!-- ── Heading ──────────────────────────────────────────────── -->
+                <StackPanel Grid.Row="0">
+                    <TextBlock Text="📌  Pinned Best Results"
+                               Style="{StaticResource PageTitleStyle}" Margin="0,0,0,4"/>
+                    <TextBlock FontSize="11" FontFamily="Consolas"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Text="Best-known combinations locked in 2025-07 · Gold · Multi-Confluence · 1 hr · ATR stops · 180-day window. Use as a sanity-check baseline when re-running Maximum Effort."/>
+                </StackPanel>
+
+                <!-- ── Pinned DataGrid ───────────────────────────────────────── -->
+                <Border Grid.Row="2"
+                        Background="{StaticResource CardBrush}"
+                        CornerRadius="6" Padding="0,0,0,4">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="14,10,14,6">
+                            <TextBlock Text="TOP 3 COMBINATIONS"
+                                       Style="{StaticResource SectionHeadingStyle}" Margin="0"/>
+                            <Border Background="#1B4332" BorderBrush="#52B788" BorderThickness="1"
+                                    CornerRadius="3" Margin="12,0,0,0" Padding="6,2">
+                                <TextBlock Text="🏆 Verified baseline"
+                                           FontSize="9" FontFamily="Consolas"
+                                           Foreground="#52B788" VerticalAlignment="Center"/>
+                            </Border>
+                        </StackPanel>
+                        <DataGrid ItemsSource="{Binding PinnedResults}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserSortColumns="True"
+                                  CanUserResizeRows="False"
+                                  HeadersVisibility="Column"
+                                  GridLinesVisibility="None"
+                                  Background="Transparent"
+                                  RowBackground="Transparent"
+                                  AlternatingRowBackground="#0AFFFFFF"
+                                  BorderThickness="0"
+                                  FontFamily="Consolas" FontSize="11"
+                                  Foreground="{StaticResource TextPrimaryBrush}">
+                            <DataGrid.ColumnHeaderStyle>
+                                <Style TargetType="DataGridColumnHeader">
+                                    <Setter Property="Background"      Value="Transparent"/>
+                                    <Setter Property="Foreground"      Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="FontSize"        Value="9"/>
+                                    <Setter Property="Padding"         Value="8,3"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                </Style>
+                            </DataGrid.ColumnHeaderStyle>
+                            <DataGrid.CellStyle>
+                                <Style TargetType="DataGridCell">
+                                    <Setter Property="Background"        Value="Transparent"/>
+                                    <Setter Property="BorderThickness"   Value="0"/>
+                                    <Setter Property="Padding"           Value="8,4"/>
+                                    <Setter Property="Foreground"        Value="{StaticResource TextPrimaryBrush}"/>
+                                    <Setter Property="VerticalAlignment" Value="Center"/>
+                                </Style>
+                            </DataGrid.CellStyle>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Persona"    Binding="{Binding Persona}"    Width="70"/>
+                                <DataGridTextColumn Header="Contract"   Binding="{Binding Contract}"   Width="90"/>
+                                <DataGridTextColumn Header="Strategy"   Binding="{Binding Strategy}"   Width="150"/>
+                                <DataGridTextColumn Header="Timeframe"  Binding="{Binding Timeframe}"  Width="80"/>
+                                <DataGridTextColumn Header="Trades"     Binding="{Binding Trades}"     Width="60"/>
+                                <DataGridTextColumn Header="Win%"       Binding="{Binding WinRate}"    Width="60"/>
+                                <DataGridTemplateColumn Header="P&amp;L" Width="100" SortMemberPath="TotalPnLRaw">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding TotalPnL}" Padding="8,4"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{Binding TotalPnLColor,
+                                                           Converter={StaticResource BrushKeyConverter}}"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="Sharpe"     Binding="{Binding Sharpe}"     Width="70"/>
+                                <DataGridTextColumn Header="Avg P&amp;L" Binding="{Binding AvgPnL}"   Width="90"/>
+                                <DataGridTextColumn Header="Max DD"     Binding="{Binding MaxDD}"      Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+                </Border>
+
+                <!-- ── Analysis panel ───────────────────────────────────────── -->
+                <Border Grid.Row="4"
+                        Background="{StaticResource SurfaceBrush}"
+                        CornerRadius="6" Padding="16,12">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="📝  ANALYSIS NOTES"
+                                       Style="{StaticResource SectionHeadingStyle}" Margin="0"/>
+                            <TextBlock Text="  (recorded 2025-07 · claude-haiku-4-5)"
+                                       FontSize="9" FontFamily="Consolas"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center"/>
+                            <Button Content="📋  Copy"
+                                    Margin="12,0,0,0" Padding="8,2"
+                                    FontSize="11" VerticalAlignment="Center"
+                                    Command="{Binding CopyPinnedAnalysisCommand}"
+                                    ToolTip="Copy pinned analysis to clipboard"/>
+                        </StackPanel>
+                        <TextBox Text="{Binding PinnedAiAnalysis, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 TextWrapping="Wrap"
+                                 FontSize="12"
                                  VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Disabled"
                                  Foreground="{StaticResource TextPrimaryBrush}"

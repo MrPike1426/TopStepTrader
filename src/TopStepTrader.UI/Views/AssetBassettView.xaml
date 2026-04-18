@@ -405,10 +405,21 @@
                                 <ContentControl Template="{StaticResource NakedTraderCardContent}"/>
                             </Button>
 
-                            <!-- 7. Placeholder -->
-                            <Button IsEnabled="False" Margin="0,0,6,0"
-                                    Style="{StaticResource StrategyCardStyle}">
-                                <ContentControl Template="{StaticResource PlaceholderCardContent}"/>
+                            <!-- 7. Double Bubble Butt -->
+                            <Button Command="{Binding ToggleDoubleBubbleButtCommand}" Margin="0,0,6,0"
+                                    ToolTip="Toggle: Double Bollinger Band · BB(20,1.0 SD) inner · BB(20,2.0 SD) outer · Long above upper 1-SD · Short below lower 1-SD · Exit on neutral-zone close · SL=outer band">
+                                <Button.Style>
+                                    <Style BasedOn="{StaticResource StrategyCardStyle}" TargetType="Button">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsDoubleBubbleButtEnabled}" Value="True">
+                                                <Setter Property="Background"      Value="{StaticResource NavSelectedBrush}"/>
+                                                <Setter Property="BorderBrush"     Value="{StaticResource AccentBrush}"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <ContentControl Template="{StaticResource DoubleBubbleButtCardContent}"/>
                             </Button>
 
                             <!-- 8. Placeholder -->

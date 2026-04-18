@@ -105,7 +105,7 @@ Namespace TopStepTrader.ML.Features
             Next
 
             ' Signal = EMA of MACD line
-            Dim validMacd = macdLine.Where(Function(v) Not Single.IsNaN(v)).Select(Function(v) CDec(v)).ToList()
+            Dim validMacd = macdLine.Where(Function(v) Not Single.IsNaN(v) AndAlso Not Single.IsInfinity(v)).Select(Function(v) CDec(v)).ToList()
             Dim signalRaw = EMA(validMacd, signalPeriod)
 
             Dim signalLine(closes.Count - 1) As Single

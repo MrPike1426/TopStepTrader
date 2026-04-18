@@ -86,11 +86,12 @@ Namespace TopStepTrader.Tests.Backtest
         <Fact>
         Public Sub Defaults_ContainsAllRegisteredStrategies()
             ' TICKET-006 design decision: combined multi-indicator strategies only.
-            ' EMA/RSI Combined + Multi-Confluence Engine + BB Squeeze Scalper + LULT Divergence + VIDYA Cross + Naked Trader = 6 entries.
-            Assert.Equal(6, StrategyDefaults.Defaults.Count)
+            ' EMA/RSI Combined + Multi-Confluence Engine + BB Squeeze Scalper + LULT Divergence + VIDYA Cross + Naked Trader + Double Bubble Butt = 7 entries.
+            Assert.Equal(7, StrategyDefaults.Defaults.Count)
             Assert.True(StrategyDefaults.Defaults.ContainsKey("EMA/RSI Combined"))
             Assert.True(StrategyDefaults.Defaults.ContainsKey("Multi-Confluence Engine"))
             Assert.True(StrategyDefaults.Defaults.ContainsKey("BB Squeeze Scalper"))
+            Assert.True(StrategyDefaults.Defaults.ContainsKey("Double Bubble Butt"))
         End Sub
 
         <Fact>

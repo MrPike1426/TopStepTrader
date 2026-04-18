@@ -7,6 +7,7 @@ Imports TopStepTrader.Core.Events
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Trading
+Imports TopStepTrader.Services.AI
 Imports TopStepTrader.Services.Trading
 Imports TopStepTrader.UI.ViewModels.Base
 
@@ -25,6 +26,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _accountService As IAccountService
         Private ReadOnly _backtestService As IBacktestService
         Private ReadOnly _barCollectionService As IBarCollectionService
+        Private ReadOnly _claudeReviewService As ClaudeReviewService
         Private ReadOnly _engine As ISniperExecutionEngine
         Private ReadOnly _session As ITradingSessionContext
 
@@ -508,25 +510,67 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property StartCommand As RelayCommand
         Public ReadOnly Property StopCommand As RelayCommand
         Public ReadOnly Property RunBacktestCommand As RelayCommand
+        Public ReadOnly Property AskClaudeCommand As RelayCommand
 
         ' ══════════════════════════════════════════════════════════════════════
         ' CONSTRUCTOR
         ' ══════════════════════════════════════════════════════════════════════
 
+        ' ══════════════════════════════════════════════════════════════════════
+        ' CLAUDE ANALYSIS
+        ' ══════════════════════════════════════════════════════════════════════
+
+        Private _claudeAnalysis As String = String.Empty
+        Public Property ClaudeAnalysis As String
+            Get
+                Return _claudeAnalysis
+            End Get
+            Set(value As String)
+                SetProperty(_claudeAnalysis, value)
+            End Set
+        End Property
+
+        Private _isClaudeAnalysing As Boolean = False
+        Public Property IsClaudeAnalysing As Boolean
+            Get
+                Return _isClaudeAnalysing
+            End Get
+            Set(value As Boolean)
+                If SetProperty(_isClaudeAnalysing, value) Then
+                    RelayCommand.RaiseCanExecuteChanged()
+                End If
+            End Set
+        End Property
+
+        Private _hasClaudeAnalysis As Boolean = False
+        Public Property HasClaudeAnalysis As Boolean
+            Get
+                Return _hasClaudeAnalysis
+            End Get
+            Set(value As Boolean)
+                SetProperty(_hasClaudeAnalysis, value)
+            End Set
+        End Property
+
         Public Sub New(accountService As IAccountService,
                        backtestService As IBacktestService,
                        barCollectionService As IBarCollectionService,
+                       claudeReviewService As ClaudeReviewService,
                        engine As ISniperExecutionEngine,
                        session As ITradingSessionContext)
             _accountService = accountService
             _backtestService = backtestService
             _barCollectionService = barCollectionService
+            _claudeReviewService = claudeReviewService
             _engine = engine
             _session = session
 
             StartCommand = New RelayCommand(AddressOf ExecuteStart, Function() CanStart)
             StopCommand = New RelayCommand(AddressOf ExecuteStop, Function() _isRunning)
             RunBacktestCommand = New RelayCommand(AddressOf ExecuteRunBacktest, Function() Not _isBacktesting)
+            AskClaudeCommand = New RelayCommand(
+                AddressOf ExecuteAskClaude,
+                Function() _hasBacktestResults AndAlso Not _isClaudeAnalysing)
 
             ' Wire engine events
             AddHandler _engine.LogMessage, AddressOf OnEngineLog
@@ -806,6 +850,31 @@ Namespace TopStepTrader.UI.ViewModels
                      End Function)
         End Sub
 
+        Private Async Sub ExecuteAskClaude()
+            If Not _hasBacktestResults Then Return
+
+            IsClaudeAnalysing = True
+            HasClaudeAnalysis = False
+            ClaudeAnalysis = "🤖 Asking Claude Haiku…"
+
+            Dim sb As New System.Text.StringBuilder()
+            sb.AppendLine($"Sniper (3-EMA Cascade) Backtest Results — {_backtestContractId}")
+            sb.AppendLine($"Date range: {_backtestStartDate:yyyy-MM-dd} to {_backtestEndDate:yyyy-MM-dd}")
+            sb.AppendLine($"Trades: {_btTotalTrades}  |  Win Rate: {_btWinRateDisplay}  |  Net P&L: {_btNetPnlDisplay}")
+            sb.AppendLine($"Max Drawdown: {_btMaxDrawdownDisplay}  |  Avg P&L/Trade: {_btAvgPnlDisplay}")
+            sb.AppendLine()
+            sb.AppendLine("Strategy: 3-EMA Cascade (EMA8/EMA21/EMA50 momentum with scaled entries).")
+            sb.AppendLine("Provide a concise assessment: what these numbers suggest about the strategy on this instrument,")
+            sb.AppendLine("any overfitting warnings, and one improvement recommendation.")
+
+            Dim analysis = Await _claudeReviewService.AnalyseBacktestResultsAsync(sb.ToString())
+            Dispatch(Sub()
+                         ClaudeAnalysis = analysis
+                         HasClaudeAnalysis = True
+                         IsClaudeAnalysing = False
+                     End Sub)
+        End Sub
+
         Private Sub ShowBacktestResult(result As BacktestResult)
             If result Is Nothing Then
                 AddLog("⚠ Backtest returned no results")
@@ -829,6 +898,9 @@ Namespace TopStepTrader.UI.ViewModels
             Next
 
             HasBacktestResults = True
+            HasClaudeAnalysis = False
+            ClaudeAnalysis = String.Empty
+            RelayCommand.RaiseCanExecuteChanged()
             AddLog($"✓ Backtest complete — {result.TotalTrades} trades | " &
                    $"Win: {result.WinRate:P1} | P&L: ${result.TotalPnL:F2}")
         End Sub

@@ -388,6 +388,7 @@ Namespace TopStepTrader.UI.ViewModels
                     Case "BbSqueeze"       : Return "WHAT THE BB SQUEEZE SCALPER STRATEGY DOES"
                     Case "Vidya"           : Return "WHAT THE VIDYA CROSS STRATEGY DOES"
                     Case "NakedTrader"     : Return "WHAT THE NAKED TRADER STRATEGY DOES"
+                    Case "DoubleBubbleButt": Return "WHAT THE DOUBLE BUBBLE BUTT STRATEGY DOES"
                     Case Else              : Return "WHAT THIS STRATEGY DOES"
                 End Select
             End Get
@@ -416,6 +417,7 @@ Namespace TopStepTrader.UI.ViewModels
                     NotifyPropertyChanged(NameOf(IsLultActive))
                     NotifyPropertyChanged(NameOf(IsBbSqueezeActive))
                     NotifyPropertyChanged(NameOf(IsNakedTraderActive))
+                    NotifyPropertyChanged(NameOf(IsDoubleBubbleButtActive))
                     NotifyPropertyChanged(NameOf(IsOtherStrategyActive))
                     NotifyPropertyChanged(NameOf(HasNoStrategySelected))
                     NotifyPropertyChanged(NameOf(StrategyDescriptionHeading))
@@ -470,6 +472,12 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property IsNakedTraderActive As Boolean
             Get
                 Return _activeStrategyKind = "NakedTrader"
+            End Get
+        End Property
+
+        Public ReadOnly Property IsDoubleBubbleButtActive As Boolean
+            Get
+                Return _activeStrategyKind = "DoubleBubbleButt"
             End Get
         End Property
 
@@ -534,6 +542,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property SelectBbSqueezeScalperCommand As RelayCommand
         Public ReadOnly Property SelectVidyaCommand As RelayCommand
         Public ReadOnly Property SelectNakedTraderCommand As RelayCommand
+        Public ReadOnly Property SelectDoubleBubbleButtCommand As RelayCommand
         Public ReadOnly Property StartCommand As RelayCommand
         Public ReadOnly Property StopCommand As RelayCommand
         Private _forceCloseCts As CancellationTokenSource
@@ -630,27 +639,31 @@ Namespace TopStepTrader.UI.ViewModels
 
             SelectEmaRsiCombinedCommand = New RelayCommand(
                 Sub(p) ApplyEmaRsiCombined(),
-                Function(p) IsFormReady AndAlso IsNotRunning)
+                Function(p) IsNotRunning)
 
             SelectMultiConfluenceEngineCommand = New RelayCommand(
                 Sub(p) ApplyMultiConfluenceEngine(),
-                Function(p) IsFormReady AndAlso IsNotRunning)
+                Function(p) IsNotRunning)
 
             SelectLultDivergenceCommand = New RelayCommand(
                 Sub(p) ApplyLultDivergence(),
-                Function(p) IsFormReady AndAlso IsNotRunning)
+                Function(p) IsNotRunning)
 
             SelectBbSqueezeScalperCommand = New RelayCommand(
                 Sub(p) ApplyBbSqueezeScalper(),
-                Function(p) IsFormReady AndAlso IsNotRunning)
+                Function(p) IsNotRunning)
 
             SelectVidyaCommand = New RelayCommand(
                 Sub(p) ApplyVidya(),
-                Function(p) IsFormReady AndAlso IsNotRunning)
+                Function(p) IsNotRunning)
 
             SelectNakedTraderCommand = New RelayCommand(
                 Sub(p) ApplyNakedTrader(),
-                Function(p) IsFormReady AndAlso IsNotRunning)
+                Function(p) IsNotRunning)
+
+            SelectDoubleBubbleButtCommand = New RelayCommand(
+                Sub(p) ApplyDoubleBubbleButt(),
+                Function(p) IsNotRunning)
 
             StartCommand = New RelayCommand(
                 AddressOf ExecuteStart,
@@ -774,7 +787,8 @@ Namespace TopStepTrader.UI.ViewModels
                          End Sub)
                 Await CheckExistingPositionsAsync()
             Catch ex As Exception
-                Dispatch(Sub() StatusText = $"⚠ Load error: {ex.Message}")
+                ' Offline / API unreachable — strategy selection still works; trading requires an account.
+                Dispatch(Sub() LogLine($"⚠ Account load failed (offline?): {ex.Message} — strategy cards are still selectable."))
             End Try
         End Sub
 
@@ -885,6 +899,7 @@ Namespace TopStepTrader.UI.ViewModels
                     Case "MultiConfluence" : ApplyMultiConfluenceEngine()
                     Case "Vidya" : ApplyVidya()
                     Case "NakedTrader" : ApplyNakedTrader()
+                    Case "DoubleBubbleButt" : ApplyDoubleBubbleButt()
                     Case "Other"
                         Select Case _currentStrategy.Name
                             Case "LULT Divergence" : ApplyLultDivergence()
@@ -1032,7 +1047,8 @@ Namespace TopStepTrader.UI.ViewModels
                 "When all seven agree, entry fires on 5-minute bars. " &
                 "The stop sits at the cloud edge or 1.5 times the ATR, whichever is closer to entry. " &
                 "Target is 2:1 reward to risk. You will not trade often with this one, but every entry carries real conviction. " &
-                "Backtest winner: Damian persona · OIL · 5-min · ATR stops · Extend TP on close."
+                "Backtest winner: Damian persona · Gold (GC=F) · 1-hr bars · ATR stops · 34 trades · 56% win rate · £17,746 P&L · Sharpe 7.71. " &
+                "Confirmed across all three personas on the same instrument and timeframe (Joe #2, Lewis #3). Clear signal — Gold 1-hr is the primary deployment target."
 
             LogEntries.Clear()
             LogLine("─────────────────────────────────────────────────────────────────────")
@@ -1272,6 +1288,68 @@ Namespace TopStepTrader.UI.ViewModels
             LogLine("• Low confidence / ADX < 20 → flat (no trade)")
             LogLine($"• 5 independent sessions — {String.Join(" · ", Assets.Select(Function(a) a.Symbol))}")
             LogLine("━━━  Naked Trader — Hydra 5-Asset Monitor  ━━━")
+        End Sub
+
+        ''' <summary>
+        ''' Activates the Double Bubble Butt (Double Bollinger Band) strategy for all 5 assets.
+        ''' Two concurrent BB sets over SMA(20): inner bands at ±1.0 SD, outer bands at ±2.0 SD.
+        ''' Long when price closes into the Buy Zone (above upper 1.0 SD band).
+        ''' Short when price closes into the Sell Zone (below lower 1.0 SD band).
+        ''' Exit when price returns to the Neutral Zone (inside the 1.0 SD bands).
+        ''' </summary>
+        Private Sub ApplyDoubleBubbleButt()
+            InitialTpAmount = 20D
+            InitialSlAmount = 10D
+
+            _currentStrategy = New StrategyDefinition With {
+                .Name = "Double Bubble Butt",
+                .Indicator = StrategyIndicatorType.DoubleBollingerBands,
+                .Condition = StrategyConditionType.DoubleBubbleButt,
+                .IndicatorPeriod = 20,
+                .IndicatorMultiplier = 1.0,
+                .SecondaryPeriod = 20,
+                .GoLongWhenBelowBands = True,
+                .GoShortWhenAboveBands = True,
+                .TimeframeMinutes = 5,
+                .DurationHours = 8760,
+                .TradingStartHourUtc = 7,
+                .TradingEndHourUtc = 20,
+                .CapitalAtRisk = _capitalAtRisk,
+                .Quantity = 1,
+                .InitialTpAmount = _initialTpAmount,
+                .InitialSlAmount = _initialSlAmount,
+                .Leverage = _leverage,
+                .AdxThreshold = _adxThreshold,
+                .MaxScaleIns = _maxScaleIns,
+                .ScaleInAmount = _capitalAtRisk,
+                .ScaleInLeverage = _leverage,
+                .MinConfidencePct = _minConfidencePct,
+                .PersonaName = _selectedProfileName
+            }
+
+            HasParsedStrategy = True
+            ActiveStrategyText = $"✔  Double Bubble Butt  |  BB(20,1SD)·BB(20,2SD)  EUR/USD  07–20 UTC  1ct  Conf:{_minConfidencePct}%"
+            ActiveStrategyKind = "DoubleBubbleButt"
+            StrategyDescription =
+                "Double Bubble Butt uses two concurrent Bollinger Band sets plotted over the same SMA(20) baseline — " &
+                "an inner set at ±1.0 standard deviation and an outer set at ±2.0 standard deviations — to divide " &
+                "price action into three clearly defined trading zones." & vbLf & vbLf &
+                "The Buy Zone sits between the upper 1.0 SD and upper 2.0 SD bands. When price closes into this area " &
+                "it signals a strong upward trend with high momentum — the engine goes long and holds as long as price " &
+                "stays above the upper 1.0 SD band." & vbLf & vbLf &
+                "The Sell Zone sits between the lower 1.0 SD and lower 2.0 SD bands. A close into this zone signals " &
+                "a powerful downward trend — the engine goes short and holds while price remains below the lower 1.0 SD band." & vbLf & vbLf &
+                "The Neutral Zone occupies the space between the two inner bands. When price closes back inside this area " &
+                "momentum has exhausted — any open position is exited. Developed by Kathy Lien. Checked every 5 minutes."
+
+            LogEntries.Clear()
+            LogLine("─────────────────────────────────────────────────────────────────────")
+            LogLine("Configure account + risk settings above, then click  ▶ Start Monitoring.")
+            LogLine($"• 5-min bars · BB(20, 1.0 SD) inner · BB(20, 2.0 SD) outer · 1ct")
+            LogLine("• Long: close > upper 1-SD band (Buy Zone) · Short: close < lower 1-SD band (Sell Zone)")
+            LogLine("• Exit: close returns inside 1-SD bands (Neutral Zone)")
+            LogLine($"• 5 independent sessions — {String.Join(" · ", Assets.Select(Function(a) a.Symbol))}")
+            LogLine("━━━  Double Bubble Butt — Hydra 5-Asset Monitor  ━━━")
         End Sub
 
         ' ── Command handlers ──────────────────────────────────────────────────────

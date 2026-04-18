@@ -1,6 +1,10 @@
 Imports Moq
+Imports Microsoft.Extensions.Logging
+Imports Microsoft.Extensions.Options
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
+Imports TopStepTrader.Core.Settings
+Imports TopStepTrader.Services.AI
 Imports TopStepTrader.Services.Trading
 Imports TopStepTrader.UI.ViewModels
 Imports Xunit
@@ -14,6 +18,7 @@ Namespace TopStepTrader.Tests.ViewModels
         Private ReadOnly _mockBarService As Mock(Of IBarCollectionService)
         Private ReadOnly _mockEngine As Mock(Of ISniperExecutionEngine)
         Private ReadOnly _mockSession As Mock(Of ITradingSessionContext)
+        Private ReadOnly _claudeReviewService As ClaudeReviewService
 
         Public Sub New()
             _mockAccountService = New Mock(Of IAccountService)()
@@ -21,6 +26,11 @@ Namespace TopStepTrader.Tests.ViewModels
             _mockBarService = New Mock(Of IBarCollectionService)()
             _mockEngine = New Mock(Of ISniperExecutionEngine)()
             _mockSession = New Mock(Of ITradingSessionContext)()
+            Dim claudeOptions As IOptions(Of ClaudeSettings) = Options.Create(New ClaudeSettings())
+            Dim apiKeyStore = New Mock(Of IApiKeyStore)()
+            apiKeyStore.Setup(Function(s) s.Load()).Returns(New ApiKeySettings())
+            _claudeReviewService = New ClaudeReviewService(claudeOptions, apiKeyStore.Object,
+                New Mock(Of ILogger(Of ClaudeReviewService))().Object)
         End Sub
 
         <Fact>
@@ -110,6 +120,7 @@ Namespace TopStepTrader.Tests.ViewModels
             Dim vm = New SniperViewModel(_mockAccountService.Object,
                                          _mockBacktestService.Object,
                                          _mockBarService.Object,
+                                         _claudeReviewService,
                                          _mockEngine.Object,
                                          _mockSession.Object)
             Return vm

@@ -31,7 +31,7 @@ Namespace TopStepTrader.UI.ViewModels
         Implements IDisposable
 
         ' ── Constants ─────────────────────────────────────────────────────────────
-        Private Const MaxSlots As Integer = 6
+        Private Const MaxSlots As Integer = 7
 
         ' ── Dependencies ──────────────────────────────────────────────────────────
         Private ReadOnly _scopeFactory As IServiceScopeFactory
@@ -311,11 +311,22 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Private _isDoubleBubbleButtEnabled As Boolean = False
+        Public Property IsDoubleBubbleButtEnabled As Boolean
+            Get
+                Return _isDoubleBubbleButtEnabled
+            End Get
+            Set(value As Boolean)
+                If SetProperty(_isDoubleBubbleButtEnabled, value) Then NotifyStrategyChanged()
+            End Set
+        End Property
+
         Public ReadOnly Property HasAnyStrategyEnabled As Boolean
             Get
                 Return _isEmaRsiEnabled OrElse _isMultiConfluenceEnabled OrElse
                        _isLultEnabled OrElse _isBbSqueezeEnabled OrElse
-                       _isVidyaEnabled OrElse _isNakedTraderEnabled
+                       _isVidyaEnabled OrElse _isNakedTraderEnabled OrElse
+                       _isDoubleBubbleButtEnabled
             End Get
         End Property
 
@@ -333,6 +344,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property ToggleBbSqueezeCommand As RelayCommand
         Public ReadOnly Property ToggleVidyaCommand As RelayCommand
         Public ReadOnly Property ToggleNakedTraderCommand As RelayCommand
+        Public ReadOnly Property ToggleDoubleBubbleButtCommand As RelayCommand
         Public ReadOnly Property StartCommand As RelayCommand
         Public ReadOnly Property StopCommand As RelayCommand
 
@@ -389,6 +401,10 @@ Namespace TopStepTrader.UI.ViewModels
 
             ToggleNakedTraderCommand = New RelayCommand(
                 Sub(p) IsNakedTraderEnabled = Not IsNakedTraderEnabled,
+                Function(p) IsNotRunning)
+
+            ToggleDoubleBubbleButtCommand = New RelayCommand(
+                Sub(p) IsDoubleBubbleButtEnabled = Not IsDoubleBubbleButtEnabled,
                 Function(p) IsNotRunning)
 
             StartCommand = New RelayCommand(
@@ -585,6 +601,30 @@ Namespace TopStepTrader.UI.ViewModels
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
                         .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName
                     }
+                Case 6  ' Double Bubble Butt — 5-min; inner BB 1.0 SD / outer BB 2.0 SD; EUR/USD only (London+NY session)
+                    ' DBB was designed by Kathy Lien for EUR/USD on daily/4H FX charts.
+                    ' Override the dropdown selection and pin this slot to M6E (Micro EUR/USD).
+                    ' Trading window 07:00–20:00 UTC covers London open through NY close.
+                    Dim eurUsdFav = FavouriteContracts.TryGetBySymbol("EURUSD")
+                    Dim dbbContractId = If(eurUsdFav IsNot Nothing, eurUsdFav.GetActiveContractId(_session.ActiveBroker), contractId)
+                    Dim dbbTickSz = If(eurUsdFav IsNot Nothing AndAlso eurUsdFav.PxTickSize > 0D, eurUsdFav.PxTickSize, tickSz)
+                    Dim dbbTickVal = If(eurUsdFav IsNot Nothing AndAlso eurUsdFav.PxTickValue > 0D, eurUsdFav.PxTickValue, tickVal)
+                    Return New StrategyDefinition With {
+                        .Name = "Double Bubble Butt", .ContractId = dbbContractId, .AccountId = accountId,
+                        .Indicator = StrategyIndicatorType.DoubleBollingerBands,
+                        .Condition = StrategyConditionType.DoubleBubbleButt,
+                        .IndicatorPeriod = 20, .IndicatorMultiplier = 1.0, .SecondaryPeriod = 20,
+                        .GoLongWhenBelowBands = True, .GoShortWhenAboveBands = True,
+                        .TimeframeMinutes = 5, .DurationHours = 8760,
+                        .TradingStartHourUtc = 7, .TradingEndHourUtc = 20,
+                        .CapitalAtRisk = _capitalAtRisk, .Quantity = 1,
+                        .InitialTpAmount = 20D, .InitialSlAmount = 10D,
+                        .SlMultipleOfN = _slMultipleOfN, .TpMultipleOfN = _tpMultipleOfN,
+                        .Leverage = _leverage, .AdxThreshold = _adxThreshold,
+                        .MaxScaleIns = 0, .ScaleInAmount = _capitalAtRisk, .ScaleInLeverage = _leverage,
+                        .MinConfidencePct = _minConfidencePct, .TickSize = dbbTickSz, .TickValue = dbbTickVal,
+                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName
+                    }
                 Case Else
                     Throw New ArgumentOutOfRangeException(NameOf(slotIdx), $"Slot {slotIdx} is out of range")
             End Select
@@ -598,6 +638,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Case 3 : Return "BbSqueeze"
                 Case 4 : Return "Vidya"
                 Case 5 : Return "NakedTrader"
+                Case 6 : Return "DoubleBubbleButt"
                 Case Else : Return $"Engine{slotIdx}"
             End Select
         End Function
@@ -610,6 +651,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Case 3 : Return _isBbSqueezeEnabled
                 Case 4 : Return _isVidyaEnabled
                 Case 5 : Return _isNakedTraderEnabled
+                Case 6 : Return _isDoubleBubbleButtEnabled
                 Case Else : Return False
             End Select
         End Function

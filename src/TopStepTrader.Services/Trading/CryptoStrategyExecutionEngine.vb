@@ -548,8 +548,36 @@ Namespace TopStepTrader.Services.Trading
                             Log($"Bar checked — VIDYA={vidyaNow:F4} Close={closeNow:F4} ΔVol={deltaNow:P0} CMO={cmoNow:F3} | {remStr}")
                         End If
 
+                    Case StrategyConditionType.DoubleBubbleButt
+                        ' ── Double Bubble Butt ──────────────────────────────────────────────
+                        ' Two BB sets over SMA(20): inner ±1.0 SD, outer ±2.0 SD.
+                        ' Long  when close enters Buy Zone  (close > upper inner 1.0 SD band).
+                        ' Short when close enters Sell Zone (close < lower inner 1.0 SD band).
+                        Dim dbbInner = TechnicalIndicators.BollingerBands(closes, 20, 1.0)
+                        Dim dbbInnerUp  = CDec(TechnicalIndicators.LastValid(dbbInner.Upper))
+                        Dim dbbInnerLow = CDec(TechnicalIndicators.LastValid(dbbInner.Lower))
+                        Dim dbbOuter = TechnicalIndicators.BollingerBands(closes, 20, 2.0)
+                        Dim dbbOuterUp  = CDec(TechnicalIndicators.LastValid(dbbOuter.Upper))
+                        Dim dbbOuterLow = CDec(TechnicalIndicators.LastValid(dbbOuter.Lower))
+                        Dim dbbAtrVals  = TechnicalIndicators.ATR(highs, lows, closes, 20)
+                        _currentAtrValue = CDec(TechnicalIndicators.LastValid(dbbAtrVals))
+
+                        Dim dbbClose = CDec(lastBar.Close)
+                        If dbbInnerUp = 0D OrElse dbbInnerLow = 0D Then
+                            Log($"Bar checked — DBB: bands not ready | {remStr}")
+                        ElseIf dbbClose > dbbInnerUp Then
+                            Log($"✅ DBB LONG! Close={dbbClose:F4} > upper 1-SD={dbbInnerUp:F4} (Buy Zone) | outer=[{dbbOuterLow:F4}–{dbbOuterUp:F4}] | ATR={_currentAtrValue:F4} | {remStr}")
+                            side = OrderSide.Buy
+                        ElseIf dbbClose < dbbInnerLow Then
+                            Log($"✅ DBB SHORT! Close={dbbClose:F4} < lower 1-SD={dbbInnerLow:F4} (Sell Zone) | outer=[{dbbOuterLow:F4}–{dbbOuterUp:F4}] | ATR={_currentAtrValue:F4} | {remStr}")
+                            side = OrderSide.Sell
+                        Else
+                            Log($"Bar checked — DBB: Neutral Zone | Close={dbbClose:F4} inner=[{dbbInnerLow:F4}–{dbbInnerUp:F4}] | {remStr}")
+                        End If
+
                     Case Else
                         Log($"Condition '{_strategy.Condition}' not yet implemented")
+
                 End Select
 
                 ' ── CryptoJoe BUY-only constraint ─────────────────────────────────────────

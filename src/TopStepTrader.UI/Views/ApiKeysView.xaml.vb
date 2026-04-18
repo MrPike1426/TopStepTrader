@@ -34,9 +34,6 @@ Namespace TopStepTrader.UI.Views
 
         ''' <summary>Push all VM key values into their corresponding PasswordBoxes.</summary>
         Private Sub SyncPasswordBoxes()
-            pb_Etoro.Password = _vm.EtoroApiKey
-            pb_EtoroUser.Password = _vm.EtoroUserKey
-            pb_EtoroLiveUser.Password = _vm.EtoroLiveUserKey
             pb_TopStepX.Password = _vm.TopStepXApiKey
             pb_Claude.Password = _vm.ClaudeApiKey
             pb_Binance.Password = _vm.BinanceApiKey
@@ -49,19 +46,7 @@ Namespace TopStepTrader.UI.Views
 
         ' ── PasswordChanged handlers — push typed value into ViewModel ────────────
 
-        Private Sub pb_Etoro_PasswordChanged(s As Object, e As RoutedEventArgs)
-            _vm.EtoroApiKey = pb_Etoro.Password
-        End Sub
-
-        Private Sub pb_EtoroUser_PasswordChanged(s As Object, e As RoutedEventArgs)
-            _vm.EtoroUserKey = pb_EtoroUser.Password
-        End Sub
-
-        Private Sub pb_EtoroLiveUser_PasswordChanged(s As Object, e As RoutedEventArgs)
-            _vm.EtoroLiveUserKey = pb_EtoroLiveUser.Password
-        End Sub
-
-        Private Sub pb_TopStepX_PasswordChanged(s As Object, e As RoutedEventArgs)
+        Private Sub pb_TopStepX_PasswordChanged
             _vm.TopStepXApiKey = pb_TopStepX.Password
         End Sub
 

@@ -70,6 +70,15 @@ Namespace TopStepTrader.Core.Enums
         ''' Fires only when confidence is Medium or High (3+ of 4 votes agree; ADX ≥ 20).
         ''' </summary>
         NakedTrader = 14
+
+        ''' <summary>
+        ''' Double Bollinger Bands: two concurrent BB sets over SMA(20).
+        ''' Inner bands at ±1.0 SD; outer bands at ±2.0 SD.
+        ''' Buy Zone between upper inner and upper outer; Sell Zone between lower inner and lower outer;
+        ''' Neutral Zone between the two inner bands.
+        ''' Developed by Kathy Lien for momentum trend classification.
+        ''' </summary>
+        DoubleBollingerBands = 15
     End Enum
 
 End Namespace
