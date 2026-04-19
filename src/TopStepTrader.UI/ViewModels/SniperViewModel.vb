@@ -781,11 +781,9 @@ Namespace TopStepTrader.UI.ViewModels
                 Return
             End If
 
-            Dim tpAmount, slAmount As Decimal
-            Decimal.TryParse(_btInitialTpAmount, tpAmount)
-            Decimal.TryParse(_btInitialSlAmount, slAmount)
-            If tpAmount <= 0D Then tpAmount = 20D
-            If slAmount <= 0D Then slAmount = 10D
+            Dim slMult, tpMult As Decimal
+            If Not Decimal.TryParse(_btInitialSlAmount, slMult) OrElse slMult <= 0D Then slMult = 1.0D
+            If Not Decimal.TryParse(_btInitialTpAmount, tpMult) OrElse tpMult <= 0D Then tpMult = 2.5D
 
             Dim config As New BacktestConfiguration With {
                 .RunName = $"Sniper {DateTime.Now:yyyyMMdd-HHmm} — {_backtestContractId}",
@@ -794,8 +792,9 @@ Namespace TopStepTrader.UI.ViewModels
                 .StartDate = _backtestStartDate,
                 .EndDate = _backtestEndDate,
                 .InitialCapital = 50000D,
-                .InitialSlAmount = slAmount,
-                .InitialTpAmount = tpAmount,
+                .UseAtrMode = True,
+                .SlAtrMultiple = slMult,
+                .TpAtrMultiple = tpMult,
                 .MinSignalConfidence = 0.8F,
                 .Quantity = 1,
                 .TickSize = GetTickSize(_backtestContractId),

@@ -327,7 +327,7 @@
                                                       CommandParameter="Lewis"/>
                                     </Border.InputBindings>
                                     <TextBlock Padding="10,5" FontSize="12" FontWeight="SemiBold"
-                                               ToolTip="Lewis — Risk Averse: $200 capital · ADX≥25 · 75% confidence · SL=1.5N / TP=3.0N">
+                                               ToolTip="Lewis — Risk Averse: $200 capital · ADX≥25 · 90% confidence · SL=1.5N / TP=3.0N">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="#90CAF9"/>
@@ -363,7 +363,7 @@
                                                       CommandParameter="Damian"/>
                                     </Border.InputBindings>
                                     <TextBlock Padding="10,5" FontSize="12" FontWeight="SemiBold"
-                                               ToolTip="Damian — Moderate: $500 capital · ADX≥20 · 65% confidence · SL=1.0N / TP=2.0N">
+                                               ToolTip="Damian — Moderate: $500 capital · ADX≥20 · 80% confidence · SL=1.0N / TP=2.5N">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="#9AE6B4"/>
@@ -399,7 +399,7 @@
                                                       CommandParameter="Joe"/>
                                     </Border.InputBindings>
                                     <TextBlock Padding="10,5" FontSize="12" FontWeight="SemiBold"
-                                               ToolTip="Joe — Aggressive: $1000 capital · ADX≥15 · 55% confidence · SL=1.5N / TP=2.0N">
+                                               ToolTip="Joe — Aggressive: $1000 capital · ADX≥15 · 70% confidence · SL=0.75N / TP=2.0N">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="#FEB2B2"/>
@@ -452,9 +452,9 @@
                                            Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
 
-                            <!-- Row 4 ── Capital · Qty · TP · SL · Confidence ──── -->
+                            <!-- Row 4 ── Capital · Qty · Confidence ──── -->
                             <TextBlock Grid.Row="4" Grid.Column="0"
-                                       Text="Capital / Qty / TP / SL / Conf:"
+                                       Text="Capital / Qty / Conf:"
                                        VerticalAlignment="Center" Margin="0,0,16,0"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                             <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
@@ -465,18 +465,6 @@
                                 <TextBox Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}"
                                          Width="46" ToolTip="Contracts per signal"/>
                                 <TextBlock Text="qty" VerticalAlignment="Center" Margin="3,0,0,0"
-                                           Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
-                                <Rectangle Width="1" Fill="{StaticResource TextSecondaryBrush}"
-                                           Opacity="0.3" Margin="14,3,14,3"/>
-                                <TextBlock Text="TP" VerticalAlignment="Center" Margin="0,0,6,0"
-                                           Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
-                                <TextBox Text="{Binding InitialTpAmount, UpdateSourceTrigger=PropertyChanged}"
-                                         Width="46" ToolTip="Take-profit dollar fallback (used when ATR mode is off)"/>
-                                <TextBlock Text="/" VerticalAlignment="Center" Margin="6,0,6,0"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
-                                <TextBox Text="{Binding InitialSlAmount, UpdateSourceTrigger=PropertyChanged}"
-                                         Width="46" ToolTip="Stop-loss dollar fallback (used when ATR mode is off)"/>
-                                <TextBlock Text="SL" VerticalAlignment="Center" Margin="3,0,0,0"
                                            Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
                                 <Rectangle Width="1" Fill="{StaticResource TextSecondaryBrush}"
                                            Opacity="0.3" Margin="14,3,14,3"/>
@@ -496,37 +484,22 @@
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                             <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Vertical">
 
-                                <!-- ATR mode row -->
+                                <!-- ATR multiple row — always visible (ATR-only mode) -->
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <CheckBox IsChecked="{Binding UseAtrMode}"
-                                              Content="ATR × Stops"
-                                              Margin="0,0,20,0"
-                                              ToolTip="When checked, SL and TP are set as multiples of ATR(14) at entry rather than fixed dollar amounts. Stops scale automatically with market volatility — recommended for cross-instrument backtests."/>
-                                    <!-- ATR multiple fields — shown only when ATR mode is on -->
-                                    <StackPanel Orientation="Horizontal"
-                                                Visibility="{Binding UseAtrMode, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <TextBlock Text="SL ×" VerticalAlignment="Center"
-                                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,6,0"/>
-                                        <TextBox Text="{Binding SlAtrMultiple, UpdateSourceTrigger=PropertyChanged}"
-                                                 Width="46"
-                                                 ToolTip="Stop-loss as a multiple of ATR(14). Default 1.5 = SL is 1.5× the current ATR."/>
-                                        <TextBlock Text="TP ×" VerticalAlignment="Center"
-                                                   Foreground="{StaticResource TextSecondaryBrush}" Margin="16,0,6,0"/>
-                                        <TextBox Text="{Binding TpAtrMultiple, UpdateSourceTrigger=PropertyChanged}"
-                                                 Width="46"
-                                                 ToolTip="Take-profit as a multiple of ATR(14). Default 3.0 = TP is 3× the current ATR (2:1 R:R vs 1.5× SL)."/>
-                                        <TextBlock Text="× ATR(14)"
-                                                   VerticalAlignment="Center" Margin="8,0,0,0"
-                                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
-                                                   FontStyle="Italic"/>
-                                    </StackPanel>
-                                    <!-- Fixed $ reminder — shown only when ATR mode is off -->
-                                    <TextBlock VerticalAlignment="Center"
+                                    <TextBlock Text="SL ×" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,6,0"/>
+                                    <TextBox Text="{Binding SlAtrMultiple, UpdateSourceTrigger=PropertyChanged}"
+                                             Width="46"
+                                             ToolTip="Stop-loss as a multiple of ATR(14). Default 1.5 = SL is 1.5× the current ATR."/>
+                                    <TextBlock Text="TP ×" VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="16,0,6,0"/>
+                                    <TextBox Text="{Binding TpAtrMultiple, UpdateSourceTrigger=PropertyChanged}"
+                                             Width="46"
+                                             ToolTip="Take-profit as a multiple of ATR(14). Default 3.0 = TP is 3× the current ATR (2:1 R:R vs 1.5× SL)."/>
+                                    <TextBlock Text="× ATR(14)"
+                                               VerticalAlignment="Center" Margin="8,0,0,0"
                                                Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
-                                               FontStyle="Italic"
-                                               Visibility="{Binding UseFixedDollarMode, Converter={StaticResource BoolToVisibilityConverter}}">
-                                        <Run Text="Using fixed $ TP/SL from Capital row above"/>
-                                    </TextBlock>
+                                               FontStyle="Italic"/>
                                 </StackPanel>
 
                                 <!-- Dynamic exit checkboxes -->
@@ -865,7 +838,7 @@
                             <DataGrid ItemsSource="{Binding TimeframeResults}"
                                       AutoGenerateColumns="False"
                                       IsReadOnly="True"
-                                      CanUserSortColumns="False"
+                                      CanUserSortColumns="True"
                                       CanUserResizeRows="False"
                                       HeadersVisibility="Column"
                                       GridLinesVisibility="None"
@@ -897,7 +870,7 @@
                                     <DataGridTextColumn Header="Timeframe"    Binding="{Binding Timeframe}"    Width="70"/>
                                     <DataGridTextColumn Header="Trades"       Binding="{Binding Trades}"       Width="60"/>
                                     <DataGridTextColumn Header="Win Rate"     Binding="{Binding WinRate}"      Width="80"/>
-                                    <DataGridTemplateColumn Header="Total P&amp;L" Width="90">
+                                    <DataGridTemplateColumn Header="Total P&amp;L" Width="90" SortMemberPath="TotalPnLRaw">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding TotalPnL}"
@@ -927,9 +900,7 @@
                     <RowDefinition Height="8"/>
                     <RowDefinition Height="Auto"/>   <!-- Row 2: Progress -->
                     <RowDefinition Height="6"/>
-                    <RowDefinition Height="*"/>      <!-- Row 4: Results grid -->
-                    <RowDefinition Height="8"/>
-                    <RowDefinition Height="Auto"/>   <!-- Row 6: AI Analysis -->
+                    <RowDefinition Height="*"/>      <!-- Row 4: Results grid + AI side-by-side -->
                 </Grid.RowDefinitions>
 
                 <!-- ── Button row ──────────────────────────────────────────── -->
@@ -937,7 +908,7 @@
 
                     <!-- Maximum Effort! button with Deadpool logo -->
                     <Button Command="{Binding MaximumEffortCommand}"
-                            ToolTip="Run every persona × every contract × every strategy × every timeframe (720 combinations). ATR stops always ON. Trailing stop / break-even / extend-TP always OFF. ForceClose inherits current tab setting. 180-day lookback window. Results sorted by P&amp;L. Top 20 sent to Claude Haiku for analysis.">
+                            ToolTip="Run every persona × every contract × every strategy × every timeframe (840 combinations). ATR stops always ON. Commission $4.50/side modelled. Trailing stop / break-even / extend-TP always OFF. ForceClose inherits current tab setting. 180-day lookback window. Results sorted by P&amp;L. Top 20 sent to Claude Haiku for analysis.">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="Background"    Value="#111111"/>
@@ -1011,7 +982,7 @@
                         <!-- Combination count + persona summary -->
                         <TextBlock FontSize="11" FontFamily="Consolas" Margin="0,5,0,0"
                                    Foreground="{StaticResource TextSecondaryBrush}"
-                                   Text="3 personas × 5 instruments × 6 strategies × 8 timeframes = 720 combinations"/>
+                                   Text="3 personas × 5 instruments × 7 strategies × 8 timeframes = 840 combinations"/>
                         <!-- Per-persona detail: capital · ADX gate · confidence · ATR stop multiples · max scale-ins -->
                         <TextBlock FontSize="10" FontFamily="Consolas" Margin="0,3,0,0"
                                    Foreground="{StaticResource TextSecondaryBrush}">
@@ -1046,8 +1017,15 @@
                                Foreground="{StaticResource TextSecondaryBrush}"/>
                 </StackPanel>
 
-                <!-- ── Results DataGrid ─────────────────────────────────────── -->
-                <Border Grid.Row="4" Background="{StaticResource CardBrush}" CornerRadius="6" Padding="0,0,0,4">
+                <!-- ── Results DataGrid + AI Analysis (side by side) ─────────── -->
+                <Grid Grid.Row="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>       <!-- Results grid -->
+                        <ColumnDefinition Width="12"/>      <!-- gutter -->
+                        <ColumnDefinition Width="380"/>     <!-- AI Analysis panel -->
+                    </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{StaticResource CardBrush}" CornerRadius="6" Padding="0,0,0,4">
                     <DataGrid ItemsSource="{Binding MaxEffortResults}"
                               AutoGenerateColumns="False"
                               IsReadOnly="True"
@@ -1080,6 +1058,22 @@
                             </Style>
                         </DataGrid.CellStyle>
                         <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="" Width="30">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="📌"
+                                                FontSize="11"
+                                                Padding="2,0"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Cursor="Hand"
+                                                ToolTip="Pin this result to the Pinned tab"
+                                                Command="{Binding DataContext.PinResultCommand,
+                                                    RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTextColumn Header="Persona"    Binding="{Binding Persona}"   Width="60"/>
                             <DataGridTextColumn Header="Contract"   Binding="{Binding Contract}"  Width="90"/>
                             <DataGridTextColumn Header="Strategy"   Binding="{Binding Strategy}"  Width="130"/>
@@ -1102,41 +1096,57 @@
                     </DataGrid>
                 </Border>
 
-                <!-- ── Claude Haiku Analysis ────────────────────────────────── -->
-                <Border Grid.Row="6"
+                <!-- ── Claude Haiku Analysis — right column, always visible ── -->
+                <Border Grid.Column="2"
                         Background="{StaticResource SurfaceBrush}"
-                        CornerRadius="6" Padding="16,12"
-                        Visibility="{Binding MaxEffortAiAnalysis,
-                            Converter={StaticResource StringToVisibilityConverter},
-                            ConverterParameter=NotEmpty}">
+                        CornerRadius="6" Padding="16,12">
                     <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <TextBlock Text="🤖  CLAUDE HAIKU ANALYSIS"
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="🤖  AI ANALYSIS"
                                        Style="{StaticResource SectionHeadingStyle}" Margin="0"/>
-                            <TextBlock Text="  (claude-haiku-4-5 · top 20 results)"
-                                       FontSize="9" FontFamily="Consolas"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       VerticalAlignment="Center"/>
-                            <Button Content="📋  Copy"
-                                    Margin="12,0,0,0" Padding="8,2"
+                            <Button Content="📋"
+                                    Margin="8,0,0,0" Padding="6,1"
                                     FontSize="11" VerticalAlignment="Center"
                                     Command="{Binding CopyAiAnalysisCommand}"
                                     ToolTip="Copy the full analysis text to clipboard"/>
                         </StackPanel>
+                        <TextBlock Text="claude-haiku-4-5 · top 20 results"
+                                   FontSize="9" FontFamily="Consolas"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Margin="0,0,0,8"/>
+                        <!-- Placeholder shown while no analysis is available -->
+                        <TextBlock FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontStyle="Italic"
+                                   Text="Run Maximum Effort! to generate an AI analysis of the top 20 results."
+                                   Visibility="{Binding MaxEffortAiAnalysis,
+                                       Converter={StaticResource StringToVisibilityConverter},
+                                       ConverterParameter=Empty}"/>
+                        <!-- Loading indicator while Claude is thinking -->
+                        <TextBlock FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   Text="⏳  Asking Claude Haiku..."
+                                   Visibility="{Binding MaxEffortAiIsLoading,
+                                       Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        <!-- Analysis text -->
                         <TextBox Text="{Binding MaxEffortAiAnalysis, Mode=OneWay}"
                                  IsReadOnly="True"
                                  TextWrapping="Wrap"
                                  FontSize="11"
-                                 MaxHeight="340"
                                  VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Disabled"
                                  Foreground="{StaticResource TextPrimaryBrush}"
                                  Background="Transparent"
                                  BorderThickness="0"
                                  Padding="0"
-                                 FontFamily="{StaticResource {x:Static SystemFonts.MessageFontFamilyKey}}"/>
+                                 FontFamily="{StaticResource {x:Static SystemFonts.MessageFontFamilyKey}}"
+                                 Visibility="{Binding MaxEffortAiAnalysis,
+                                     Converter={StaticResource StringToVisibilityConverter},
+                                     ConverterParameter=NotEmpty}"/>
                     </StackPanel>
                 </Border>
+
+                </Grid>  <!-- end side-by-side grid -->
 
             </Grid>
         </TabItem>
@@ -1158,7 +1168,7 @@
                                Style="{StaticResource PageTitleStyle}" Margin="0,0,0,4"/>
                     <TextBlock FontSize="11" FontFamily="Consolas"
                                Foreground="{StaticResource TextSecondaryBrush}"
-                               Text="Best-known combinations locked in 2025-07 · Gold · Multi-Confluence · 1 hr · ATR stops · 180-day window. Use as a sanity-check baseline when re-running Maximum Effort."/>
+                               Text="Pin results from Maximum Effort! using the 📌 button on each row. Legacy 2025-07 baseline (Gold · Multi-Confluence · 1 hr) shown by default — use as a sanity-check when re-running."/>
                 </StackPanel>
 
                 <!-- ── Pinned DataGrid ───────────────────────────────────────── -->

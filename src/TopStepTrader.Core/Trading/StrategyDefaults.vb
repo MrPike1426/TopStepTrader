@@ -16,18 +16,16 @@ Namespace TopStepTrader.Core.Trading
         ''' All registered strategies and their default parameters.
         ''' Key lookup is case-insensitive.
         ''' </summary>
-        ' eToro AI Trading path: Capital (USD cash), Qty, InitialTpAmount ($), InitialSlAmount ($).
-        ' Dollar-based Turtle bracket — engine converts to absolute prices using ATR and leverage.
-        ' TP = 2% of capital ($20 on $1000), SL = 1.5% of capital ($15 on $1000) — 2:1.5 ratio.
+        ' Capital (USD cash) and Quantity per entry. ATR-based SL/TP replaces dollar amounts.
         Public Shared ReadOnly Defaults As IReadOnlyDictionary(Of String, StrategyParameterSet) =
             New Dictionary(Of String, StrategyParameterSet)(StringComparer.OrdinalIgnoreCase) From {
-                {"EMA/RSI Combined", New StrategyParameterSet("1000", "1", "20", "15")},
-                {"Multi-Confluence Engine", New StrategyParameterSet("1000", "1", "20", "15")},
-                {"BB Squeeze Scalper", New StrategyParameterSet("1000", "1", "8", "4")},
-                {"LULT Divergence", New StrategyParameterSet("1000", "1", "20", "10")},
-                {"VIDYA Cross", New StrategyParameterSet("1000", "1", "20", "10")},
-                {"Naked Trader", New StrategyParameterSet("1000", "1", "20", "10")},
-                {"Double Bubble Butt", New StrategyParameterSet("1000", "1", "20", "10")}
+                {"EMA/RSI Combined",       New StrategyParameterSet("1000", "1", "20", "15")},
+                {"Multi-Confluence Engine", New StrategyParameterSet("1000", "1")},
+                {"BB Squeeze Scalper",     New StrategyParameterSet("1000", "1")},
+                {"LULT Divergence",        New StrategyParameterSet("1000", "1")},
+                {"VIDYA Cross",            New StrategyParameterSet("1000", "1")},
+                {"Naked Trader",           New StrategyParameterSet("1000", "1")},
+                {"Double Bubble Butt",     New StrategyParameterSet("1000", "1")}
             }
 
         ''' <summary>
@@ -44,24 +42,25 @@ Namespace TopStepTrader.Core.Trading
     End Class
 
     ''' <summary>
-    ''' Immutable set of capital/quantity/TP/SL defaults for a strategy.
+    ''' Immutable set of capital/quantity defaults for a strategy.
     ''' Values are stored as strings to match the ViewModel's text-bound input fields.
-    ''' InitialTpAmount and InitialSlAmount are dollar P&amp;L amounts for the Turtle bracket.
+    ''' SL and TP are ATR-based (set via SlAtrMultiple/TpAtrMultiple on BacktestConfiguration).
+    ''' InitialSlAmount and InitialTpAmount are optional dollar-based overrides.
     ''' </summary>
     Public NotInheritable Class StrategyParameterSet
 
         Public ReadOnly Property Capital As String
         Public ReadOnly Property Qty As String
-        ''' <summary>Initial take-profit in dollars (e.g. "20" = $20). First Turtle bracket target.</summary>
         Public ReadOnly Property InitialTpAmount As String
-        ''' <summary>Initial stop-loss in dollars (e.g. "10" = $10). Hard stop for Bracket 0.</summary>
         Public ReadOnly Property InitialSlAmount As String
 
-        Public Sub New(capital As String, qty As String, tp As String, sl As String)
+        Public Sub New(capital As String, qty As String,
+                       Optional initialTpAmount As String = Nothing,
+                       Optional initialSlAmount As String = Nothing)
             Me.Capital = capital
             Me.Qty = qty
-            Me.InitialTpAmount = tp
-            Me.InitialSlAmount = sl
+            Me.InitialTpAmount = initialTpAmount
+            Me.InitialSlAmount = initialSlAmount
         End Sub
 
     End Class

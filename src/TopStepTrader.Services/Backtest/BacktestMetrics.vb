@@ -16,8 +16,9 @@ Namespace TopStepTrader.Services.Backtest
         ''' Calculate the dollar P&amp;L for a closed trade using the contract-specific point value
         ''' from <paramref name="config"/>.
         '''
-        ''' Formula: (exitPrice − entryPrice) × quantity × pointValue
+        ''' Formula: (exitPrice − entryPrice) × quantity × pointValue − commission
         ''' where pointValue is dollars per 1.0 price-unit move (set per-contract in BacktestViewModel).
+        ''' Commission = config.CommissionPerSideUsd × 2 (round trip) × trade.Quantity.
         '''
         ''' Correct values: MES = $5/pt, MNQ = $2/pt, MGC = $10/pt, MCL = $10/pt.
         ''' (Old code hardcoded $50/pt which is the full-size ES — 10× too large for MES.)
@@ -29,7 +30,9 @@ Namespace TopStepTrader.Services.Backtest
             If Not trade.ExitPrice.HasValue Then Return 0D
             Dim priceDiff = trade.ExitPrice.Value - trade.EntryPrice
             Dim isBuy = trade.Side = "Buy"
-            Return If(isBuy, priceDiff, -priceDiff) * trade.Quantity * config.PointValue
+            Dim gross = If(isBuy, priceDiff, -priceDiff) * trade.Quantity * config.PointValue
+            Dim commission = config.CommissionPerSideUsd * 2D * trade.Quantity  ' entry + exit
+            Return gross - commission
         End Function
 
         ''' <summary>
@@ -148,23 +151,26 @@ Namespace TopStepTrader.Services.Backtest
             Return Nothing
         End Function
 
+        ''' <summary>
+        ''' Config-based overload — derives fixed SL/TP price levels from dollar amounts in
+        ''' <paramref name="config"/> then delegates to the price-level overload.
+        ''' Formula:  dollarPerPoint = PointValue × Quantity
+        '''           slDelta = InitialSlAmount / dollarPerPoint
+        '''           tpDelta = InitialTpAmount / dollarPerPoint
+        ''' </summary>
         Friend Function CheckExit(trade As BacktestTrade,
                                    bar As MarketBar,
                                    config As BacktestConfiguration) As String
             Dim dollarPerPoint = config.PointValue * config.Quantity
-            If dollarPerPoint = 0D Then Return Nothing
-
+            Dim slDelta = If(dollarPerPoint > 0D, config.InitialSlAmount / dollarPerPoint, 0D)
+            Dim tpDelta = If(dollarPerPoint > 0D, config.InitialTpAmount / dollarPerPoint, 0D)
             Dim isBuy = trade.Side = "Buy"
-            Dim stopDelta = Math.Round(config.InitialSlAmount / dollarPerPoint, 4)
-            Dim tpDelta = Math.Round(config.InitialTpAmount / dollarPerPoint, 4)
-
-            ' Delegate to the price-level overload using the initial fixed levels.
-            Dim stopLevel = If(isBuy, trade.EntryPrice - stopDelta, trade.EntryPrice + stopDelta)
-            Dim tpLevel   = If(isBuy, trade.EntryPrice + tpDelta,   trade.EntryPrice - tpDelta)
-            Return CheckExit(trade, bar, stopLevel, tpLevel)
+            Dim currentStop = If(isBuy, trade.EntryPrice - slDelta, trade.EntryPrice + slDelta)
+            Dim currentTp = If(isBuy, trade.EntryPrice + tpDelta, trade.EntryPrice - tpDelta)
+            Return CheckExit(trade, bar, currentStop, currentTp)
         End Function
 
-        ''' <summary>
+''' <summary>
         ''' Returns the exact fill price for a closed trade based on its exit reason.
         '''
         ''' UAT-BUG-006: Using bar.Close as the exit price when SL/TP is triggered on
@@ -187,10 +193,10 @@ Namespace TopStepTrader.Services.Backtest
         ''' CheckExit used when it returned the exit reason.
         ''' </summary>
         Friend Function GetExitPrice(trade As BacktestTrade,
-                                      bar As MarketBar,
-                                      exitReason As String,
-                                      currentStop As Decimal,
-                                      currentTp As Decimal) As Decimal
+                                       bar As MarketBar,
+                                       exitReason As String,
+                                       currentStop As Decimal,
+                                       currentTp As Decimal) As Decimal
             If exitReason = "StopLoss" Then
                 Return currentStop
             ElseIf exitReason = "TakeProfit" Then
@@ -200,24 +206,25 @@ Namespace TopStepTrader.Services.Backtest
             End If
         End Function
 
+        ''' <summary>
+        ''' Config-based overload — derives SL/TP price levels from dollar amounts in
+        ''' <paramref name="config"/> then delegates to the price-level overload.
+        ''' </summary>
         Friend Function GetExitPrice(trade As BacktestTrade,
                                       bar As MarketBar,
                                       exitReason As String,
                                       config As BacktestConfiguration) As Decimal
             Dim dollarPerPoint = config.PointValue * config.Quantity
+            Dim slDelta = If(dollarPerPoint > 0D, config.InitialSlAmount / dollarPerPoint, 0D)
+            Dim tpDelta = If(dollarPerPoint > 0D, config.InitialTpAmount / dollarPerPoint, 0D)
             Dim isBuy = trade.Side = "Buy"
-            If exitReason = "StopLoss" AndAlso dollarPerPoint > 0D Then
-                Dim stopDelta = Math.Round(config.InitialSlAmount / dollarPerPoint, 4)
-                Return If(isBuy, trade.EntryPrice - stopDelta, trade.EntryPrice + stopDelta)
-            ElseIf exitReason = "TakeProfit" AndAlso dollarPerPoint > 0D Then
-                Dim tpDelta = Math.Round(config.InitialTpAmount / dollarPerPoint, 4)
-                Return If(isBuy, trade.EntryPrice + tpDelta, trade.EntryPrice - tpDelta)
-            Else
-                Return bar.Close
-            End If
+            Dim currentStop = If(isBuy, trade.EntryPrice - slDelta, trade.EntryPrice + slDelta)
+            Dim currentTp = If(isBuy, trade.EntryPrice + tpDelta, trade.EntryPrice - tpDelta)
+            Return GetExitPrice(trade, bar, exitReason, currentStop, currentTp)
         End Function
 
-        ''' <summary>
+
+''' <summary>
         ''' Annualised Sharpe ratio computed from a list of per-position P&amp;L values.
         ''' Returns Nothing when fewer than 2 positions exist or all returns are identical.
         ''' Formula: (avg / stddev) × √252

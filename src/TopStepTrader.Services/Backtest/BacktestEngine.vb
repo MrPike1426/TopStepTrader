@@ -345,6 +345,27 @@ Namespace TopStepTrader.Services.Backtest
             Dim dynStopDelta As Decimal = 0D
             Dim dynTpDelta   As Decimal = 0D
 
+            ' ── Next-bar entry state (Items 2+3) ────────────────────────────────
+            ' Signal fires at bar[i]; position fills at bar[i+1].Open ± 1 tick slippage.
+            ' Pending state is cleared each bar regardless of whether the fill succeeded.
+            Dim pendingSide       As String  = Nothing  ' "Buy", "Sell", or Nothing
+            Dim pendingGroupId    As Integer = 0
+            Dim pendingConf       As Single  = 0F
+            Dim pendingIsScaleIn  As Boolean = False
+            Dim pendingStopDelta  As Decimal = 0D       ' ATR-relative distance entry→SL
+            Dim pendingTpDelta    As Decimal = 0D       ' ATR-relative distance entry→TP
+            ' SuperTrend: absolute SL/TP levels set at signal time (indicator-anchored)
+            Dim pendingAbsStSl    As Decimal = 0D
+            Dim pendingAbsStTp    As Decimal = 0D
+            Dim pendingStIsLong   As Boolean = True
+            ' Indicator-channel exits stored at signal time (valid regardless of fill price)
+            Dim pendingDonMid     As Decimal = 0D   ' DonchianBreakout mid-channel exit
+            Dim pendingDonIsLong  As Boolean = True
+            Dim pendingBbMid      As Decimal = 0D   ' BbRsiMeanReversion BB-middle exit
+            Dim pendingBbIsLong   As Boolean = True
+            Dim pendingDbbInner   As Decimal = 0D   ' DoubleBubbleButt inner-band exit
+            Dim pendingDbbIsLong  As Boolean = True
+
             ' MinSignalConfidence is stored as 0.0–1.0 (e.g. 0.75 = 75%).
             ' The EMA/RSI score produces 0–100, so convert once here.
             Dim minPct As Double = config.MinSignalConfidence * 100.0
@@ -362,6 +383,75 @@ Namespace TopStepTrader.Services.Backtest
                 End If
 
                 Dim bar = filteredBars(i)
+
+                ' ── Fill pending entry from previous bar's signal ──────────────────
+                ' Entry fills at bar.Open ± 1 tick adverse slippage (Items 2+3).
+                ' Pending entries generated during a ForceClose cooldown are dropped.
+                If pendingSide IsNot Nothing Then
+                    If (i - lastForceCloseBarIndex) <= 3 Then
+                        pendingSide = Nothing   ' cooldown — discard stale signal
+                    Else
+                        Dim canFillLeg = (openLegs.Count = 0) OrElse
+                                         (pendingIsScaleIn AndAlso openLegs.Count > 0 AndAlso
+                                          openLegs.Count < config.MaxScaleIns AndAlso
+                                          openLegs(0).Side = pendingSide)
+                        If canFillLeg Then
+                            Dim isBuyFill  = (pendingSide = "Buy")
+                            Dim fillSlip   = If(config.TickSize > 0D, config.TickSize, 0D)
+                            Dim fillPrice  = bar.Open + If(isBuyFill, fillSlip, -fillSlip)
+                            Dim newLeg As New BacktestTrade With {
+                                .PositionGroupId = If(pendingIsScaleIn, openLegs(0).PositionGroupId, pendingGroupId),
+                                .EntryTime       = bar.Timestamp,
+                                .EntryPrice      = fillPrice,
+                                .Side            = pendingSide,
+                                .Quantity        = config.Quantity,
+                                .SignalConfidence = pendingConf
+                            }
+                            openLegs.Add(newLeg)
+                            ' Initialise dynamic exit levels for initial entry
+                            If dynEnabled AndAlso Not pendingIsScaleIn Then
+                                If pendingAbsStSl <> 0D Then
+                                    ' SuperTrend: SL = indicator line (absolute); TP = stored absolute
+                                    qlStOpenSlPrice = pendingAbsStSl
+                                    qlStOpenTpPrice = pendingAbsStTp
+                                    qlStIsLong      = pendingStIsLong
+                                    dynStopDelta = Math.Abs(fillPrice - qlStOpenSlPrice)
+                                    dynTpDelta   = Math.Abs(qlStOpenTpPrice - fillPrice)
+                                    dynStop = qlStOpenSlPrice
+                                    dynTp   = qlStOpenTpPrice
+                                ElseIf pendingStopDelta > 0D Then
+                                    ' ATR-relative exits: anchor SL/TP to fillPrice
+                                    dynStopDelta = pendingStopDelta
+                                    dynTpDelta   = pendingTpDelta
+                                    dynStop = If(isBuyFill, fillPrice - dynStopDelta, fillPrice + dynStopDelta)
+                                    dynTp   = If(isBuyFill, fillPrice + dynTpDelta,  fillPrice - dynTpDelta)
+                                    If config.StrategyCondition = StrategyConditionType.MultiConfluence Then
+                                        mcOpenSlPrice = dynStop : mcOpenTpPrice = dynTp
+                                        mcIsLong      = isBuyFill
+                                    End If
+                                End If
+                            End If
+                            ' Indicator-channel exits (set at signal time; independent of fill price)
+                            If pendingDonMid <> 0D Then
+                                qlDonOpenMidExit = pendingDonMid : qlDonIsLong = pendingDonIsLong
+                            End If
+                            If pendingBbMid <> 0D Then
+                                qlBbOpenMidExit = pendingBbMid : qlBbIsLong = pendingBbIsLong
+                            End If
+                            If pendingDbbInner <> 0D Then
+                                dbbInner1SdExit = pendingDbbInner : dbbIsLong = pendingDbbIsLong
+                            End If
+                        End If
+                    End If
+                    ' Clear all pending state (whether fill succeeded or not)
+                    pendingSide      = Nothing
+                    pendingGroupId   = 0
+                    pendingConf      = 0F
+                    pendingIsScaleIn = False
+                    pendingStopDelta = 0D : pendingTpDelta  = 0D
+                    pendingAbsStSl   = 0D : pendingAbsStTp  = 0D
+                    pendingDonMid    = 0D : pendingBbMid    = 0D : pendingDbbInner = 0D
+                End If
 
                 ' ── Check exit for open position ──────────────────────────────────
                 ' TP/SL levels are anchored to the first leg's entry price; all legs exit together.
@@ -418,6 +508,7 @@ Namespace TopStepTrader.Services.Backtest
                             dbbInner1SdExit = 0D
                             dynStop = 0D : dynTp = 0D : dynStopDelta = 0D : dynTpDelta = 0D
                             lastForceCloseBarIndex = i  ' arm 3-bar re-entry cooldown
+                            pendingSide = Nothing       ' discard any pending entry from this bar
                             Continue For  ' ForceClose handled exit — skip remaining checks for this bar
                         End If
                     End If
@@ -532,11 +623,6 @@ Namespace TopStepTrader.Services.Backtest
                             If exitReason IsNot Nothing Then
                                 exitPrice = BacktestMetrics.GetExitPrice(openLegs(0), bar, exitReason, dynStop, dynTp)
                             End If
-                        Else
-                            exitReason = BacktestMetrics.CheckExit(openLegs(0), bar, config)
-                            If exitReason IsNot Nothing Then
-                                exitPrice = BacktestMetrics.GetExitPrice(openLegs(0), bar, exitReason, config)
-                            End If
                         End If
                     End If
                     If exitReason IsNot Nothing Then
@@ -634,31 +720,15 @@ Namespace TopStepTrader.Services.Backtest
 
                         If cascadeSide IsNot Nothing Then
                             positionGroupCounter += 1
-                            openLegs.Add(New BacktestTrade With {
-                                .PositionGroupId = positionGroupCounter,
-                                .EntryTime = bar.Timestamp,
-                                .EntryPrice = bar.Close,
-                                .Side = cascadeSide,
-                                .Quantity = config.Quantity,
-                                .SignalConfidence = 1.0F
-                            })
+                            pendingGroupId = positionGroupCounter
+                            pendingSide    = cascadeSide
+                            pendingConf    = 1.0F
                             If dynEnabled Then
                                 Dim atrCasc As Single = If(universalAtr14 IsNot Nothing AndAlso i < universalAtr14.Length AndAlso
                                                             Not Single.IsNaN(universalAtr14(i)), universalAtr14(i), 0.0F)
                                 If config.UseAtrMode AndAlso atrCasc > 0.0F Then
-                                    dynStopDelta = SafeD(atrCasc) * config.SlAtrMultiple
-                                    dynTpDelta   = SafeD(atrCasc) * config.TpAtrMultiple
-                                Else
-                                    Dim dpp = config.PointValue * config.Quantity
-                                    If dpp > 0D Then
-                                        dynStopDelta = Math.Round(config.InitialSlAmount / dpp, 4)
-                                        dynTpDelta   = Math.Round(config.InitialTpAmount / dpp, 4)
-                                    End If
-                                End If
-                                If dynStopDelta > 0D Then
-                                    Dim isCascBuy = (cascadeSide = "Buy")
-                                    dynStop = If(isCascBuy, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
-                                    dynTp   = If(isCascBuy, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
+                                    pendingStopDelta = SafeD(atrCasc) * config.SlAtrMultiple
+                                    pendingTpDelta   = SafeD(atrCasc) * config.TpAtrMultiple
                                 End If
                             End If
                         End If
@@ -738,24 +808,12 @@ Namespace TopStepTrader.Services.Backtest
 
                             If mcSide IsNot Nothing AndAlso mcSlCand <> 0D Then
                                 positionGroupCounter += 1
-                                openLegs.Add(New BacktestTrade With {
-                                    .PositionGroupId = positionGroupCounter,
-                                    .EntryTime = bar.Timestamp,
-                                    .EntryPrice = mcLastClose,
-                                    .Side = mcSide,
-                                    .Quantity = config.Quantity,
-                                    .SignalConfidence = 1.0F
-                                })
-                                mcOpenSlPrice = mcSlCand
-                                mcOpenTpPrice = mcTpCand
-                                mcIsLong = (mcSide = "Buy")
-                                ' Initialise dynamic exit levels from ATR-derived entry distances
-                                If dynEnabled Then
-                                    dynStopDelta = Math.Abs(mcLastClose - mcSlCand)
-                                    dynTpDelta   = Math.Abs(mcTpCand - mcLastClose)
-                                    dynStop = mcSlCand
-                                    dynTp   = mcTpCand
-                                End If
+                                pendingGroupId = positionGroupCounter
+                                pendingSide    = mcSide
+                                pendingConf    = 1.0F
+                                ' Store ATR-relative deltas; fill block re-anchors to nextBar.Open
+                                pendingStopDelta = Math.Abs(mcLastClose - mcSlCand)
+                                pendingTpDelta   = Math.Abs(mcTpCand - mcLastClose)
                             End If
                         End If
                     End If
@@ -780,31 +838,15 @@ Namespace TopStepTrader.Services.Backtest
                             End If
                             If crSide IsNot Nothing Then
                                 positionGroupCounter += 1
-                                openLegs.Add(New BacktestTrade With {
-                                    .PositionGroupId = positionGroupCounter,
-                                    .EntryTime = bar.Timestamp,
-                                    .EntryPrice = bar.Close,
-                                    .Side = crSide,
-                                    .Quantity = config.Quantity,
-                                    .SignalConfidence = 1.0F
-                                })
+                                pendingGroupId = positionGroupCounter
+                                pendingSide    = crSide
+                                pendingConf    = 1.0F
                                 If dynEnabled Then
                                     Dim atrCr As Single = If(universalAtr14 IsNot Nothing AndAlso i < universalAtr14.Length AndAlso
                                                               Not Single.IsNaN(universalAtr14(i)), universalAtr14(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrCr > 0.0F Then
-                                        dynStopDelta = SafeD(atrCr) * config.SlAtrMultiple
-                                        dynTpDelta   = SafeD(atrCr) * config.TpAtrMultiple
-                                    Else
-                                        Dim dppCr = config.PointValue * config.Quantity
-                                        If dppCr > 0D Then
-                                            dynStopDelta = Math.Round(config.InitialSlAmount / dppCr, 4)
-                                            dynTpDelta   = Math.Round(config.InitialTpAmount / dppCr, 4)
-                                        End If
-                                    End If
-                                    If dynStopDelta > 0D Then
-                                        Dim isCrBuy = (crSide = "Buy")
-                                        dynStop = If(isCrBuy, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
-                                        dynTp   = If(isCrBuy, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
+                                        pendingStopDelta = SafeD(atrCr) * config.SlAtrMultiple
+                                        pendingTpDelta   = SafeD(atrCr) * config.TpAtrMultiple
                                     End If
                                 End If
                             End If
@@ -836,34 +878,16 @@ Namespace TopStepTrader.Services.Backtest
                                                       Not Single.IsNaN(qlStAtr10(i)),
                                                       SafeD(qlStAtr10(i)), 0D)
                                     positionGroupCounter += 1
-                                    openLegs.Add(New BacktestTrade With {
-                                        .PositionGroupId = positionGroupCounter,
-                                        .EntryTime = bar.Timestamp,
-                                        .EntryPrice = bar.Close,
-                                        .Side = stSide,
-                                        .Quantity = config.Quantity,
-                                        .SignalConfidence = 1.0F
-                                    })
-                                    qlStIsLong = (stSide = "Buy")
-                                    ' SL = SuperTrend line; TP = 2× ATR reward
-                                    If qlStIsLong Then
-                                        qlStOpenSlPrice = SafeD(stLineNow)
-                                        qlStOpenTpPrice = If(stAtrVal > 0D,
-                                                             bar.Close + stAtrVal * 2D,
-                                                             bar.Close * 1.02D)
-                                    Else
-                                        qlStOpenSlPrice = SafeD(stLineNow)
-                                        qlStOpenTpPrice = If(stAtrVal > 0D,
-                                                             bar.Close - stAtrVal * 2D,
-                                                             bar.Close * 0.98D)
-                                    End If
-                                    ' Initialise dynamic exit levels from SuperTrend price levels
-                                    If dynEnabled Then
-                                        dynStopDelta = Math.Abs(bar.Close - qlStOpenSlPrice)
-                                        dynTpDelta   = Math.Abs(qlStOpenTpPrice - bar.Close)
-                                        dynStop = qlStOpenSlPrice
-                                        dynTp   = qlStOpenTpPrice
-                                    End If
+                                    pendingGroupId  = positionGroupCounter
+                                    pendingSide     = stSide
+                                    pendingConf     = 1.0F
+                                    pendingStIsLong = (stSide = "Buy")
+                                    ' SL = SuperTrend line (absolute indicator level)
+                                    ' TP = 2× ATR from signal close — fill block will use these as-is
+                                    pendingAbsStSl = SafeD(stLineNow)
+                                    pendingAbsStTp = If(pendingStIsLong,
+                                                        If(stAtrVal > 0D, bar.Close + stAtrVal * 2D, bar.Close * 1.02D),
+                                                        If(stAtrVal > 0D, bar.Close - stAtrVal * 2D, bar.Close * 0.98D))
                                 End If
                             End If
                             qlStPrevDir = stDirNow
@@ -896,38 +920,19 @@ Namespace TopStepTrader.Services.Backtest
                             End If
                             If donSide IsNot Nothing Then
                                 positionGroupCounter += 1
-                                openLegs.Add(New BacktestTrade With {
-                                    .PositionGroupId = positionGroupCounter,
-                                    .EntryTime = bar.Timestamp,
-                                    .EntryPrice = bar.Close,
-                                    .Side = donSide,
-                                    .Quantity = config.Quantity,
-                                    .SignalConfidence = 1.0F
-                                })
-                                qlDonIsLong = (donSide = "Buy")
-                                ' Initialise dynamic exit levels — dynStop is a trailing hard stop;
-                                ' dynTp set far away since Donchian uses indicator-based exits.
+                                pendingGroupId   = positionGroupCounter
+                                pendingSide      = donSide
+                                pendingConf      = 1.0F
+                                pendingDonIsLong = (donSide = "Buy")
+                                pendingDonMid    = SafeD(donMidVal)   ' mid-channel exit level
                                 If dynEnabled Then
                                     Dim atrDon As Single = If(universalAtr14 IsNot Nothing AndAlso i < universalAtr14.Length AndAlso
                                                                Not Single.IsNaN(universalAtr14(i)), universalAtr14(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrDon > 0.0F Then
-                                        dynStopDelta = SafeD(atrDon) * config.SlAtrMultiple
-                                        dynTpDelta   = SafeD(atrDon) * config.TpAtrMultiple
-                                    Else
-                                        Dim dppDon = config.PointValue * config.Quantity
-                                        If dppDon > 0D Then
-                                            dynStopDelta = Math.Round(config.InitialSlAmount / dppDon, 4)
-                                            dynTpDelta   = Math.Round(config.InitialTpAmount / dppDon, 4)
-                                        End If
-                                    End If
-                                    If dynStopDelta > 0D Then
-                                        Dim isDonBuy = (donSide = "Buy")
-                                        dynStop = If(isDonBuy, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
-                                        dynTp   = If(isDonBuy, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
+                                        pendingStopDelta = SafeD(atrDon) * config.SlAtrMultiple
+                                        pendingTpDelta   = SafeD(atrDon) * config.TpAtrMultiple
                                     End If
                                 End If
-                                ' Exit when close crosses the 10-bar mid-channel (adverse direction)
-                                qlDonOpenMidExit = SafeD(donMidVal)
                             End If
                         End If
                     End If
@@ -955,34 +960,17 @@ Namespace TopStepTrader.Services.Backtest
                             End If
                             If mrSide IsNot Nothing Then
                                 positionGroupCounter += 1
-                                openLegs.Add(New BacktestTrade With {
-                                    .PositionGroupId = positionGroupCounter,
-                                    .EntryTime = bar.Timestamp,
-                                    .EntryPrice = bar.Close,
-                                    .Side = mrSide,
-                                    .Quantity = config.Quantity,
-                                    .SignalConfidence = 1.0F
-                                })
-                                qlBbIsLong = (mrSide = "Buy")
-                                ' Exit when price returns to middle BB (SMA20)
-                                qlBbOpenMidExit = SafeD(bbMidVal)
+                                pendingGroupId  = positionGroupCounter
+                                pendingSide     = mrSide
+                                pendingConf     = 1.0F
+                                pendingBbIsLong = (mrSide = "Buy")
+                                pendingBbMid    = SafeD(bbMidVal)   ' BB middle exit level
                                 If dynEnabled Then
                                     Dim atrBb As Single = If(universalAtr14 IsNot Nothing AndAlso i < universalAtr14.Length AndAlso
                                                               Not Single.IsNaN(universalAtr14(i)), universalAtr14(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrBb > 0.0F Then
-                                        dynStopDelta = SafeD(atrBb) * config.SlAtrMultiple
-                                        dynTpDelta   = SafeD(atrBb) * config.TpAtrMultiple
-                                    Else
-                                        Dim dppBb = config.PointValue * config.Quantity
-                                        If dppBb > 0D Then
-                                            dynStopDelta = Math.Round(config.InitialSlAmount / dppBb, 4)
-                                            dynTpDelta   = Math.Round(config.InitialTpAmount / dppBb, 4)
-                                        End If
-                                    End If
-                                    If dynStopDelta > 0D Then
-                                        Dim isBbBuy = (mrSide = "Buy")
-                                        dynStop = If(isBbBuy, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
-                                        dynTp   = If(isBbBuy, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
+                                        pendingStopDelta = SafeD(atrBb) * config.SlAtrMultiple
+                                        pendingTpDelta   = SafeD(atrBb) * config.TpAtrMultiple
                                     End If
                                 End If
                             End If
@@ -1017,32 +1005,21 @@ Namespace TopStepTrader.Services.Backtest
                             End If
                             If dbbSide IsNot Nothing Then
                                 positionGroupCounter += 1
-                                openLegs.Add(New BacktestTrade With {
-                                    .PositionGroupId = positionGroupCounter,
-                                    .EntryTime = bar.Timestamp,
-                                    .EntryPrice = bar.Close,
-                                    .Side = dbbSide,
-                                    .Quantity = config.Quantity,
-                                    .SignalConfidence = 1.0F
-                                })
-                                dbbIsLong = (dbbSide = "Buy")
-                                ' Record inner 1-SD level for neutral-zone exit trigger
-                                dbbInner1SdExit = If(dbbIsLong, SafeD(dbbIU), SafeD(dbbIL))
-                                ' SL = outer 2.0 SD band at entry; TP = 2× ATR(20) from entry
+                                pendingGroupId   = positionGroupCounter
+                                pendingSide      = dbbSide
+                                pendingConf      = 1.0F
+                                Dim isDbbBuyPend = (dbbSide = "Buy")
+                                pendingDbbIsLong = isDbbBuyPend
+                                ' Inner 1-SD band level for neutral-zone exit (stored at signal time)
+                                pendingDbbInner = If(isDbbBuyPend, SafeD(dbbIU), SafeD(dbbIL))
+                                ' Compute SL/TP deltas; fill block anchors to nextBar.Open
                                 Dim dbbAtr = If(Not Single.IsNaN(dbbAtrVal), SafeD(dbbAtrVal), 0D)
-                                If dynEnabled Then
-                                    ' ATR mode: SL = outer band distance, TP = 2× ATR
-                                    Dim outerBandDist = If(dbbIsLong,
-                                        bar.Close - SafeD(dbbOL),   ' long SL = outer lower band
-                                        SafeD(dbbOU) - bar.Close)   ' short SL = outer upper band
-                                    dynStopDelta = If(outerBandDist > 0D, outerBandDist,
+                                Dim outerBandDist = If(isDbbBuyPend,
+                                    bar.Close - SafeD(dbbOL),
+                                    SafeD(dbbOU) - bar.Close)
+                                pendingStopDelta = If(outerBandDist > 0D, outerBandDist,
                                                      If(dbbAtr > 0D, dbbAtr * 2D, 0D))
-                                    dynTpDelta = If(dbbAtr > 0D, dbbAtr * 2D, dynStopDelta)
-                                    If dynStopDelta > 0D Then
-                                        dynStop = If(dbbIsLong, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
-                                        dynTp   = If(dbbIsLong, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
-                                    End If
-                                End If
+                                pendingTpDelta   = If(dbbAtr > 0D, dbbAtr * 2D, pendingStopDelta)
                             End If
                         End If
                     End If
@@ -1076,31 +1053,15 @@ Namespace TopStepTrader.Services.Backtest
                             If vcSide IsNot Nothing Then
                                 Dim vcConf2 = CSng(Math.Min(100.0, Math.Abs(deltaVol) * 100.0)) / 100.0F
                                 positionGroupCounter += 1
-                                openLegs.Add(New BacktestTrade With {
-                                    .PositionGroupId = positionGroupCounter,
-                                    .EntryTime = bar.Timestamp,
-                                    .EntryPrice = bar.Close,
-                                    .Side = vcSide,
-                                    .Quantity = config.Quantity,
-                                    .SignalConfidence = vcConf2
-                                })
+                                pendingGroupId = positionGroupCounter
+                                pendingSide    = vcSide
+                                pendingConf    = vcConf2
                                 If dynEnabled Then
                                     Dim atrVc As Single = If(vcAtr14 IsNot Nothing AndAlso i < vcAtr14.Length AndAlso
                                                               Not Single.IsNaN(vcAtr14(i)), vcAtr14(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrVc > 0.0F Then
-                                        dynStopDelta = SafeD(atrVc) * config.SlAtrMultiple
-                                        dynTpDelta   = SafeD(atrVc) * config.TpAtrMultiple
-                                    Else
-                                        Dim dppVc = config.PointValue * config.Quantity
-                                        If dppVc > 0D Then
-                                            dynStopDelta = Math.Round(config.InitialSlAmount / dppVc, 4)
-                                            dynTpDelta   = Math.Round(config.InitialTpAmount / dppVc, 4)
-                                        End If
-                                    End If
-                                    If dynStopDelta > 0D Then
-                                        Dim isVcBuy = (vcSide = "Buy")
-                                        dynStop = If(isVcBuy, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
-                                        dynTp   = If(isVcBuy, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
+                                        pendingStopDelta = SafeD(atrVc) * config.SlAtrMultiple
+                                        pendingTpDelta   = SafeD(atrVc) * config.TpAtrMultiple
                                     End If
                                 End If
                             End If
@@ -1188,31 +1149,15 @@ Namespace TopStepTrader.Services.Backtest
                             If ntFireable AndAlso ntConf >= config.MinSignalConfidence Then
                                 Dim ntSide = If(ntIsBull, "Buy", "Sell")
                                 positionGroupCounter += 1
-                                openLegs.Add(New BacktestTrade With {
-                                    .PositionGroupId = positionGroupCounter,
-                                    .EntryTime = bar.Timestamp,
-                                    .EntryPrice = bar.Close,
-                                    .Side = ntSide,
-                                    .Quantity = config.Quantity,
-                                    .SignalConfidence = ntConf
-                                })
+                                pendingGroupId = positionGroupCounter
+                                pendingSide    = ntSide
+                                pendingConf    = ntConf
                                 If dynEnabled Then
                                     Dim atrNt As Single = If(ntAtr14 IsNot Nothing AndAlso i < ntAtr14.Length AndAlso
                                                               Not Single.IsNaN(ntAtr14(i)), ntAtr14(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrNt > 0.0F Then
-                                        dynStopDelta = SafeD(atrNt) * config.SlAtrMultiple
-                                        dynTpDelta   = SafeD(atrNt) * config.TpAtrMultiple
-                                    Else
-                                        Dim dppNt = config.PointValue * config.Quantity
-                                        If dppNt > 0D Then
-                                            dynStopDelta = Math.Round(config.InitialSlAmount / dppNt, 4)
-                                            dynTpDelta   = Math.Round(config.InitialTpAmount / dppNt, 4)
-                                        End If
-                                    End If
-                                    If dynStopDelta > 0D Then
-                                        Dim isNtBuy = (ntSide = "Buy")
-                                        dynStop = If(isNtBuy, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
-                                        dynTp   = If(isNtBuy, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
+                                        pendingStopDelta = SafeD(atrNt) * config.SlAtrMultiple
+                                        pendingTpDelta   = SafeD(atrNt) * config.TpAtrMultiple
                                     End If
                                 End If
                             End If
@@ -1313,25 +1258,14 @@ Namespace TopStepTrader.Services.Backtest
                             Next ' isBull
                             If lultSide IsNot Nothing Then
                                 positionGroupCounter += 1
-                                Dim lultConf = 1.0F  ' all 6 steps confirmed
-                                openLegs.Add(New BacktestTrade With {
-                                    .PositionGroupId = positionGroupCounter,
-                                    .EntryTime = bar.Timestamp,
-                                    .EntryPrice = bar.Close,
-                                    .Side = lultSide,
-                                    .Quantity = config.Quantity,
-                                    .SignalConfidence = lultConf
-                                })
-                                ' SL at trigger extreme; TP = 2R
+                                pendingGroupId = positionGroupCounter
+                                pendingSide    = lultSide
+                                pendingConf    = 1.0F
+                                ' SL at trigger extreme distance; TP = 2R — anchored to fillPrice at fill
                                 Dim lultSlDist = Math.Abs(bar.Close - triggerExtreme)
-                                If lultSlDist = 0D Then lultSlDist = 1D  ' safety: avoid zero-distance
-                                Dim isLultBuy = (lultSide = "Buy")
-                                If dynEnabled OrElse True Then
-                                    dynStopDelta = lultSlDist
-                                    dynTpDelta   = lultSlDist * 2D
-                                    dynStop = If(isLultBuy, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
-                                    dynTp   = If(isLultBuy, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
-                                End If
+                                If lultSlDist = 0D Then lultSlDist = 1D
+                                pendingStopDelta = lultSlDist
+                                pendingTpDelta   = lultSlDist * 2D
                             End If
                         End If
                     End If
@@ -1398,31 +1332,15 @@ Namespace TopStepTrader.Services.Backtest
                             If bbSide IsNot Nothing Then
                                 Dim bbConf2 = If(sqzActive, 0.8F, 0.7F)
                                 positionGroupCounter += 1
-                                openLegs.Add(New BacktestTrade With {
-                                    .PositionGroupId = positionGroupCounter,
-                                    .EntryTime = bar.Timestamp,
-                                    .EntryPrice = bar.Close,
-                                    .Side = bbSide,
-                                    .Quantity = config.Quantity,
-                                    .SignalConfidence = bbConf2
-                                })
+                                pendingGroupId = positionGroupCounter
+                                pendingSide    = bbSide
+                                pendingConf    = bbConf2
                                 If dynEnabled Then
                                     Dim atrBbs As Single = If(bbsAtr10 IsNot Nothing AndAlso i < bbsAtr10.Length AndAlso
                                                                Not Single.IsNaN(bbsAtr10(i)), bbsAtr10(i), 0.0F)
                                     If config.UseAtrMode AndAlso atrBbs > 0.0F Then
-                                        dynStopDelta = SafeD(atrBbs) * config.SlAtrMultiple
-                                        dynTpDelta   = SafeD(atrBbs) * config.TpAtrMultiple
-                                    Else
-                                        Dim dppBbs = config.PointValue * config.Quantity
-                                        If dppBbs > 0D Then
-                                            dynStopDelta = Math.Round(config.InitialSlAmount / dppBbs, 4)
-                                            dynTpDelta   = Math.Round(config.InitialTpAmount / dppBbs, 4)
-                                        End If
-                                    End If
-                                    If dynStopDelta > 0D Then
-                                        Dim isBbsBuy = (bbSide = "Buy")
-                                        dynStop = If(isBbsBuy, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
-                                        dynTp   = If(isBbsBuy, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
+                                        pendingStopDelta = SafeD(atrBbs) * config.SlAtrMultiple
+                                        pendingTpDelta   = SafeD(atrBbs) * config.TpAtrMultiple
                                     End If
                                 End If
                             End If
@@ -1539,44 +1457,22 @@ Namespace TopStepTrader.Services.Backtest
                     If tradeableSide IsNot Nothing Then
                         If openLegs.Count = 0 Then
                             positionGroupCounter += 1
-                            openLegs.Add(New BacktestTrade With {
-                                .PositionGroupId = positionGroupCounter,
-                                .EntryTime = bar.Timestamp,
-                                .EntryPrice = bar.Close,
-                                .Side = tradeableSide,
-                                .Quantity = config.Quantity,
-                                .SignalConfidence = sigConf
-                            })
-                            ' Initialise dynamic exit levels — ATR mode or fixed dollar mode
+                            pendingGroupId = positionGroupCounter
+                            pendingSide    = tradeableSide
+                            pendingConf    = sigConf
                             If dynEnabled Then
                                 Dim atrEma As Single = If(universalAtr14 IsNot Nothing AndAlso i < universalAtr14.Length AndAlso
                                                            Not Single.IsNaN(universalAtr14(i)), universalAtr14(i), 0.0F)
                                 If config.UseAtrMode AndAlso atrEma > 0.0F Then
-                                    dynStopDelta = SafeD(atrEma) * config.SlAtrMultiple
-                                    dynTpDelta   = SafeD(atrEma) * config.TpAtrMultiple
-                                Else
-                                    Dim dpp = config.PointValue * config.Quantity
-                                    If dpp > 0D Then
-                                        dynStopDelta = Math.Round(config.InitialSlAmount / dpp, 4)
-                                        dynTpDelta   = Math.Round(config.InitialTpAmount / dpp, 4)
-                                    End If
-                                End If
-                                If dynStopDelta > 0D Then
-                                    Dim isBuyEntry = (tradeableSide = "Buy")
-                                    dynStop = If(isBuyEntry, bar.Close - dynStopDelta, bar.Close + dynStopDelta)
-                                    dynTp   = If(isBuyEntry, bar.Close + dynTpDelta,   bar.Close - dynTpDelta)
+                                    pendingStopDelta = SafeD(atrEma) * config.SlAtrMultiple
+                                    pendingTpDelta   = SafeD(atrEma) * config.TpAtrMultiple
                                 End If
                             End If
                         ElseIf openLegs.Count < config.MaxScaleIns AndAlso openLegs(0).Side = tradeableSide Then
                             ' Scale-in: same direction, up to MaxScaleIns additional legs
-                            openLegs.Add(New BacktestTrade With {
-                                .PositionGroupId = openLegs(0).PositionGroupId,
-                                .EntryTime = bar.Timestamp,
-                                .EntryPrice = bar.Close,
-                                .Side = tradeableSide,
-                                .Quantity = config.Quantity,
-                                .SignalConfidence = sigConf
-                            })
+                            pendingSide      = tradeableSide
+                            pendingConf      = sigConf
+                            pendingIsScaleIn = True
                         End If
                     End If
                 End If

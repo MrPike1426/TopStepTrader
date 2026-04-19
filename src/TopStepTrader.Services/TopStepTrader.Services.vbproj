@@ -3,9 +3,6 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace></RootNamespace>
-    <!-- CA1873: ILogger has no lazy-eval overload; all operational trading logs are always-enabled.
-         Adding IsEnabled guards around every call would add pure boilerplate with no practical benefit. -->
-    <NoWarn>$(NoWarn);CA1873</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

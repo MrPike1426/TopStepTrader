@@ -41,8 +41,6 @@ Namespace TopStepTrader.Services
             services.AddScoped(Of IBalanceHistoryService, BalanceHistoryService)()
 
             ' ── Market
-            ' Yahoo Finance — backtest / Quant Lab bar source
-            services.AddScoped(Of BarIngestionService)()
             ' TopStepX — live trading bar source for all live views
             services.AddScoped(Of IBarIngestionService, TopStepXBarIngestionService)()
             ' TICKET-006: bar download + caching for the Backtest page

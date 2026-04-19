@@ -155,28 +155,6 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _initialSlAmount As String = "20"
-        ''' <summary>Initial stop-loss in dollars (Turtle bracket first SL level). Default = 1.5% of $1000 capital.</summary>
-        Public Property InitialSlAmount As String
-            Get
-                Return _initialSlAmount
-            End Get
-            Set(value As String)
-                SetProperty(_initialSlAmount, value)
-            End Set
-        End Property
-
-        Private _initialTpAmount As String = "30"
-        ''' <summary>Initial take-profit in dollars (Turtle bracket first TP level).</summary>
-        Public Property InitialTpAmount As String
-            Get
-                Return _initialTpAmount
-            End Get
-            Set(value As String)
-                SetProperty(_initialTpAmount, value)
-            End Set
-        End Property
-
         Private _minConfidence As String = "90"
         Public Property MinConfidence As String
             Get
@@ -262,25 +240,6 @@ Namespace TopStepTrader.UI.ViewModels
 
         ' ── ATR-based SL/TP mode ──────────────────────────────────────────────────
 
-        Private _useAtrMode As Boolean = False
-        ''' <summary>When True, SL and TP are expressed as ATR multiples instead of fixed dollar amounts.</summary>
-        Public Property UseAtrMode As Boolean
-            Get
-                Return _useAtrMode
-            End Get
-            Set(value As Boolean)
-                SetProperty(_useAtrMode, value)
-                OnPropertyChanged(NameOf(UseFixedDollarMode))
-            End Set
-        End Property
-
-        ''' <summary>Inverse of UseAtrMode — shows fixed dollar fields when True.</summary>
-        Public ReadOnly Property UseFixedDollarMode As Boolean
-            Get
-                Return Not _useAtrMode
-            End Get
-        End Property
-
         Private _slAtrMultiple As String = "1.5"
         ''' <summary>SL as a multiple of ATR(14) at entry. Only used when UseAtrMode=True.</summary>
         Public Property SlAtrMultiple As String
@@ -305,6 +264,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         ' ── Persona selection ─────────────────────────────────────────────────
         Private _selectedPersona As String = "Damian"
+        Private _personaExplicitlyChosen As Boolean = False  ' True once user clicks a persona button
         Private _configMaxScaleIns As Integer = 2   ' mirrors active persona; default = Damian
 
         ''' <summary>True when Lewis (risk-averse) persona is active.</summary>
@@ -729,6 +689,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property SelectPersonaCommand As RelayCommand
         Public ReadOnly Property CopyAiAnalysisCommand As RelayCommand
         Public ReadOnly Property CopyPinnedAnalysisCommand As RelayCommand
+        Public ReadOnly Property PinResultCommand As RelayCommand
 
         ' ══════════════════════════════════════════════════════════════════════
         ' CONSTRUCTOR
@@ -801,6 +762,14 @@ Namespace TopStepTrader.UI.ViewModels
                     End If
                 End Sub,
                 Function() Not String.IsNullOrEmpty(_pinnedAiAnalysis))
+            PinResultCommand = New RelayCommand(
+                Sub(param)
+                    Dim row = TryCast(param, MaxEffortRowVm)
+                    If row IsNot Nothing AndAlso Not PinnedResults.Contains(row) Then
+                        PinnedResults.Add(row)
+                    End If
+                End Sub,
+                Function(param) param IsNot Nothing)
 
             AddHandler _backtestService.ProgressUpdated, AddressOf OnProgress
 
@@ -841,10 +810,12 @@ Namespace TopStepTrader.UI.ViewModels
         Private Sub ApplyStrategyDefaults(strategyName As String)
             Dim defaults = StrategyDefaults.TryGet(strategyName)
             If defaults IsNot Nothing Then
-                InitialCapital = defaults.Capital
+                ' Only apply the strategy's capital default when no persona has been explicitly
+                ' chosen — once the user picks Lewis/Damian/Joe the persona capital takes priority.
+                If Not _personaExplicitlyChosen Then
+                    InitialCapital = defaults.Capital
+                End If
                 Quantity = defaults.Qty
-                InitialTpAmount = defaults.InitialTpAmount
-                InitialSlAmount = defaults.InitialSlAmount
             End If
         End Sub
 
@@ -856,29 +827,13 @@ Namespace TopStepTrader.UI.ViewModels
         Private Sub ApplyPersona(personaName As String)
             Dim profile = _personaService.GetProfile(personaName)
             _selectedPersona = personaName.Split(" "c)(0)   ' "Lewis", "Damian", or "Joe"
+            _personaExplicitlyChosen = True
             _configMaxScaleIns = profile.MaxScaleIns
             InitialCapital  = profile.TradeAmount.ToString("F0")
             MinAdxThreshold = CInt(profile.AdxThreshold).ToString()
             MinConfidence   = profile.DefaultConfidencePct.ToString()
-            If UseAtrMode Then
-                SlAtrMultiple = profile.SlMultipleOfN.ToString("F2")
-                TpAtrMultiple = profile.TpMultipleOfN.ToString("F2")
-            End If
-            ' Set sensible fixed-dollar SL/TP per persona (2:1 R:R based on capital at risk).
-            ' Lewis ($200, conservative): $10 SL / $20 TP
-            ' Damian ($500, moderate):     $15 SL / $30 TP
-            ' Joe ($1000, aggressive):     $20 SL / $40 TP
-            Select Case _selectedPersona
-                Case "Lewis"
-                    InitialSlAmount = "10"
-                    InitialTpAmount = "20"
-                Case "Joe"
-                    InitialSlAmount = "20"
-                    InitialTpAmount = "40"
-                Case Else  ' Damian / default
-                    InitialSlAmount = "15"
-                    InitialTpAmount = "30"
-            End Select
+            SlAtrMultiple = profile.SlMultipleOfN.ToString("F2")
+            TpAtrMultiple = profile.TpMultipleOfN.ToString("F2")
             OnPropertyChanged(NameOf(IsLewisSelected))
             OnPropertyChanged(NameOf(IsDamianSelected))
             OnPropertyChanged(NameOf(IsJoeSelected))
@@ -1177,9 +1132,6 @@ Namespace TopStepTrader.UI.ViewModels
                 ProgressText = "Invalid initial capital" : Return
             End If
 
-            Dim slAmount, tpAmount As Decimal
-            Decimal.TryParse(_initialSlAmount, slAmount)
-            Decimal.TryParse(_initialTpAmount, tpAmount)
             Dim qty As Integer
             Integer.TryParse(_quantity, qty)
 
@@ -1213,8 +1165,6 @@ Namespace TopStepTrader.UI.ViewModels
             ' Capture mutable locals for the async closure
             Dim capContractId = contractId
             Dim capCapital = capital
-            Dim capSl = If(slAmount > 0, slAmount, 10D)
-            Dim capTp = If(tpAmount > 0, tpAmount, 20D)
             Dim capConf = If(conf > 0, conf, 0.65F)
             Dim capQty = If(qty > 0, qty, 1)
             Dim capMinAdx = Math.Max(0.0F, minAdx)
@@ -1222,7 +1172,6 @@ Namespace TopStepTrader.UI.ViewModels
             Dim capTrailingStop = TrailingStopEnabled
             Dim capBreakEven    = BreakEvenEnabled
             Dim capExtendTp     = ExtendTpEnabled
-            Dim capUseAtrMode   = UseAtrMode
             Dim capSlAtrMult    = If(slAtrMult > 0, slAtrMult, 1.5D)
             Dim capTpAtrMult    = If(tpAtrMult > 0, tpAtrMult, 3.0D)
             Dim capForceClose   = ForceCloseEnabled
@@ -1272,7 +1221,7 @@ Namespace TopStepTrader.UI.ViewModels
 
                              Try
                                  ' Clamp start date to Yahoo Finance's per-timeframe lookback limit
-                                 Dim maxDays = GetYahooMaxDays(tf)
+                                 Dim maxDays = GetMaxLookbackDays(tf)
                                  Dim earliestAllowed = DateTime.Today.AddDays(-maxDays)
                                  Dim effectiveStart = If(capStart < earliestAllowed, earliestAllowed, capStart)
 
@@ -1297,8 +1246,6 @@ Namespace TopStepTrader.UI.ViewModels
                                      .StartDate = effectiveStart,
                                      .EndDate = capEnd,
                                      .InitialCapital = capCapital,
-                                     .InitialSlAmount = capSl,
-                                     .InitialTpAmount = capTp,
                                      .MinSignalConfidence = capConf,
                                      .Quantity = capQty,
                                      .TickSize = capTick,
@@ -1309,13 +1256,14 @@ Namespace TopStepTrader.UI.ViewModels
                                      .TrailingStopEnabled = capTrailingStop,
                                      .BreakEvenOnHalfTpEnabled = capBreakEven,
                                      .ExtendTpEnabled = capExtendTp,
-                                     .UseAtrMode = capUseAtrMode,
-                                      .SlAtrMultiple = capSlAtrMult,
-                                      .TpAtrMultiple = capTpAtrMult,
-                                      .ForceCloseEnabled = capForceClose,
-                                      .ForceCloseAmount = capForceAmt,
-                                      .SlippageTicks = 1
-                                  }
+                                     .UseAtrMode = True,
+                                     .SlAtrMultiple = capSlAtrMult,
+                                     .TpAtrMultiple = capTpAtrMult,
+                                     .ForceCloseEnabled = capForceClose,
+                                     .ForceCloseAmount = capForceAmt,
+                                     .SlippageTicks = 1,
+                                     .CommissionPerSideUsd = GetCommissionPerSide(capContractId)
+                                 }
 
                                  Dim result = Await _backtestService.RunBacktestAsync(config, cts.Token)
                                  Dispatch(Sub() TimeframeResults.Add(New TimeframeResultRowVm(label, result)))
@@ -1373,22 +1321,11 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         ''' <summary>
-        ''' Returns the maximum historical lookback in days that Yahoo Finance supports
-        ''' for the underlying source interval of each timeframe.
-        '''   1-min source  →   7 days  (Yahoo hard limit for 1m data)
-        '''   5-min source  →  60 days  (covers 5m, 10m, 15m, 30m)
-        '''   60-min source → 730 days  (covers 1hr, 2hr, 4hr)
+        ''' Returns the maximum historical lookback in days for bar downloads from TopStepX.
+        ''' ProjectX supports up to 60 days of intraday history across all timeframes.
         ''' </summary>
-        Private Shared Function GetYahooMaxDays(tf As BarTimeframe) As Integer
-            Select Case tf
-                Case BarTimeframe.OneMinute
-                    Return 7
-                Case BarTimeframe.FiveMinute, BarTimeframe.TenMinute,
-                     BarTimeframe.FifteenMinute, BarTimeframe.ThirtyMinute
-                    Return 60
-                Case Else  ' OneHour, TwoHour, FourHour, Daily
-                    Return 730
-            End Select
+        Private Shared Function GetMaxLookbackDays(tf As BarTimeframe) As Integer
+            Return 60
         End Function
 
         ''' <summary>
@@ -1441,6 +1378,16 @@ Namespace TopStepTrader.UI.ViewModels
                 If pv > 0D Then Return pv
             End If
             Return 1.0D   ' fallback
+        End Function
+
+        ''' <summary>
+        ''' Returns the commission per side (in USD) for the given contract on TopStepX.
+        ''' Falls back to $4.50 — the standard CME Globex micro futures rate — when not found.
+        ''' </summary>
+        Private Function GetCommissionPerSide(contractId As String) As Decimal
+            Dim fc = FavouriteContracts.TryGetBySymbol(contractId)
+            If fc IsNot Nothing Then Return fc.PxCommissionPerSide
+            Return 4.5D
         End Function
 
         Private Sub ExecuteCancel(param As Object)
@@ -1564,7 +1511,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
-        Private _maxEffortProgressText As String = "Click Maximum Effort! to run all 720 combinations (3 personas × 5 instruments × 6 strategies × 8 timeframes)."
+        Private _maxEffortProgressText As String = "Click Maximum Effort! to run all 840 combinations (3 personas × 5 instruments × 7 strategies × 8 timeframes)."
         Public Property MaxEffortProgressText As String
             Get
                 Return _maxEffortProgressText
@@ -1673,7 +1620,7 @@ Namespace TopStepTrader.UI.ViewModels
                                 End Sub)
 
                                 Try
-                                    Dim maxDays = GetYahooMaxDays(tfEnum)
+                                    Dim maxDays = GetMaxLookbackDays(tfEnum)
                                     Dim earliestAllowed = DateTime.Today.AddDays(-maxDays)
                                     Dim effectiveStart = If(capStart < earliestAllowed, earliestAllowed, capStart)
 
@@ -1707,7 +1654,8 @@ Namespace TopStepTrader.UI.ViewModels
                                         .TpAtrMultiple = persona.TpMultipleOfN,
                                         .ForceCloseEnabled = _forceCloseEnabled,
                                         .ForceCloseAmount = If(Decimal.TryParse(_forceCloseAmount, Nothing), CDec(_forceCloseAmount), 50D),
-                                        .SlippageTicks = 1
+                                        .SlippageTicks = 1,
+                                        .CommissionPerSideUsd = contract.PxCommissionPerSide
                                     }
 
                                     Dim result = Await _backtestService.RunBacktestAsync(config, cts.Token)
@@ -1749,9 +1697,9 @@ Namespace TopStepTrader.UI.ViewModels
                     End Sub)
 
                     Dim sb As New System.Text.StringBuilder()
-                    sb.AppendLine($"Backtest results — {rawResults.Count} combinations across {contracts.Count} instruments, 6 strategies, 8 timeframes, 3 personas (Lewis/Damian/Joe).")
-                    sb.AppendLine($"Date range: up to 180 days (capped per Yahoo Finance limits).")
-                    sb.AppendLine($"ATR-based stops: Lewis SL=1.5×/TP=3.0×N  Damian SL=1.0×/TP=2.0×N  Joe SL=1.5×/TP=2.0×N  (N = ATR14 × point value).")
+                    sb.AppendLine($"Backtest results — {rawResults.Count} combinations across {contracts.Count} instruments, 7 strategies, 8 timeframes, 3 personas (Lewis/Damian/Joe).")
+                    sb.AppendLine($"Date range: 60 days (TopStepX API limit). Commission $4.50/side modelled.")
+                    sb.AppendLine($"ATR-based stops: Lewis SL=1.5×/TP=3.0×N  Damian SL=1.0×/TP=2.0×N  Joe SL=0.75×/TP=2.0×N  (N = ATR14 × point value).")
                     sb.AppendLine()
                     sb.AppendLine("TOP 20 BY TOTAL P&L:")
                     sb.AppendLine("Rank | Persona | Contract | Strategy | Timeframe | Trades | Win% | P&L | Sharpe | Avg P&L")
@@ -1883,6 +1831,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property Trades As String
         Public ReadOnly Property WinRate As String
         Public ReadOnly Property TotalPnL As String
+        Public ReadOnly Property TotalPnLRaw As Decimal
         Public ReadOnly Property TotalPnLColor As String
         Public ReadOnly Property Sharpe As String
         Public ReadOnly Property AvgPnLPerTrade As String
@@ -1894,6 +1843,7 @@ Namespace TopStepTrader.UI.ViewModels
             Timeframe = label
             Trades = result.TotalTrades.ToString()
             WinRate = result.WinRate.ToString("P1")
+            TotalPnLRaw = result.TotalPnL
             TotalPnL = result.TotalPnL.ToString("C0")
             TotalPnLColor = If(result.TotalPnL >= 0, "BuyBrush", "SellBrush")
             Sharpe = If(result.SharpeRatio.HasValue, result.SharpeRatio.Value.ToString("F2"), "—")
@@ -1907,6 +1857,7 @@ Namespace TopStepTrader.UI.ViewModels
             Timeframe = label
             Trades = "—"
             WinRate = "—"
+            TotalPnLRaw = 0
             TotalPnL = errorMessage
             TotalPnLColor = "TextSecondaryBrush"
             Sharpe = "—"

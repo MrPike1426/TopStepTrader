@@ -124,11 +124,16 @@ Two `IHostedService` workers run continuously:
 | Persona default values (appsettings) | `Core/Settings/PersonasSettings.vb` · `appsettings.json "Personas"` section |
 | Persona SQLite persistence | `Data/Entities/PersonaSettingsEntity.vb` · `Data/AppDbContext.vb` (DbSet + EnsureSchemaCurrent) |
 | Strategy defaults | `Core/Trading/StrategyDefaults.vb` |
+| Strategy condition/indicator enums | `Core/Enums/StrategyConditionType.vb` · `Core/Enums/StrategyIndicatorType.vb` |
+| Technical indicator math | `ML/Features/TechnicalIndicators.vb` |
 | Test tick/stop logic | `Tests/Trading/TopStepXTickTests.vb` — comprehensive test helpers (`FakeCatalogLocalOnly`, `FakeCatalogWithMinStop`) |
 | Bar timeframe enum | `Core/Enums/BarTimeframe.vb` |
 | Bar download + cache | `Services/Market/BarCollectionService.vb` |
 | Backtest engine | `Services/Backtest/BacktestEngine.vb` |
+| QuantLab research page | `UI/ViewModels/QuantLabViewModel.vb` · `UI/Views/QuantLabView.xaml` |
+| Sniper live engine | `UI/ViewModels/SniperViewModel.vb` · `UI/Views/SniperView.xaml` · `Services/Trading/SniperExecutionEngine.vb` |
 | Claude AI integration | `Services/AI/ClaudeReviewService.vb` |
+| API key management | `UI/Views/ApiKeysView.xaml` · `UI/Views/ApiKeysView.xaml.vb` |
 
 ## Persona System
 
@@ -223,8 +228,45 @@ Values are the DB discriminator (integer minutes):
 
 ### Strategy Defaults (`Core/Trading/StrategyDefaults.vb`)
 Only combined multi-indicator strategies are registered (design rule: single-indicator strategies excluded).
-Default parameters: **Capital = $1,000 · Qty = 1 · TP = $20 (2%) · SL = $15 (1.5%)** — 2:1.5 reward-to-risk ratio.
+Default parameters: **Capital = $1,000 · Qty = 1** — TP and SL vary by strategy:
+
+| Strategy | TP | SL |
+|---|---|---|
+| EMA/RSI Combined | $20 | $15 |
+| Multi-Confluence Engine | $20 | $15 |
+| BB Squeeze Scalper | $8 | $4 |
+| LULT Divergence | $20 | $10 |
+| VIDYA Cross | $20 | $10 |
+| Naked Trader | $20 | $10 |
+| Double Bubble Butt | $20 | $10 |
+
 `MinConfidence` is stored in the ViewModel as a whole-number percentage (e.g. `"90"`) and divided by 100 before being passed to the engine.
+
+### Strategy Condition / Indicator Enums
+`Core/Enums/StrategyConditionType.vb` and `Core/Enums/StrategyIndicatorType.vb` enumerate all supported strategies. The integer values are used as DB discriminators and must not change once data is stored.
+
+**Trading strategies (Hydra / AssetBassett / Backtest):**
+
+| Value | ConditionType | Description |
+|---|---|---|
+| 6 | `EmaRsiWeightedScore` | Six-signal EMA/RSI weighted score (buy >60%, sell <40%) |
+| 7 | `TripleEmaCascade` | 3-EMA Cascade on 1-min bars — Sniper strategy |
+| 8 | `MultiConfluence` | Ichimoku + EMA21/50 + MACD + StochRSI + DMI/ADX (all 7 must align) |
+| 9 | `LultDivergence` | WaveTrend Anchor/Trigger divergence — 6-step gate, NQ 5-min, 11:00–17:00 UTC |
+| 10 | `BbSqueezeScalper` | Dual-mode BB scalper — Squeeze Breakout or Band Bounce |
+| 15 | `VidyaCross` | VIDYA CMO-adaptive EMA crossover + delta-volume filter |
+| 16 | `NakedTrader` | 4-vote consensus: EMA(9/21), MACD(8,17,9), DMI/ADX(14), VWAP |
+| 17 | `DoubleBubbleButt` | Double Bollinger Bands (±1.0 SD inner / ±2.0 SD outer) zone system |
+
+**QuantLab research-only strategies (not live-traded):**
+
+| Value | ConditionType | Description |
+|---|---|---|
+| 11 | `ConnorsRsi2` | RSI(2) mean reversion filtered by SMA(200); 67–72% win rate |
+| 12 | `SuperTrend` | ATR(10)×3.0 trend flip; 40–52% win rate |
+| 13 | `DonchianBreakout` | 20-bar Turtle breakout; 30–40% win rate |
+| 14 | `BbRsiMeanReversion` | BB(20,2) + RSI(14) dual-confirmation reversion; 55–65% win rate |
+| 17 | `DoubleBubbleButt` | Also available in QuantLab |
 
 ### ATR-Based SL/TP Mode (`BacktestConfiguration.UseAtrMode`)
 When `UseAtrMode = True`, stop loss and take profit are expressed as ATR multiples rather than fixed dollar amounts. At each entry the engine pre-calculates `ATR(14)` across all bars and sets:
@@ -246,13 +288,15 @@ Both views expose three ATR bracket tier buttons — **Tight**, **Standard**, **
 
 Persona controls capital, leverage, ADX gate, and confidence. Tier controls bracket elasticity (how many ATR units the stops span).
 
-### BacktestView — Three Tabs
+### BacktestView — Four Tabs
 
-**Tab 1 — Run Backtest**: Persona selector (Lewis / Damian / Joe) at the top of the config form pre-fills Capital, Min ADX, Min Confidence, and ATR multiples (when ATR mode is on). Runs the selected strategy across **8 timeframes** (1min, 5min, 10min, 15min, 30min, 1hr, 2hr, 4hr) simultaneously. Each timeframe's effective date range is clamped to Yahoo's limit. Results appear in a live-filling grid sorted by timeframe. Default date range: today − 180 days (clamped per timeframe).
+**Tab 1 — Run Backtest**: Persona selector (Lewis / Damian / Joe) at the top of the config form pre-fills Capital, Min ADX, Min Confidence, and ATR multiples (when ATR mode is on). Runs the selected strategy across **8 timeframes** (1min, 5min, 10min, 15min, 30min, 1hr, 2hr, 4hr) simultaneously. Each timeframe's effective date range is clamped to Yahoo's limit. Results appear in a live-filling, **sortable** grid (column headers are clickable; `TotalPnLRaw As Decimal` on `TimeframeResultRowVm` drives numeric sort on the P&L column). Default date range: today − 180 days (clamped per timeframe).
 
-**Tab 2 — Previous Runs**: DataGrid of saved `BacktestRunEntity` records from SQLite.
+**Tab 2 — Maximum Effort!** (Deadpool button): Runs every combination of **3 personas × 5 instruments × 7 strategies × 8 timeframes = 840 backtest runs**. Each run uses its persona's capital, ADX threshold, confidence, and ATR SL/TP multiples — sourced from `IPersonaService.GetAllProfiles()` so any saved overrides from the Persona config page are automatically reflected. Results populate a sortable DataGrid in real time (with a Persona column), sorted by P&L descending as each run completes. The tab uses a **side-by-side layout**: results grid on the left (`*` width), Claude Haiku analysis panel on the right (380px fixed) — always visible without scrolling. Each result row has a **📌 pin button** (`PinResultCommand` on the ViewModel, bound via `RelativeSource` to the DataGrid's DataContext) that appends the row to `PinnedResults`. On completion, the top 20 results are sent to **Claude Haiku** (`claude-haiku-4-5-20251001`) for a concise analysis covering top persona/instrument/strategy combinations, overfitting warnings, and a live-trade recommendation. Requires Claude API key configured on the API Keys page.
 
-**Tab 3 — Maximum Effort!** (Deadpool button): Runs every combination of **3 personas × 12 instruments × 6 strategies × 8 timeframes = 1,728 backtest runs**. Each run uses its persona's capital, ADX threshold, confidence, and ATR SL/TP multiples — sourced from `IPersonaService.GetAllProfiles()` so any saved overrides from the Persona config page are automatically reflected. Results populate a sortable DataGrid in real time (with a Persona column), sorted by P&L descending as each run completes. On completion, the top 20 results are sent to **Claude Haiku** (`claude-haiku-4-5-20251001`) for a concise analysis covering top persona/instrument/strategy combinations, overfitting warnings, and a live-trade recommendation. Requires Claude API key configured on the API Keys page.
+**Tab 3 — Pinned**: Shows `PinnedResults` — an `ObservableCollection(Of MaxEffortRowVm)` seeded in the constructor with the 2025-07 Gold/Multi-Confluence/1hr baseline, and extended at runtime whenever the user pins a row from Maximum Effort. The tab caption explains the 📌 workflow.
+
+**Tab 4 — Previous Runs**: DataGrid of saved `BacktestRunEntity` records from SQLite.
 
 **TopStepX P&L**: Both single-run (`ExecuteRun`) and Maximum Effort (`ExecuteMaximumEffort`) resolve tick size and point value via `contract.GetTickSize(_session.ActiveBroker)` / `contract.GetPointValue(_session.ActiveBroker)`. This correctly returns MGC=$10/pt, MES=$5/pt, MNQ=$2/pt, MCL=$100/pt, M6E=$12,500/pt. `BacktestViewModel` receives `ITradingSessionContext` as a constructor parameter for this purpose.
 
@@ -290,10 +334,81 @@ Both buttons are only visible when `HasOpenPosition` is `True` (derived from `_p
 
 **Note:** `ApplySl` signature is `(slPrice As Decimal, tpPrice As Decimal, isAdvance As Boolean, isFreeRide As Boolean)`. Do not call the old 3-parameter version.
 
+### QuantLab View (`UI/ViewModels/QuantLabViewModel.vb`)
+
+A dedicated research page for testing academically-validated strategies that are **not** used in live Hydra/AssetBassett trading. Accessed via sidebar.
+
+**Five strategy cards:**
+1. **Connors RSI-2** — Mean reversion · RSI(2) dips vs SMA(200) trend · 67–72% win rate · Sharpe 1.0–1.5
+2. **SuperTrend** — Trend-following · ATR(10)×3.0 direction flip · 40–52% win rate · Sharpe 0.70–1.05
+3. **Donchian Breakout** — Turtle breakout · 20-bar high/low channel · 30–40% win rate · Sharpe 0.4–0.8
+4. **BB + RSI Reversion** — Dual-confirm reversion · BB(20,2) AND RSI(14) · 55–65% win rate · Sharpe 0.6–1.2
+5. **Double Bubble Butt** — Zone momentum · ±1.0 SD inner / ±2.0 SD outer BB · 45–60% win rate · Sharpe 0.6–1.1
+
+**Workflow:** Select card → choose contract + date range + interval → Run Backtest → view results (win rate, Sharpe, P&L, drawdown) → optionally "Ask Claude" for AI analysis.
+
+- `MinSignalConfidence = 1.0` — QuantLab strategies use price-level exits, not confidence scoring
+- `InitialSlAmount = 0 / InitialTpAmount = 0` — exits are indicator-driven (SuperTrend line, Donchian mid, RSI 50)
+- CSV export available for the full trade list
+- "Ask Claude" calls `ClaudeReviewService.AnalyseBacktestResultsAsync` with strategy description and result summary
+- `QuantLabViewModel` accepts `IBacktestService`, `IBarCollectionService`, `ClaudeReviewService`
+
+### Sniper View (`UI/ViewModels/SniperViewModel.vb`)
+
+Live trading interface for the **3-EMA Cascade** strategy (`TripleEmaCascade = 7`) on 1-minute bars.
+
+- EMA8/EMA21/EMA50 — Long when EMA8 crosses above EMA21 AND price is above rising EMA50; Short on reverse
+- Supports **pyramiding scale-in** up to 10 contracts
+- Has both a **Live tab** (wires `ISniperExecutionEngine`) and a **Backtest tab** (uses `IBacktestService` with `TripleEmaCascade`)
+- Live P&L tracked per-session; win/loss counts maintained in `_winCount` / `_lossCount`
+- `SniperViewModel` accepts: `IAccountService`, `IBacktestService`, `IBarCollectionService`, `ClaudeReviewService`, `ISniperExecutionEngine`, `ITradingSessionContext`
+
+### Technical Indicators (`ML/Features/TechnicalIndicators.vb`)
+
+Pure-math module — no external dependencies, fully unit-testable. All methods take `IList(Of Decimal)` price series and return `Single()` arrays (NaN-padded during warm-up).
+
+| Function | Description |
+|---|---|
+| `EMA(prices, period)` | Exponential Moving Average (k = 2/(period+1)) |
+| `SMA(prices, period)` | Simple Moving Average |
+| `RSI(closes, period)` | Wilder-smoothed RSI |
+| `MACD(closes, fast, slow, signal)` | Returns (Line, Signal, Histogram) |
+| `ATR(highs, lows, closes, period)` | Wilder-smoothed ATR |
+| `VWAP(highs, lows, closes, volumes)` | Cumulative VWAP |
+| `BollingerBands(closes, period, sd)` | Returns (Upper, Middle, Lower) |
+| `BollingerBandWidth(closes, period, sd)` | (Upper−Lower)/Middle×100 |
+| `BollingerPercentB(closes, period, sd)` | 0=lower band, 1=upper band |
+| `DMI(highs, lows, closes, period)` | Returns (+DI, −DI, ADX) — Wilder smoothing |
+| `IchimokuCloud(highs, lows, closes, ...)` | Returns (Tenkan, Kijun, SpanA, SpanB) — projected 26 bars forward |
+| `StochasticRSI(closes, rsi, stoch, signal)` | Returns (%K, %D) normalised 0–1 |
+| `WaveTrend(highs, lows, closes, ...)` | Market Cipher B simulation — (WT1, WT2) |
+| `SuperTrend(highs, lows, closes, period, mult)` | ATR-based trend line; returns (Line, Direction) |
+| `DonchianChannel(highs, lows, period)` | Rolling high/low channel; returns (Upper, Lower, Middle) |
+| `CMO(closes, period)` | Chande Momentum Oscillator normalised to [−1, +1] |
+| `VIDYA(closes, vidyaLen, cmoLen)` | CMO-adaptive EMA — fast in trends, slow in chop |
+| `DeltaVolume(closes, opens, volumes, window)` | Net buy/sell pressure normalised to [−1, +1] |
+| `Rsi2(closes)` | Convenience wrapper for RSI(closes, 2) |
+| `LastValid(series)` | Last non-NaN value in array |
+| `PreviousValid(series)` | Second-to-last non-NaN value |
+
+### API Keys View (`UI/Views/ApiKeysView.xaml`)
+
+Three named credential slots (stored locally via `ApiKeyStore`, never synced):
+
+| Provider | Fields |
+|---|---|
+| **TopStepX** | Account Email + API Key |
+| **Claude (Anthropic)** | Organisation/Workspace ID (optional) + API Key |
+| **Binance** | API Key + Secret Key |
+
+Plus **4 Future Slots** (editable label + username + API key) reserved for future integrations.
+
+Toggle **Show/Hide** button masks all password boxes simultaneously. "💾 Save Keys" persists all fields.
+
 ### Claude AI Integration (`Services/AI/ClaudeReviewService.vb`)
 Three methods, all using the API key from `ApiKeyStore` (falls back to `appsettings.json`):
 - `ReviewStrategyAsync` — strategy improvement suggestions (used by HydraView)
 - `ConfidenceCheckAsync` — macro/session bias for a contract
-- `AnalyseBacktestResultsAsync` — quantitative analysis of a backtest results table (used by Maximum Effort tab). Always uses `claude-haiku-4-5-20251001` regardless of the model setting, for cost efficiency.
+- `AnalyseBacktestResultsAsync` — quantitative analysis of a backtest results table (used by Maximum Effort tab and QuantLab "Ask Claude"). Always uses `claude-haiku-4-5-20251001` regardless of the model setting, for cost efficiency.
 
-`ClaudeSettings.Model` defaults to `claude-haiku-4-5`. Registered as **Scoped** in `ServicesExtensions.vb`. Injected into `BacktestViewModel` via constructor.
+`ClaudeSettings.Model` defaults to `claude-haiku-4-5`. Registered as **Scoped** in `ServicesExtensions.vb`. Injected into `BacktestViewModel` and `QuantLabViewModel` via constructor.

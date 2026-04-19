@@ -207,6 +207,13 @@ Namespace TopStepTrader.Core.Trading
         End Function
 
         ''' <summary>
+        ''' Exchange + clearing + platform commission per side per contract on TopStepX.
+        ''' Used by the backtest engine to model round-trip friction (entry + exit = 2×).
+        ''' Default $4.50 — standard CME Globex micro futures rate on TopStepX.
+        ''' </summary>
+        Public Property PxCommissionPerSide As Decimal = 4.5D
+
+        ''' <summary>
         ''' True when this is a leveraged eToro CFD (MaxLeverage ≥ 5).
         ''' Not applicable for TopStepX futures (inherently margined by exchange).
         ''' </summary>

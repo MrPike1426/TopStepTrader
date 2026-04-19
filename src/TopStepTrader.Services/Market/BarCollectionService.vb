@@ -1,6 +1,6 @@
 Imports System.Threading
 Imports Microsoft.Extensions.Logging
-Imports TopStepTrader.API.Http
+Imports TopStepTrader.API.Http.ProjectX
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
@@ -13,32 +13,38 @@ Namespace TopStepTrader.Services.Market
     ''' Implements <see cref="IBarCollectionService"/>.
     '''
     ''' Ensures bars of the requested timeframe exist in the local SQLite database for a given
-    ''' contract and date range, downloading missing bars from Yahoo Finance if required.
-    ''' Yahoo Finance is used regardless of the active broker — it provides free, accurate
-    ''' historical data (5-min: up to 60 days; 60-min: up to 730 days; daily: unlimited).
+    ''' contract and date range, downloading missing bars from the TopStepX ProjectX API.
+    ''' Bars are fetched in 5,000-bar pages covering up to 60 calendar days.
+    '''
+    ''' Symbol resolution:
+    '''   contractId may be an eToro ID ("GOLD.24-7"), a PX root ("MGC"), or a full PX ID
+    '''   ("CON.F.US.MGC.Q26").  The service resolves to PxContractId for the API call, but
+    '''   stores bars under the original contractId so the storage key is stable across contract rolls.
     '''
     ''' Algorithm:
     '''   1. Count bars already in SQLite for (contractId, timeframe, startDate–endDate).
-    '''   2. If ≥ 50 and they span ≥ 80% of the requested range → return success (cache hit).
-    '''   3. If insufficient → fetch from Yahoo Finance in one request and store to SQLite.
+    '''   2. If ≥ 50, span ≥ 80%, and fresh (latest bar &lt; 24 h old) → return success (cache hit).
+    '''   3. Resolve PX contract ID → paginate API (5 000 bars/page) → INSERT OR IGNORE into SQLite.
     '''   4. Count final total and return success/failure result.
     '''
-    ''' Deduplication: handled by BarRepository.BulkInsertAsync (INSERT OR IGNORE).
+    ''' Non-native timeframes: TenMinute downloads 5-min source bars then aggregates 2:1.
+    ''' TwoHour / FourHour download 1-hr source bars and aggregate accordingly.
     ''' </summary>
     Public Class BarCollectionService
         Implements IBarCollectionService
 
         ' BacktestEngine requires at least 50 bars; reject below this threshold
         Private Const MinBarsForBacktest As Integer = 50
+        Private Const PageSize As Integer = 5000
 
-        Private ReadOnly _yahooClient As YahooFinanceHistoryClient
+        Private ReadOnly _pxHistoryClient As PXHistoryClient
         Private ReadOnly _barRepository As BarRepository
         Private ReadOnly _logger As ILogger(Of BarCollectionService)
 
-        Public Sub New(yahooClient As YahooFinanceHistoryClient,
+        Public Sub New(pxHistoryClient As PXHistoryClient,
                        barRepository As BarRepository,
                        logger As ILogger(Of BarCollectionService))
-            _yahooClient = yahooClient
+            _pxHistoryClient = pxHistoryClient
             _barRepository = barRepository
             _logger = logger
         End Sub
@@ -56,12 +62,6 @@ Namespace TopStepTrader.Services.Market
             If String.IsNullOrWhiteSpace(contractId) Then
                 Return Fail(contractId, "Contract ID is required", progress)
             End If
-
-            ' Resolve API unit code for Yahoo Finance interval mapping
-            Dim apiUnit As Integer
-            Dim apiUnitNumber As Integer
-            Dim barMinutes As Integer  ' unused by Yahoo path but kept for helper signature
-            TimeframeToApiParams(timeframe, apiUnit, apiUnitNumber, barMinutes)
 
             Dim tfLabel = TimeframeLabel(timeframe)
 
@@ -84,17 +84,7 @@ Namespace TopStepTrader.Services.Market
             End Try
 
             If existing.Count >= MinBarsForBacktest Then
-                ' UAT-BUG-007: A simple count ≥ 50 cache hit is too permissive.
-                ' Live-trading bar downloads only fetch recent bars (e.g. 1 day).
-                ' If those bars happen to fall inside the requested range they satisfy
-                ' the ≥ 50 count but the backtest then only sees 1 day of data.
-                '
-                ' Fix: also validate that the cached bars span the majority of the
-                ' requested date range.  For short ranges (≤ 7 calendar days) the simple
-                ' count check is sufficient; for longer ranges the bars must cover at
-                ' least 80 % of the requested span, measured from earliest-to-latest bar.
                 Dim rangeSpan = (toDt - fromDt).TotalDays
-
                 Dim spanOk As Boolean
                 If rangeSpan <= 7D Then
                     spanOk = True
@@ -106,9 +96,6 @@ Namespace TopStepTrader.Services.Market
                 End If
 
                 If spanOk Then
-                    ' Staleness check: if the most recent bar is older than 24 hours, force a
-                    ' re-download so that weekly runs keep accumulating fresh bars in the DB.
-                    ' INSERT OR IGNORE deduplication means re-fetching overlapping bars is safe.
                     Dim latestBar = existing.Max(Function(b) b.Timestamp)
                     Dim isStale = latestBar < DateTimeOffset.UtcNow.AddHours(-24)
 
@@ -127,175 +114,193 @@ Namespace TopStepTrader.Services.Market
                     End If
 
                     _logger.LogInformation(
-                        "EnsureBarsAsync: {Count} {Tf} bars in DB for {Contract} — span OK but stale (latest={Latest:u}), re-downloading",
+                        "EnsureBarsAsync: {Count} {Tf} bars in DB for {Contract} — stale (latest={Latest:u}), re-downloading",
                         existing.Count, tfLabel, contractId, latestBar)
                     progress?.Report($"⏳ {tfLabel} bars exist but are stale — refreshing {contractId}...")
                 End If
-
-                _logger.LogInformation(
-                    "EnsureBarsAsync: {Count} {Tf} bars in DB for {Contract} but they don't cover " &
-                    "the requested range — downloading missing history",
-                    existing.Count, tfLabel, contractId)
             End If
 
-            ' ── Step 2: Download from Yahoo Finance (single request for full date range) ──
+            ' ── Step 2: Resolve PX contract ID ────────────────────────────────────────
+            ' The contractId stored in SQLite is the stable eToro key (e.g. "GOLD.24-7").
+            ' The API call requires the quarterly PX contract ID (e.g. "CON.F.US.MGC.Q26").
+            Dim pxContractId As String = contractId
+            Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+            If fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId) Then
+                pxContractId = fav.PxContractId
+            End If
+
+            ' Determine source timeframe for non-native intervals
+            Dim sourceTimeframe As BarTimeframe
+            Dim sourceUnit As Integer
+            Dim sourceUnitNumber As Integer
+            Select Case timeframe
+                Case BarTimeframe.TenMinute
+                    sourceTimeframe = BarTimeframe.FiveMinute
+                    sourceUnit = 2 : sourceUnitNumber = 5
+                Case BarTimeframe.TwoHour
+                    sourceTimeframe = BarTimeframe.OneHour
+                    sourceUnit = 3 : sourceUnitNumber = 1
+                Case BarTimeframe.FourHour
+                    sourceTimeframe = BarTimeframe.OneHour
+                    sourceUnit = 3 : sourceUnitNumber = 1
+                Case Else
+                    sourceTimeframe = timeframe
+                    TimeframeToApiParams(timeframe, sourceUnit, sourceUnitNumber)
+            End Select
+
+            ' ── Step 3: Download from TopStepX in paginated 5 000-bar batches ──────────
             _logger.LogInformation(
-                "EnsureBarsAsync: {Count} {Tf} bars in DB for {Contract} (need ≥ {Min}). " &
-                "Downloading from Yahoo Finance (unit={U})...",
-                existing.Count, tfLabel, contractId, MinBarsForBacktest, apiUnit)
+                "EnsureBarsAsync: downloading {Tf} bars for {Contract} (PX={PxId}) from TopStepX...",
+                tfLabel, contractId, pxContractId)
 
-            progress?.Report($"⏳ Downloading {tfLabel} bars for {contractId} from Yahoo Finance...")
+            progress?.Report($"⏳ Downloading {tfLabel} bars for {contractId} from TopStepX...")
 
-            Dim totalFetched As Integer = 0
-            Dim totalInserted As Integer = 0
+            Dim allRawBars As New List(Of MarketBar)()
+            Dim pageStart = fromDt
+            Dim pagesDone As Integer = 0
 
-            ' Translate contractId to Yahoo Finance ticker (e.g. "GOLD.24-7" → "GC=F").
-            ' FavouriteContracts.YahooSymbol holds the correct ticker for each instrument.
-            ' Falls back to contractId unchanged so direct Yahoo symbols (e.g. "GC=F") work too.
-            Dim yahooTicker = contractId
-            Dim favForYahoo = FavouriteContracts.TryGetBySymbol(contractId)
-            If favForYahoo IsNot Nothing AndAlso Not String.IsNullOrEmpty(favForYahoo.YahooSymbol) Then
-                yahooTicker = favForYahoo.YahooSymbol
-            End If
-
-            Dim yahooResponse As API.Models.Responses.BarResponse = Nothing
-            Try
-                yahooResponse = Await _yahooClient.RetrieveBarsAsync(
-                    yahooTicker,
-                    unit:=apiUnit,
-                    startTime:=fromDt,
-                    endTime:=toDt,
-                    cancel:=cancel)
-            Catch ex As OperationCanceledException
-                Throw
-            Catch ex As Exception
-                _logger.LogWarning(ex,
-                    "EnsureBarsAsync: Yahoo Finance error for {Contract} — aborting download",
-                    contractId)
-            End Try
-
-            If yahooResponse IsNot Nothing AndAlso yahooResponse.Success AndAlso
-               yahooResponse.Bars IsNot Nothing AndAlso yahooResponse.Bars.Count > 0 Then
-
-                ' ── Map BarDto → MarketBar ────────────────────────────────────────────
-                ' Non-native timeframes (TenMinute, TwoHour, FourHour) download their nearest
-                ' native Yahoo interval (5-min or 1-hr) then aggregate here into the correct
-                ' candle width before inserting.  Using source timeframe during construction
-                ' so AggregateBars can detect candle boundaries by source width.
-                Dim sourceTimeframe As BarTimeframe
-                Select Case timeframe
-                    Case BarTimeframe.TenMinute  : sourceTimeframe = BarTimeframe.FiveMinute
-                    Case BarTimeframe.TwoHour    : sourceTimeframe = BarTimeframe.OneHour
-                    Case BarTimeframe.FourHour   : sourceTimeframe = BarTimeframe.OneHour
-                    Case Else                    : sourceTimeframe = timeframe
-                End Select
-
-                Dim rawBars = yahooResponse.Bars _
-                    .Where(Function(b) IsValidOhlc(b.Open) AndAlso IsValidOhlc(b.High) AndAlso
-                                       IsValidOhlc(b.Low) AndAlso IsValidOhlc(b.Close)) _
-                    .Select(Function(b) New MarketBar With {
-                        .ContractId = contractId,
-                        .Timeframe = sourceTimeframe,
-                        .Timestamp = DateTimeOffset.Parse(
-                                          b.Timestamp, Nothing,
-                                          System.Globalization.DateTimeStyles.RoundtripKind),
-                        .Open = CDec(b.Open),
-                        .High = CDec(b.High),
-                        .Low = CDec(b.Low),
-                        .Close = CDec(b.Close),
-                        .Volume = b.Volume,
-                        .VWAP = (CDec(b.Open) + CDec(b.Close)) / 2D
-                    }) _
-                    .OrderBy(Function(b) b.Timestamp) _
-                    .ToList()
-
-                ' Aggregate non-native timeframes into their correct candle width.
-                Dim bars As List(Of MarketBar)
-                If sourceTimeframe <> timeframe Then
-                    bars = AggregateBars(rawBars, timeframe)
-                Else
-                    ' Native timeframe — update the Timeframe field (was set to sourceTimeframe above)
-                    For Each b In rawBars
-                        b.Timeframe = timeframe
-                    Next
-                    bars = rawBars
-                End If
-
-                totalFetched = bars.Count
-
-                ' ── Persist to SQLite (INSERT OR IGNORE for deduplication) ────────────
+            Do
+                Dim pxResponse As API.Models.Responses.BarResponse = Nothing
                 Try
-                    totalInserted = Await _barRepository.BulkInsertAsync(bars, timeframe, cancel)
+                    pxResponse = Await _pxHistoryClient.RetrieveBarsAsync(
+                        pxContractId,
+                        unit:=sourceUnit,
+                        unitNumber:=sourceUnitNumber,
+                        limit:=PageSize,
+                        live:=False,
+                        startTime:=pageStart,
+                        endTime:=toDt,
+                        cancel:=cancel)
                 Catch ex As OperationCanceledException
                     Throw
                 Catch ex As Exception
-                    _logger.LogError(ex,
-                        "EnsureBarsAsync: BulkInsertAsync failed for {Contract}",
-                        contractId)
+                    _logger.LogWarning(ex,
+                        "EnsureBarsAsync: TopStepX error for {Contract} page {Page} — stopping",
+                        contractId, pagesDone + 1)
+                    Exit Do
+                End Try
+
+                If pxResponse Is Nothing OrElse Not pxResponse.Success OrElse
+                   pxResponse.Bars Is Nothing OrElse pxResponse.Bars.Count = 0 Then
+                    Dim errDetail = If(pxResponse?.ErrorMessage, "no data returned")
+                    _logger.LogWarning(
+                        "EnsureBarsAsync: TopStepX returned no bars for {Contract} page {Page}: {Error}",
+                        contractId, pagesDone + 1, errDetail)
+                    If pagesDone = 0 Then
+                        progress?.Report($"⚠ TopStepX: {errDetail}")
+                    End If
+                    Exit Do
+                End If
+
+                Dim pageBars As New List(Of MarketBar)(pxResponse.Bars.Count)
+                For Each b In pxResponse.Bars
+                    Try
+                        Dim ts As DateTimeOffset
+                        If Not DateTimeOffset.TryParse(b.Timestamp, Nothing,
+                                                       Globalization.DateTimeStyles.RoundtripKind, ts) Then
+                            Continue For
+                        End If
+                        If Not (b.Open > 0 AndAlso b.High > 0 AndAlso b.Low > 0 AndAlso b.Close > 0) Then
+                            Continue For
+                        End If
+                        pageBars.Add(New MarketBar With {
+                            .ContractId = contractId,   ' store under stable eToro key
+                            .Timeframe = sourceTimeframe,
+                            .Timestamp = ts,
+                            .Open = CDec(b.Open),
+                            .High = CDec(b.High),
+                            .Low = CDec(b.Low),
+                            .Close = CDec(b.Close),
+                            .Volume = b.Volume,
+                            .VWAP = (CDec(b.Open) + CDec(b.Close)) / 2D
+                        })
+                    Catch
+                        ' Skip malformed bar
+                    End Try
+                Next
+
+                allRawBars.AddRange(pageBars)
+                pagesDone += 1
+
+                progress?.Report(
+                    $"⏳ {contractId} ({tfLabel}): {allRawBars.Count:N0} bars downloaded so far...")
+
+                ' Stop paging if this is the last page (fewer bars than limit)
+                If pxResponse.Bars.Count < PageSize Then Exit Do
+
+                ' Advance window: start from 1 tick past the newest bar in this page
+                Dim newestInPage = pageBars.Max(Function(b) b.Timestamp)
+                pageStart = newestInPage.AddMinutes(1)
+
+                ' Safety: stop if we've passed the requested end
+                If pageStart >= toDt Then Exit Do
+
+                ' Safety: cap total pages at 30 to avoid runaway loops
+                If pagesDone >= 30 Then Exit Do
+            Loop
+
+            ' Aggregate non-native timeframes into their correct candle width
+            Dim finalBars As List(Of MarketBar)
+            If sourceTimeframe <> timeframe Then
+                finalBars = AggregateBars(allRawBars, timeframe)
+            Else
+                For Each b In allRawBars
+                    b.Timeframe = timeframe
+                Next
+                finalBars = allRawBars
+            End If
+
+            Dim totalInserted As Integer = 0
+            If finalBars.Count > 0 Then
+                Try
+                    totalInserted = Await _barRepository.BulkInsertAsync(finalBars, timeframe, cancel)
+                Catch ex As OperationCanceledException
+                    Throw
+                Catch ex As Exception
+                    _logger.LogError(ex, "EnsureBarsAsync: BulkInsertAsync failed for {Contract}", contractId)
                 End Try
 
                 progress?.Report(
-                    $"⏳ {contractId} ({tfLabel}): {totalFetched:N0} bars fetched from Yahoo Finance, {totalInserted:N0} stored...")
-
+                    $"⏳ {contractId} ({tfLabel}): {finalBars.Count:N0} bars downloaded, {totalInserted:N0} stored...")
                 _logger.LogInformation(
-                    "EnsureBarsAsync: {Fetched} bars from Yahoo Finance for {Contract}, {Inserted} inserted",
-                    totalFetched, contractId, totalInserted)
-            Else
-                ' Surface the Yahoo error directly so the user can see what went wrong
-                Dim errDetail = If(yahooResponse?.ErrorMessage, "no data returned")
-                _logger.LogWarning(
-                    "EnsureBarsAsync: Yahoo Finance returned no bars for {Contract}: {Error}",
-                    contractId, errDetail)
-                progress?.Report($"⚠ Yahoo Finance: {errDetail}")
+                    "EnsureBarsAsync: {Fetched} bars from TopStepX for {Contract}, {Inserted} inserted",
+                    finalBars.Count, contractId, totalInserted)
             End If
 
-            ' ── Step 3: Final count of bars in SQLite for the requested range ──────────
-            ' For intraday Yahoo data the bars span the last 60d regardless of the user's
-            ' StartDate. Widen the DB query to the full available range (all stored bars for
-            ' this contract + timeframe) so a cache-hit is possible even when StartDate is
-            ' older than 60 days.
-            Dim queryFrom = DateTimeOffset.UtcNow.AddDays(-800)   ' covers 730d 60-min window
-            Dim queryTo   = DateTimeOffset.UtcNow.AddDays(1)
-
-            Dim finalBars As New List(Of MarketBar)()
+            ' ── Step 4: Final count of bars in SQLite for the requested range ──────────
+            Dim countBars As New List(Of MarketBar)()
             Try
-                finalBars = Await _barRepository.GetBarsAsync(
-                    contractId, timeframe, queryFrom, queryTo, cancel)
+                countBars = Await _barRepository.GetBarsAsync(contractId, timeframe, fromDt, toDt, cancel)
             Catch ex As OperationCanceledException
                 Throw
             Catch
-                ' Use count 0 — result below will set the right message
+                ' Use count 0 — message below will reflect failure
             End Try
 
-            Dim success = finalBars.Count >= MinBarsForBacktest
-
-            Dim yahooErrDetail = If(yahooResponse IsNot Nothing AndAlso Not yahooResponse.Success,
-                                    yahooResponse.ErrorMessage, Nothing)
+            Dim success = countBars.Count >= MinBarsForBacktest
 
             Dim finalMessage As String
             If success Then
-                Dim earliest = finalBars.Min(Function(b) b.Timestamp)
-                Dim latest   = finalBars.Max(Function(b) b.Timestamp)
-                finalMessage = $"✓ {finalBars.Count:N0} {tfLabel} bars available for {contractId} " &
-                               $"({earliest:MM/dd/yyyy} – {latest:MM/dd/yyyy})  [Yahoo Finance]"
-            ElseIf finalBars.Count > 0 Then
-                finalMessage = $"⚠ Only {finalBars.Count:N0} {tfLabel} bars available for {contractId} — " &
-                               "Yahoo Finance may have returned partial data."
-            ElseIf Not String.IsNullOrEmpty(yahooErrDetail) Then
-                finalMessage = $"✗ Yahoo Finance error for {contractId}: {yahooErrDetail}"
+                Dim earliest = countBars.Min(Function(b) b.Timestamp)
+                Dim latest   = countBars.Max(Function(b) b.Timestamp)
+                finalMessage = $"✓ {countBars.Count:N0} {tfLabel} bars available for {contractId} " &
+                               $"({earliest:MM/dd/yyyy} – {latest:MM/dd/yyyy})  [TopStepX]"
+            ElseIf countBars.Count > 0 Then
+                finalMessage = $"⚠ Only {countBars.Count:N0} {tfLabel} bars available for {contractId} — " &
+                               "TopStepX may have returned partial data."
             Else
-                finalMessage = $"✗ No {tfLabel} bars returned for {contractId} from Yahoo Finance. " &
-                               "Check that the symbol is supported (SPX500, NSDQ100, GOLD.24-7, OIL, UK100, BTC, ETH)."
+                finalMessage = $"✗ No {tfLabel} bars returned for {contractId} from TopStepX. " &
+                               "Ensure the contract is active and the API key is valid."
             End If
 
             progress?.Report(finalMessage)
             _logger.LogInformation(
-                "EnsureBarsAsync: complete — {Count} {Tf} bars for {Contract} in range, success={Ok}",
-                finalBars.Count, tfLabel, contractId, success)
+                "EnsureBarsAsync: complete — {Count} {Tf} bars for {Contract}, success={Ok}",
+                countBars.Count, tfLabel, contractId, success)
 
             Return New BarEnsureResult With {
                 .Success = success,
-                .BarCount = finalBars.Count,
+                .BarCount = countBars.Count,
                 .ContractId = contractId,
                 .Message = finalMessage
             }
@@ -304,67 +309,38 @@ Namespace TopStepTrader.Services.Market
         ' ── Helpers ───────────────────────────────────────────────────────────────────
 
         ''' <summary>
-        ''' Maps a BarTimeframe to the ProjectX API unit codes and the bar width in minutes.
-        ''' Mirrors BarIngestionService.TimeframeToApiParams so both services use identical mappings.
-        '''   API codes: unit=1 → 1-min, unit=2 → 5-min, unit=3 → 15-min,
-        '''              unit=4 → 30-min, unit=5 → 1-hour, unit=6 → daily.
+        ''' Maps a BarTimeframe to the ProjectX API unit (AggregateBarUnit type) and unitNumber.
+        '''   unit=2 Minute: 1m=1, 5m=5, 15m=15, 30m=30
+        '''   unit=3 Hour:   1h=1
+        '''   unit=4 Day:    daily=1
         ''' </summary>
         Private Shared Sub TimeframeToApiParams(tf As BarTimeframe,
                                                 ByRef unit As Integer,
-                                                ByRef unitNumber As Integer,
-                                                ByRef barMinutes As Integer)
+                                                ByRef unitNumber As Integer)
             Select Case tf
-                Case BarTimeframe.OneMinute
-                    unit = 1 : unitNumber = 1 : barMinutes = 1
-                Case BarTimeframe.ThreeMinute
-                    ' Yahoo has no 3-min interval; use 1-min as closest source
-                    unit = 1 : unitNumber = 1 : barMinutes = 3
-                Case BarTimeframe.FiveMinute
-                    unit = 2 : unitNumber = 2 : barMinutes = 5
-                Case BarTimeframe.TenMinute
-                    ' Yahoo has no 10-min interval; use 5-min as closest source
-                    unit = 2 : unitNumber = 2 : barMinutes = 10
-                Case BarTimeframe.FifteenMinute
-                    unit = 3 : unitNumber = 3 : barMinutes = 15
-                Case BarTimeframe.ThirtyMinute
-                    unit = 4 : unitNumber = 4 : barMinutes = 30
-                Case BarTimeframe.OneHour
-                    unit = 5 : unitNumber = 5 : barMinutes = 60
-                Case BarTimeframe.TwoHour
-                    ' Yahoo has no 2-hr interval; use 1-hr as closest source
-                    unit = 5 : unitNumber = 5 : barMinutes = 120
-                Case BarTimeframe.FourHour
-                    ' Yahoo has no 4-hr interval; use 1-hr as closest source
-                    unit = 5 : unitNumber = 5 : barMinutes = 240
-                Case Else
-                    unit = 2 : unitNumber = 2 : barMinutes = 5
+                Case BarTimeframe.OneMinute    : unit = 2 : unitNumber = 1
+                Case BarTimeframe.ThreeMinute  : unit = 2 : unitNumber = 3
+                Case BarTimeframe.FiveMinute   : unit = 2 : unitNumber = 5
+                Case BarTimeframe.FifteenMinute: unit = 2 : unitNumber = 15
+                Case BarTimeframe.ThirtyMinute : unit = 2 : unitNumber = 30
+                Case BarTimeframe.OneHour      : unit = 3 : unitNumber = 1
+                Case BarTimeframe.Daily        : unit = 4 : unitNumber = 1
+                Case Else                      : unit = 2 : unitNumber = 5
             End Select
         End Sub
 
         ''' <summary>
         ''' Aggregates a sorted list of source bars into wider candles for non-native timeframes.
-        '''
         ''' Groups source bars by aligned UTC time windows of the target width so candle
-        ''' boundaries always fall on even multiples of the target interval (e.g. 2-hr candles
-        ''' open at 00:00, 02:00, 04:00 … UTC).  Only complete groups are emitted — trailing
-        ''' partial candles at the end of the series are discarded.
-        '''
-        ''' OHLCV aggregation:
-        '''   Open  = first bar in window
-        '''   High  = Max(High) across all bars in window
-        '''   Low   = Min(Low)  across all bars in window
-        '''   Close = last bar in window
-        '''   Volume = Sum
-        '''   VWAP   = arithmetic mean of constituent bar VWAPs (approximation)
-        '''
-        ''' Used for: TenMinute (2 × 5-min), TwoHour (2 × 1-hr), FourHour (4 × 1-hr).
+        ''' boundaries always fall on even multiples of the target interval.
+        ''' OHLCV: Open=first, High=Max, Low=Min, Close=last, Volume=Sum, VWAP=mean.
+        ''' Used for: TenMinute (2×5-min), TwoHour (2×1-hr), FourHour (4×1-hr).
         ''' </summary>
         Private Shared Function AggregateBars(sourceBars As List(Of MarketBar),
                                               targetTimeframe As BarTimeframe) As List(Of MarketBar)
-            Dim targetMinutes As Long = CLng(targetTimeframe)   ' enum value IS the minute count
+            Dim targetMinutes As Long = CLng(targetTimeframe)
             Dim windowSeconds As Long = targetMinutes * 60L
 
-            ' Group by aligned UTC window: floor(epochSeconds / windowSeconds)
             Dim grouped = sourceBars _
                 .GroupBy(Function(b) b.Timestamp.ToUnixTimeSeconds() \ windowSeconds) _
                 .OrderBy(Function(g) g.Key) _
@@ -392,16 +368,16 @@ Namespace TopStepTrader.Services.Market
         ''' <summary>Short display label for a timeframe, e.g. "5-min", "1-hour".</summary>
         Private Shared Function TimeframeLabel(tf As BarTimeframe) As String
             Select Case tf
-                Case BarTimeframe.OneMinute : Return "1-min"
-                Case BarTimeframe.ThreeMinute : Return "3-min"
-                Case BarTimeframe.FiveMinute : Return "5-min"
-                Case BarTimeframe.TenMinute : Return "10-min"
-                Case BarTimeframe.FifteenMinute : Return "15-min"
+                Case BarTimeframe.OneMinute    : Return "1-min"
+                Case BarTimeframe.ThreeMinute  : Return "3-min"
+                Case BarTimeframe.FiveMinute   : Return "5-min"
+                Case BarTimeframe.TenMinute    : Return "10-min"
+                Case BarTimeframe.FifteenMinute: Return "15-min"
                 Case BarTimeframe.ThirtyMinute : Return "30-min"
-                Case BarTimeframe.OneHour : Return "1-hour"
-                Case BarTimeframe.TwoHour : Return "2-hour"
-                Case BarTimeframe.FourHour : Return "4-hour"
-                Case Else : Return tf.ToString()
+                Case BarTimeframe.OneHour      : Return "1-hour"
+                Case BarTimeframe.TwoHour      : Return "2-hour"
+                Case BarTimeframe.FourHour     : Return "4-hour"
+                Case Else                      : Return tf.ToString()
             End Select
         End Function
 
@@ -415,15 +391,6 @@ Namespace TopStepTrader.Services.Market
                 .ContractId = contractId,
                 .Message = message
             }
-        End Function
-
-        ''' <summary>
-        ''' Returns True when a Yahoo Finance OHLC double value is safe to convert to Decimal.
-        ''' Yahoo Finance occasionally returns NaN or zero for bars during closed-market periods;
-        ''' CDec(Double.NaN) and CDec(Double.PositiveInfinity) both throw OverflowException.
-        ''' </summary>
-        Private Shared Function IsValidOhlc(v As Double) As Boolean
-            Return Not Double.IsNaN(v) AndAlso Not Double.IsInfinity(v) AndAlso v > 0
         End Function
 
     End Class

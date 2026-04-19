@@ -20,18 +20,6 @@ Namespace TopStepTrader.Core.Interfaces
         Public Property InitialCapital As Decimal = 50000D
         Public Property MinSignalConfidence As Single = 0.65F
 
-        ''' <summary>
-        ''' Initial hard stop in dollars (e.g. 10 = $10 max loss on entry).
-        ''' Turtle bracket uses this as the first SL level; SL only advances thereafter.
-        ''' </summary>
-        Public Property InitialSlAmount As Decimal = 10D
-
-        ''' <summary>
-        ''' Initial take-profit target in dollars (e.g. 20 = $20 gain triggers first bracket advance).
-        ''' Subsequent bracket steps advance by 0.5 × N (ATR in dollar terms).
-        ''' </summary>
-        Public Property InitialTpAmount As Decimal = 20D
-
         ' ── Per-contract execution parameters ──────────────────────────────────
         ''' <summary>Number of contracts per trade entry.</summary>
         Public Property Quantity As Integer = 1
@@ -76,7 +64,7 @@ Namespace TopStepTrader.Core.Interfaces
         ''' via PointValue × Quantity as normal.
         ''' When False (default), InitialSlAmount / InitialTpAmount are used.
         ''' </summary>
-        Public Property UseAtrMode As Boolean = False
+        Public Property UseAtrMode As Boolean = True
 
         ''' <summary>
         ''' Stop-loss distance as a multiple of ATR(14) at entry.
@@ -143,6 +131,30 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Public Property SlippageTicks As Integer = 0
 
+        ''' <summary>
+        ''' Exchange + clearing + platform commission per side per contract, in USD.
+        ''' Deducted as a round-trip cost (2×) per closed trade leg in CalculatePnL.
+        ''' TopStepX micro futures standard rate: $4.50/side = $9.00 round trip.
+        ''' Default 0 preserves existing behaviour for callers that do not set it.
+        ''' </summary>
+        Public Property CommissionPerSideUsd As Decimal = 0D
+
+        ' ── Dollar-based fixed SL/TP bracket ─────────────────────────────────────
+
+        ''' <summary>
+        ''' Dollar amount for the initial stop-loss bracket.
+        ''' Used by the config-based CheckExit / GetExitPrice overloads when
+        ''' <see cref="UseAtrMode"/> is False.  0 = no stop (open-ended).
+        ''' </summary>
+        Public Property InitialSlAmount As Decimal = 0D
+
+        ''' <summary>
+        ''' Dollar amount for the initial take-profit bracket.
+        ''' Used by the config-based CheckExit / GetExitPrice overloads when
+        ''' <see cref="UseAtrMode"/> is False.  0 = no target (open-ended).
+        ''' </summary>
+        Public Property InitialTpAmount As Decimal = 0D
+
         ' ── Scale-in cap ─────────────────────────────────────────────────────────
 
         ''' <summary>
@@ -152,15 +164,6 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Public Property MaxScaleIns As Integer = 2
 
-        ' ── EmaRsiWeightedScore / eToro by-amount fields ────────────────────────
-        ''' <summary>USD cash per initial entry (EmaRsiWeightedScore). Default $200.</summary>
-        Public Property EntryAmount As Decimal = 200D
-        ''' <summary>Leverage for the initial entry (EmaRsiWeightedScore). Default 5.</summary>
-        Public Property EntryLeverage As Integer = 5
-        ''' <summary>USD cash per scale-in trade (EmaRsiWeightedScore). Default $200.</summary>
-        Public Property ScaleInAmount As Decimal = 200D
-        ''' <summary>Leverage for scale-in trades. Default 5.</summary>
-        Public Property ScaleInLeverage As Integer = 5
     End Class
 
 End Namespace

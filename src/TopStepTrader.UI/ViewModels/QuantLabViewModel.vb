@@ -514,8 +514,6 @@ Namespace TopStepTrader.UI.ViewModels
                     .InitialCapital = capital,
                     .Quantity = qty,
                     .MinSignalConfidence = 1.0F,   ' QuantLab strategies don't use confidence scoring
-                    .InitialSlAmount = 0D,         ' strategies use price-level or indicator exits
-                    .InitialTpAmount = 0D,
                     .StrategyCondition = _selectedCard.ConditionType,
                     .MinAdxThreshold = 0.0F
                 }
