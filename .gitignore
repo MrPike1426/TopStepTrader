@@ -88,3 +88,7 @@ scaffold.ps1
 scaffold2.ps1
 build.ps1
 build2.ps1
+
+# Build logs
+build_full.log
+msbuild.binlog
