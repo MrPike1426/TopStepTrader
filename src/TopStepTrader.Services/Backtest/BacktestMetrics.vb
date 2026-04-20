@@ -27,6 +27,11 @@ Namespace TopStepTrader.Services.Backtest
         ''' </summary>
         Friend Function CalculatePnL(trade As BacktestTrade,
                                       config As BacktestConfiguration) As Decimal
+            If config.TickSize <= 0D Then
+                Throw New InvalidOperationException(
+                    $"BacktestConfiguration.TickSize must be > 0 (got {config.TickSize}). " &
+                    $"Check FavouriteContracts for contract '{config.ContractId}'.")
+            End If
             If Not trade.ExitPrice.HasValue Then Return 0D
             Dim priceDiff = trade.ExitPrice.Value - trade.EntryPrice
             Dim isBuy = trade.Side = "Buy"

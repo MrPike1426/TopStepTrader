@@ -160,9 +160,20 @@ Namespace TopStepTrader.Core.Interfaces
         ''' <summary>
         ''' Maximum additional entries after the initial leg.
         ''' Mirrors <see cref="StrategyDefinition.MaxScaleIns"/>: Lewis=1, Damian=2, Joe=3.
-        ''' Default 2 (Damian baseline).
+        ''' Default 2 (Damian baseline). Must be ≥ 0.
         ''' </summary>
-        Public Property MaxScaleIns As Integer = 2
+        Public Property MaxScaleIns As Integer
+            Get
+                Return _maxScaleIns
+            End Get
+            Set(value As Integer)
+                If value < 0 Then
+                    Throw New ArgumentOutOfRangeException(NameOf(MaxScaleIns), "MaxScaleIns must be ≥ 0.")
+                End If
+                _maxScaleIns = value
+            End Set
+        End Property
+        Private _maxScaleIns As Integer = 2
 
     End Class
 

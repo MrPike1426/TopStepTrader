@@ -439,6 +439,73 @@ Namespace TopStepTrader.Tests.Backtest
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════
+        ' BUG-04: TickSize > 0 guard in CalculatePnL
+        ' ══════════════════════════════════════════════════════════════════
+
+        <Fact>
+        Public Sub CalculatePnL_TickSizeZero_ThrowsInvalidOperationException()
+            ' A misconfigured TickSize=0 must produce a clear error, not DivideByZeroException.
+            Dim trade = MakeTrade("Buy", entryPrice:=5000D, exitPrice:=5010D, qty:=1)
+            Dim config = MakeConfig()
+            config.TickSize = 0D   ' simulate misconfigured instrument
+
+            Dim ex = Assert.Throws(Of InvalidOperationException)(
+                Sub() BacktestMetrics.CalculatePnL(trade, config))
+            Assert.Contains("TickSize must be > 0", ex.Message)
+        End Sub
+
+        <Fact>
+        Public Sub CalculatePnL_TickSizeNegative_ThrowsInvalidOperationException()
+            Dim trade = MakeTrade("Buy", entryPrice:=5000D, exitPrice:=5010D, qty:=1)
+            Dim config = MakeConfig()
+            config.TickSize = -0.25D
+
+            Dim ex = Assert.Throws(Of InvalidOperationException)(
+                Sub() BacktestMetrics.CalculatePnL(trade, config))
+            Assert.Contains("TickSize must be > 0", ex.Message)
+        End Sub
+
+        <Fact>
+        Public Sub CalculatePnL_TickSizePositive_DoesNotThrow()
+            ' A valid TickSize should work normally — no exception
+            Dim trade = MakeTrade("Buy", entryPrice:=5000D, exitPrice:=5010D, qty:=1)
+            Dim config = MakeConfig()
+            config.TickSize = 0.25D   ' MES default
+
+            Dim result = BacktestMetrics.CalculatePnL(trade, config)
+
+            Assert.Equal(50D, result)  ' (5010-5000) × 1 × $5/pt = $50
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
+        ' BUG-04: MaxScaleIns ≥ 0 guard in BacktestConfiguration
+        ' ══════════════════════════════════════════════════════════════════
+
+        <Fact>
+        Public Sub BacktestConfiguration_MaxScaleInsNegative_ThrowsArgumentOutOfRange()
+            Dim config As New BacktestConfiguration()
+
+            Dim ex = Assert.Throws(Of ArgumentOutOfRangeException)(
+                Sub() config.MaxScaleIns = -1)
+            Assert.Equal("MaxScaleIns", ex.ParamName)
+        End Sub
+
+        <Fact>
+        Public Sub BacktestConfiguration_MaxScaleInsZero_IsValid()
+            ' Zero scale-ins is a valid configuration (no pyramid entries allowed)
+            Dim config As New BacktestConfiguration()
+            config.MaxScaleIns = 0
+            Assert.Equal(0, config.MaxScaleIns)
+        End Sub
+
+        <Fact>
+        Public Sub BacktestConfiguration_MaxScaleInsPositive_IsValid()
+            Dim config As New BacktestConfiguration()
+            config.MaxScaleIns = 3   ' Joe persona
+            Assert.Equal(3, config.MaxScaleIns)
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
         ' Test helpers
         ' ══════════════════════════════════════════════════════════════════
 

@@ -252,7 +252,7 @@
     <TabControl x:Name="MainTabControl" Background="{StaticResource BackgroundBrush}">
 
         <!-- ══ Tab 1: Run Backtest ══════════════════════════════════════════ -->
-        <TabItem Header="🔬  Run Backtest">
+        <TabItem Header="🔬  Run Backtest" DataContext="{Binding RunVm}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <Grid Margin="24,20">
                     <Grid.RowDefinitions>
@@ -893,7 +893,7 @@
         </TabItem>
 
         <!-- ══ Tab 3: Maximum Effort ════════════════════════════════════════ -->
-        <TabItem Header="💀  Maximum Effort!">
+        <TabItem Header="💀  Maximum Effort!" DataContext="{Binding MaxEffortVm}">
             <Grid Margin="24,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>   <!-- Row 0: Button row -->
@@ -1152,7 +1152,7 @@
         </TabItem>
 
         <!-- ══ Tab: Pinned Results ══════════════════════════════════════════ -->
-        <TabItem Header="📌  Pinned">
+        <TabItem Header="📌  Pinned" DataContext="{Binding PinnedVm}">
             <Grid Margin="24,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>   <!-- Row 0: heading + caption -->
@@ -1277,8 +1277,8 @@
             </Grid>
         </TabItem>
 
-        <!-- ══ Tab 2: Previous Runs (unchanged) ════════════════════════════ -->
-        <TabItem Header="📁  Previous Runs">
+        <!-- ══ Tab 4: Previous Runs ═══════════════════════════════════════ -->
+        <TabItem Header="📁  Previous Runs" DataContext="{Binding PreviousRunsVm}">
             <Grid Margin="24,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>

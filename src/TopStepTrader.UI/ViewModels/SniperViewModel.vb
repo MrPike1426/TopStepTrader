@@ -913,6 +913,8 @@ Namespace TopStepTrader.UI.ViewModels
         ' ══════════════════════════════════════════════════════════════════════
 
         Private Sub AddLog(message As String)
+            ' Cap at 1,000 entries — remove oldest (tail) before inserting newest (head).
+            If LogEntries.Count >= 1000 Then LogEntries.RemoveAt(LogEntries.Count - 1)
             LogEntries.Insert(0, message)
         End Sub
 

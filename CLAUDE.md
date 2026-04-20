@@ -37,7 +37,7 @@ dotnet build --no-restore -v q
 dotnet test --no-build -v q
 ```
 
-**Expected output:** `221 passed, 0 failed` (as of 2026-04-14). If the count changes after adding new tests, update this number.
+**Expected output:** `292 passed, 0 failed` (as of 2026-04-20). If the count changes after adding new tests, update this number.
 
 **Rules:**
 - Never leave the project in a broken build state.
