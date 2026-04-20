@@ -39,7 +39,7 @@ Namespace TopStepTrader.Core.Trading
         ''' <summary>
         ''' Initial stop-loss expressed as a multiple of N (ATR in dollar terms).
         ''' SL dollars = SlMultipleOfN × ATR × DollarPerPoint.
-        ''' Falls back to <see cref="StrategyDefinition.InitialSlAmount"/> when ATR = 0.
+        ''' Falls back to <see cref="StrategyDefinition.SlDollarBracket"/> when ATR = 0.
         ''' </summary>
         Public ReadOnly Property SlMultipleOfN As Decimal
 

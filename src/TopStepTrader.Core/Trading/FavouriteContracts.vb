@@ -148,7 +148,7 @@ Namespace TopStepTrader.Core.Trading
         Public Property PxMinSlDistancePct As Decimal
         ''' <summary>
         ''' Hard floor on the stop-loss amount in USD for TopStepX orders.
-        ''' When the strategy's computed SL dollars (InitialSlAmount ÷ contracts) falls below
+        ''' When the strategy's computed SL dollars (SlDollarBracket ÷ contracts) falls below
         ''' this value the engine clamps up to this floor before converting to ticks.
         ''' Prevents noise-stops on high-price instruments such as NASDAQ and Gold.
         ''' 0 = no floor (use strategy value as-is).

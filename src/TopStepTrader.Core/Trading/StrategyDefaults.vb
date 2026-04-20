@@ -45,22 +45,22 @@ Namespace TopStepTrader.Core.Trading
     ''' Immutable set of capital/quantity defaults for a strategy.
     ''' Values are stored as strings to match the ViewModel's text-bound input fields.
     ''' SL and TP are ATR-based (set via SlAtrMultiple/TpAtrMultiple on BacktestConfiguration).
-    ''' InitialSlAmount and InitialTpAmount are optional dollar-based overrides.
+    ''' SlDollarBracket and TpDollarBracket are optional dollar-based overrides.
     ''' </summary>
     Public NotInheritable Class StrategyParameterSet
 
         Public ReadOnly Property Capital As String
         Public ReadOnly Property Qty As String
-        Public ReadOnly Property InitialTpAmount As String
-        Public ReadOnly Property InitialSlAmount As String
+        Public ReadOnly Property TpDollarBracket As String
+        Public ReadOnly Property SlDollarBracket As String
 
         Public Sub New(capital As String, qty As String,
-                       Optional initialTpAmount As String = Nothing,
-                       Optional initialSlAmount As String = Nothing)
+                       Optional TpDollarBracket As String = Nothing,
+                       Optional SlDollarBracket As String = Nothing)
             Me.Capital = capital
             Me.Qty = qty
-            Me.InitialTpAmount = initialTpAmount
-            Me.InitialSlAmount = initialSlAmount
+            Me.TpDollarBracket = TpDollarBracket
+            Me.SlDollarBracket = SlDollarBracket
         End Sub
 
     End Class

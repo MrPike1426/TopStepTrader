@@ -214,8 +214,8 @@ Namespace TopStepTrader.Tests.Trading
                 .AccountId = 1L,
                 .CapitalAtRisk = 200D,
                 .Leverage = 5,
-                .InitialSlAmount = 10D,
-                .InitialTpAmount = 20D,
+                .SlDollarBracket = 10D,
+                .TpDollarBracket = 20D,
                 .MinConfidencePct = 85
             }
 

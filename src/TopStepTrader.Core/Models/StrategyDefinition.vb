@@ -35,22 +35,22 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>
         ''' Initial stop-loss in dollars (e.g. 10 = $10 hard stop for Bracket 0).
         ''' Turtle bracket SL only ever advances in the favourable direction; never retreats.
-        ''' Engine converts to an absolute price: Entry ± (InitialSlAmount / DollarPerPoint).
+        ''' Engine converts to an absolute price: Entry ± (SlDollarBracket / DollarPerPoint).
         ''' </summary>
-        Public Property InitialSlAmount As Decimal = 10D
+        Public Property SlDollarBracket As Decimal = 10D
 
         ''' <summary>
         ''' Initial take-profit target in dollars (e.g. 20 = $20 triggers first bracket advance).
         ''' Once hit, SL steps to the TP level and a new TP is set at TP + 0.5×N (ATR in $).
-        ''' Engine converts to an absolute price: Entry ± (InitialTpAmount / DollarPerPoint).
+        ''' Engine converts to an absolute price: Entry ± (TpDollarBracket / DollarPerPoint).
         ''' Used as ATR-unavailable fallback only when <see cref="TpMultipleOfN"/> is active.
         ''' </summary>
-        Public Property InitialTpAmount As Decimal = 20D
+        Public Property TpDollarBracket As Decimal = 20D
 
         ''' <summary>
         ''' Initial stop-loss as a multiple of N (ATR in dollar terms).
         ''' SL dollars = SlMultipleOfN × ATR × DollarPerPoint.
-        ''' When ATR &gt; 0 this overrides <see cref="InitialSlAmount"/>; falls back to that
+        ''' When ATR &gt; 0 this overrides <see cref="SlDollarBracket"/>; falls back to that
         ''' fixed amount when ATR is unavailable (e.g. indicator warm-up period).
         ''' Profile defaults — Lewis (Averse): 1.5  Damian (Moderate): 1.0  Joe (Aggressive): 0.75
         ''' </summary>
@@ -92,7 +92,7 @@ Namespace TopStepTrader.Core.Models
         ''' TopStepX only: initial stop-loss distance in ticks from the entry fill price.
         ''' When set, the engine attaches a stopLossBracket to the entry order and uses this
         ''' value as the SL seed for any trailing logic.
-        ''' When Nothing, the engine derives ticks from <see cref="InitialSlAmount"/> / TickValue.
+        ''' When Nothing, the engine derives ticks from <see cref="SlDollarBracket"/> / TickValue.
         ''' </summary>
         Public Property InitialStopTicks As Integer?
 
@@ -215,8 +215,8 @@ Namespace TopStepTrader.Core.Models
                     directions = "Short only"
                 End If
 
-                Dim tp = If(TpMultipleOfN > 0D, $"TP:{TpMultipleOfN:F2}N", If(InitialTpAmount > 0, $"TP:${InitialTpAmount:F0}", "No TP"))
-                Dim slBase = If(SlMultipleOfN > 0D, $"SL:{SlMultipleOfN:F2}N", If(InitialSlAmount > 0, $"SL:${InitialSlAmount:F0}", "No SL"))
+                Dim tp = If(TpMultipleOfN > 0D, $"TP:{TpMultipleOfN:F2}N", If(TpDollarBracket > 0, $"TP:${TpDollarBracket:F0}", "No TP"))
+                Dim slBase = If(SlMultipleOfN > 0D, $"SL:{SlMultipleOfN:F2}N", If(SlDollarBracket > 0, $"SL:${SlDollarBracket:F0}", "No SL"))
                 Dim sl = If(LeveragedSlMultipleOfN > 0D, $"{slBase} ({LeveragedSlMultipleOfN:F2}N lev)", slBase)
 
                 Return $"{indicator} | {TimeframeMinutes}-min | {DurationHours}hrs | {directions} | {tp} {sl}"

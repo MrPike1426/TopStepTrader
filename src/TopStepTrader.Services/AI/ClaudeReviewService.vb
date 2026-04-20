@@ -497,8 +497,8 @@ Namespace TopStepTrader.Services.AI
             sb.AppendLine($"  Condition:   {strategy.Condition}")
             sb.AppendLine($"  Long entry:  {strategy.GoLongWhenBelowBands}")
             sb.AppendLine($"  Short entry: {strategy.GoShortWhenAboveBands}")
-            sb.AppendLine($"  Take Profit: {If(strategy.InitialTpAmount > 0, $"${strategy.InitialTpAmount:F0}", "None")}")
-            sb.AppendLine($"  Stop Loss:   {If(strategy.InitialSlAmount > 0, $"${strategy.InitialSlAmount:F0}", "None")}")
+            sb.AppendLine($"  Take Profit: {If(strategy.TpDollarBracket > 0, $"${strategy.TpDollarBracket:F0}", "None")}")
+            sb.AppendLine($"  Stop Loss:   {If(strategy.SlDollarBracket > 0, $"${strategy.SlDollarBracket:F0}", "None")}")
             sb.AppendLine($"  Quantity:    {strategy.Quantity} contract(s)")
             sb.AppendLine($"  Capital Risk: ${strategy.CapitalAtRisk:F2}")
             If Not String.IsNullOrWhiteSpace(strategy.RawDescription) Then

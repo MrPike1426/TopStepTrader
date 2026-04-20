@@ -62,7 +62,7 @@ Namespace TopStepTrader.Core.Interfaces
         ''' When True, SL and TP are expressed as multiples of the 14-bar ATR at entry
         ''' rather than fixed dollar amounts.  ATR is in price units; dollar P&amp;L is computed
         ''' via PointValue × Quantity as normal.
-        ''' When False (default), InitialSlAmount / InitialTpAmount are used.
+        ''' When False (default), SlDollarBracket / TpDollarBracket are used.
         ''' </summary>
         Public Property UseAtrMode As Boolean = True
 
@@ -146,14 +146,14 @@ Namespace TopStepTrader.Core.Interfaces
         ''' Used by the config-based CheckExit / GetExitPrice overloads when
         ''' <see cref="UseAtrMode"/> is False.  0 = no stop (open-ended).
         ''' </summary>
-        Public Property InitialSlAmount As Decimal = 0D
+        Public Property SlDollarBracket As Decimal = 0D
 
         ''' <summary>
         ''' Dollar amount for the initial take-profit bracket.
         ''' Used by the config-based CheckExit / GetExitPrice overloads when
         ''' <see cref="UseAtrMode"/> is False.  0 = no target (open-ended).
         ''' </summary>
-        Public Property InitialTpAmount As Decimal = 0D
+        Public Property TpDollarBracket As Decimal = 0D
 
         ' ── Scale-in cap ─────────────────────────────────────────────────────────
 

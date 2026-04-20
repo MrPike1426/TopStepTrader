@@ -59,25 +59,25 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _initialTpAmount As Decimal = 20D
+        Private _TpDollarBracket As Decimal = 20D
         ''' <summary>Initial take-profit in dollars. Turtle bracket first TP level. Default $20.</summary>
-        Public Property InitialTpAmount As Decimal
+        Public Property TpDollarBracket As Decimal
             Get
-                Return _initialTpAmount
+                Return _TpDollarBracket
             End Get
             Set(value As Decimal)
-                SetProperty(_initialTpAmount, Math.Max(0D, value))
+                SetProperty(_TpDollarBracket, Math.Max(0D, value))
             End Set
         End Property
 
-        Private _initialSlAmount As Decimal = 10D
+        Private _SlDollarBracket As Decimal = 10D
         ''' <summary>Initial stop-loss in dollars. Turtle bracket first SL level. Default $10.</summary>
-        Public Property InitialSlAmount As Decimal
+        Public Property SlDollarBracket As Decimal
             Get
-                Return _initialSlAmount
+                Return _SlDollarBracket
             End Get
             Set(value As Decimal)
-                SetProperty(_initialSlAmount, Math.Max(0D, value))
+                SetProperty(_SlDollarBracket, Math.Max(0D, value))
             End Set
         End Property
 
@@ -318,8 +318,8 @@ Namespace TopStepTrader.UI.ViewModels
         ''' — satisfying the "runs 24/7" requirement.
         ''' </summary>
         Private Sub ApplyEmaRsiCombined()
-            InitialTpAmount = 20D
-            InitialSlAmount = 10D
+            TpDollarBracket = 20D
+            SlDollarBracket = 10D
             Leverage = 5
 
             _currentStrategy = New StrategyDefinition With {
@@ -335,8 +335,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .ScaleInAmount = 200D,
                 .ScaleInLeverage = 5,
@@ -349,20 +349,20 @@ Namespace TopStepTrader.UI.ViewModels
             LogEntries.Clear()
             LogLine("─────────────────────────────────────────────────────────────────────")
             LogLine("Configure account + risk settings above, then click  ▶ Start Monitoring.")
-            LogLine($"• 5-min bars · TP=${_initialTpAmount:F0} · SL=${_initialSlAmount:F0} · 1ct · Conf={_minConfidencePct}%")
+            LogLine($"• 5-min bars · TP=${_TpDollarBracket:F0} · SL=${_SlDollarBracket:F0} · 1ct · Conf={_minConfidencePct}%")
             LogLine("• 5 independent sessions — BTC · ETH · XRP · SOL · BNB")
             LogLine("━━━  EMA/RSI Combined — CryptoJoe 5-Asset Monitor  ━━━")
         End Sub
 
         ''' <summary>
         ''' Activates the Multi-Confluence Engine strategy for all 5 crypto assets.
-        ''' Uses Turtle bracket (InitialTpAmount = $20, InitialSlAmount = $10) as the
+        ''' Uses Turtle bracket (TpDollarBracket = $20, SlDollarBracket = $10) as the
         ''' initial bracket; bracket advances on each TP hit using 0.5×N ATR steps.
         ''' DurationHours = 8 760 so sessions never auto-expire.
         ''' </summary>
         Private Sub ApplyMultiConfluenceEngine()
-            InitialTpAmount = 20D
-            InitialSlAmount = 10D
+            TpDollarBracket = 20D
+            SlDollarBracket = 10D
             Leverage = 5
 
             _currentStrategy = New StrategyDefinition With {
@@ -378,8 +378,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .ScaleInAmount = 200D,
                 .ScaleInLeverage = 5,
@@ -401,14 +401,14 @@ Namespace TopStepTrader.UI.ViewModels
         ''' <summary>
         ''' Activates the LULT Divergence strategy for all 5 crypto assets.
         ''' Uses WaveTrend (Market Cipher B) Anchor/Trigger divergence on 5-minute bars.
-        ''' Uses Turtle bracket (InitialTpAmount = $20, InitialSlAmount = $10) with
+        ''' Uses Turtle bracket (TpDollarBracket = $20, SlDollarBracket = $10) with
         ''' LULT-specific ATR-derived SL/TP anchored to WaveTrend divergence levels.
         ''' Bracket advances on each TP hit; SL never retreats.
         ''' Time filter: 11:00–17:00 UTC (London + NY pre-market, 07:00–13:00 EST/EDT).
         ''' </summary>
         Private Sub ApplyLultDivergence()
-            InitialTpAmount = 20D
-            InitialSlAmount = 10D
+            TpDollarBracket = 20D
+            SlDollarBracket = 10D
             Leverage = 5
 
             _currentStrategy = New StrategyDefinition With {
@@ -424,8 +424,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .ScaleInAmount = 0D,
                 .ScaleInLeverage = 1,
@@ -452,8 +452,8 @@ Namespace TopStepTrader.UI.ViewModels
         ''' DurationHours = 8 760 so sessions never auto-expire.
         ''' </summary>
         Private Sub ApplyBbSqueezeScalper()
-            InitialTpAmount = 8D
-            InitialSlAmount = 4D
+            TpDollarBracket = 8D
+            SlDollarBracket = 4D
             Leverage = 5
 
             _currentStrategy = New StrategyDefinition With {
@@ -469,8 +469,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .ScaleInAmount = 0D,
                 .ScaleInLeverage = 1,
@@ -483,7 +483,7 @@ Namespace TopStepTrader.UI.ViewModels
             LogEntries.Clear()
             LogLine("─────────────────────────────────────────────────────────────────────")
             LogLine("Configure account + risk settings above, then click  ▶ Start Monitoring.")
-            LogLine($"• 1-min bars · TP=${_initialTpAmount:F0} · SL=${_initialSlAmount:F0} · 1ct · 15s polling")
+            LogLine($"• 1-min bars · TP=${_TpDollarBracket:F0} · SL=${_SlDollarBracket:F0} · 1ct · 15s polling")
             LogLine("• Mode B (Band Bounce): %B < 0 or > 1 + RSI7 extreme + rejection wick ≥ 60%")
             LogLine("• Mode A (Squeeze Breakout): BBW < SMA(BBW,20) ≥3 bars + band break + EMA5 + RSI7")
             LogLine("• 5 independent sessions — BTC · ETH · XRP · SOL · BNB")
@@ -496,8 +496,8 @@ Namespace TopStepTrader.UI.ViewModels
         ''' Ideal for crypto where momentum shifts can be sharp and decisive.
         ''' </summary>
         Private Sub ApplyVidya()
-            InitialTpAmount = 20D
-            InitialSlAmount = 10D
+            TpDollarBracket = 20D
+            SlDollarBracket = 10D
             Leverage = 5
 
             _currentStrategy = New StrategyDefinition With {
@@ -513,8 +513,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .ScaleInAmount = 200D,
                 .ScaleInLeverage = 5,
@@ -541,8 +541,8 @@ Namespace TopStepTrader.UI.ViewModels
         ''' DurationHours = 8 760 so sessions never auto-expire.
         ''' </summary>
         Private Sub ApplyNakedTrader()
-            InitialTpAmount = 20D
-            InitialSlAmount = 10D
+            TpDollarBracket = 20D
+            SlDollarBracket = 10D
             Leverage = 5
 
             _currentStrategy = New StrategyDefinition With {
@@ -558,8 +558,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .ScaleInAmount = 200D,
                 .ScaleInLeverage = 5,
@@ -572,7 +572,7 @@ Namespace TopStepTrader.UI.ViewModels
             LogEntries.Clear()
             LogLine("─────────────────────────────────────────────────────────────────────")
             LogLine("Configure account + risk settings above, then click  ▶ Start Monitoring.")
-            LogLine($"• 5-min bars · TP=${_initialTpAmount:F0} · SL=${_initialSlAmount:F0} · 1ct · Conf={_minConfidencePct}%")
+            LogLine($"• 5-min bars · TP=${_TpDollarBracket:F0} · SL=${_SlDollarBracket:F0} · 1ct · Conf={_minConfidencePct}%")
             LogLine("• Medium confidence: 3/4 votes + ADX≥20 → 60% · High confidence: 4/4 votes + ADX≥25 + vol → 90%")
             LogLine("• 5 independent sessions — BTC · ETH · XRP · SOL · BNB")
             LogLine("━━━  Naked Trader — CryptoJoe 5-Asset Monitor  ━━━")
@@ -605,8 +605,8 @@ Namespace TopStepTrader.UI.ViewModels
                     .AccountId = SelectedAccount.Id,
                     .CapitalAtRisk = _capitalAtRisk,
                     .Quantity = 1,
-                    .InitialTpAmount = _initialTpAmount,
-                    .InitialSlAmount = _initialSlAmount,
+                    .TpDollarBracket = _TpDollarBracket,
+                    .SlDollarBracket = _SlDollarBracket,
                     .Leverage = _leverage,
                     .ScaleInAmount = _currentStrategy.ScaleInAmount,
                     .ScaleInLeverage = _currentStrategy.ScaleInLeverage,

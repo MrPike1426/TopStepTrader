@@ -140,11 +140,11 @@
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        Margin="0,0,8,0"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <TextBox Text="{Binding InitialTpAmount, UpdateSourceTrigger=LostFocus}"
+                                <TextBox Text="{Binding TpDollarBracket, UpdateSourceTrigger=LostFocus}"
                                          Width="44" ToolTip="Initial take-profit dollar fallback (used when ATR unavailable)"/>
                                 <TextBlock Text="/" VerticalAlignment="Center" Margin="5,0,5,0"
                                            Foreground="{StaticResource TextSecondaryBrush}"/>
-                                <TextBox Text="{Binding InitialSlAmount, UpdateSourceTrigger=LostFocus}"
+                                <TextBox Text="{Binding SlDollarBracket, UpdateSourceTrigger=LostFocus}"
                                          Width="44" ToolTip="Initial stop-loss dollar fallback (used when ATR unavailable)"/>
                             </StackPanel>
 

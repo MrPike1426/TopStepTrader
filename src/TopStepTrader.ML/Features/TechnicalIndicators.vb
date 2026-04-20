@@ -141,6 +141,7 @@ Namespace TopStepTrader.ML.Features
                 result(i) = Single.NaN
             Next
             If n < 2 Then Return result
+            If n < period Then Return result
 
             ' True ranges
             Dim trs(n - 1) As Double

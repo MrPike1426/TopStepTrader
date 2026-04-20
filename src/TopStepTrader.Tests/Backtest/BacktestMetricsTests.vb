@@ -567,8 +567,8 @@ Namespace TopStepTrader.Tests.Backtest
             ' MES defaults: TickSize=0.25, PointValue=5, Quantity=1
             ' → slDollars = slTicks × 0.25 × 5 = slTicks × 1.25
             Return New BacktestConfiguration With {
-                .InitialSlAmount = slTicks * 0.25D * 5D,
-                .InitialTpAmount = tpTicks * 0.25D * 5D,
+                .SlDollarBracket = slTicks * 0.25D * 5D,
+                .TpDollarBracket = tpTicks * 0.25D * 5D,
                 .RunName = "Unit Test",
                 .ContractId = "CON.F.US.MES.H26",
                 .StartDate = Date.Today.AddDays(-7),
@@ -577,6 +577,428 @@ Namespace TopStepTrader.Tests.Backtest
                 .MinSignalConfidence = 0.65F
             }
         End Function
+
+        ' ══════════════════════════════════════════════════════════════════
+        ' TEST-01: UpdateDynamicExits — Trailing Stop, Break-Even, Extend TP
+        ' ══════════════════════════════════════════════════════════════════
+
+        ' ── Trailing stop ─────────────────────────────────────────────────
+
+        ''' <summary>
+        ''' Long position: price rises, so SL candidate (close − stopDelta) exceeds current SL.
+        ''' SL must ratchet up to lock in profit.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_TrailingStop_Long_PriceRises_SlAdvances()
+            Dim trade  = MakeTrade("Buy", entryPrice:=5000D)
+            Dim bar    = MakeBar(high:=5012D, low:=5008D, close:=5010D)
+            Dim config = MakeConfig()
+            config.TrailingStopEnabled = True
+
+            Dim currentStop = 4995D   ' initial SL: 5 pts below entry
+            Dim currentTp   = 5010D
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=5D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            ' candidate = 5010 − 5 = 5005 > 4995 → advances
+            Assert.Equal(5005D, currentStop)
+        End Sub
+
+        ''' <summary>
+        ''' Long position: price dips back. SL must NOT retreat — it only moves in trade's favour.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_TrailingStop_Long_PriceFalls_SlDoesNotRetreat()
+            Dim trade  = MakeTrade("Buy", entryPrice:=5000D)
+            Dim bar    = MakeBar(high:=5006D, low:=5001D, close:=5001D)
+            Dim config = MakeConfig()
+            config.TrailingStopEnabled = True
+
+            Dim currentStop = 5005D   ' SL already ratcheted to 5005
+            Dim currentTp   = 5010D
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=5D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            ' candidate = 5001 − 5 = 4996 < 5005 → stays at 5005
+            Assert.Equal(5005D, currentStop)
+        End Sub
+
+        ''' <summary>
+        ''' Short position: price falls, so SL candidate (close + stopDelta) is below current SL.
+        ''' SL must ratchet down.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_TrailingStop_Short_PriceFalls_SlAdvances()
+            Dim trade  = MakeTrade("Sell", entryPrice:=5000D)
+            Dim bar    = MakeBar(high:=4992D, low:=4988D, close:=4990D)
+            Dim config = MakeConfig()
+            config.TrailingStopEnabled = True
+
+            Dim currentStop = 5005D   ' initial SL: 5 pts above entry
+            Dim currentTp   = 4990D
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=5D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            ' candidate = 4990 + 5 = 4995 < 5005 → advances (ratchets down)
+            Assert.Equal(4995D, currentStop)
+        End Sub
+
+        ''' <summary>
+        ''' Short position: price bounces up. SL must NOT widen upward.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_TrailingStop_Short_PriceRises_SlDoesNotRetreat()
+            Dim trade  = MakeTrade("Sell", entryPrice:=5000D)
+            Dim bar    = MakeBar(high:=5002D, low:=4999D, close:=5001D)
+            Dim config = MakeConfig()
+            config.TrailingStopEnabled = True
+
+            Dim currentStop = 4995D   ' SL already ratcheted to 4995
+            Dim currentTp   = 4990D
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=5D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            ' candidate = 5001 + 5 = 5006 > 4995 → stays at 4995
+            Assert.Equal(4995D, currentStop)
+        End Sub
+
+        ' ── Break-even ────────────────────────────────────────────────────
+
+        ''' <summary>
+        ''' Long position: close reaches exactly entry + halfTp → SL advances to entry.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_BreakEven_Long_ClosesAtHalfTp_SlMovesToEntry()
+            Dim trade  = MakeTrade("Buy", entryPrice:=5000D)
+            ' tpDelta=10 → halfTp=5 → trigger at close ≥ 5005
+            Dim bar    = MakeBar(high:=5006D, low:=5004D, close:=5005D)
+            Dim config = MakeConfig()
+            config.BreakEvenOnHalfTpEnabled = True
+
+            Dim currentStop = 4990D   ' SL below entry
+            Dim currentTp   = 5010D
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=10D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            Assert.Equal(5000D, currentStop)   ' moved to entry
+        End Sub
+
+        ''' <summary>
+        ''' Long position: close is 1 tick below the half-TP trigger → SL must stay put.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_BreakEven_Long_ClosesBelowHalfTp_SlUnchanged()
+            Dim trade  = MakeTrade("Buy", entryPrice:=5000D)
+            ' halfTp=5 → trigger at 5005; bar closes at 5004 (below trigger)
+            Dim bar    = MakeBar(high:=5005D, low:=5003D, close:=5004D)
+            Dim config = MakeConfig()
+            config.BreakEvenOnHalfTpEnabled = True
+
+            Dim currentStop = 4990D
+            Dim currentTp   = 5010D
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=10D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            Assert.Equal(4990D, currentStop)   ' unchanged
+        End Sub
+
+        ''' <summary>
+        ''' Break-even is idempotent: once SL = entry, subsequent bars above the trigger
+        ''' must not retreat SL (condition `currentStop &lt; entryPrice` becomes False).
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_BreakEven_Long_AlreadyAtEntry_SlNotRetreated()
+            Dim trade  = MakeTrade("Buy", entryPrice:=5000D)
+            Dim bar    = MakeBar(high:=5008D, low:=5006D, close:=5007D)
+            Dim config = MakeConfig()
+            config.BreakEvenOnHalfTpEnabled = True
+
+            Dim currentStop = 5000D   ' already at break-even
+            Dim currentTp   = 5010D
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=10D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            ' currentStop (5000) is NOT < entryPrice (5000) → condition is False → no change
+            Assert.Equal(5000D, currentStop)
+        End Sub
+
+        ''' <summary>
+        ''' Short position: close reaches entry − halfTp → SL advances to entry.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_BreakEven_Short_ClosesAtHalfTp_SlMovesToEntry()
+            Dim trade  = MakeTrade("Sell", entryPrice:=5000D)
+            ' tpDelta=10 → halfTp=5 → trigger at close ≤ 4995
+            Dim bar    = MakeBar(high:=4996D, low:=4994D, close:=4995D)
+            Dim config = MakeConfig()
+            config.BreakEvenOnHalfTpEnabled = True
+
+            Dim currentStop = 5010D   ' SL above entry for short
+            Dim currentTp   = 4990D
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=10D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            Assert.Equal(5000D, currentStop)   ' moved to entry
+        End Sub
+
+        ' ── Extend TP ─────────────────────────────────────────────────────
+
+        ''' <summary>
+        ''' Long position: bar closes at TP level → TP advances by one tpDelta.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_ExtendTp_Long_CloseBeyondTarget_TpAdvances()
+            Dim trade  = MakeTrade("Buy", entryPrice:=5000D)
+            Dim bar    = MakeBar(high:=5012D, low:=5009D, close:=5010D)
+            Dim config = MakeConfig()
+            config.ExtendTpEnabled = True
+
+            Dim currentStop = 4990D
+            Dim currentTp   = 5010D   ' initial TP = entry + 1×tpDelta
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=10D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            ' close(5010) ≥ currentTp(5010) → extended = 5020 ≤ cap(5000+30=5030) → advances
+            Assert.Equal(5020D, currentTp)
+        End Sub
+
+        ''' <summary>
+        ''' Long position: bar closes one tick below TP → TP must remain unchanged.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_ExtendTp_Long_ClosesBelowTarget_TpUnchanged()
+            Dim trade  = MakeTrade("Buy", entryPrice:=5000D)
+            Dim bar    = MakeBar(high:=5010D, low:=5008D, close:=5009D)
+            Dim config = MakeConfig()
+            config.ExtendTpEnabled = True
+
+            Dim currentStop = 4990D
+            Dim currentTp   = 5010D
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=10D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            Assert.Equal(5010D, currentTp)   ' unchanged
+        End Sub
+
+        ''' <summary>
+        ''' Long position: TP is already at the hard cap (entry + 3×tpDelta).
+        ''' A close at the cap must NOT advance TP beyond it.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_ExtendTp_Long_AtCap_TpDoesNotExceedCap()
+            Dim trade  = MakeTrade("Buy", entryPrice:=5000D)
+            ' cap = entry(5000) + 3×tpDelta(10) = 5030
+            Dim bar    = MakeBar(high:=5032D, low:=5029D, close:=5030D)
+            Dim config = MakeConfig()
+            config.ExtendTpEnabled = True
+
+            Dim currentStop = 4990D
+            Dim currentTp   = 5030D   ' already at cap
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=10D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            ' extended = 5040 > cap(5030) → blocked
+            Assert.Equal(5030D, currentTp)
+        End Sub
+
+        ''' <summary>
+        ''' Short position: bar closes at or below TP level → TP advances downward by tpDelta.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_ExtendTp_Short_CloseBeyondTarget_TpAdvances()
+            Dim trade  = MakeTrade("Sell", entryPrice:=5000D)
+            Dim bar    = MakeBar(high:=4992D, low:=4989D, close:=4990D)
+            Dim config = MakeConfig()
+            config.ExtendTpEnabled = True
+
+            Dim currentStop = 5010D
+            Dim currentTp   = 4990D   ' initial TP = entry − 1×tpDelta
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=10D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            ' close(4990) ≤ currentTp(4990) → extended = 4980 ≥ cap(5000−30=4970) → advances
+            Assert.Equal(4980D, currentTp)
+        End Sub
+
+        ''' <summary>
+        ''' stopDelta = 0 → early return; neither SL nor TP are touched.
+        ''' </summary>
+        <Fact>
+        Public Sub UpdateDynamicExits_StopDeltaZero_EarlyReturn_NothingChanged()
+            Dim trade  = MakeTrade("Buy", entryPrice:=5000D)
+            Dim bar    = MakeBar(high:=5020D, low:=5015D, close:=5018D)
+            Dim config = MakeConfig()
+            config.TrailingStopEnabled       = True
+            config.BreakEvenOnHalfTpEnabled  = True
+            config.ExtendTpEnabled           = True
+
+            Dim currentStop = 4990D
+            Dim currentTp   = 5010D
+            BacktestMetrics.UpdateDynamicExits(trade, bar, config,
+                                               stopDelta:=0D, tpDelta:=10D,
+                                               currentStop, currentTp)
+
+            ' stopDelta = 0 → function returns immediately, nothing changes
+            Assert.Equal(4990D, currentStop)
+            Assert.Equal(5010D, currentTp)
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
+        ' TEST-02: Scale-In Multi-Leg Exit Tests
+        ' ══════════════════════════════════════════════════════════════════
+
+        ''' <summary>
+        ''' 2-leg Buy: initial entry at 5000, scale-in at 5002, both exit at TP 5010.
+        ''' Individual leg P&amp;Ls sum correctly; BuildResult counts 1 position (winner).
+        ''' MES: $5/pt.  Leg1 = (5010-5000)×$5 = $50.  Leg2 = (5010-5002)×$5 = $40.
+        ''' </summary>
+        <Fact>
+        Public Sub ScaleIn_TwoLegBuy_TakeProfit_AggregatePnLIsCorrect()
+            Dim config = MakeConfig()
+            ' Leg 1 — initial entry
+            Dim leg1 = MakeTrade("Buy", entryPrice:=5000D, exitPrice:=5010D, qty:=1)
+            leg1.PositionGroupId = 1
+            leg1.PnL = BacktestMetrics.CalculatePnL(leg1, config)
+            ' Leg 2 — scale-in at higher entry price
+            Dim leg2 = MakeTrade("Buy", entryPrice:=5002D, exitPrice:=5010D, qty:=1)
+            leg2.PositionGroupId = 1   ' same group as initial entry
+            leg2.PnL = BacktestMetrics.CalculatePnL(leg2, config)
+
+            ' Individual legs
+            Assert.Equal(50D, leg1.PnL.Value)    ' (5010-5000) × 1 × $5
+            Assert.Equal(40D, leg2.PnL.Value)    ' (5010-5002) × 1 × $5
+
+            ' Aggregate via BuildResult
+            Dim trades = New List(Of BacktestTrade) From {leg1, leg2}
+            Dim result = BacktestMetrics.BuildResult(config, trades, finalCapital:=50090D, maxDrawdown:=0D)
+
+            Assert.Equal(1, result.TotalTrades)       ' 1 position (both legs share group 1)
+            Assert.Equal(1, result.WinningTrades)
+            Assert.Equal(0, result.LosingTrades)
+            Assert.Equal(90D, result.TotalPnL)         ' 50 + 40
+            Assert.Equal(90D, result.AveragePnLPerTrade)
+            Assert.Equal(2, result.Trades.Count)       ' both raw rows preserved
+        End Sub
+
+        ''' <summary>
+        ''' 2-leg Buy: initial entry at 5000, scale-in at 5002, both hit SL at 4997.5.
+        ''' A 2-leg position hitting SL produces the correct aggregate loss.
+        ''' Leg1 = (4997.5-5000)×$5 = -$12.50.  Leg2 = (4997.5-5002)×$5 = -$22.50.
+        ''' </summary>
+        <Fact>
+        Public Sub ScaleIn_TwoLegBuy_StopLoss_AggregateLossIsCorrect()
+            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            ' SL is 10 ticks = 2.5 pts below entry; both legs exit at the same SL fill price
+            Dim slFill = 4997.5D   ' entry(5000) − 10 ticks × 0.25
+
+            Dim leg1 = MakeTrade("Buy", entryPrice:=5000D, exitPrice:=slFill, qty:=1)
+            leg1.PositionGroupId = 1
+            leg1.ExitReason = "StopLoss"
+            leg1.PnL = BacktestMetrics.CalculatePnL(leg1, config)
+
+            Dim leg2 = MakeTrade("Buy", entryPrice:=5002D, exitPrice:=slFill, qty:=1)
+            leg2.PositionGroupId = 1
+            leg2.ExitReason = "StopLoss"
+            leg2.PnL = BacktestMetrics.CalculatePnL(leg2, config)
+
+            ' Individual leg losses
+            Assert.Equal(-12.5D, leg1.PnL.Value)   ' (4997.5-5000) × 1 × $5
+            Assert.Equal(-22.5D, leg2.PnL.Value)   ' (4997.5-5002) × 1 × $5
+
+            ' Aggregate — both are losses so position is a loser
+            Dim trades = New List(Of BacktestTrade) From {leg1, leg2}
+            Dim result = BacktestMetrics.BuildResult(config, trades, finalCapital:=49965D, maxDrawdown:=35D)
+
+            Assert.Equal(1, result.TotalTrades)
+            Assert.Equal(0, result.WinningTrades)
+            Assert.Equal(1, result.LosingTrades)
+            Assert.Equal(-35D, result.TotalPnL)         ' -12.5 + -22.5
+            Assert.True(result.TotalPnL < 0D, "Aggregate P&L of a SL exit must be negative")
+        End Sub
+
+        ''' <summary>
+        ''' PositionGroupId consistency: 3 legs share group 1; a 4th leg belongs to group 2.
+        ''' BuildResult must count exactly 2 positions — not 4 individual entries.
+        ''' Group-1 aggregate P&amp;L: +$50 + $40 + $30 = +$120 (winner).
+        ''' Group-2 P&amp;L: -$20 (loser).
+        ''' </summary>
+        <Fact>
+        Public Sub ScaleIn_PositionGroupId_Consistent_BuildResultCountsPositions()
+            Dim config = MakeConfig()
+
+            ' Group 1 — three legs, all profitable
+            Dim leg1 = MakeClosedTrade(50D,  positionGroupId:=1)
+            Dim leg2 = MakeClosedTrade(40D,  positionGroupId:=1)
+            Dim leg3 = MakeClosedTrade(30D,  positionGroupId:=1)
+            ' Group 2 — single losing position
+            Dim leg4 = MakeClosedTrade(-20D, positionGroupId:=2)
+
+            Dim trades = New List(Of BacktestTrade) From {leg1, leg2, leg3, leg4}
+            Dim result = BacktestMetrics.BuildResult(config, trades, finalCapital:=50120D, maxDrawdown:=20D)
+
+            Assert.Equal(2, result.TotalTrades)          ' 2 unique groups, not 4 rows
+            Assert.Equal(1, result.WinningTrades)        ' group 1 sum = +120 > 0
+            Assert.Equal(1, result.LosingTrades)         ' group 2 sum = -20 ≤ 0
+            Assert.Equal(100D, result.TotalPnL)          ' 120 + (-20)
+            Assert.Equal(50D, result.AveragePnLPerTrade) ' 100 / 2 positions
+            Assert.Equal(4, result.Trades.Count)         ' all raw rows preserved
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
+        ' CheckFixedExit
+        ' ══════════════════════════════════════════════════════════════════
+
+        <Fact>
+        Public Sub CheckFixedExit_Buy_SlHit_ReturnsStopLoss()
+            ' Long SL fires when bar.Low touches or crosses below sl.
+            Dim bar = MakeBar(high:=5005D, low:=4994D, close:=4995D)
+            Dim result = BacktestMetrics.CheckFixedExit("Buy", bar, sl:=4995D, tp:=5010D)
+            Assert.Equal("StopLoss", result)
+        End Sub
+
+        <Fact>
+        Public Sub CheckFixedExit_Buy_TpHit_ReturnsTakeProfit()
+            ' Long TP fires when bar.High touches or crosses above tp.
+            Dim bar = MakeBar(high:=5011D, low:=5001D, close:=5008D)
+            Dim result = BacktestMetrics.CheckFixedExit("Buy", bar, sl:=4990D, tp:=5010D)
+            Assert.Equal("TakeProfit", result)
+        End Sub
+
+        <Fact>
+        Public Sub CheckFixedExit_Sell_SlHit_ReturnsStopLoss()
+            ' Short SL fires when bar.High touches or crosses above sl.
+            Dim bar = MakeBar(high:=5006D, low:=4998D, close:=5000D)
+            Dim result = BacktestMetrics.CheckFixedExit("Sell", bar, sl:=5005D, tp:=4990D)
+            Assert.Equal("StopLoss", result)
+        End Sub
+
+        <Fact>
+        Public Sub CheckFixedExit_Sell_TpHit_ReturnsTakeProfit()
+            ' Short TP fires when bar.Low touches or crosses below tp.
+            Dim bar = MakeBar(high:=5001D, low:=4989D, close:=4992D)
+            Dim result = BacktestMetrics.CheckFixedExit("Sell", bar, sl:=5010D, tp:=4990D)
+            Assert.Equal("TakeProfit", result)
+        End Sub
+
+        <Fact>
+        Public Sub CheckFixedExit_NoExit_ReturnsNothing()
+            ' Bar stays entirely between sl and tp — no exit triggered.
+            Dim bar = MakeBar(high:=5005D, low:=4997D, close:=5001D)
+            Dim result = BacktestMetrics.CheckFixedExit("Buy", bar, sl:=4990D, tp:=5010D)
+            Assert.Null(result)
+        End Sub
 
     End Class
 

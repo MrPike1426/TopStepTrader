@@ -1,4 +1,4 @@
-<UserControl x:Class="TopStepTrader.UI.Views.SniperView"
+﻿<UserControl x:Class="TopStepTrader.UI.Views.SniperView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -132,12 +132,12 @@
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                Margin="0,0,8,0"/>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <TextBox Text="{Binding InitialTpAmount, UpdateSourceTrigger=PropertyChanged}"
+                                        <TextBox Text="{Binding TpDollarBracket, UpdateSourceTrigger=PropertyChanged}"
                                                  Width="44" IsEnabled="{Binding IsNotRunning}"
                                                  ToolTip="Initial take-profit in dollars (e.g. 20)"/>
                                         <TextBlock Text="/" VerticalAlignment="Center" Margin="5,0,5,0"
                                                    Foreground="{StaticResource TextSecondaryBrush}"/>
-                                        <TextBox Text="{Binding InitialSlAmount, UpdateSourceTrigger=PropertyChanged}"
+                                        <TextBox Text="{Binding SlDollarBracket, UpdateSourceTrigger=PropertyChanged}"
                                                  Width="44" IsEnabled="{Binding IsNotRunning}"
                                                  ToolTip="Initial stop-loss in dollars (e.g. 10)"/>
                                     </StackPanel>
@@ -440,12 +440,12 @@
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                Margin="0,0,8,0"/>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <TextBox Text="{Binding BtInitialTpAmount, UpdateSourceTrigger=PropertyChanged}"
+                                        <TextBox Text="{Binding BtTpDollarBracket, UpdateSourceTrigger=PropertyChanged}"
                                                  Width="44" IsEnabled="{Binding IsNotBacktesting}"
                                                  ToolTip="Initial take-profit in dollars (e.g. 20)"/>
                                         <TextBlock Text="/" VerticalAlignment="Center" Margin="5,0,5,0"
                                                    Foreground="{StaticResource TextSecondaryBrush}"/>
-                                        <TextBox Text="{Binding BtInitialSlAmount, UpdateSourceTrigger=PropertyChanged}"
+                                        <TextBox Text="{Binding BtSlDollarBracket, UpdateSourceTrigger=PropertyChanged}"
                                                  Width="44" IsEnabled="{Binding IsNotBacktesting}"
                                                  ToolTip="Initial stop-loss in dollars (e.g. 10)"/>
                                     </StackPanel>

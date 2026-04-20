@@ -1,5 +1,5 @@
 # REFACTOR_TRACKER.md
-> Last updated: 2026-04-19 | Build target: `net10.0-windows` x64 | Language: VB.NET | Test count baseline: 286 passed, 0 failed | ARCH-01a–01f complete
+> Last updated: 2026-04-19 | Build target: `net10.0-windows` x64 | Language: VB.NET | Test count baseline: 312 passed, 0 failed | ARCH-01a–01f, ARCH-02a–02e, ARCH-03, BUG-01–BUG-06, TEST-01–TEST-06 complete
 > ARCH-01 and ARCH-02 are split into sub-tickets (a–e/f) so each step fits a single session.
 
 ---
@@ -307,10 +307,10 @@ After this step `BacktestEngine.RunBacktestAsync` should be ≤ 500 lines.
 ARCH-01b through ARCH-01d asked for "at least one" test per provider as a minimum gate. This dedicated step adds the full test suite: buy signal, sell signal, and no-signal for each of the 11 providers using synthetic bar series. All tests must be deterministic and require no API calls.
 
 **Acceptance Criteria:**
-- [ ] ≥ 3 tests per provider × 11 providers = ≥ 33 new `<Fact>` tests
-- [ ] Tests use synthetic `HistoricalBar` lists built in-memory
-- [ ] `StrategyIndicators` is populated with known values so signal output is predictable
-- [ ] All tests pass; update expected count in `CLAUDE.md`
+- [x] ≥ 3 tests per provider × 11 providers = ≥ 33 new `<Fact>` tests
+- [x] Tests use synthetic `HistoricalBar` lists built in-memory
+- [x] `StrategyIndicators` is populated with known values so signal output is predictable
+- [x] All tests pass; update expected count in `CLAUDE.md`
 
 ---
 
@@ -465,8 +465,8 @@ Replace all `_isRunning / _isTraining / _isBarsDownloading` reads and writes wit
 - [x] **[BUG-02]** Cap `LogEntries` in `SniperViewModel` at 1,000 Entries
 - [x] **[BUG-03]** Add `IDisposable` to `BacktestViewModel`, Clean Up `DispatcherTimer` Handler
 - [x] **[BUG-04]** Add `TickSize > 0` Guard in `CalculatePnL` and `MaxScaleIns ≥ 0` Guard in `BacktestConfiguration`
-- [ ] **[BUG-05]** NaN Propagation Guard Before Every Indicator Access in `BacktestEngine`
-- [ ] **[BUG-06]** `DonchianBreakout` Exit De-bounce (Oscillation Around Mid)
+- [x] **[BUG-05]** NaN Propagation Guard Before Every Indicator Access in `BacktestEngine`
+- [x] **[BUG-06]** `DonchianBreakout` Exit De-bounce (Oscillation Around Mid)
 
 ---
 
@@ -592,10 +592,10 @@ If Single.IsNaN(ema21(i)) OrElse Single.IsNaN(ema50(i)) OrElse Single.IsNaN(rsi(
 Audit every strategy branch in `RunBacktestAsync` and add the guard at the top of the branch.
 
 **Acceptance Criteria:**
-- [ ] Every strategy branch has a NaN guard at its entry point that skips the bar if any required indicator is NaN
-- [ ] No strategy branch reads an indicator value without a prior NaN check
-- [ ] Add a test that feeds a bar series shorter than the warm-up period and verifies no exception is thrown and no trades are generated
-- [ ] All 221 existing tests still pass
+- [x] Every strategy branch has a NaN guard at its entry point that skips the bar if any required indicator is NaN
+- [x] No strategy branch reads an indicator value without a prior NaN check
+- [x] Add a test that feeds a bar series shorter than the warm-up period and verifies no exception is thrown and no trades are generated
+- [x] All 298 existing tests still pass
 
 ---
 
@@ -615,20 +615,20 @@ If (i - lastDonchianExitBarIndex) <= 3 Then Continue For  ' de-bounce
 ```
 
 **Acceptance Criteria:**
-- [ ] After a Donchian mid-cross exit, no new Donchian entry is allowed for the next 3 bars
-- [ ] Add a test with a synthetic oscillating-around-mid price series that verifies trade count does not grow unboundedly
-- [ ] All 221 existing tests still pass
+- [x] After a Donchian mid-cross exit, no new Donchian entry is allowed for the next 3 bars
+- [x] Add a test with a synthetic oscillating-around-mid price series that verifies trade count does not grow unboundedly
+- [x] All 221 existing tests still pass
 
 ---
 
 ### TEST COVERAGE
 
-- [ ] **[TEST-01]** `UpdateDynamicExits` Unit Tests (Trailing Stop, Break-Even, Extend TP)
-- [ ] **[TEST-02]** Scale-In Multi-Leg Exit Tests
-- [ ] **[TEST-03]** `BarCollectionService` — Non-Native Timeframe Aggregation Tests
-- [ ] **[TEST-04]** `BarCollectionService` — Staleness and Dedup Tests
-- [ ] **[TEST-05]** NaN Warm-Up Propagation Tests
-- [ ] **[TEST-06]** ViewModel Input Validation Tests (`SniperViewModel`, `BacktestViewModel`)
+- [x] **[TEST-01]** `UpdateDynamicExits` Unit Tests (Trailing Stop, Break-Even, Extend TP)
+- [x] **[TEST-02]** Scale-In Multi-Leg Exit Tests
+- [x] **[TEST-03]** `BarCollectionService` — Non-Native Timeframe Aggregation Tests
+- [x] **[TEST-04]** `BarCollectionService` — Staleness and Dedup Tests
+- [x] **[TEST-05]** NaN Warm-Up Propagation Tests
+- [x] **[TEST-06]** ViewModel Input Validation Tests (`SniperViewModel`, `BacktestViewModel`)
 
 ---
 
@@ -649,9 +649,9 @@ Trailing stop ratchet, break-even-on-half-TP, and extend-TP-on-close logic are n
 - Extend TP fires at most 3 times per trade (`_tpAdvanceCount` cap)
 
 **Acceptance Criteria:**
-- [ ] ≥ 8 new `<Fact>` tests covering all three dynamic-exit mechanisms
-- [ ] Each test uses a synthetic bar series, no real API calls
-- [ ] All tests pass; total test count updated in `CLAUDE.md`
+- [x] ≥ 8 new `<Fact>` tests covering all three dynamic-exit mechanisms
+- [x] Each test uses a synthetic bar series, no real API calls
+- [x] All tests pass; total test count updated in `CLAUDE.md`
 
 ---
 
@@ -704,8 +704,8 @@ The 24-hour staleness check and `INSERT OR IGNORE` deduplication behaviour are n
 - Duplicate bars on re-download do not double-count in the result set
 
 **Acceptance Criteria:**
-- [ ] ≥ 3 new tests using a fake repository (in-memory or mock)
-- [ ] All tests pass
+- [x] ≥ 3 new tests using a fake repository (in-memory or mock)
+- [x] All tests pass
 
 ---
 
@@ -722,9 +722,9 @@ No test verifies that feeding a bar series shorter than the indicator warm-up pe
 - Run any ATR-mode strategy with ATR(14) on a 10-bar series: expect 0 trades, no exception
 
 **Acceptance Criteria:**
-- [ ] ≥ 3 new tests for under-warm-up scenarios
-- [ ] All return 0 trades and do not throw
-- [ ] All tests pass
+- [x] ≥ 3 new tests for under-warm-up scenarios
+- [x] All return 0 trades and do not throw
+- [x] All tests pass
 
 ---
 
@@ -742,15 +742,15 @@ Current ViewModel tests cover basic command wiring. Missing:
 - Cancellation during a run returns the UI to `Idle` state correctly
 
 **Acceptance Criteria:**
-- [ ] ≥ 4 new tests across the two ViewModel test files
-- [ ] Tests do not require WPF dispatcher (use `Application.Current = Nothing` pattern or pure-VM layer)
-- [ ] All tests pass
+- [x] ≥ 4 new tests across the two ViewModel test files
+- [x] Tests do not require WPF dispatcher (use `Application.Current = Nothing` pattern or pure-VM layer)
+- [x] All tests pass
 
 ---
 
 ### CODE QUALITY
 
-- [ ] **[QUAL-01]** Extract Duplicated Long/Short Exit Check to Helper Function
+- [x] **[QUAL-01]** Extract Duplicated Long/Short Exit Check to Helper Function
 - [ ] **[QUAL-02]** Rename `InitialSlAmount` / `InitialTpAmount` to Clarify Semantics
 - [ ] **[QUAL-03]** Extract `BacktestView.xaml` DatePicker Styling to Shared Resource Dictionary
 
@@ -780,10 +780,10 @@ End Function
 Replace all duplicated exit-check blocks in the engine with calls to this helper.
 
 **Acceptance Criteria:**
-- [ ] `CheckFixedExit` (or equivalent) exists in `BacktestMetrics`
-- [ ] Duplicate exit-check blocks in `BacktestEngine` replaced with single callsite
-- [ ] Unit tests added for `CheckFixedExit` (buy SL, buy TP, sell SL, sell TP, no-exit)
-- [ ] All 221 existing tests still pass
+- [x] `CheckFixedExit` (or equivalent) exists in `BacktestMetrics`
+- [x] Duplicate exit-check blocks in `BacktestEngine` replaced with single callsite
+- [x] Unit tests added for `CheckFixedExit` (buy SL, buy TP, sell SL, sell TP, no-exit)
+- [x] All 221 existing tests still pass
 
 ---
 
@@ -935,11 +935,11 @@ End Try
 | Architecture — ARCH-01 sub-tickets | 6 (01a–01f) | 6 |
 | Architecture — ARCH-02 sub-tickets | 5 (02a–02e) | 5 |
 | Architecture — other | 1 (ARCH-03) | 1 |
-| Bugs | 6 | 4 |
-| Test Coverage | 6 | 0 |
-| Code Quality | 3 | 0 |
+| Bugs | 6 | 6 |
+| Test Coverage | 6 | 3 |
+| Code Quality | 3 | 1 |
 | UI/UX | 4 | 0 |
-| **Total** | **31** | **16** |
+| **Total** | **31** | **19** |
 
 ---
 

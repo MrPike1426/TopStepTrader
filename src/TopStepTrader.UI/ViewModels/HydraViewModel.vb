@@ -125,25 +125,25 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _initialTpAmount As Decimal = 20D
+        Private _TpDollarBracket As Decimal = 20D
         ''' <summary>Initial take-profit in dollars. Turtle bracket first TP level. Default $20.</summary>
-        Public Property InitialTpAmount As Decimal
+        Public Property TpDollarBracket As Decimal
             Get
-                Return _initialTpAmount
+                Return _TpDollarBracket
             End Get
             Set(value As Decimal)
-                SetProperty(_initialTpAmount, Math.Max(0D, value))
+                SetProperty(_TpDollarBracket, Math.Max(0D, value))
             End Set
         End Property
 
-        Private _initialSlAmount As Decimal = 10D
+        Private _SlDollarBracket As Decimal = 10D
         ''' <summary>Initial stop-loss in dollars. Turtle bracket first SL level. Default $10.</summary>
-        Public Property InitialSlAmount As Decimal
+        Public Property SlDollarBracket As Decimal
             Get
-                Return _initialSlAmount
+                Return _SlDollarBracket
             End Get
             Set(value As Decimal)
-                SetProperty(_initialSlAmount, Math.Max(0D, value))
+                SetProperty(_SlDollarBracket, Math.Max(0D, value))
             End Set
         End Property
 
@@ -948,8 +948,8 @@ Namespace TopStepTrader.UI.ViewModels
         ''' (set by ApplyRiskProfile); only strategy-specific dollar fallbacks are set here.
         ''' </summary>
         Private Sub ApplyEmaRsiCombined()
-            InitialTpAmount = 20D        ' dollar fallback (used when ATR unavailable)
-            InitialSlAmount = 10D        ' dollar fallback
+            TpDollarBracket = 20D        ' dollar fallback (used when ATR unavailable)
+            SlDollarBracket = 10D        ' dollar fallback
 
             _currentStrategy = New StrategyDefinition With {
                 .Name = "EMA/RSI Combined",
@@ -964,8 +964,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .SlMultipleOfN = _slMultipleOfN,
                 .TpMultipleOfN = _tpMultipleOfN,
                 .Leverage = _leverage,
@@ -1000,13 +1000,13 @@ Namespace TopStepTrader.UI.ViewModels
 
         ''' <summary>
         ''' Activates the Multi-Confluence Engine strategy for all 5 assets.
-        ''' Uses Turtle bracket (InitialTpAmount = $20, InitialSlAmount = $10) as the
+        ''' Uses Turtle bracket (TpDollarBracket = $20, SlDollarBracket = $10) as the
         ''' initial bracket; bracket advances on each TP hit using 0.5×N ATR steps.
         ''' DurationHours = 8 760 so sessions never auto-expire.
         ''' </summary>
         Private Sub ApplyMultiConfluenceEngine()
-            InitialTpAmount = 20D        ' dollar fallback (used when ATR unavailable)
-            InitialSlAmount = 10D        ' dollar fallback
+            TpDollarBracket = 20D        ' dollar fallback (used when ATR unavailable)
+            SlDollarBracket = 10D        ' dollar fallback
 
             _currentStrategy = New StrategyDefinition With {
                 .Name = "Multi-Confluence Engine",
@@ -1021,8 +1021,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = _maxScaleIns,
@@ -1067,8 +1067,8 @@ Namespace TopStepTrader.UI.ViewModels
         ''' Time filter: 11:00–17:00 UTC (London + NY pre-market, 07:00–13:00 EST/EDT).
         ''' </summary>
         Private Sub ApplyLultDivergence()
-            InitialTpAmount = 20D        ' dollar fallback (used when ATR unavailable)
-            InitialSlAmount = 10D        ' dollar fallback
+            TpDollarBracket = 20D        ' dollar fallback (used when ATR unavailable)
+            SlDollarBracket = 10D        ' dollar fallback
 
             _currentStrategy = New StrategyDefinition With {
                 .Name = "LULT Divergence",
@@ -1083,8 +1083,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = 0,
@@ -1124,8 +1124,8 @@ Namespace TopStepTrader.UI.ViewModels
         ''' DurationHours = 8 760 so sessions never auto-expire.
         ''' </summary>
         Private Sub ApplyBbSqueezeScalper()
-            InitialTpAmount = 8D         ' dollar fallback — ATR on 1-min bars is naturally smaller
-            InitialSlAmount = 4D         ' dollar fallback
+            TpDollarBracket = 8D         ' dollar fallback — ATR on 1-min bars is naturally smaller
+            SlDollarBracket = 4D         ' dollar fallback
 
             _currentStrategy = New StrategyDefinition With {
                 .Name = "BB Squeeze Scalper",
@@ -1140,8 +1140,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = 0,       ' strategy override — fast scalp, quick exit
@@ -1181,8 +1181,8 @@ Namespace TopStepTrader.UI.ViewModels
         ''' fast in trending conditions, near-flat in chop. Entry fires on price crossover.
         ''' </summary>
         Private Sub ApplyVidya()
-            InitialTpAmount = 20D
-            InitialSlAmount = 10D
+            TpDollarBracket = 20D
+            SlDollarBracket = 10D
 
             _currentStrategy = New StrategyDefinition With {
                 .Name = "VIDYA Cross",
@@ -1197,8 +1197,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = _maxScaleIns,
@@ -1238,8 +1238,8 @@ Namespace TopStepTrader.UI.ViewModels
         ''' High confidence fires with confidence 90; Medium fires at 60; Low is filtered.
         ''' </summary>
         Private Sub ApplyNakedTrader()
-            InitialTpAmount = 20D
-            InitialSlAmount = 10D
+            TpDollarBracket = 20D
+            SlDollarBracket = 10D
 
             _currentStrategy = New StrategyDefinition With {
                 .Name = "Naked Trader",
@@ -1254,8 +1254,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = _maxScaleIns,
@@ -1298,8 +1298,8 @@ Namespace TopStepTrader.UI.ViewModels
         ''' Exit when price returns to the Neutral Zone (inside the 1.0 SD bands).
         ''' </summary>
         Private Sub ApplyDoubleBubbleButt()
-            InitialTpAmount = 20D
-            InitialSlAmount = 10D
+            TpDollarBracket = 20D
+            SlDollarBracket = 10D
 
             _currentStrategy = New StrategyDefinition With {
                 .Name = "Double Bubble Butt",
@@ -1316,8 +1316,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .TradingEndHourUtc = 20,
                 .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .InitialTpAmount = _initialTpAmount,
-                .InitialSlAmount = _initialSlAmount,
+                .TpDollarBracket = _TpDollarBracket,
+                .SlDollarBracket = _SlDollarBracket,
                 .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = _maxScaleIns,
@@ -1399,8 +1399,8 @@ Namespace TopStepTrader.UI.ViewModels
                     .AccountId = SelectedAccount.Id,
                     .CapitalAtRisk = _capitalAtRisk,
                     .Quantity = 1,
-                    .InitialTpAmount = _currentStrategy.InitialTpAmount,
-                    .InitialSlAmount = _currentStrategy.InitialSlAmount,
+                    .TpDollarBracket = _currentStrategy.TpDollarBracket,
+                    .SlDollarBracket = _currentStrategy.SlDollarBracket,
                     .Leverage = _currentStrategy.Leverage,
                     .AdxThreshold = _currentStrategy.AdxThreshold,
                     .MaxScaleIns = _currentStrategy.MaxScaleIns,

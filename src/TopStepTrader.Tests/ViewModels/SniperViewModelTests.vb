@@ -126,6 +126,52 @@ Namespace TopStepTrader.Tests.ViewModels
             Return vm
         End Function
 
+        ' ══════════════════════════════════════════════════════════════════
+        ' TEST-06 — CanStart input validation
+
+        ''' <summary>
+        ''' When IsRunning is True, CanStart must be False to prevent a duplicate
+        ''' submission while a session is already active.
+        ''' </summary>
+        <Fact>
+        Public Sub CanStart_WhenIsRunning_IsFalse()
+            Dim vm = CreateViewModel()
+            Dim account As New Account With {.Id = 1, .Name = "Test"}
+            vm.SelectedAccount = account
+            vm.ContractId = "CON.Test"
+            vm.IsRunning = True
+
+            Assert.False(vm.CanStart)
+        End Sub
+
+        ''' <summary>
+        ''' An empty ContractId must prevent CanStart from returning True even when
+        ''' an account is selected and IsRunning is False.
+        ''' </summary>
+        <Fact>
+        Public Sub CanStart_WithEmptyContractId_IsFalse()
+            Dim vm = CreateViewModel()
+            Dim account As New Account With {.Id = 1, .Name = "Test"}
+            vm.SelectedAccount = account
+            vm.ContractId = String.Empty
+
+            Assert.False(vm.CanStart)
+        End Sub
+
+        ''' <summary>
+        ''' A whitespace-only ContractId must also be rejected — IsNullOrWhiteSpace
+        ''' semantics, not just IsNullOrEmpty.
+        ''' </summary>
+        <Fact>
+        Public Sub CanStart_WithWhitespaceContractId_IsFalse()
+            Dim vm = CreateViewModel()
+            Dim account As New Account With {.Id = 1, .Name = "Test"}
+            vm.SelectedAccount = account
+            vm.ContractId = "   "
+
+            Assert.False(vm.CanStart)
+        End Sub
+
     End Class
 
 End Namespace

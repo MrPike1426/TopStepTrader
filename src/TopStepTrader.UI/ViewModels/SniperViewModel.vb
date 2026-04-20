@@ -72,23 +72,23 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _initialTpAmount As String = "20"
-        Public Property InitialTpAmount As String
+        Private _TpDollarBracket As String = "20"
+        Public Property TpDollarBracket As String
             Get
-                Return _initialTpAmount
+                Return _TpDollarBracket
             End Get
             Set(value As String)
-                SetProperty(_initialTpAmount, value)
+                SetProperty(_TpDollarBracket, value)
             End Set
         End Property
 
-        Private _initialSlAmount As String = "10"
-        Public Property InitialSlAmount As String
+        Private _SlDollarBracket As String = "10"
+        Public Property SlDollarBracket As String
             Get
-                Return _initialSlAmount
+                Return _SlDollarBracket
             End Get
             Set(value As String)
-                SetProperty(_initialSlAmount, value)
+                SetProperty(_SlDollarBracket, value)
             End Set
         End Property
 
@@ -238,7 +238,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property CanStart As Boolean
             Get
                 Return Not _isRunning AndAlso
-                       Not String.IsNullOrEmpty(_contractId) AndAlso
+                       Not String.IsNullOrWhiteSpace(_contractId) AndAlso
                        _selectedAccount IsNot Nothing
             End Get
         End Property
@@ -376,23 +376,23 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _btInitialTpAmount As String = "20"
-        Public Property BtInitialTpAmount As String
+        Private _btTpDollarBracket As String = "20"
+        Public Property BtTpDollarBracket As String
             Get
-                Return _btInitialTpAmount
+                Return _btTpDollarBracket
             End Get
             Set(value As String)
-                SetProperty(_btInitialTpAmount, value)
+                SetProperty(_btTpDollarBracket, value)
             End Set
         End Property
 
-        Private _btInitialSlAmount As String = "10"
-        Public Property BtInitialSlAmount As String
+        Private _btSlDollarBracket As String = "10"
+        Public Property BtSlDollarBracket As String
             Get
-                Return _btInitialSlAmount
+                Return _btSlDollarBracket
             End Get
             Set(value As String)
-                SetProperty(_btInitialSlAmount, value)
+                SetProperty(_btSlDollarBracket, value)
             End Set
         End Property
 
@@ -637,8 +637,8 @@ Namespace TopStepTrader.UI.ViewModels
             Dim tpDollars As Decimal = 0D
             Dim slDollars As Decimal = 0D
 
-            Decimal.TryParse(_initialTpAmount, tpDollars)
-            Decimal.TryParse(_initialSlAmount, slDollars)
+            Decimal.TryParse(_TpDollarBracket, tpDollars)
+            Decimal.TryParse(_SlDollarBracket, slDollars)
             Double.TryParse(_scaleInTriggerTicks, scaleK) ' 'k' factor (ATR multiplier)
             Integer.TryParse(_maxRiskHeatTicks, heat)
 
@@ -782,8 +782,8 @@ Namespace TopStepTrader.UI.ViewModels
             End If
 
             Dim slMult, tpMult As Decimal
-            If Not Decimal.TryParse(_btInitialSlAmount, slMult) OrElse slMult <= 0D Then slMult = 1.0D
-            If Not Decimal.TryParse(_btInitialTpAmount, tpMult) OrElse tpMult <= 0D Then tpMult = 2.5D
+            If Not Decimal.TryParse(_btSlDollarBracket, slMult) OrElse slMult <= 0D Then slMult = 1.0D
+            If Not Decimal.TryParse(_btTpDollarBracket, tpMult) OrElse tpMult <= 0D Then tpMult = 2.5D
 
             Dim config As New BacktestConfiguration With {
                 .RunName = $"Sniper {DateTime.Now:yyyyMMdd-HHmm} — {_backtestContractId}",

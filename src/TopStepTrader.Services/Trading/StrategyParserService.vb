@@ -29,8 +29,8 @@ Namespace TopStepTrader.Services.Trading
                 .Condition = StrategyConditionType.FullCandleOutsideBands,
                 .GoLongWhenBelowBands = True,
                 .GoShortWhenAboveBands = True,
-                .InitialTpAmount = 20D,
-                .InitialSlAmount = 10D,
+                .TpDollarBracket = 20D,
+                .SlDollarBracket = 10D,
                 .RawDescription = "Over the next 8 hours, monitor the charts and wait for a full " &
                                   "5-minute candle to be completely outside the Bollinger Band " &
                                   "(above or below). Place a BUY order if below the bands and a " &
@@ -45,8 +45,8 @@ Namespace TopStepTrader.Services.Trading
                 .Condition = StrategyConditionType.RSIOversold,
                 .GoLongWhenBelowBands = True,
                 .GoShortWhenAboveBands = True,
-                .InitialTpAmount = 20D,
-                .InitialSlAmount = 10D,
+                .TpDollarBracket = 20D,
+                .SlDollarBracket = 10D,
                 .RawDescription = "Over the next 4 hours, use a 14-period RSI on 5-minute bars. " &
                                   "Place a BUY when RSI drops below 30 (oversold) and a SELL " &
                                   "when RSI rises above 70 (overbought)."
@@ -61,8 +61,8 @@ Namespace TopStepTrader.Services.Trading
                 .Condition = StrategyConditionType.EMACrossAbove,
                 .GoLongWhenBelowBands = True,
                 .GoShortWhenAboveBands = True,
-                .InitialTpAmount = 20D,
-                .InitialSlAmount = 10D,
+                .TpDollarBracket = 20D,
+                .SlDollarBracket = 10D,
                 .RawDescription = "Over the next 6 hours, monitor 5-minute bars. When EMA 9 " &
                                   "crosses above EMA 21, place a BUY. When EMA 9 crosses below " &
                                   "EMA 21, place a SELL."
@@ -77,8 +77,8 @@ Namespace TopStepTrader.Services.Trading
                 .Condition = StrategyConditionType.EMACrossAbove,
                 .GoLongWhenBelowBands = True,
                 .GoShortWhenAboveBands = True,
-                .InitialTpAmount = 20D,
-                .InitialSlAmount = 10D,
+                .TpDollarBracket = 20D,
+                .SlDollarBracket = 10D,
                 .RawDescription = "EMA Smush Zone: Price gets squeezed between EMA 12 and EMA 50. " &
                                   "Wait for EMA 12 to cross above EMA 50 to enter long (breakout up), " &
                                   "or EMA 12 to cross below EMA 50 to enter short (breakout down). " &
@@ -94,8 +94,8 @@ Namespace TopStepTrader.Services.Trading
                 .Condition = StrategyConditionType.EMACrossAbove,
                 .GoLongWhenBelowBands = True,
                 .GoShortWhenAboveBands = True,
-                .InitialTpAmount = 20D,
-                .InitialSlAmount = 10D,
+                .TpDollarBracket = 20D,
+                .SlDollarBracket = 10D,
                 .RawDescription = "EMA Double Tap: After a big directional move, price pulls back and " &
                                   "bounces between EMA 5 and EMA 12 — the double tap. " &
                                   "Enter long when EMA 5 crosses above EMA 12, short when it crosses below. " &
@@ -111,8 +111,8 @@ Namespace TopStepTrader.Services.Trading
                 .Condition = StrategyConditionType.EMACrossAbove,
                 .GoLongWhenBelowBands = True,
                 .GoShortWhenAboveBands = True,
-                .InitialTpAmount = 20D,
-                .InitialSlAmount = 10D,
+                .TpDollarBracket = 20D,
+                .SlDollarBracket = 10D,
                 .RawDescription = "EMA Flipperoo: Watch for an EMA (9 or 20) that was acting as resistance " &
                                   "to flip and become support (or vice versa for shorts). " &
                                   "Enter long when EMA 9 crosses above EMA 20 and price backtests the level, " &
@@ -128,8 +128,8 @@ Namespace TopStepTrader.Services.Trading
                 .Condition = StrategyConditionType.RSIOversold,
                 .GoLongWhenBelowBands = True,
                 .GoShortWhenAboveBands = True,
-                .InitialTpAmount = 20D,
-                .InitialSlAmount = 10D,
+                .TpDollarBracket = 20D,
+                .SlDollarBracket = 10D,
                 .RawDescription = "Double Bottom Reversal: Look for a W-shaped price pattern at a key support level. " &
                                   "When RSI drops below 30 (oversold) a second time at the same support, " &
                                   "enter long expecting a reversal. Enter short when RSI rises above 70 " &
@@ -146,8 +146,8 @@ Namespace TopStepTrader.Services.Trading
                 .Condition = StrategyConditionType.CloseOutsideBands,
                 .GoLongWhenBelowBands = True,
                 .GoShortWhenAboveBands = True,
-                .InitialTpAmount = 20D,
-                .InitialSlAmount = 10D,
+                .TpDollarBracket = 20D,
+                .SlDollarBracket = 10D,
                 .RawDescription = "Head & Shoulders Breakout: Identify a Head & Shoulders top pattern (or inverse H&S bottom). " &
                                   "When price closes below the Bollinger lower band (neckline break on H&S top), go short. " &
                                   "When price closes above the Bollinger upper band (neckline break on inverse H&S), go long. " &

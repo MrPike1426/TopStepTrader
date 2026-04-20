@@ -41,7 +41,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private _cancelSource As CancellationTokenSource
 
         ' ── Elapsed-time timer ─────────────────────────────────────────────────
-        Private ReadOnly _elapsedTimer As DispatcherTimer
+        Private _elapsedTimer As DispatcherTimer   ' Nothing when no WPF dispatcher (unit tests)
         Private _workStartTime As DateTimeOffset
 
         ' ══════════════════════════════════════════════════════════════════════
@@ -605,10 +605,12 @@ Namespace TopStepTrader.UI.ViewModels
 
             AddHandler _backtestService.ProgressUpdated, AddressOf OnProgress
 
-            _elapsedTimer = New DispatcherTimer(DispatcherPriority.Normal,
-                                                Application.Current.Dispatcher)
-            _elapsedTimer.Interval = TimeSpan.FromSeconds(1)
-            AddHandler _elapsedTimer.Tick, AddressOf OnElapsedTick
+            If Application.Current IsNot Nothing Then
+                _elapsedTimer = New DispatcherTimer(DispatcherPriority.Normal,
+                                                    Application.Current.Dispatcher)
+                _elapsedTimer.Interval = TimeSpan.FromSeconds(1)
+                AddHandler _elapsedTimer.Tick, AddressOf OnElapsedTick
+            End If
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════════
@@ -1156,12 +1158,12 @@ Namespace TopStepTrader.UI.ViewModels
         Private Sub StartElapsedTimer()
             _workStartTime = DateTimeOffset.UtcNow
             ElapsedTimeText = "0:00"
-            If Not _elapsedTimer.IsEnabled Then _elapsedTimer.Start()
+            If _elapsedTimer IsNot Nothing AndAlso Not _elapsedTimer.IsEnabled Then _elapsedTimer.Start()
         End Sub
 
         Private Sub StopElapsedTimerIfIdle()
             If Not IsWorking Then
-                _elapsedTimer.Stop()
+                _elapsedTimer?.Stop()
                 ElapsedTimeText = ""
             End If
         End Sub
@@ -1210,8 +1212,10 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public Sub Dispose() Implements IDisposable.Dispose
             If Not _disposed Then
-                _elapsedTimer.Stop()
-                RemoveHandler _elapsedTimer.Tick, AddressOf OnElapsedTick
+                If _elapsedTimer IsNot Nothing Then
+                    _elapsedTimer.Stop()
+                    RemoveHandler _elapsedTimer.Tick, AddressOf OnElapsedTick
+                End If
                 RemoveHandler _backtestService.ProgressUpdated, AddressOf OnProgress
                 _cancelSource?.Cancel()
                 _cancelSource?.Dispose()

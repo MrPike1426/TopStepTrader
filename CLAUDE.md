@@ -37,7 +37,7 @@ dotnet build --no-restore -v q
 dotnet test --no-build -v q
 ```
 
-**Expected output:** `292 passed, 0 failed` (as of 2026-04-20). If the count changes after adding new tests, update this number.
+**Expected output:** `320 passed, 0 failed` (as of 2026-04-20). If the count changes after adding new tests, update this number.
 
 **Rules:**
 - Never leave the project in a broken build state.
@@ -348,7 +348,7 @@ A dedicated research page for testing academically-validated strategies that are
 **Workflow:** Select card → choose contract + date range + interval → Run Backtest → view results (win rate, Sharpe, P&L, drawdown) → optionally "Ask Claude" for AI analysis.
 
 - `MinSignalConfidence = 1.0` — QuantLab strategies use price-level exits, not confidence scoring
-- `InitialSlAmount = 0 / InitialTpAmount = 0` — exits are indicator-driven (SuperTrend line, Donchian mid, RSI 50)
+- `SlDollarBracket = 0 / TpDollarBracket = 0` — exits are indicator-driven (SuperTrend line, Donchian mid, RSI 50)
 - CSV export available for the full trade list
 - "Ask Claude" calls `ClaudeReviewService.AnalyseBacktestResultsAsync` with strategy description and result summary
 - `QuantLabViewModel` accepts `IBacktestService`, `IBarCollectionService`, `ClaudeReviewService`

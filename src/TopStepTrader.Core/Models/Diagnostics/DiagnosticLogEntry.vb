@@ -75,8 +75,8 @@ Namespace TopStepTrader.Core.Models.Diagnostics
     ''' Null for NO_SIGNAL entries.
     ''' </summary>
     Public Class DiagSettings
-        Public Property InitialSlAmount As Decimal
-        Public Property InitialTpAmount As Decimal
+        Public Property SlDollarBracket As Decimal
+        Public Property TpDollarBracket As Decimal
         Public Property SlPrice As Decimal
         Public Property TpPrice As Decimal
         ''' <summary>ATR | PCT — which formula determined SL/TP.</summary>

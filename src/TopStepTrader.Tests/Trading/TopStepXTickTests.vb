@@ -216,16 +216,16 @@ Namespace TopStepTrader.Tests.Trading
         End Sub
 
         <Fact>
-        Public Sub EtoroSl_FallbackWhenAtrZero_UsesInitialSlAmount()
-            ' When ATR=0, engine falls back to InitialSlAmount / dollarPerPoint.
+        Public Sub EtoroSl_FallbackWhenAtrZero_UsesSlDollarBracket()
+            ' When ATR=0, engine falls back to SlDollarBracket / dollarPerPoint.
             ' dollarPerPoint = (amount × leverage) / price = (500 × 1) / 1800 ≈ 0.2778
             ' slDistance = $10 / 0.2778 ≈ 36.0  → SL ≈ 1800 - 36 = 1764
             Dim amount = 500D
             Dim leverage = 1
             Dim price = 1800D
-            Dim initialSlAmount = 10D
+            Dim SlDollarBracket = 10D
             Dim dpp = Math.Round((amount * leverage) / price, 4)
-            Dim dist = Math.Round(initialSlAmount / dpp, 4)
+            Dim dist = Math.Round(SlDollarBracket / dpp, 4)
             Dim sl = Math.Round(price - dist, 4)
             Assert.True(sl < price)
             Assert.True(sl > price * 0.95D)  ' still tighter than the old 5% hardcode

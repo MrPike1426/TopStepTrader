@@ -45,8 +45,8 @@ Namespace TopStepTrader.Tests.Trading
                 .DurationHours = 8,
                 .GoLongWhenBelowBands = True,
                 .GoShortWhenAboveBands = True,
-                .InitialSlAmount = slPct,
-                .InitialTpAmount = tpPct,
+                .SlDollarBracket = slPct,
+                .TpDollarBracket = tpPct,
                 .SlMultipleOfN = 0D,
                 .TpMultipleOfN = 0D,
                 .Leverage = leverage,
@@ -175,23 +175,23 @@ Namespace TopStepTrader.Tests.Trading
         <Fact>
         Public Sub SlAmount_Zero_MeansNoSlOrder()
             Dim strategy = BuildStrategy("OIL", slPct:=0D, tpPct:=1.5D, capitalAtRisk:=1000D)
-            ' Engine guard: If _strategy.InitialSlAmount > 0 Then ... bracket initialised with SL price
-            Assert.Equal(0D, strategy.InitialSlAmount)
+            ' Engine guard: If _strategy.SlDollarBracket > 0 Then ... bracket initialised with SL price
+            Assert.Equal(0D, strategy.SlDollarBracket)
             ' slPrice remains 0 → engine skips SL bracket placement
         End Sub
 
         <Fact>
         Public Sub TpAmount_Zero_MeansNoTpOrder()
             Dim strategy = BuildStrategy("OIL", slPct:=0.75D, tpPct:=0D, capitalAtRisk:=1000D)
-            Assert.Equal(0D, strategy.InitialTpAmount)
+            Assert.Equal(0D, strategy.TpDollarBracket)
         End Sub
 
         <Fact>
         Public Sub BothAmounts_Zero_NoBrackets_OrderStillValidToPlace()
             ' A trade can be opened without SL/TP — just a market open with no brackets.
             Dim strategy = BuildStrategy("OIL", slPct:=0D, tpPct:=0D, capitalAtRisk:=1000D)
-            Assert.Equal(0D, strategy.InitialSlAmount)
-            Assert.Equal(0D, strategy.InitialTpAmount)
+            Assert.Equal(0D, strategy.SlDollarBracket)
+            Assert.Equal(0D, strategy.TpDollarBracket)
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════
@@ -439,8 +439,8 @@ Namespace TopStepTrader.Tests.Trading
         Public Sub StrategyDefinition_NewDollarFields_DefaultToTwentyAndTen()
             Dim sd As New StrategyDefinition()
 
-            Assert.Equal(20D, sd.InitialTpAmount)
-            Assert.Equal(10D, sd.InitialSlAmount)
+            Assert.Equal(20D, sd.TpDollarBracket)
+            Assert.Equal(10D, sd.SlDollarBracket)
             Assert.Equal(1, sd.Leverage)
         End Sub
 
@@ -448,8 +448,8 @@ Namespace TopStepTrader.Tests.Trading
         Public Sub StrategyDefinition_DollarFields_RoundTrip()
             Dim sd = BuildStrategy("OIL", slPct:=0.75D, tpPct:=1.5D, capitalAtRisk:=1000D, leverage:=2)
 
-            Assert.Equal(0.75D, sd.InitialSlAmount)
-            Assert.Equal(1.5D, sd.InitialTpAmount)
+            Assert.Equal(0.75D, sd.SlDollarBracket)
+            Assert.Equal(1.5D, sd.TpDollarBracket)
             Assert.Equal(2, sd.Leverage)
         End Sub
 

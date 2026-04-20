@@ -336,8 +336,8 @@ Namespace TopStepTrader.Services.Market
         ''' OHLCV: Open=first, High=Max, Low=Min, Close=last, Volume=Sum, VWAP=mean.
         ''' Used for: TenMinute (2×5-min), TwoHour (2×1-hr), FourHour (4×1-hr).
         ''' </summary>
-        Private Shared Function AggregateBars(sourceBars As List(Of MarketBar),
-                                              targetTimeframe As BarTimeframe) As List(Of MarketBar)
+        Friend Shared Function AggregateBars(sourceBars As List(Of MarketBar),
+                                             targetTimeframe As BarTimeframe) As List(Of MarketBar)
             Dim targetMinutes As Long = CLng(targetTimeframe)
             Dim windowSeconds As Long = targetMinutes * 60L
 

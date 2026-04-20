@@ -1515,7 +1515,7 @@ Namespace TopStepTrader.Services.Trading
                 Dim slThreshold As Decimal =
                     If(_currentAtrValue > 0D AndAlso _totalDollarPerPoint > 0D,
                        -Math.Abs(_strategy.SlMultipleOfN * _currentAtrValue * _totalDollarPerPoint),
-                       -Math.Abs(_strategy.InitialSlAmount))
+                       -Math.Abs(_strategy.SlDollarBracket))
                 Dim estimatedPnl As Decimal
                 If _lastApiPnl <> 0D Then
                     estimatedPnl = _lastApiPnl
@@ -1542,8 +1542,8 @@ Namespace TopStepTrader.Services.Trading
                         slDollarsDeferred = Math.Round(_strategy.SlMultipleOfN * _currentAtrValue * dppDeferred, 2)
                         tpDollarsDeferred = Math.Round(_strategy.TpMultipleOfN * _currentAtrValue * dppDeferred, 2)
                     Else
-                        slDollarsDeferred = _strategy.InitialSlAmount
-                        tpDollarsDeferred = _strategy.InitialTpAmount
+                        slDollarsDeferred = _strategy.SlDollarBracket
+                        tpDollarsDeferred = _strategy.TpDollarBracket
                     End If
                     ' Seed _lastSlPrice and _lastTpPrice from ATR so the trail ratchet has a
                     ' starting point, then IMMEDIATELY push both levels to the broker.

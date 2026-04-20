@@ -56,7 +56,6 @@ Namespace TopStepTrader.Services.Backtest
             _logger.LogInformation("Starting backtest '{Name}' from {Start} to {End}",
                                    config.RunName, config.StartDate, config.EndDate)
 
-            ' Load bars for the configured date range â€” GetBarsAsync returns domain MarketBar objects
             Dim from As DateTimeOffset = New DateTimeOffset(DateTime.SpecifyKind(config.StartDate, DateTimeKind.Unspecified), TimeSpan.Zero)
             Dim [to] As DateTimeOffset = New DateTimeOffset(DateTime.SpecifyKind(config.EndDate, DateTimeKind.Unspecified), TimeSpan.Zero).AddDays(1)
             Dim filteredBars = Await _barRepository.GetBarsAsync(
@@ -68,6 +67,30 @@ Namespace TopStepTrader.Services.Backtest
             End If
 
             _logger.LogInformation("Replaying {N} bars", filteredBars.Count)
+            Dim result = RunReplay(config, filteredBars, cancel)
+
+            Try
+                Await PersistResultAsync(result, filteredBars.Count, config.Timeframe)
+            Catch ex As Exception
+                _logger.LogError(ex, "Failed to persist backtest result")
+            End Try
+
+            _logger.LogInformation(
+                "Backtest complete: {Trades} trades, PnL={PnL:C}, WinRate={WR:P1}",
+                result.TotalTrades, result.TotalPnL, result.WinRate)
+
+            Return result
+        End Function
+
+        ''' <summary>
+        ''' Pure replay loop -- pre-loaded bars only, no I/O.
+        ''' Exposed as Friend so unit tests can inject synthetic bar lists and verify engine
+        ''' behaviour (e.g. DonchianBreakout de-bounce, NaN warm-up guard) without a
+        ''' database or bar-repository dependency.
+        ''' </summary>
+        Friend Function RunReplay(config As BacktestConfiguration,
+                                  filteredBars As IReadOnlyList(Of MarketBar),
+                                  cancel As CancellationToken) As BacktestResult
 
             ' -- Pre-calculate all indicator series and warm-up period via helper.
             Dim warmUp As Integer = 0
@@ -110,6 +133,9 @@ Namespace TopStepTrader.Services.Backtest
             ' Sentinel is -1000 (not Integer.MinValue) to avoid Int32 overflow in the
             ' (i - lastForceCloseBarIndex) subtraction at the cooldown check below.
             Dim lastForceCloseBarIndex As Integer = -1000
+            ' Tracks the bar index of the most recent DonchianBreakout mid-cross (NeutralExit).
+            ' Suppresses re-entry for 3 bars after a mid-cross exit to prevent oscillation churn.
+            Dim lastDonchianExitBarIndex As Integer = -1000
 
             ' MultiConfluence ATR-based SL/TP prices â€” set at entry, cleared on exit.
             ' Used instead of tick-based config values for MultiConfluence positions.
@@ -284,22 +310,9 @@ Namespace TopStepTrader.Services.Backtest
 
                     ' â”€â”€ SuperTrend price-level exit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                     If config.StrategyCondition = StrategyConditionType.SuperTrend AndAlso qlStOpenSlPrice <> 0D Then
-                        If qlStIsLong Then
-                            If bar.Low <= qlStOpenSlPrice Then
-                                exitReason = "StopLoss"
-                                exitPrice = qlStOpenSlPrice
-                            ElseIf bar.High >= qlStOpenTpPrice Then
-                                exitReason = "TakeProfit"
-                                exitPrice = qlStOpenTpPrice
-                            End If
-                        Else
-                            If bar.High >= qlStOpenSlPrice Then
-                                exitReason = "StopLoss"
-                                exitPrice = qlStOpenSlPrice
-                            ElseIf bar.Low <= qlStOpenTpPrice Then
-                                exitReason = "TakeProfit"
-                                exitPrice = qlStOpenTpPrice
-                            End If
+                        exitReason = BacktestMetrics.CheckFixedExit(openLegs(0).Side, bar, qlStOpenSlPrice, qlStOpenTpPrice)
+                        If exitReason IsNot Nothing Then
+                            exitPrice = BacktestMetrics.GetExitPrice(openLegs(0), bar, exitReason, qlStOpenSlPrice, qlStOpenTpPrice)
                         End If
                     End If
 
@@ -367,22 +380,9 @@ Namespace TopStepTrader.Services.Backtest
                     End If
 
                     If config.StrategyCondition = StrategyConditionType.MultiConfluence AndAlso mcOpenSlPrice <> 0D Then
-                        If mcIsLong Then
-                            If bar.Low <= mcOpenSlPrice Then
-                                exitReason = "StopLoss"
-                                exitPrice = mcOpenSlPrice
-                            ElseIf bar.High >= mcOpenTpPrice Then
-                                exitReason = "TakeProfit"
-                                exitPrice = mcOpenTpPrice
-                            End If
-                        Else
-                            If bar.High >= mcOpenSlPrice Then
-                                exitReason = "StopLoss"
-                                exitPrice = mcOpenSlPrice
-                            ElseIf bar.Low <= mcOpenTpPrice Then
-                                exitReason = "TakeProfit"
-                                exitPrice = mcOpenTpPrice
-                            End If
+                        exitReason = BacktestMetrics.CheckFixedExit(openLegs(0).Side, bar, mcOpenSlPrice, mcOpenTpPrice)
+                        If exitReason IsNot Nothing Then
+                            exitPrice = BacktestMetrics.GetExitPrice(openLegs(0), bar, exitReason, mcOpenSlPrice, mcOpenTpPrice)
                         End If
                      ElseIf exitReason Is Nothing Then
                         ' Use dynamic price levels when any dynamic-exit flag is on;
@@ -431,6 +431,11 @@ Namespace TopStepTrader.Services.Backtest
                         dynTp        = 0D
                         dynStopDelta = 0D
                         dynTpDelta   = 0D
+                        ' Arm Donchian de-bounce: suppress re-entry for 3 bars after a mid-cross exit
+                        If exitReason = "NeutralExit" AndAlso
+                           config.StrategyCondition = StrategyConditionType.DonchianBreakout Then
+                            lastDonchianExitBarIndex = i
+                        End If
                     Else
                         ' No exit this bar â€” advance trailing stop / break-even / extend TP
                         ' ready for the NEXT bar's exit check.  Must run AFTER all exit checks
@@ -456,6 +461,12 @@ Namespace TopStepTrader.Services.Backtest
                 ' ForceClose re-entry cooldown: suppress entry signals for 3 bars after a
                 ' profit-cap exit (only when flat; open-position exits are unaffected).
                 If openLegs.Count = 0 AndAlso (i - lastForceCloseBarIndex) <= 3 Then Continue For
+
+                ' DonchianBreakout de-bounce: suppress re-entry for 3 bars after a mid-cross
+                ' (NeutralExit) to prevent oscillation churn around the 10-bar mid-channel.
+                If openLegs.Count = 0 AndAlso
+                   config.StrategyCondition = StrategyConditionType.DonchianBreakout AndAlso
+                   (i - lastDonchianExitBarIndex) <= 3 Then Continue For
 
                 ' EmaRsi: evaluate even when a position is open (neutral-zone exit fires on
                 ' open positions).  All other strategies: evaluate only when flat.
@@ -541,19 +552,9 @@ Namespace TopStepTrader.Services.Backtest
                 Next
             End If
 
+
             ' Calculate metrics
             Dim result = BacktestMetrics.BuildResult(config, trades, capital, maxDrawdown)
-
-            ' Persist to database
-            Try
-                Await PersistResultAsync(result, filteredBars.Count, config.Timeframe)
-            Catch ex As Exception
-                _logger.LogError(ex, "Failed to persist backtest result")
-            End Try
-
-            _logger.LogInformation(
-                "Backtest complete: {Trades} trades, PnL={PnL:C}, WinRate={WR:P1}",
-                result.TotalTrades, result.TotalPnL, result.WinRate)
 
             Return result
         End Function

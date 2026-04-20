@@ -49,7 +49,7 @@ Namespace TopStepTrader.Services.Backtest
         ''' passed unchanged on every subsequent bar so the trailing distance stays constant.
         ''' They are strategy-agnostic — the caller derives them from either dollar-based config
         ''' or ATR price levels:
-        '''   Standard strategies: stopDelta = InitialSlAmount / (PointValue × Qty)
+        '''   Standard strategies: stopDelta = SlDollarBracket / (PointValue × Qty)
         '''   MultiConfluence/SuperTrend: stopDelta = Abs(entryPrice − mcOpenSlPrice)
         '''
         ''' Trailing stop  — advances <paramref name="currentStop"/> toward price, never away.
@@ -126,8 +126,8 @@ Namespace TopStepTrader.Services.Backtest
         '''
         ''' Dollar-based Turtle bracket convention:
         '''   dollarPerPoint = config.PointValue × config.Quantity
-        '''   slDelta = config.InitialSlAmount / dollarPerPoint   (price units to SL)
-        '''   tpDelta = config.InitialTpAmount / dollarPerPoint   (price units to TP)
+        '''   slDelta = config.SlDollarBracket / dollarPerPoint   (price units to SL)
+        '''   tpDelta = config.TpDollarBracket / dollarPerPoint   (price units to TP)
         '''
         ''' Buy  SL: bar.Low  ≤ entryPrice − slDelta
         ''' Buy  TP: bar.High ≥ entryPrice + tpDelta
@@ -160,15 +160,15 @@ Namespace TopStepTrader.Services.Backtest
         ''' Config-based overload — derives fixed SL/TP price levels from dollar amounts in
         ''' <paramref name="config"/> then delegates to the price-level overload.
         ''' Formula:  dollarPerPoint = PointValue × Quantity
-        '''           slDelta = InitialSlAmount / dollarPerPoint
-        '''           tpDelta = InitialTpAmount / dollarPerPoint
+        '''           slDelta = SlDollarBracket / dollarPerPoint
+        '''           tpDelta = TpDollarBracket / dollarPerPoint
         ''' </summary>
         Friend Function CheckExit(trade As BacktestTrade,
                                    bar As MarketBar,
                                    config As BacktestConfiguration) As String
             Dim dollarPerPoint = config.PointValue * config.Quantity
-            Dim slDelta = If(dollarPerPoint > 0D, config.InitialSlAmount / dollarPerPoint, 0D)
-            Dim tpDelta = If(dollarPerPoint > 0D, config.InitialTpAmount / dollarPerPoint, 0D)
+            Dim slDelta = If(dollarPerPoint > 0D, config.SlDollarBracket / dollarPerPoint, 0D)
+            Dim tpDelta = If(dollarPerPoint > 0D, config.TpDollarBracket / dollarPerPoint, 0D)
             Dim isBuy = trade.Side = "Buy"
             Dim currentStop = If(isBuy, trade.EntryPrice - slDelta, trade.EntryPrice + slDelta)
             Dim currentTp = If(isBuy, trade.EntryPrice + tpDelta, trade.EntryPrice - tpDelta)
@@ -220,8 +220,8 @@ Namespace TopStepTrader.Services.Backtest
                                       exitReason As String,
                                       config As BacktestConfiguration) As Decimal
             Dim dollarPerPoint = config.PointValue * config.Quantity
-            Dim slDelta = If(dollarPerPoint > 0D, config.InitialSlAmount / dollarPerPoint, 0D)
-            Dim tpDelta = If(dollarPerPoint > 0D, config.InitialTpAmount / dollarPerPoint, 0D)
+            Dim slDelta = If(dollarPerPoint > 0D, config.SlDollarBracket / dollarPerPoint, 0D)
+            Dim tpDelta = If(dollarPerPoint > 0D, config.TpDollarBracket / dollarPerPoint, 0D)
             Dim isBuy = trade.Side = "Buy"
             Dim currentStop = If(isBuy, trade.EntryPrice - slDelta, trade.EntryPrice + slDelta)
             Dim currentTp = If(isBuy, trade.EntryPrice + tpDelta, trade.EntryPrice - tpDelta)
@@ -308,6 +308,26 @@ Namespace TopStepTrader.Services.Backtest
             }
         End Function
 
-    End Module
+            ''' <summary>
+            ''' Check whether a bar triggered a fixed-price stop-loss or take-profit exit.
+            '''
+            ''' Uses bar.Low / bar.High (OHLC detection), not bar.Close, so that exits fire on the
+            ''' correct intra-bar extreme rather than the settlement price.
+            '''
+            ''' Returns "StopLoss", "TakeProfit", or Nothing (no exit this bar).
+            ''' A tp of 0 means no take-profit level is active; only the SL is checked.
+            ''' </summary>
+            Friend Function CheckFixedExit(side As String, bar As MarketBar, sl As Decimal, tp As Decimal) As String
+                If side = "Buy" Then
+                    If bar.Low <= sl Then Return "StopLoss"
+                    If tp > 0D AndAlso bar.High >= tp Then Return "TakeProfit"
+                Else
+                    If bar.High >= sl Then Return "StopLoss"
+                    If tp > 0D AndAlso bar.Low <= tp Then Return "TakeProfit"
+                End If
+                Return Nothing
+            End Function
 
-End Namespace
+        End Module
+
+    End Namespace

@@ -635,6 +635,21 @@ Namespace TopStepTrader.Tests.Backtest
             Assert.Null(result)
         End Sub
 
+        ''' <summary>NaN in EMA8 → warm-up guard returns Nothing (no exception thrown).</summary>
+        <Fact>
+        Public Sub TripleEmaCascade_NaNInEma8_ReturnsNothing()
+            Dim provider As New TripleEmaCascadeSignalProvider()
+            Dim bars = MakeBars(N, basePrice:=110D, allBullish:=True)
+            Dim indicators As New StrategyIndicators With {
+                .AllBars = bars,
+                .Ema8    = NaNArr(),        ' still warming up
+                .Ema21   = ConstArr(100.0F),
+                .Ema50   = ConstArr(99.0F)
+            }
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
         ' ══════════════════════════════════════════════════════════════════
         ' BbSqueezeSignalProvider
         ' ══════════════════════════════════════════════════════════════════
@@ -786,6 +801,20 @@ Namespace TopStepTrader.Tests.Backtest
             Assert.Null(result)
         End Sub
 
+        ''' <summary>NaN in VIDYA → warm-up guard returns Nothing (no exception thrown).</summary>
+        <Fact>
+        Public Sub VidyaCross_NaNInVidya_ReturnsNothing()
+            Dim provider As New VidyaCrossSignalProvider()
+            Dim bars = MakeBars(N)
+            Dim indicators As New StrategyIndicators With {
+                .AllBars    = bars,
+                .Vidya      = NaNArr(),        ' still warming up
+                .DeltaVolume = ConstArr(0.3F)
+            }
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
         ' ══════════════════════════════════════════════════════════════════
         ' NakedTraderSignalProvider
         ' ══════════════════════════════════════════════════════════════════
@@ -875,6 +904,25 @@ Namespace TopStepTrader.Tests.Backtest
             Assert.Null(result)
         End Sub
 
+        ''' <summary>NaN in EMA9 → warm-up guard returns Nothing (no exception thrown).</summary>
+        <Fact>
+        Public Sub NakedTrader_NaNInEma9_ReturnsNothing()
+            Dim provider As New NakedTraderSignalProvider()
+            Dim bars = MakeBars(N, basePrice:=110D, allBullish:=True)
+            Dim indicators As New StrategyIndicators With {
+                .AllBars       = bars,
+                .Ema9          = NaNArr(),        ' still warming up
+                .Ema21         = ConstArr(100.0F),
+                .MacdHistogram = ConstArr(0.1F),
+                .MacdLine      = ConstArr(0.05F),
+                .PlusDi        = ConstArr(25.0F),
+                .MinusDi       = ConstArr(15.0F),
+                .Adx           = ConstArr(30.0F)
+            }
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
         ' ══════════════════════════════════════════════════════════════════
         ' DoubleBubbleButtSignalProvider
         ' ══════════════════════════════════════════════════════════════════
@@ -953,6 +1001,24 @@ Namespace TopStepTrader.Tests.Backtest
             }
             Dim result = provider.Evaluate(currentBar, indicators, MakeConfig(), Idx)
 
+            Assert.Null(result)
+        End Sub
+
+        ''' <summary>NaN in DbbInnerUpper → warm-up guard returns Nothing (no exception thrown).</summary>
+        <Fact>
+        Public Sub DoubleBubbleButt_NaNInInnerBand_ReturnsNothing()
+            Dim provider As New DoubleBubbleButtSignalProvider()
+            Dim currentBar = MakeBar(102D, 103D, 101D, 102D)
+            Dim bars = MakeBars(N)
+            Dim indicators As New StrategyIndicators With {
+                .AllBars       = bars,
+                .DbbInnerUpper = NaNArr(),        ' still warming up
+                .DbbInnerLower = ConstArr(99.0F),
+                .BbUpper       = ConstArr(104.0F),
+                .BbLower       = ConstArr(96.0F),
+                .Atr           = ConstArr(2.0F)
+            }
+            Dim result = provider.Evaluate(currentBar, indicators, MakeConfig(), Idx)
             Assert.Null(result)
         End Sub
 
@@ -1285,6 +1351,21 @@ Namespace TopStepTrader.Tests.Backtest
             Assert.Equal(9.0D, result.TpDelta)     ' 3.0 × 3.0
         End Sub
 
+        ''' <summary>NaN in DonchianUpper → warm-up guard returns Nothing (no exception thrown).</summary>
+        <Fact>
+        Public Sub DonchianBreakout_NaNInUpper_ReturnsNothing()
+            Dim provider As New DonchianBreakoutSignalProvider()
+            Dim bars = MakeBars(N, basePrice:=5000D)
+            Dim bar  = MakeBar(5010D, 5015D, 5008D, 5011D)
+            Dim indicators As New StrategyIndicators With {
+                .DonchianUpper = NaNArr(),        ' still warming up
+                .DonchianLower = ConstArr(4990.0F),
+                .DonchianMid   = ConstArr(5000.0F)
+            }
+            Dim result = provider.Evaluate(bar, indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
         ' ══════════════════════════════════════════════════════════════════
         ' BbRsiReversionSignalProvider
         ' ══════════════════════════════════════════════════════════════════
@@ -1589,6 +1670,25 @@ Namespace TopStepTrader.Tests.Backtest
             Assert.True(result.IsLong)
             Assert.Equal(153D, result.StopDelta)
             Assert.Equal(306D, result.TpDelta)
+        End Sub
+
+        ''' <summary>
+        ''' NaN values in WaveTrend1 array → warm-up guard skips every bar in the
+        ''' lookback scan → no extremes found → Nothing returned (no exception thrown).
+        ''' </summary>
+        <Fact>
+        Public Sub LultDivergence_NaNWaveTrend1Values_ReturnsNothing()
+            Dim provider As New LultDivergenceSignalProvider()
+            Dim bars = BuildLultBars(currentBarHour:=12)
+            Dim nanWt1(LultN - 1) As Single
+            For i = 0 To LultN - 1 : nanWt1(i) = Single.NaN : Next
+            Dim indicators As New StrategyIndicators With {
+                .AllBars    = bars,
+                .WaveTrend1 = nanWt1,
+                .WaveTrend2 = BuildLultWt2()
+            }
+            Dim result = provider.Evaluate(bars(LultIdx), indicators, MakeConfig(), LultIdx)
+            Assert.Null(result)
         End Sub
 
     End Class
