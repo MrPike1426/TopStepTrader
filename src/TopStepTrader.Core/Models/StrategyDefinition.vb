@@ -19,6 +19,18 @@ Namespace TopStepTrader.Core.Models
         Public Property TimeframeMinutes As Integer = 5
         Public Property DurationHours As Double = 8.0
 
+        ''' <summary>
+        ''' Minute-precise UTC window start (inclusive). When both fields are set, entry orders are
+        ''' suppressed outside this window. Nothing = no restriction. Complements TradingStartHourUtc
+        ''' with minute-level granularity (e.g. New TimeOnly(8, 0) for 08:00 UTC).
+        ''' </summary>
+        Public Property TradingWindowUtcStart As TimeOnly? = Nothing
+
+        ''' <summary>
+        ''' Minute-precise UTC window end (inclusive). Nothing = no restriction.
+        ''' </summary>
+        Public Property TradingWindowUtcEnd As TimeOnly? = Nothing
+
         ' ── Indicator ─────────────────────────────────────────────────────
         Public Property Indicator As StrategyIndicatorType = StrategyIndicatorType.BollingerBands
         Public Property IndicatorPeriod As Integer = 20

@@ -8,20 +8,28 @@ Namespace TopStepTrader.Services.Backtest.Strategies
     ''' Mirrors the EmaRsiWeightedScore block in BacktestEngine (lines 1352–1478)
     ''' and the live StrategyExecutionEngine signal algorithm.
     '''
-    ''' Scoring (0–110 raw, clamped to 100 before EMA21 momentum + candle checks):
-    '''   1. EMA21 > EMA50 × 1.0005  — 25 pts
-    '''   2. Close > EMA21            — 20 pts
-    '''   3. Close > EMA50            — 15 pts
-    '''   4. RSI in 55–70 range       — 20 pts  (clamped to 100 here)
-    '''   5. EMA21 rising             — 10 pts
+    ''' Bull scoring (0–120 raw, clamped to 100 before momentum + candle + volume checks):
+    '''   1. EMA21 > EMA50 × 1.0005     — 25 pts
+    '''   2. Close > EMA21              — 20 pts
+    '''   3. Close > EMA50              — 15 pts
+    '''   4. RSI zone — 20/12/8 pts     (55–70=20, >70=12, 50–55=8)  (clamped to 100 here)
+    '''   5. EMA21 slope > 0.03% / 3 bars — 10 pts
     '''   6. ≥ 2 of last 3 bars bullish — 10 pts
+    '''   7. Volume > 20-bar avg × 1.1  — 10 pts  (skipped when absent)
+    '''
+    ''' Bear scoring (independent — NOT 100 − bullScore):
+    '''   1. EMA21 &lt; EMA50 × 0.9995 — 25 pts
+    '''   2. Close &lt; EMA21           — 20 pts
+    '''   3. Close &lt; EMA50           — 15 pts
+    '''   4. RSI zone — 20/12/8 pts   (30–45=20, &lt;30=12, 45–50=8)
+    '''   5. EMA21 slope &lt; −0.03% / 3 bars — 10 pts
+    '''   6. ≥ 2 of last 3 bars bearish — 10 pts
+    '''   7. Volume > 20-bar avg × 1.1 — 10 pts  (skipped when absent)
     '''
     ''' Buy  when bullScore  ≥ MinSignalConfidence × 100.
-    ''' Sell when (100 − bullScore) ≥ MinSignalConfidence × 100.
+    ''' Sell when bearScore  ≥ MinSignalConfidence × 100.
     '''
-    ''' Note: The neutral-zone exit (score 40–60 while in a position) is an exit
-    ''' mechanism that stays in BacktestEngine until ARCH-01e; this provider
-    ''' handles entry signals only.
+    ''' Neutral exit: both bullScore and bearScore in 40–60 (direction-less market).
     ''' </summary>
     Public Class EmaRsiSignalProvider
         Implements IStrategySignalProvider
@@ -54,14 +62,26 @@ Namespace TopStepTrader.Services.Backtest.Strategies
             ' 3. Close vs EMA50 — 15 pts
             If bar.Close > CDec(ema50Now) Then bullScore += 15
 
-            ' 4. RSI trending zone 55–70 — 20 pts
-            If rsiVal >= 55.0F AndAlso rsiVal < 70.0F Then bullScore += 20
+            ' 4. RSI zone scoring — 3 tiers
+            If rsiVal >= 55.0F AndAlso rsiVal < 70.0F Then
+                bullScore += 20    ' confirmed bullish trend zone
+            ElseIf rsiVal >= 70.0F Then
+                bullScore += 12    ' extended/overbought — still bullish, reduced weight
+            ElseIf rsiVal >= 50.0F Then
+                bullScore += 8     ' mildly bullish, above midline
+            End If
 
-            ' Clamp before momentum + candle checks (mirrors live engine)
+            ' Clamp before momentum + candle + volume checks (mirrors live engine)
             bullScore = Math.Max(0.0, Math.Min(100.0, bullScore))
 
-            ' 5. EMA21 momentum (rising since prior bar) — 10 pts
-            If ema21Now > ema21Prev Then bullScore += 10
+            ' 5. EMA21 slope over 3 bars — 10 pts (bounds guard: need barIndex ≥ 3)
+            If barIndex >= 3 Then
+                Dim ema21ThreeBack = indicators.Ema21(barIndex - 3)
+                If Not Single.IsNaN(ema21ThreeBack) AndAlso ema21ThreeBack > 0.0F Then
+                    Dim slope = (ema21Now - ema21ThreeBack) / ema21ThreeBack
+                    If slope > 0.0003F Then bullScore += 10
+                End If
+            End If
 
             ' 6. Recent 3 candles: ≥ 2 bullish — 10 pts
             Dim bullCandles As Integer = 0
@@ -70,7 +90,55 @@ Namespace TopStepTrader.Services.Backtest.Strategies
             Next
             If bullCandles >= 2 Then bullScore += 10
 
-            Dim downPct As Double = 100.0 - bullScore
+            ' 7. Volume confirmation — 10 pts (gracefully skipped when volume is absent/zero)
+            Dim volScore As Integer = 0
+            If indicators.AllBars IsNot Nothing AndAlso barIndex >= 20 Then
+                Dim sumVol As Long = 0
+                For vi = barIndex - 20 To barIndex - 1
+                    sumVol += indicators.AllBars(vi).Volume
+                Next
+                Dim avgVol20 = CSng(sumVol) / 20.0F
+                If avgVol20 > 0 AndAlso bar.Volume > 0 Then
+                    If CSng(bar.Volume) > avgVol20 * 1.1F Then volScore = 10
+                End If
+            End If
+            bullScore += volScore
+
+            ' ── Bear score (independent — not 100 − bullScore) ──────────────────
+            Dim bearScore As Double = 0
+
+            ' 1. EMA21 < EMA50 × 0.9995 — 25 pts
+            If ema21Now < ema50Now * 0.9995F Then bearScore += 25
+            ' 2. Close < EMA21 — 20 pts
+            If bar.Close < CDec(ema21Now) Then bearScore += 20
+            ' 3. Close < EMA50 — 15 pts
+            If bar.Close < CDec(ema50Now) Then bearScore += 15
+            ' 4. RSI zone scoring — 3 tiers
+            If rsiVal >= 30.0F AndAlso rsiVal <= 45.0F Then
+                bearScore += 20    ' confirmed bearish trend zone
+            ElseIf rsiVal < 30.0F Then
+                bearScore += 12    ' oversold — still bearish, reduced weight
+            ElseIf rsiVal <= 50.0F Then
+                bearScore += 8     ' mildly bearish, below midline
+            End If
+            ' Clamp before momentum + candle + volume checks
+            bearScore = Math.Max(0.0, Math.Min(100.0, bearScore))
+            ' 5. EMA21 slope falling over 3 bars — 10 pts
+            If barIndex >= 3 Then
+                Dim ema21ThreeBack = indicators.Ema21(barIndex - 3)
+                If Not Single.IsNaN(ema21ThreeBack) AndAlso ema21ThreeBack > 0.0F Then
+                    Dim slope = (ema21Now - ema21ThreeBack) / ema21ThreeBack
+                    If slope < -0.0003F Then bearScore += 10
+                End If
+            End If
+            ' 6. ≥ 2 of last 3 candles bearish — 10 pts
+            Dim bearCandles As Integer = 0
+            For c = barIndex - 2 To barIndex
+                If Not indicators.AllBars(c).IsBullish Then bearCandles += 1
+            Next
+            If bearCandles >= 2 Then bearScore += 10
+            ' 7. Volume confirmation — 10 pts (same ratio computed for bull)
+            bearScore += volScore
 
             ' ── ADX trend-strength gate ──────────────────────────────────────────
             Dim adxGate As Boolean = (config.MinAdxThreshold <= 0.0F)
@@ -88,15 +156,16 @@ Namespace TopStepTrader.Services.Backtest.Strategies
                 If bullScore >= minPct Then
                     side = "Buy"
                     conf = CSng(bullScore) / 100.0F
-                ElseIf downPct >= minPct Then
+                ElseIf bearScore >= minPct Then
                     side = "Sell"
-                    conf = CSng(downPct) / 100.0F
+                    conf = CSng(bearScore) / 100.0F
                 End If
             End If
 
-            ' Neutral-zone flag: score 40–60 = direction-less market.
+            ' Neutral-zone flag: both bull and bear scores 40–60 = direction-less market.
             ' BacktestEngine closes any open position at bar.Close when this is True.
-            Dim neutralExit = (bullScore >= 40.0 AndAlso bullScore <= 60.0)
+            Dim neutralExit = (bullScore >= 40.0 AndAlso bullScore <= 60.0 AndAlso
+                               bearScore >= 40.0 AndAlso bearScore <= 60.0)
 
             If side Is Nothing Then
                 Return If(neutralExit, New SignalResult With {.NeutralExit = True}, Nothing)

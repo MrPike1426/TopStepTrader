@@ -25,6 +25,7 @@ Namespace TopStepTrader.Tests.Backtest
             Return New BarCollectionService(
                 Nothing,
                 Nothing,
+                Nothing,
                 NullLogger(Of BarCollectionService).Instance)
         End Function
 
@@ -258,7 +259,7 @@ Namespace TopStepTrader.Tests.Backtest
             _ctx = New AppDbContext(opts)
             _ctx.Database.EnsureCreated()
             _repo = New BarRepository(_ctx, NullLogger(Of BarRepository).Instance)
-            _sut = New BarCollectionService(Nothing, _repo, NullLogger(Of BarCollectionService).Instance)
+            _sut = New BarCollectionService(Nothing, _repo, Nothing, NullLogger(Of BarCollectionService).Instance)
         End Sub
 
         Public Sub Dispose() Implements IDisposable.Dispose

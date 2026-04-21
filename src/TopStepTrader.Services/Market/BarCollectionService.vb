@@ -6,6 +6,7 @@ Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.Data.Repositories
+Imports TopStepTrader.Services.Trading
 
 Namespace TopStepTrader.Services.Market
 
@@ -39,13 +40,16 @@ Namespace TopStepTrader.Services.Market
 
         Private ReadOnly _pxHistoryClient As PXHistoryClient
         Private ReadOnly _barRepository As BarRepository
+        Private ReadOnly _catalog As TopStepXInstrumentCatalog
         Private ReadOnly _logger As ILogger(Of BarCollectionService)
 
         Public Sub New(pxHistoryClient As PXHistoryClient,
                        barRepository As BarRepository,
+                       catalog As TopStepXInstrumentCatalog,
                        logger As ILogger(Of BarCollectionService))
             _pxHistoryClient = pxHistoryClient
             _barRepository = barRepository
+            _catalog = catalog
             _logger = logger
         End Sub
 
@@ -109,7 +113,8 @@ Namespace TopStepTrader.Services.Market
                             .Success = True,
                             .BarCount = existing.Count,
                             .ContractId = contractId,
-                            .Message = msg
+                            .Message = msg,
+                            .WasCacheHit = True
                         }
                     End If
 
@@ -122,11 +127,24 @@ Namespace TopStepTrader.Services.Market
 
             ' ── Step 2: Resolve PX contract ID ────────────────────────────────────────
             ' The contractId stored in SQLite is the stable eToro key (e.g. "GOLD.24-7").
-            ' The API call requires the quarterly PX contract ID (e.g. "CON.F.US.MGC.Q26").
+            ' The API call requires the active front-month PX contract ID (e.g. "CON.F.US.MGC.Q25").
+            ' Use TopStepXInstrumentCatalog.GetResolvedContractIdAsync — the same catalog-backed
+            ' resolution used by TopStepXBarIngestionService — so that quarterly rolls are handled
+            ' automatically and we never request a far-out contract that has no bar history yet.
             Dim pxContractId As String = contractId
             Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
             If fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId) Then
-                pxContractId = fav.PxContractId
+                Dim resolved = Await _catalog.GetResolvedContractIdAsync(fav, cancel)
+                If Not String.IsNullOrEmpty(resolved) Then
+                    If Not String.Equals(resolved, fav.PxContractId, StringComparison.OrdinalIgnoreCase) Then
+                        _logger.LogInformation(
+                            "EnsureBarsAsync: resolved {Old} → {New} (front-month roll) for {Contract}",
+                            fav.PxContractId, resolved, contractId)
+                    End If
+                    pxContractId = resolved
+                Else
+                    pxContractId = fav.PxContractId
+                End If
             End If
 
             ' Determine source timeframe for non-native intervals
@@ -289,7 +307,8 @@ Namespace TopStepTrader.Services.Market
                 finalMessage = $"⚠ Only {countBars.Count:N0} {tfLabel} bars available for {contractId} — " &
                                "TopStepX may have returned partial data."
             Else
-                finalMessage = $"✗ No {tfLabel} bars returned for {contractId} from TopStepX. " &
+                Dim pxIdHint = If(pxContractId <> contractId, $" (PX contract: {pxContractId})", "")
+                finalMessage = $"✗ No {tfLabel} bars returned for {contractId}{pxIdHint} from TopStepX. " &
                                "Ensure the contract is active and the API key is valid."
             End If
 

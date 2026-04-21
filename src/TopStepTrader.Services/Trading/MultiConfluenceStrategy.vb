@@ -40,22 +40,26 @@ Namespace TopStepTrader.Services.Trading
         Public Property StochRsiK As Single = 0F
         Public Property LongCount As Integer = 0
         Public Property ShortCount As Integer = 0
+        ''' <summary>Graduated confidence score [0–1] based on ADX, DI-spread, MACD magnitude, and StochRSI distance. 0 when no signal fires.</summary>
+        Public Property Confidence As Single = 0F
     End Class
 
     ''' <summary>
     ''' Multi-Confluence Engine for commodities trading via the eToro API.
     '''
-    ''' Combines seven independent signals on 15-minute bars:
-    '''   1. Ichimoku Cloud (9 / 26 / 52 / displacement 26)
+    ''' Combines nine independent signals on 15-minute bars:
+    '''   1. Ichimoku Cloud (9 / 26 / 52 / displacement 26) + cloud twist pre-filter
     '''   2. EMA 21  (primary trend)
-    '''   3. EMA 50  (big-picture trend)
-    '''   4. MACD histogram (12 / 26 / 9)
+    '''   2b. EMA 50  (big-picture trend anchor — active gate condition)
+    '''   3. Tenkan/Kijun cross
+    '''   4. MACD histogram (8 / 17 / 9 — intraday-tuned)
     '''   5. Stochastic RSI (14 / 14)
     '''   6. DMI / ADX (14) trend-strength gate
     '''   7. Ichimoku Lagging Span (Chikou) confirmation
+    '''   8. Volume confirmation (current bar ≥ 1.2× 20-bar average)
     '''
-    ''' ALL seven long conditions must align for a Long entry;
-    ''' all seven short conditions must align for a Short entry.
+    ''' ALL nine long conditions must align for a Long entry;
+    ''' all nine short conditions must align for a Short entry.
     ''' SL = min(1.5×ATR, Ichimoku cloud edge); TP = 2:1 reward-to-risk.
     ''' Minimum <see cref="MinBarsRequired"/> bars required for full warm-up.
     ''' </summary>
@@ -78,12 +82,13 @@ Namespace TopStepTrader.Services.Trading
         Public Const MinBarsRequired As Integer = 80
 
         ''' <summary>
-        ''' Evaluates all seven confluence conditions and returns a trade signal.
+        ''' Evaluates all nine confluence conditions and returns a trade signal.
         ''' Returns a <see cref="MultiConfluenceResult"/> with Side = Nothing when no signal fires.
         ''' </summary>
         ''' <param name="highs">Bar high prices.</param>
         ''' <param name="lows">Bar low prices.</param>
         ''' <param name="closes">Bar close prices.</param>
+        ''' <param name="volumes">Bar volumes (used for condition 8 volume gate).</param>
         ''' <param name="adxThreshold">
         ''' Minimum ADX(14) for condition 5 (trend-strength gate). Defaults to 20 (Damian profile).
         ''' Lewis (Averse) = 25; Joe (Aggressive) = 15.
@@ -92,6 +97,7 @@ Namespace TopStepTrader.Services.Trading
                 highs As IList(Of Decimal),
                 lows As IList(Of Decimal),
                 closes As IList(Of Decimal),
+                volumes As IList(Of Decimal),
                 Optional adxThreshold As Single = 20.0F) As MultiConfluenceResult
 
             Dim result As New MultiConfluenceResult()
@@ -118,13 +124,23 @@ Namespace TopStepTrader.Services.Trading
             Dim kijunNow = ichi.Kijun(n - 1)
             Dim cloudTop = CDec(Math.Max(spanANow, spanBNow))
             Dim cloudBottom = CDec(Math.Min(spanANow, spanBNow))
+            Dim bullishCloud = (spanANow >= spanBNow)   ' SpanA ≥ SpanB = green/bullish cloud
             Dim lastClose = closes(n - 1)
 
             ' ── Lagging span: current close vs price 26 bars ago ──────────────────
             ' Chikou confirmation: close must be above (Long) / below (Short) the price
-            ' that appeared 26 bars ago on the chart.
+            ' that appeared 26 bars ago on the chart AND must clear the cloud at that position.
             Dim lagIdx = n - 1 - IchimokuDisplacement
             Dim lagClose = If(lagIdx >= 0, closes(lagIdx), Decimal.MinValue)
+
+            ' Historical cloud at the Chikou lag position — guard for index < 0 and NaN.
+            ' lagCloudTop=MaxValue / lagCloudBottom=MinValue ensures conditions fail when unavailable.
+            Dim lagSpanAOk = (lagIdx >= 0 AndAlso Not Single.IsNaN(ichi.SpanA(lagIdx)))
+            Dim lagSpanBOk = (lagIdx >= 0 AndAlso Not Single.IsNaN(ichi.SpanB(lagIdx)))
+            Dim lagCloudTop    = If(lagSpanAOk AndAlso lagSpanBOk,
+                                    CDec(Math.Max(ichi.SpanA(lagIdx), ichi.SpanB(lagIdx))), Decimal.MaxValue)
+            Dim lagCloudBottom = If(lagSpanAOk AndAlso lagSpanBOk,
+                                    CDec(Math.Min(ichi.SpanA(lagIdx), ichi.SpanB(lagIdx))), Decimal.MinValue)
 
             ' ── EMA 21 / EMA 50 ───────────────────────────────────────────────────
             Dim ema21Arr = TechnicalIndicators.EMA(closes, 21)
@@ -138,14 +154,15 @@ Namespace TopStepTrader.Services.Trading
             Dim minusDINow = TechnicalIndicators.LastValid(dmi.MinusDI)
             Dim adxNow = TechnicalIndicators.LastValid(dmi.ADX)
 
-            ' ── MACD (12, 26, 9) ──────────────────────────────────────────────────
-            Dim macd = TechnicalIndicators.MACD(closes)
+            ' ── MACD (8, 17, 9) — intraday-tuned ─────────────────────────────────
+            Dim macd = TechnicalIndicators.MACD(closes, fastPeriod:=8, slowPeriod:=17, signalPeriod:=9)
             Dim histNow = TechnicalIndicators.LastValid(macd.Histogram)
             Dim histPrev = TechnicalIndicators.PreviousValid(macd.Histogram)
 
             ' ── Stochastic RSI (14 / 14) ──────────────────────────────────────────
             Dim stochRsi = TechnicalIndicators.StochasticRSI(closes)
             Dim stochKNow = TechnicalIndicators.LastValid(stochRsi.K)
+            Dim stochKPrev = TechnicalIndicators.PreviousValid(stochRsi.K)
 
             ' ── ATR (14) — for SL/TP sizing ───────────────────────────────────────
             Dim atrArr = TechnicalIndicators.ATR(highs, lows, closes, 14)
@@ -169,33 +186,43 @@ Namespace TopStepTrader.Services.Trading
             ' When ATR = 0 (warm-up) this degrades to the original > 0 / < 0 check.
             Dim macdMinMag = CSng(result.AtrValue * 0.05D)
 
-            ' ── Long conditions (all 7 must be True) ──────────────────────────────
+            ' ── Long conditions (all 8 must be True) ──────────────────────────────
             Dim tenkanKijunValid = Not Single.IsNaN(tenkanNow) AndAlso Not Single.IsNaN(kijunNow)
 
-            Dim lc1 = (lastClose > cloudTop)                                                ' 1. Price above cloud
+            Dim lc1 = (bullishCloud AndAlso lastClose > cloudTop)                           ' 1. Price above cloud in bullish cloud (cloud twist pre-filter)
             Dim lc2 = (lastClose > CDec(ema21Now))                                          ' 2. Price above EMA 21
+            Dim lc2b = (Not Single.IsNaN(ema50Now) AndAlso lastClose > CDec(ema50Now))     ' 2b. Price above EMA 50 (big-picture trend anchor)
             Dim lc3 = (tenkanKijunValid AndAlso tenkanNow > kijunNow)                       ' 3. Tenkan-sen > Kijun-sen
-            Dim lc4 = (lagIdx >= 0 AndAlso lastClose > lagClose + chikouMinGap)             ' 4. Chikou above price 26 bars ago by ≥0.1%
+            Dim lc4 = (lagIdx >= 0 AndAlso lastClose > lagClose + chikouMinGap AndAlso
+                       lastClose > lagCloudTop)                                              ' 4. Chikou above price 26 bars ago by ≥0.1% AND above historical cloud top
             Dim lc5 = (adxNow >= adxThreshold AndAlso plusDINow - minusDINow >= MinDiSpread) ' 5. ADX gate + DI spread ≥ 2 pts
             Dim lc6 = (histNow >= macdMinMag AndAlso histNow > histPrev _
                        AndAlso Not Single.IsNaN(histPrev))                                  ' 6. MACD histogram positive by ≥5% ATR and rising
-            Dim lc7 = (Not Single.IsNaN(stochKNow) AndAlso stochKNow < 0.7F)               ' 7. StochRSI K < 0.7 (not overbought; was 0.8)
+            Dim lc7 = (Not Single.IsNaN(stochKNow) AndAlso stochKNow < 0.7F)               ' 7. StochRSI K < 0.7 (not overbought)
 
-            ' ── Short conditions (all 7 must be True) ─────────────────────────────
-            Dim sc1 = (lastClose < cloudBottom)                                              ' 1. Price below cloud
+            ' ── Volume gate: current bar volume must be ≥ 1.2× the 20-bar average ──────
+            Dim volAvg = If(n >= 21, volumes.Skip(n - 21).Take(20).Average(), 0D)
+            Dim lc8 = (volAvg > 0D AndAlso volumes(n - 1) >= volAvg * 1.2D)                ' 8. Volume ≥ 1.2× 20-bar average
+            Dim sc8 = lc8   ' same gate for shorts
+
+            ' ── Short conditions (all 9 must be True) ─────────────────────────────
+            Dim sc1 = (Not bullishCloud AndAlso lastClose < cloudBottom)                    ' 1. Price below cloud in bearish cloud (cloud twist pre-filter)
             Dim sc2 = (lastClose < CDec(ema21Now))                                           ' 2. Price below EMA 21
+            Dim sc2b = (Not Single.IsNaN(ema50Now) AndAlso lastClose < CDec(ema50Now))      ' 2b. Price below EMA 50
             Dim sc3 = (tenkanKijunValid AndAlso tenkanNow < kijunNow)                        ' 3. Tenkan-sen < Kijun-sen
-            Dim sc4 = (lagIdx >= 0 AndAlso lastClose < lagClose - chikouMinGap)              ' 4. Chikou below price 26 bars ago by ≥0.1%
+            Dim sc4 = (lagIdx >= 0 AndAlso lastClose < lagClose - chikouMinGap AndAlso
+                       lastClose < lagCloudBottom)                                           ' 4. Chikou below price 26 bars ago by ≥0.1% AND below historical cloud bottom
             Dim sc5 = (adxNow >= adxThreshold AndAlso minusDINow - plusDINow >= MinDiSpread) ' 5. ADX gate + DI spread ≥ 2 pts
             Dim sc6 = (histNow <= -macdMinMag AndAlso histNow < histPrev _
                        AndAlso Not Single.IsNaN(histPrev))                                   ' 6. MACD histogram negative by ≥5% ATR and falling
-            Dim sc7 = (Not Single.IsNaN(stochKNow) AndAlso stochKNow > 0.3F)                ' 7. StochRSI K > 0.3 (not oversold; was 0.2)
+            Dim sc7 = (Not Single.IsNaN(stochKNow) AndAlso stochKNow > 0.3F _
+                       AndAlso Not Single.IsNaN(stochKPrev) AndAlso stochKNow < stochKPrev) ' 7. StochRSI K not oversold AND falling (room to fall, turning from overbought)
 
-            Dim longCount = {lc1, lc2, lc3, lc4, lc5, lc6, lc7}.Count(Function(c) c)
-            Dim shortCount = {sc1, sc2, sc3, sc4, sc5, sc6, sc7}.Count(Function(c) c)
+            Dim longCount = {lc1, lc2, lc2b, lc3, lc4, lc5, lc6, lc7, lc8}.Count(Function(c) c)
+            Dim shortCount = {sc1, sc2, sc2b, sc3, sc4, sc5, sc6, sc7, sc8}.Count(Function(c) c)
 
-            result.BullScore = CInt(longCount / 7 * 100)
-            result.BearScore = CInt(shortCount / 7 * 100)
+            result.BullScore = CInt(longCount / 9 * 100)
+            result.BearScore = CInt(shortCount / 9 * 100)
             result.AdxValue = adxNow
             result.Cloud1 = cloudTop
             result.Cloud2 = cloudBottom
@@ -218,16 +245,31 @@ Namespace TopStepTrader.Services.Trading
                 $"EMA21={CDec(ema21Now):F4} EMA50={CDec(ema50Now):F4} | " &
                 $"ADX={adxNow:F1} DI+={plusDINow:F1} DI-={minusDINow:F1} | " &
                 $"MACD-H={histNow:F4}(prev={histPrev:F4}) | StochRSI={stochKNow:F3} | " &
-                $"Long={longCount}/7 Short={shortCount}/7"
+                $"VolGate={lc8} | Long={longCount}/9 Short={shortCount}/9"
 
-            ' ── Signal: all 7 conditions met in one direction ─────────────────────
-            If longCount = 7 Then
+            ' ── Signal: all 9 conditions met in one direction ─────────────────────
+            If longCount = 9 Then
                 result.Side = OrderSide.Buy
                 result.CloudEdgeSl = cloudBottom    ' cloud floor = Long SL candidate
-            ElseIf shortCount = 7 Then
+            ElseIf shortCount = 9 Then
                 result.Side = OrderSide.Sell
                 result.CloudEdgeSl = cloudTop       ' cloud ceiling = Short SL candidate
             End If
+
+            ' ── STRAT-19: Graduated confidence ────────────────────────────────────
+            ' Weight: ADX 35%, DI-spread 25%, MACD magnitude 25%, StochRSI distance 15%
+            Dim isLong       = (result.Side = OrderSide.Buy)
+            Dim adxStr       = CSng(Math.Min(1.0F, 0.5F + (adxNow - adxThreshold) / 60.0F))
+            Dim diSpreadVal  = If(isLong, plusDINow - minusDINow, minusDINow - plusDINow)
+            Dim diStr        = CSng(Math.Min(1.0F, (diSpreadVal - MinDiSpread) / 20.0F + 0.5F))
+            Dim macdMagVal   = Math.Abs(histNow)
+            Dim macdNormVal  = CSng(result.AtrValue) * 0.5F + 0.001F
+            Dim macdStr      = CSng(Math.Min(1.0F, macdMagVal / macdNormVal))
+            Dim stochDist    = If(isLong, 0.7F - stochKNow, stochKNow - 0.3F)
+            Dim stochStr     = CSng(Math.Max(0.0F, Math.Min(1.0F, stochDist / 0.7F)))
+            result.Confidence = CSng(Math.Max(0.0F, Math.Min(1.0F,
+                                    adxStr * 0.35F + diStr * 0.25F +
+                                    macdStr * 0.25F + stochStr * 0.15F)))
 
             Return result
         End Function

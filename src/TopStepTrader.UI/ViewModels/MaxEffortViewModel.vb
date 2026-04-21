@@ -207,6 +207,7 @@ Namespace TopStepTrader.UI.ViewModels
             Task.Run(Async Function()
                 Dim runIndex = 0
                 Dim rawResults As New List(Of MaxEffortRowVm)()
+                Try
 
                 For Each persona In personas
                     Dim personaShort = persona.Name.Split(" "c)(0)
@@ -331,10 +332,12 @@ Namespace TopStepTrader.UI.ViewModels
                     End Sub)
                 End If
 
-                Dispatch(Sub()
-                    MaxEffortIsRunning = False
-                    cts?.Dispose()
-                End Sub)
+                Finally
+                    Dispatch(Sub()
+                        MaxEffortIsRunning = False
+                        cts?.Dispose()
+                    End Sub)
+                End Try
             End Function)
         End Sub
 

@@ -460,7 +460,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Sub(card) SelectedCard = card)
 
             ExportCsvCommand = New RelayCommand(
-                Sub() ExportCsv(),
+                Sub() ExportCsvAsync(),
                 Function() _hasResults AndAlso Trades.Count > 0)
 
             AskClaudeCommand = New RelayCommand(
@@ -615,7 +615,7 @@ Namespace TopStepTrader.UI.ViewModels
             RelayCommand.RaiseCanExecuteChanged()
         End Sub
 
-        Private Sub ExportCsv()
+        Private Async Sub ExportCsvAsync()
             Dim dlg As New SaveFileDialog With {
                 .Title = "Export Trade List",
                 .Filter = "CSV Files (*.csv)|*.csv",
@@ -624,27 +624,34 @@ Namespace TopStepTrader.UI.ViewModels
             }
             If dlg.ShowDialog() <> True Then Return
 
+            Dim filePath = dlg.FileName
+            Dim tradeCount = Trades.Count
+            Dim content = BuildCsvContent()
             Try
-                Dim sb As New StringBuilder()
-                sb.AppendLine("PositionGroupId,Side,EntryTime,ExitTime,EntryPrice,ExitPrice,Quantity,PnL,ExitReason,Confidence")
-                For Each t In Trades
-                    Dim exitTimeStr = If(t.ExitTime.HasValue, t.ExitTime.Value.ToString("yyyy-MM-dd HH:mm:ss"), String.Empty)
-                    Dim exitPriceStr = If(t.ExitPrice.HasValue, t.ExitPrice.Value.ToString("F4"), String.Empty)
-                    Dim pnlStr = If(t.PnL.HasValue, t.PnL.Value.ToString("F2"), String.Empty)
-                    sb.AppendLine($"{t.PositionGroupId},{t.Side}," &
-                                  $"{t.EntryTime:yyyy-MM-dd HH:mm:ss}," &
-                                  $"{exitTimeStr}," &
-                                  $"{t.EntryPrice:F4},{exitPriceStr}," &
-                                  $"{t.Quantity},{pnlStr},{t.ExitReason}," &
-                                  $"{t.SignalConfidence:F2}")
-                Next
-                File.WriteAllText(dlg.FileName, sb.ToString(), Encoding.UTF8)
-                StatusText = $"Exported {Trades.Count} trades → {Path.GetFileName(dlg.FileName)}"
+                Await Task.Run(Sub() File.WriteAllText(filePath, content, Encoding.UTF8))
+                StatusText = $"Exported {tradeCount} trades → {Path.GetFileName(filePath)}"
             Catch ex As Exception
                 MessageBox.Show($"Export failed: {ex.Message}", "Export Error",
                                 MessageBoxButton.OK, MessageBoxImage.Warning)
             End Try
         End Sub
+
+        Private Function BuildCsvContent() As String
+            Dim sb As New StringBuilder()
+            sb.AppendLine("PositionGroupId,Side,EntryTime,ExitTime,EntryPrice,ExitPrice,Quantity,PnL,ExitReason,Confidence")
+            For Each t In Trades
+                Dim exitTimeStr = If(t.ExitTime.HasValue, t.ExitTime.Value.ToString("yyyy-MM-dd HH:mm:ss"), String.Empty)
+                Dim exitPriceStr = If(t.ExitPrice.HasValue, t.ExitPrice.Value.ToString("F4"), String.Empty)
+                Dim pnlStr = If(t.PnL.HasValue, t.PnL.Value.ToString("F2"), String.Empty)
+                sb.AppendLine($"{t.PositionGroupId},{t.Side}," &
+                              $"{t.EntryTime:yyyy-MM-dd HH:mm:ss}," &
+                              $"{exitTimeStr}," &
+                              $"{t.EntryPrice:F4},{exitPriceStr}," &
+                              $"{t.Quantity},{pnlStr},{t.ExitReason}," &
+                              $"{t.SignalConfidence:F2}")
+            Next
+            Return sb.ToString()
+        End Function
 
         ' ══════════════════════════════════════════════════════════════════════
         ' HELPERS

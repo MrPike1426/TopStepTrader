@@ -155,6 +155,15 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Public Property TpDollarBracket As Decimal = 0D
 
+        ' ── Indicator period ─────────────────────────────────────────────────────
+
+        ''' <summary>
+        ''' RSI period used by EmaRsiWeightedScore backtests.
+        ''' Default 14 preserves existing behaviour. Set to 9 for 1-min/5-min scalping.
+        ''' Ignored by strategies that do not use a configurable RSI period.
+        ''' </summary>
+        Public Property IndicatorPeriod As Integer = 14
+
         ' ── Scale-in cap ─────────────────────────────────────────────────────────
 
         ''' <summary>

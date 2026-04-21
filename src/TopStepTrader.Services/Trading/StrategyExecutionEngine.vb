@@ -147,7 +147,12 @@ Namespace TopStepTrader.Services.Trading
         ' Enforces a re-entry cooldown so the engine cannot place a new order in the same
         ' 30-second tick that detected the close — preventing instant re-entry cascades.
         Private _lastPositionClosedAt As DateTimeOffset = DateTimeOffset.MinValue
-        Private Const ReEntryCooldownSeconds As Integer = 60  ' minimum gap between a close and the next entry
+        ''' <summary>2 full bars in seconds — scales with timeframe so confluent conditions clear before re-entry is allowed.</summary>
+        Private ReadOnly Property ReEntryCooldownSeconds As Integer
+            Get
+                Return _strategy.TimeframeMinutes * 2 * 60
+            End Get
+        End Property
         Private _lastApiPnl As Decimal = 0D     ' last broker-reported unrealised P&L; used as final P&L on close
         Private _lastBarClose As Decimal = 0D   ' freshest price: 15-second bar when position open, strategy-tf bar otherwise; used for P&L calculation
         ' Cloud-edge SL price set by the MultiConfluence case; consumed once by PlaceBracketOrdersAsync.
@@ -161,7 +166,8 @@ Namespace TopStepTrader.Services.Trading
         ' Cleared on the first DoCheckAsync tick where ATR is available, and on every position close/reset.
         Private _bracketInitPending As Boolean = False
         ' ── Free Roll state ─────────────────────────────────────────────────────
-        ' Activation price = entry ± (initialTpTicks × 50% × tickSize).
+        ' Activation price = entry ± (initialTpTicks × 67% × tickSize).
+        Private Const FreeRollActivationFraction As Decimal = 0.67D
         ' When price crosses this level the engine moves SL to BE+CommissionTickBuffer,
         ' cancels the TP, and enters pure ATR trailing mode (TradePhase.FreeRoll).
         Private _freeRollActivationPrice As Decimal = 0D
@@ -707,11 +713,12 @@ Namespace TopStepTrader.Services.Trading
                         End If
 
                     Case StrategyConditionType.EmaRsiWeightedScore
-                        ' Six-signal weighted scoring — mirrors TrendAnalysisService on Test Trade tab.
-                        ' Periods are hardcoded (EMA21/EMA50/RSI14) for this combined strategy.
+                        ' Seven-signal weighted scoring — mirrors EmaRsiSignalProvider in backtest.
+                        ' EMA periods fixed (EMA21/EMA50); RSI period from _strategy.IndicatorPeriod (default 14).
                         Dim ema21Vals = TechnicalIndicators.EMA(closes, 21)
                         Dim ema50Vals = TechnicalIndicators.EMA(closes, 50)
-                        Dim rsi14Vals = TechnicalIndicators.RSI(closes, 14)
+                        Dim rsiPeriod = If(_strategy.IndicatorPeriod > 0, _strategy.IndicatorPeriod, 14)
+                        Dim rsi14Vals = TechnicalIndicators.RSI(closes, rsiPeriod)
 
                         Dim ema21Now = TechnicalIndicators.LastValid(ema21Vals)
                         Dim ema21Prev = TechnicalIndicators.PreviousValid(ema21Vals)
@@ -720,40 +727,74 @@ Namespace TopStepTrader.Services.Trading
                         Dim lastClose = CDec(lastBar.Close)
                         _currentEma21 = CDec(ema21Now)    ' snapshot for pullback scale-in guard
 
-                        ' Accumulate bull score (max 100)
+                        ' 3-bar EMA21 slope for Signal 5
+                        Dim ema21ThreeBack = If(ema21Vals.Length >= 4, ema21Vals(ema21Vals.Length - 4), Single.NaN)
+                        Dim ema21SlopeValid = Not Single.IsNaN(ema21ThreeBack) AndAlso ema21ThreeBack > 0.0F
+                        Dim ema21Slope = If(ema21SlopeValid, (ema21Now - ema21ThreeBack) / ema21ThreeBack, 0.0F)
+
+                        ' Volume ratio for Signal 7 (0 when volume absent/zero for futures bars)
+                        Dim volRatioVal As Single = 0F
+                        If bars.Count >= 20 Then
+                            Dim avgVol = bars.Skip(bars.Count - 20).Average(Function(b) CDbl(b.Volume))
+                            If avgVol > 0 AndAlso lastBar.Volume > 0 Then
+                                volRatioVal = CSng(lastBar.Volume / avgVol)
+                            End If
+                        End If
+
+                        ' Accumulate bull score
                         Dim bullScore As Double = 0
 
-                        ' 1. EMA21 vs EMA50 crossover — 25% (requires ≥0.05% separation, not single-tick)
+                        ' 1. EMA21 vs EMA50 crossover — 25 pts (requires ≥0.05% separation)
                         If ema21Now > ema50Now * 1.0005 Then bullScore += 25
-
-                        ' 2. Price vs EMA21 — 20%
+                        ' 2. Price vs EMA21 — 20 pts
                         If lastClose > CDec(ema21Now) Then bullScore += 20
-
-                        ' 3. Price vs EMA50 — 15%
+                        ' 3. Price vs EMA50 — 15 pts
                         If lastClose > CDec(ema50Now) Then bullScore += 15
-
-                        ' 4. RSI trending zone — 20 pts
-                        ' Awards +20 when RSI is in the 55–70 range: genuinely trending bullish,
-                        ' not merely at neutral (50–54 is non-directional noise). Tightened from 50–70.
-                        Dim rsiScore As Double
+                        ' 4. RSI zone scoring — 3 tiers
                         If rsiVal >= 55 AndAlso rsiVal < 70 Then
-                            rsiScore = 20
-                        Else
-                            rsiScore = 0
+                            bullScore += 20    ' confirmed bullish trend zone
+                        ElseIf rsiVal >= 70 Then
+                            bullScore += 12    ' extended/overbought — still bullish, reduced weight
+                        ElseIf rsiVal >= 50 Then
+                            bullScore += 8     ' mildly bullish, above midline
                         End If
-                        bullScore += rsiScore
                         bullScore = Math.Max(0.0, Math.Min(100.0, bullScore))
-
-                        ' 5. EMA21 momentum — 10%
-                        If ema21Now > ema21Prev Then bullScore += 10
-
-                        ' 6. Recent 3 candles — 10%  (majority green = bullish)
+                        ' 5. EMA21 slope over 3 bars — 10 pts
+                        If ema21SlopeValid AndAlso ema21Slope > 0.0003F Then bullScore += 10
+                        ' 6. Recent 3 candles — 10 pts  (majority green = bullish)
                         Dim lastThree = bars.Skip(bars.Count - 3).ToList()
                         Dim bullCandles = lastThree.Where(Function(b) b.Close >= b.Open).Count()
                         If bullCandles >= 2 Then bullScore += 10
+                        ' 7. Volume — 10 pts
+                        If volRatioVal > 1.1F Then bullScore += 10
+
+                        ' ── Bear score (independent — not 100 − bullScore) ──────────────
+                        Dim bearScore As Double = 0
+                        ' 1. EMA21 < EMA50 × 0.9995 — 25 pts
+                        If ema21Now < ema50Now * 0.9995 Then bearScore += 25
+                        ' 2. Close < EMA21 — 20 pts
+                        If lastClose < CDec(ema21Now) Then bearScore += 20
+                        ' 3. Close < EMA50 — 15 pts
+                        If lastClose < CDec(ema50Now) Then bearScore += 15
+                        ' 4. RSI zone scoring — 3 tiers
+                        If rsiVal >= 30 AndAlso rsiVal <= 45 Then
+                            bearScore += 20    ' confirmed bearish trend zone
+                        ElseIf rsiVal < 30 Then
+                            bearScore += 12    ' oversold — still bearish, reduced weight
+                        ElseIf rsiVal <= 50 Then
+                            bearScore += 8     ' mildly bearish, below midline
+                        End If
+                        bearScore = Math.Max(0.0, Math.Min(100.0, bearScore))
+                        ' 5. EMA21 slope falling over 3 bars — 10 pts
+                        If ema21SlopeValid AndAlso ema21Slope < -0.0003F Then bearScore += 10
+                        ' 6. ≥ 2 of last 3 candles bearish — 10 pts
+                        Dim bearCandles = lastThree.Where(Function(b) b.Close < b.Open).Count()
+                        If bearCandles >= 2 Then bearScore += 10
+                        ' 7. Volume — 10 pts
+                        If volRatioVal > 1.1F Then bearScore += 10
 
                         Dim upPct As Double = bullScore
-                        Dim downPct As Double = 100 - bullScore
+                        Dim downPct As Double = bearScore
                         rawUpPct = CInt(upPct)
                         rawDownPct = CInt(downPct)
                         Dim minPct As Integer = _strategy.MinConfidencePct  ' user-set threshold (default 85)
@@ -777,6 +818,7 @@ Namespace TopStepTrader.Services.Trading
                             .Ema21 = CDec(ema21Now),
                             .Ema50 = CDec(ema50Now),
                             .Rsi14 = CSng(rsiVal),
+                            .VolumeRatio = volRatioVal,
                             .Ema21Rising = (ema21Now > ema21Prev),
                             .RecentCandlesBullish = (bullCandles >= 2),
                             .PlusDI = TechnicalIndicators.LastValid(dmiResult.PlusDI),
@@ -803,7 +845,7 @@ Namespace TopStepTrader.Services.Trading
                         End If
 
                     Case StrategyConditionType.MultiConfluence
-                        Dim mcResult = MultiConfluenceStrategy.Evaluate(highs, lows, closes, _strategy.AdxThreshold)
+                        Dim mcResult = MultiConfluenceStrategy.Evaluate(highs, lows, closes, volumes, _strategy.AdxThreshold)
                         _currentAtrValue = mcResult.AtrValue
                         _lastAdxValue = CSng(mcResult.AdxValue)
                         _mcCloudSlPrice = Nothing   ' reset; will be set only when a signal fires
@@ -1348,6 +1390,19 @@ Namespace TopStepTrader.Services.Trading
                             If Not _openPositionId.HasValue Then
                                 _openPositionId = snapshot.PositionId
                                 Log($"🔗 Position ID resolved: {snapshot.PositionId}")
+                                ' Correct the entry price from the broker's confirmed fill rate.
+                                ' PlaceBracketOrdersAsync stores lastClose as _lastEntryPrice (an estimate).
+                                ' ProjectX does not return the fill price from PlaceOrder, so the first
+                                ' REST sync is the earliest point we can get the actual fill rate.
+                                ' Without this fix, M6E P&L is off by (fill − barClose) × DPP for the
+                                ' entire life of the trade — typically 3-5 ticks on fast bars.
+                                If snapshot.OpenRate > 0D AndAlso _lastEntryPrice > 0D Then
+                                    Dim fillDiff = Math.Abs(snapshot.OpenRate - _lastEntryPrice)
+                                    If fillDiff > If(_strategy.TickSize > 0D, _strategy.TickSize, 0.0001D) Then
+                                        Log($"📌 Entry corrected {_lastEntryPrice:F5} → {snapshot.OpenRate:F5} (fill delta={fillDiff:F5})")
+                                        _lastEntryPrice = snapshot.OpenRate
+                                    End If
+                                End If
                             End If
 
                             ' Keep the aggregate contract count / leverage in sync with the
@@ -1575,10 +1630,10 @@ Namespace TopStepTrader.Services.Trading
                     If _freeRollActivationPrice = 0D AndAlso _currentAtrValue > 0D AndAlso tickSzDeferred > 0D Then
                         Dim tpMultDeferred = If(_strategy.TpMultipleOfN > 0D, _strategy.TpMultipleOfN, 2D)
                         _initialTpTicks = CInt(Math.Floor(tpMultDeferred * _currentAtrValue / tickSzDeferred))
-                        Dim actTks = CInt(Math.Floor(_initialTpTicks * 0.5))
+                        Dim actTks = CInt(Math.Floor(_initialTpTicks * FreeRollActivationFraction))
                         _freeRollActivationPrice = TickMath.PriceFromTicks(
                             _lastEntryPrice, actTks, tickSzDeferred, isBuyDeferred, isStop:=False)
-                        Log($"🎯 Free Roll gate (deferred): activation @ {_freeRollActivationPrice:F4} ({actTks}t = 50% of {_initialTpTicks}t TP)")
+                        Log($"🎯 Free Roll gate (deferred): activation @ {_freeRollActivationPrice:F4} ({actTks}t = 67% of {_initialTpTicks}t TP)")
                     End If
                     _bracketInitPending = False
                     Log($"🎯 ATR bracket init for detected position — " &
@@ -1659,6 +1714,14 @@ Namespace TopStepTrader.Services.Trading
                         If _pendingDiagEntry IsNot Nothing Then
                             _pendingDiagEntry.EventType = "REJECT"
                             _pendingDiagEntry.RejectionReason = $"Outside trading hours (UTC {DateTimeOffset.UtcNow.Hour:00}:xx, window={_strategy.TradingStartHourUtc:00}–{_strategy.TradingEndHourUtc:00}h)"
+                            _diagLogger?.WriteEntry(_pendingDiagEntry)
+                            _pendingDiagEntry = Nothing
+                        End If
+                    ElseIf Not IsInsideTradingWindow() Then
+                        Log($"⏰ Outside trading window ({_strategy.TradingWindowUtcStart.Value}–{_strategy.TradingWindowUtcEnd.Value} UTC) — entry suppressed | signal: {side.Value}")
+                        If _pendingDiagEntry IsNot Nothing Then
+                            _pendingDiagEntry.EventType = "REJECT"
+                            _pendingDiagEntry.RejectionReason = $"Outside trading window ({_strategy.TradingWindowUtcStart.Value}–{_strategy.TradingWindowUtcEnd.Value} UTC)"
                             _diagLogger?.WriteEntry(_pendingDiagEntry)
                             _pendingDiagEntry = Nothing
                         End If
@@ -1762,9 +1825,9 @@ Namespace TopStepTrader.Services.Trading
                     If(_currentAtrValue <= 0D, " [ATR not ready — using preset]", String.Empty))
             End If
 
-            ' ── Free Roll: store TP ticks and compute activation price (50% of TP distance) ─
+            ' ── Free Roll: store TP ticks and compute activation price (67% of TP distance) ─
             _initialTpTicks = initialTpTicks
-            Dim activationTicks = CInt(Math.Floor(initialTpTicks * 0.5))
+            Dim activationTicks = CInt(Math.Floor(initialTpTicks * FreeRollActivationFraction))
             Dim isBuyFutForActivation = (side = OrderSide.Buy)
 
             Log($"📊 Placing TopStepX {sideStr} {contracts} contract(s) {fav.PxContractId} | " &
@@ -1801,7 +1864,7 @@ Namespace TopStepTrader.Services.Trading
                 ' Free Roll activation at 50% of TP tick distance from entry
                 _freeRollActivationPrice = TickMath.PriceFromTicks(priceUsed, activationTicks, tickSize,
                                                                     isBuy:=isBuyFut, isStop:=False)
-                Log($"🎯 Free Roll gate: activation @ {_freeRollActivationPrice:F4} ({activationTicks}t = 50% of TP {initialTpTicks}t)")
+                Log($"🎯 Free Roll gate: activation @ {_freeRollActivationPrice:F4} ({activationTicks}t = 67% of TP {initialTpTicks}t)")
                 _totalDollarPerPoint += CDec(contracts) * tickValue / tickSize
                 _positionOpenedAt = DateTimeOffset.UtcNow
                 _lastApiPnl = 0D
@@ -2023,7 +2086,13 @@ Namespace TopStepTrader.Services.Trading
             Dim fav = FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
             Dim expectedId = If(fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId),
                                 fav.PxContractId, _strategy.ContractId)
-            If Not String.Equals(e.Quote.ContractId, expectedId, StringComparison.OrdinalIgnoreCase) Then Return
+            ' Primary match: exact contract ID (e.g. "CON.F.US.M6E.U26").
+            ' Fallback: root-symbol match so quotes survive quarterly rolls without a code change
+            ' (e.g. MarketHub sends "CON.F.US.M6E.M26" but hardcoded PxContractId is "CON.F.US.M6E.U26").
+            Dim exactMatch = String.Equals(e.Quote.ContractId, expectedId, StringComparison.OrdinalIgnoreCase)
+            Dim rootMatch = Not String.IsNullOrEmpty(fav?.PxRootSymbol) AndAlso
+                            e.Quote.ContractId.IndexOf(fav.PxRootSymbol, StringComparison.OrdinalIgnoreCase) >= 0
+            If Not exactMatch AndAlso Not rootMatch Then Return
             ' Prefer last-trade price; fall back to bid/ask mid when no trade has printed yet.
             Dim price As Double = CDbl(e.Quote.LastPrice)
             If price <= 0D AndAlso e.Quote.BidPrice > 0D AndAlso e.Quote.AskPrice > 0D Then
@@ -2482,6 +2551,16 @@ Namespace TopStepTrader.Services.Trading
         End Function
 
         ''' <summary>
+        ''' Returns True when the current UTC time falls within the nullable minute-precise window.
+        ''' When either property is Nothing the filter is disabled (always returns True).
+        ''' </summary>
+        Private Function IsInsideTradingWindow() As Boolean
+            If Not _strategy.TradingWindowUtcStart.HasValue OrElse Not _strategy.TradingWindowUtcEnd.HasValue Then Return True
+            Dim nowUtc = TimeOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime)
+            Return nowUtc >= _strategy.TradingWindowUtcStart.Value AndAlso nowUtc <= _strategy.TradingWindowUtcEnd.Value
+        End Function
+
+        ''' <summary>
         ''' Returns True when the session P&amp;L has hit or exceeded the MaxDailyLossUsd circuit
         ''' breaker.  Always returns False when MaxDailyLossUsd is 0 (disabled).
         ''' </summary>
@@ -2538,6 +2617,16 @@ Namespace TopStepTrader.Services.Trading
                     If _pendingDiagEntry IsNot Nothing Then
                         _pendingDiagEntry.EventType = "REJECT"
                         _pendingDiagEntry.RejectionReason = $"Outside trading hours (UTC {DateTimeOffset.UtcNow.Hour:00}:xx)"
+                        _diagLogger?.WriteEntry(_pendingDiagEntry)
+                        _pendingDiagEntry = Nothing
+                    End If
+                    Return
+                End If
+                If Not IsInsideTradingWindow() Then
+                    Log($"⏰ Outside trading window ({_strategy.TradingWindowUtcStart.Value}–{_strategy.TradingWindowUtcEnd.Value} UTC) — entry suppressed | signal: {side.Value} up={upPct:F0}%")
+                    If _pendingDiagEntry IsNot Nothing Then
+                        _pendingDiagEntry.EventType = "REJECT"
+                        _pendingDiagEntry.RejectionReason = $"Outside trading window ({_strategy.TradingWindowUtcStart.Value}–{_strategy.TradingWindowUtcEnd.Value} UTC)"
                         _diagLogger?.WriteEntry(_pendingDiagEntry)
                         _pendingDiagEntry = Nothing
                     End If

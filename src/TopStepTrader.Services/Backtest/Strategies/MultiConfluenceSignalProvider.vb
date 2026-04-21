@@ -6,14 +6,16 @@ Namespace TopStepTrader.Services.Backtest.Strategies
     ''' <summary>
     ''' Multi-Confluence Engine entry provider.
     ''' Mirrors the MultiConfluence signal block in BacktestEngine (lines 740–822).
-    ''' ALL 7 conditions must align for a Long or Short signal:
-    '''   1. Close above/below Ichimoku cloud
+    ''' ALL 9 conditions must align for a Long or Short signal:
+    '''   1. Close above/below Ichimoku cloud + cloud twist pre-filter (bullish/bearish cloud)
     '''   2. Close above/below EMA21
+    '''   2b. Close above/below EMA50 (big-picture trend anchor)
     '''   3. Tenkan above/below Kijun
     '''   4. Chikou (close 26 bars ago) above/below current close (momentum)
     '''   5. ADX ≥ MinAdxThreshold and +DI/−DI directional bias
-    '''   6. MACD histogram positive/negative AND expanding
-    '''   7. StochRSI %K below 0.8 (Long) or above 0.2 (Short)
+    '''   6. MACD histogram positive/negative AND expanding (8/17/9 — intraday-tuned)
+    '''   7. StochRSI %K below 0.7 (Long) or above 0.3 AND falling (Short)
+    '''   8. Volume ≥ 1.2× 20-bar average (participation gate)
     '''
     ''' SL = min(1.5×ATR, Ichimoku cloud edge); TP = 2×R from actual SL distance.
     ''' Returns Nothing if any indicator is still in warm-up (NaN).
@@ -36,6 +38,7 @@ Namespace TopStepTrader.Services.Backtest.Strategies
                indicators.IchiTenkan Is Nothing OrElse indicators.IchiKijun Is Nothing OrElse
                indicators.Adx Is Nothing OrElse indicators.MacdHistogram Is Nothing OrElse
                indicators.StochRsiK Is Nothing OrElse indicators.Ema21 Is Nothing OrElse
+               indicators.Ema50 Is Nothing OrElse
                indicators.Atr Is Nothing OrElse indicators.AllBars Is Nothing Then
                 Return Nothing
             End If
@@ -54,16 +57,19 @@ Namespace TopStepTrader.Services.Backtest.Strategies
                                 indicators.MacdHistogram(barIndex - 1), Single.NaN)
             Dim mcStochK  = If(Not Single.IsNaN(indicators.StochRsiK(barIndex)),
                                indicators.StochRsiK(barIndex), Single.NaN)
+            Dim mcStochKPrev = If(barIndex > 0 AndAlso Not Single.IsNaN(indicators.StochRsiK(barIndex - 1)),
+                                  indicators.StochRsiK(barIndex - 1), Single.NaN)
             Dim mcAtrVal  = If(Not Single.IsNaN(indicators.Atr(barIndex)),
                                indicators.Atr(barIndex), 0.0F)
             Dim mcEma21   = indicators.Ema21(barIndex)
+            Dim mcEma50   = indicators.Ema50(barIndex)
 
             ' Skip if any indicator hasn't finished warming up
             If Single.IsNaN(mcSpanA) OrElse Single.IsNaN(mcSpanB) OrElse
                Single.IsNaN(mcTenkan) OrElse Single.IsNaN(mcKijun) OrElse
                Single.IsNaN(mcAdxVal) OrElse Single.IsNaN(mcHistNow) OrElse
                Single.IsNaN(mcHistPrev) OrElse Single.IsNaN(mcStochK) OrElse
-               Single.IsNaN(mcEma21) Then
+               Single.IsNaN(mcEma21) OrElse Single.IsNaN(mcEma50) Then
                 Return Nothing
             End If
 
@@ -71,44 +77,63 @@ Namespace TopStepTrader.Services.Backtest.Strategies
             Dim mcLastClose  = bar.Close
             Dim mcCloudTop    = SafeD(Math.Max(mcSpanA, mcSpanB))
             Dim mcCloudBottom = SafeD(Math.Min(mcSpanA, mcSpanB))
+            Dim mcBullishCloud = (mcSpanA >= mcSpanB)   ' SpanA ≥ SpanB = green/bullish cloud
             Dim mcLagIdx      = barIndex - 26
             Dim mcLagClose    = If(mcLagIdx >= 0, indicators.AllBars(mcLagIdx).Close, Decimal.MinValue)
 
-            ' ── Long: all 7 conditions ────────────────────────────────────────────
-            Dim lcl1 = (mcLastClose > mcCloudTop)
+            ' Historical cloud at lag position — guard for index < 0 and NaN.
+            Dim mcLagSpanAOk = (mcLagIdx >= 0 AndAlso Not Single.IsNaN(indicators.IchiSpanA(mcLagIdx)))
+            Dim mcLagSpanBOk = (mcLagIdx >= 0 AndAlso Not Single.IsNaN(indicators.IchiSpanB(mcLagIdx)))
+            Dim mcLagCloudTop    = If(mcLagSpanAOk AndAlso mcLagSpanBOk,
+                                      SafeD(Math.Max(indicators.IchiSpanA(mcLagIdx), indicators.IchiSpanB(mcLagIdx))), Decimal.MaxValue)
+            Dim mcLagCloudBottom = If(mcLagSpanAOk AndAlso mcLagSpanBOk,
+                                      SafeD(Math.Min(indicators.IchiSpanA(mcLagIdx), indicators.IchiSpanB(mcLagIdx))), Decimal.MinValue)
+
+            ' ── Long: all 8 conditions ────────────────────────────────────────────
+            Dim lcl1 = (mcBullishCloud AndAlso mcLastClose > mcCloudTop)
             Dim lcl2 = (mcLastClose > SafeD(mcEma21))
+            Dim lcl2b = (mcLastClose > SafeD(mcEma50))
             Dim lcl3 = (mcTenkan > mcKijun)
-            Dim lcl4 = (mcLagIdx >= 0 AndAlso mcLastClose > mcLagClose)
+            Dim lcl4 = (mcLagIdx >= 0 AndAlso mcLastClose > mcLagClose AndAlso mcLastClose > mcLagCloudTop)
             Dim lcl5 = ((config.MinAdxThreshold <= 0.0F OrElse mcAdxVal >= config.MinAdxThreshold) AndAlso
                         Not Single.IsNaN(mcPlusDI) AndAlso Not Single.IsNaN(mcMinusDI) AndAlso
                         mcPlusDI > mcMinusDI)
             Dim lcl6 = (mcHistNow > 0 AndAlso mcHistNow > mcHistPrev)
             Dim lcl7 = (mcStochK < 0.8F)
 
-            ' ── Short: all 7 conditions ───────────────────────────────────────────
-            Dim scl1 = (mcLastClose < mcCloudBottom)
+            ' ── Volume gate: current bar volume ≥ 1.2× 20-bar average ───────────
+            ' When VolMa20 is not populated (e.g. in unit tests) the gate is skipped.
+            Dim mcVolMa = If(indicators.VolMa20 IsNot Nothing AndAlso Not Single.IsNaN(indicators.VolMa20(barIndex)),
+                             CDec(indicators.VolMa20(barIndex)), 0D)
+            Dim mcCurVol = indicators.AllBars(barIndex).Volume
+            Dim lcl8 = (mcVolMa = 0D OrElse mcCurVol >= mcVolMa * 1.2D)   ' 8. Volume gate (skipped when VolMa20 unavailable)
+            Dim scl8 = lcl8   ' same gate for shorts
+
+            ' ── Short: all 9 conditions ───────────────────────────────────────────
+            Dim scl1 = (Not mcBullishCloud AndAlso mcLastClose < mcCloudBottom)
             Dim scl2 = (mcLastClose < SafeD(mcEma21))
+            Dim scl2b = (mcLastClose < SafeD(mcEma50))
             Dim scl3 = (mcTenkan < mcKijun)
-            Dim scl4 = (mcLagIdx >= 0 AndAlso mcLastClose < mcLagClose)
+            Dim scl4 = (mcLagIdx >= 0 AndAlso mcLastClose < mcLagClose AndAlso mcLastClose < mcLagCloudBottom)
             Dim scl5 = ((config.MinAdxThreshold <= 0.0F OrElse mcAdxVal >= config.MinAdxThreshold) AndAlso
                         Not Single.IsNaN(mcPlusDI) AndAlso Not Single.IsNaN(mcMinusDI) AndAlso
                         mcMinusDI > mcPlusDI)
             Dim scl6 = (mcHistNow < 0 AndAlso mcHistNow < mcHistPrev)
-            Dim scl7 = (mcStochK > 0.2F)
+            Dim scl7 = (mcStochK > 0.3F AndAlso Not Single.IsNaN(mcStochKPrev) AndAlso mcStochK < mcStochKPrev) ' K not oversold AND falling
 
             ' ── Determine side and compute SL/TP deltas ──────────────────────────
             Dim mcSide As String = Nothing
             Dim mcSlCand As Decimal = 0D
             Dim mcTpCand As Decimal = 0D
 
-            If lcl1 AndAlso lcl2 AndAlso lcl3 AndAlso lcl4 AndAlso lcl5 AndAlso lcl6 AndAlso lcl7 Then
+            If lcl1 AndAlso lcl2 AndAlso lcl2b AndAlso lcl3 AndAlso lcl4 AndAlso lcl5 AndAlso lcl6 AndAlso lcl7 AndAlso lcl8 Then
                 mcSide = "Buy"
                 ' SL = min(1.5×ATR, cloud bottom); TP = 2:1 R:R from actual SL distance
                 Dim mcAtrSlLevel = mcLastClose - SafeD(mcAtrVal * 1.5F)
                 mcSlCand = If(mcCloudBottom > mcAtrSlLevel, mcCloudBottom, mcAtrSlLevel)
                 mcTpCand = mcLastClose + (mcLastClose - mcSlCand) * 2D
 
-            ElseIf scl1 AndAlso scl2 AndAlso scl3 AndAlso scl4 AndAlso scl5 AndAlso scl6 AndAlso scl7 Then
+            ElseIf scl1 AndAlso scl2 AndAlso scl2b AndAlso scl3 AndAlso scl4 AndAlso scl5 AndAlso scl6 AndAlso scl7 AndAlso scl8 Then
                 mcSide = "Sell"
                 ' SL = min(1.5×ATR, cloud top); TP = 2:1 R:R from actual SL distance
                 Dim mcAtrSlLevel = mcLastClose + SafeD(mcAtrVal * 1.5F)
@@ -118,10 +143,26 @@ Namespace TopStepTrader.Services.Backtest.Strategies
 
             If mcSide Is Nothing OrElse mcSlCand = 0D Then Return Nothing
 
+            ' ── STRAT-19: Graduated confidence ────────────────────────────────────
+            ' Weight: ADX 35%, DI-spread 25%, MACD magnitude 25%, StochRSI distance 15%
+            Dim isLongSignal    = (mcSide = "Buy")
+            Dim adxThresh       = If(config.MinAdxThreshold > 0.0F, config.MinAdxThreshold, 20.0F)
+            Dim adxStrength     = CSng(Math.Min(1.0F, 0.5F + (mcAdxVal - adxThresh) / 60.0F))
+            Dim diSpread        = Math.Abs(mcPlusDI - mcMinusDI)
+            Dim diStrength      = CSng(Math.Min(1.0F, (diSpread - 2.0F) / 20.0F + 0.5F))
+            Dim macdMag         = Math.Abs(mcHistNow)
+            Dim macdNorm        = mcAtrVal * 0.5F + 0.001F   ' normalise by ½ ATR; avoid ÷0
+            Dim macdStrength    = CSng(Math.Min(1.0F, macdMag / macdNorm))
+            Dim stochDist       = If(isLongSignal, 0.7F - mcStochK, mcStochK - 0.3F)
+            Dim stochStrength   = CSng(Math.Max(0.0F, Math.Min(1.0F, stochDist / 0.7F)))
+            Dim mcConfidence    = CSng(adxStrength * 0.35F + diStrength * 0.25F +
+                                       macdStrength * 0.25F + stochStrength * 0.15F)
+            mcConfidence = CSng(Math.Max(0.0F, Math.Min(1.0F, mcConfidence)))
+
             ' StopDelta/TpDelta are relative to signal close; fill block re-anchors to nextBar.Open.
             Return New SignalResult With {
                 .Side       = mcSide,
-                .Confidence = 1.0F,
+                .Confidence = mcConfidence,
                 .IsLong     = (mcSide = "Buy"),
                 .StopDelta  = Math.Abs(mcLastClose - mcSlCand),
                 .TpDelta    = Math.Abs(mcTpCand - mcLastClose)

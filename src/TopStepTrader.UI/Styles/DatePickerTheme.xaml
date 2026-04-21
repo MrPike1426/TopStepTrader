@@ -1,0 +1,234 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--  DatePicker dark-theme fix.
+          The WPF Aero2 system ControlTemplate renders DatePicker using system
+          brushes that ignore local Background/Foreground setters, making the
+          control invisible on a dark background.
+
+          Two-part implementation:
+            1. Implicit DatePickerTextBox style — ensures the editable text
+               field shows white text on a transparent background.
+            2. DarkDatePickerStyle (named) — dark card shell with accent border,
+               matching UnclippedComboBoxStyle appearance.
+          The Calendar popup that appears on click retains the WPF default
+          light styling (full Calendar re-theming is out of scope), but is
+          fully functional.  -->
+
+    <!-- 1. DatePickerTextBox — internal text-entry control of DatePicker.
+            An implicit style applies automatically to the PART_TextBox instance
+            inside DarkDatePickerStyle's ControlTemplate.
+            Named parts required by DatePickerTextBox:
+              PART_Watermark    – placeholder shown when no date is selected.
+              PART_ContentHost  – ScrollViewer hosting the editable text.  -->
+    <Style TargetType="DatePickerTextBox">
+        <Setter Property="Foreground"               Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="Background"               Value="Transparent"/>
+        <Setter Property="BorderThickness"          Value="0"/>
+        <Setter Property="CaretBrush"               Value="{StaticResource AccentBrush}"/>
+        <Setter Property="SelectionBrush"           Value="{StaticResource AccentBrush}"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DatePickerTextBox">
+                    <Grid>
+                        <!-- Watermark (placeholder) — collapsed unless no date selected -->
+                        <ContentControl x:Name="PART_Watermark"
+                                        Foreground="#66E0E0F0"
+                                        IsHitTestVisible="False"
+                                        Padding="4,0"
+                                        VerticalAlignment="Center"
+                                        Visibility="Collapsed"/>
+                        <!-- Editable text area -->
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      Margin="4,0"
+                                      VerticalAlignment="Center"
+                                      Foreground="{TemplateBinding Foreground}"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <!-- Show watermark when parent DatePicker has no selected date -->
+                        <DataTrigger Binding="{Binding Path=SelectedDate,
+                                                       RelativeSource={RelativeSource AncestorType={x:Type DatePicker}}}"
+                                     Value="{x:Null}">
+                            <Setter TargetName="PART_Watermark" Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 2. Calendar popup — dark theme (named style).
+            Popup creates a separate visual tree so implicit styles from
+            UserControl.Resources do NOT propagate. We use a NAMED style
+            and wire it via DatePicker.CalendarStyle so that all sub-element
+            styles travel into the Popup.
+            Sub-element styles (CalendarItem, CalendarDayButton, CalendarButton)
+            are embedded inside Style.Resources so they resolve inside the Popup. -->
+    <Style x:Key="DarkCalendarStyle" TargetType="Calendar">
+        <Style.Resources>
+            <!-- CalendarItem — the header + month/day grid inside Calendar -->
+            <Style TargetType="CalendarItem">
+                <Setter Property="Background" Value="#FF243156"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="BorderBrush" Value="#FF2E3F6E"/>
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+            <!-- CalendarDayButton — individual day cells -->
+            <Style TargetType="CalendarDayButton">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="CalendarDayButton">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}">
+                                <TextBlock Text="{TemplateBinding Content}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Foreground="{TemplateBinding Foreground}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#332E3F6E"/>
+                                </Trigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter Property="Background" Value="#FF2E3F6E"/>
+                                    <Setter Property="Foreground" Value="#FFFF9500"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                </Trigger>
+                                <Trigger Property="IsBlackedOut" Value="True">
+                                    <Setter Property="Foreground" Value="#66888888"/>
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <!-- CalendarButton — month/year/decade navigation cells -->
+            <Style TargetType="CalendarButton">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="CalendarButton">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderThickness="0">
+                                <TextBlock Text="{TemplateBinding Content}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           Foreground="{TemplateBinding Foreground}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#332E3F6E"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </Style.Resources>
+        <Setter Property="Background" Value="#FF243156"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="#FF2E3F6E"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Calendar">
+                    <StackPanel HorizontalAlignment="Center">
+                        <CalendarItem x:Name="PART_CalendarItem"
+                                      Background="{TemplateBinding Background}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}"
+                                      Foreground="{TemplateBinding Foreground}"/>
+                    </StackPanel>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 3. Outer DatePicker shell — dark card look matching UnclippedComboBoxStyle.
+            Named parts required by DatePicker:
+              PART_TextBox – DatePickerTextBox (editable field).
+              PART_Button  – Button that opens the calendar popup.
+              PART_Popup   – Popup hosting the Calendar control.
+            DatePicker wires PART_Button → PART_Popup internally.  -->
+    <Style x:Key="DarkDatePickerStyle" TargetType="DatePicker">
+        <Setter Property="Background"      Value="#FF243156"/>
+        <Setter Property="Foreground"      Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush"     Value="#FF2E3F6E"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="FontFamily"      Value="Segoe UI"/>
+        <Setter Property="FontSize"        Value="13"/>
+        <Setter Property="CalendarStyle"   Value="{StaticResource DarkCalendarStyle}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DatePicker">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="3">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="26"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Editable date field (implicit DatePickerTextBox style applies) -->
+                            <DatePickerTextBox x:Name="PART_TextBox"
+                                               Grid.Column="0"
+                                               Foreground="{TemplateBinding Foreground}"
+                                               Background="Transparent"
+                                               BorderThickness="0"
+                                               Padding="6,0"
+                                               VerticalContentAlignment="Center"/>
+
+                            <!-- Calendar toggle — chevron-down glyph matching ComboBox arrow -->
+                            <Button x:Name="PART_Button"
+                                    Grid.Column="1"
+                                    Focusable="False"
+                                    VerticalAlignment="Stretch"
+                                    HorizontalAlignment="Stretch">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="BtnBd"
+                                                Background="Transparent"
+                                                CornerRadius="0,3,3,0">
+                                            <Path Data="M0,0 L4,5 L8,0 Z"
+                                                  Fill="#FFE0E0F0"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="BtnBd" Property="Background"
+                                                        Value="#332E3F6E"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+
+                            <!-- Calendar popup — positioned and opened by DatePicker internally -->
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Placement="Bottom"
+                                   StaysOpen="False"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

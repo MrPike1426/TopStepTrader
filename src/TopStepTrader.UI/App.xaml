@@ -12,6 +12,7 @@
                 <ResourceDictionary Source="Styles/StrategyCards.xaml"/>
                 <ResourceDictionary Source="Styles/DataGrids.xaml"/>
                 <ResourceDictionary Source="Styles/ComboBoxes3.xaml"/>
+                <ResourceDictionary Source="Styles/DatePickerTheme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Register converters so StaticResource lookups succeed during InitializeComponent -->

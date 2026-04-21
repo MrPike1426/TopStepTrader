@@ -47,6 +47,8 @@ Namespace TopStepTrader.Core.Interfaces
         Public Property ContractId As String
         ''' <summary>Human-readable status message (shown in the Backtest page UI).</summary>
         Public Property Message As String
+        ''' <summary>True when bars were served from the local SQLite cache; False when freshly downloaded.</summary>
+        Public Property WasCacheHit As Boolean
     End Class
 
 End Namespace

@@ -439,7 +439,7 @@ Namespace TopStepTrader.Services.Trading
                         End If
 
                     Case StrategyConditionType.MultiConfluence
-                        Dim mcResult = MultiConfluenceStrategy.Evaluate(highs, lows, closes)
+                        Dim mcResult = MultiConfluenceStrategy.Evaluate(highs, lows, closes, volumes)
                         _currentAtrValue = mcResult.AtrValue
                         _mcCloudSlPrice = Nothing
 

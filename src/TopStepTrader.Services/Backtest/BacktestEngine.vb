@@ -731,122 +731,126 @@ Namespace TopStepTrader.Services.Backtest
             Dim mcAdxSeries  As Single() = Nothing
             Dim mcMacdHist   As Single() = Nothing
             Dim mcStochRsiK  As Single() = Nothing
-            Dim mcAtr14      As Single() = Nothing
+            Dim mcAtr14 As Single() = Nothing
+            Dim mcVolMa20 As Single() = Nothing
             If config.StrategyCondition = StrategyConditionType.MultiConfluence Then
-                Dim ichi     = TechnicalIndicators.IchimokuCloud(allHighs, allLows, allCloses, 9, 26, 52, 26)
+                Dim ichi = TechnicalIndicators.IchimokuCloud(allHighs, allLows, allCloses, 9, 26, 52, 26)
                 mcIchiTenkan = ichi.Tenkan
-                mcIchiKijun  = ichi.Kijun
-                mcIchiSpanA  = ichi.SpanA
-                mcIchiSpanB  = ichi.SpanB
-                Dim dmiMc    = TechnicalIndicators.DMI(allHighs, allLows, allCloses, 14)
-                mcPlusDI     = dmiMc.PlusDI
-                mcMinusDI    = dmiMc.MinusDI
-                mcAdxSeries  = dmiMc.ADX
-                mcMacdHist   = TechnicalIndicators.MACD(allCloses).Histogram
-                mcStochRsiK  = TechnicalIndicators.StochasticRSI(allCloses).K
-                mcAtr14      = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 14)
+                mcIchiKijun = ichi.Kijun
+                mcIchiSpanA = ichi.SpanA
+                mcIchiSpanB = ichi.SpanB
+                Dim dmiMc = TechnicalIndicators.DMI(allHighs, allLows, allCloses, 14)
+                mcPlusDI = dmiMc.PlusDI
+                mcMinusDI = dmiMc.MinusDI
+                mcAdxSeries = dmiMc.ADX
+                mcMacdHist = TechnicalIndicators.MACD(allCloses, fastPeriod:=8, slowPeriod:=17, signalPeriod:=9).Histogram
+                mcStochRsiK = TechnicalIndicators.StochasticRSI(allCloses).K
+                mcAtr14 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 14)
+                Dim mcAllVols = filteredBars.Select(Function(b) CDec(b.Volume)).ToList()
+                mcVolMa20 = TechnicalIndicators.SMA(mcAllVols, 20)
             End If
 
             ' -- VIDYA Cross: VIDYA(14,9), CMO(9), DeltaVolume(6), ATR(14)
-            Dim vcVidyaSeries    As Single() = Nothing
-            Dim vcCmoSeries      As Single() = Nothing
+            Dim vcVidyaSeries As Single() = Nothing
+            Dim vcCmoSeries As Single() = Nothing
             Dim vcDeltaVolSeries As Single() = Nothing
-            Dim vcAtr14          As Single() = Nothing
+            Dim vcAtr14 As Single() = Nothing
             If config.StrategyCondition = StrategyConditionType.VidyaCross Then
-                vcVidyaSeries    = TechnicalIndicators.VIDYA(allCloses, 14, 9)
-                vcCmoSeries      = TechnicalIndicators.CMO(allCloses, 9)
-                Dim allOpens     = filteredBars.Select(Function(b) b.Open).ToList()
-                Dim allVols      = filteredBars.Select(Function(b) b.Volume).ToList()
+                vcVidyaSeries = TechnicalIndicators.VIDYA(allCloses, 14, 9)
+                vcCmoSeries = TechnicalIndicators.CMO(allCloses, 9)
+                Dim allOpens = filteredBars.Select(Function(b) b.Open).ToList()
+                Dim allVols = filteredBars.Select(Function(b) b.Volume).ToList()
                 vcDeltaVolSeries = TechnicalIndicators.DeltaVolume(allCloses, allOpens, allVols, 6)
-                vcAtr14          = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 14)
+                vcAtr14 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 14)
             End If
 
             ' -- Naked Trader: EMA(9/21), MACD(8,17,9), DMI(14), VWAP, VolMA(20), ATR(14)
-            Dim ntEma9       As Single() = Nothing
-            Dim ntEma21      As Single() = Nothing
-            Dim ntMacdHist   As Single() = Nothing
-            Dim ntMacdLine   As Single() = Nothing
-            Dim ntPlusDI     As Single() = Nothing
-            Dim ntMinusDI    As Single() = Nothing
-            Dim ntAdxSeries  As Single() = Nothing
+            Dim ntEma9 As Single() = Nothing
+            Dim ntEma21 As Single() = Nothing
+            Dim ntMacdHist As Single() = Nothing
+            Dim ntMacdLine As Single() = Nothing
+            Dim ntPlusDI As Single() = Nothing
+            Dim ntMinusDI As Single() = Nothing
+            Dim ntAdxSeries As Single() = Nothing
             Dim ntVwapSeries As Single() = Nothing
-            Dim ntVolMa20    As Single() = Nothing
-            Dim ntAtr14      As Single() = Nothing
+            Dim ntVolMa20 As Single() = Nothing
+            Dim ntAtr14 As Single() = Nothing
             If config.StrategyCondition = StrategyConditionType.NakedTrader Then
-                ntEma9       = TechnicalIndicators.EMA(allCloses, 9)
-                ntEma21      = TechnicalIndicators.EMA(allCloses, 21)
-                Dim macdNt   = TechnicalIndicators.MACD(allCloses, 8, 17, 9)
-                ntMacdHist   = macdNt.Histogram
-                ntMacdLine   = macdNt.Line
-                Dim dmiNt    = TechnicalIndicators.DMI(allHighs, allLows, allCloses, 14)
-                ntPlusDI     = dmiNt.PlusDI
-                ntMinusDI    = dmiNt.MinusDI
-                ntAdxSeries  = dmiNt.ADX
-                Dim allVols  = filteredBars.Select(Function(b) b.Volume).ToList()
+                ntEma9 = TechnicalIndicators.EMA(allCloses, 9)
+                ntEma21 = TechnicalIndicators.EMA(allCloses, 21)
+                Dim macdNt = TechnicalIndicators.MACD(allCloses, 8, 17, 9)
+                ntMacdHist = macdNt.Histogram
+                ntMacdLine = macdNt.Line
+                Dim dmiNt = TechnicalIndicators.DMI(allHighs, allLows, allCloses, 14)
+                ntPlusDI = dmiNt.PlusDI
+                ntMinusDI = dmiNt.MinusDI
+                ntAdxSeries = dmiNt.ADX
+                Dim allVols = filteredBars.Select(Function(b) b.Volume).ToList()
                 ntVwapSeries = TechnicalIndicators.VWAP(allHighs, allLows, allCloses, allVols)
                 Dim volDecimals = allVols.Select(Function(v) CDec(v)).ToList()
-                ntVolMa20    = TechnicalIndicators.SMA(volDecimals, 20)
-                ntAtr14      = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 14)
+                ntVolMa20 = TechnicalIndicators.SMA(volDecimals, 20)
+                ntAtr14 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 14)
             End If
 
             ' -- LULT Divergence: WaveTrend(10,21,4) + ATR(14)
-            Dim lultWt1   As Single() = Nothing
-            Dim lultWt2   As Single() = Nothing
+            Dim lultWt1 As Single() = Nothing
+            Dim lultWt2 As Single() = Nothing
             Dim lultAtr14 As Single() = Nothing
             If config.StrategyCondition = StrategyConditionType.LultDivergence Then
-                Dim wt    = TechnicalIndicators.WaveTrend(allHighs, allLows, allCloses, 10, 21, 4)
-                lultWt1   = wt.Wt1
-                lultWt2   = wt.Wt2
+                Dim wt = TechnicalIndicators.WaveTrend(allHighs, allLows, allCloses, 10, 21, 4)
+                lultWt1 = wt.Wt1
+                lultWt2 = wt.Wt2
                 lultAtr14 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 14)
             End If
 
             ' -- BB Squeeze Scalper: BB(12,2), BBW, %B, RSI(7), EMA(5), BBW SMA(20), ATR(10)
-            Dim bbsBands   As (Upper As Single(), Middle As Single(), Lower As Single()) = (Nothing, Nothing, Nothing)
-            Dim bbsBbwArr  As Single() = Nothing
+            Dim bbsBands As (Upper As Single(), Middle As Single(), Lower As Single()) = (Nothing, Nothing, Nothing)
+            Dim bbsBbwArr As Single() = Nothing
             Dim bbsPctBArr As Single() = Nothing
-            Dim bbsRsi7    As Single() = Nothing
-            Dim bbsEma5    As Single() = Nothing
-            Dim bbsBbwSma  As Single() = Nothing
-            Dim bbsAtr10   As Single() = Nothing
+            Dim bbsRsi7 As Single() = Nothing
+            Dim bbsEma5 As Single() = Nothing
+            Dim bbsBbwSma As Single() = Nothing
+            Dim bbsAtr10 As Single() = Nothing
             If config.StrategyCondition = StrategyConditionType.BbSqueezeScalper Then
-                bbsBands   = TechnicalIndicators.BollingerBands(allCloses, 12, 2.0)
-                bbsBbwArr  = TechnicalIndicators.BollingerBandWidth(allCloses, 12, 2.0)
+                bbsBands = TechnicalIndicators.BollingerBands(allCloses, 12, 2.0)
+                bbsBbwArr = TechnicalIndicators.BollingerBandWidth(allCloses, 12, 2.0)
                 bbsPctBArr = TechnicalIndicators.BollingerPercentB(allCloses, 12, 2.0)
-                bbsRsi7    = TechnicalIndicators.RSI(allCloses, 7)
-                bbsEma5    = TechnicalIndicators.EMA(allCloses, 5)
-                bbsBbwSma  = TechnicalIndicators.SMA(bbsBbwArr.Select(Function(v) SafeD(v)).ToList(), 20)
-                bbsAtr10   = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 10)
+                bbsRsi7 = TechnicalIndicators.RSI(allCloses, 7)
+                bbsEma5 = TechnicalIndicators.EMA(allCloses, 5)
+                bbsBbwSma = TechnicalIndicators.SMA(bbsBbwArr.Select(Function(v) SafeD(v)).ToList(), 20)
+                bbsAtr10 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 10)
             End If
 
             ' -- Warm-up periods (bars to skip before signalling)
             Select Case config.StrategyCondition
-                Case StrategyConditionType.MultiConfluence  : warmUp = 80
-                Case StrategyConditionType.ConnorsRsi2      : warmUp = 205
+                Case StrategyConditionType.MultiConfluence : warmUp = 80
+                Case StrategyConditionType.ConnorsRsi2 : warmUp = 205
                 Case StrategyConditionType.DoubleBubbleButt : warmUp = 25
-                Case StrategyConditionType.LultDivergence   : warmUp = 100
-                Case Else                                    : warmUp = 55
+                Case StrategyConditionType.LultDivergence : warmUp = 100
+                Case Else : warmUp = 55
             End Select
 
             ' -- Populate StrategyIndicators from computed series
             Dim indicators As New StrategyIndicators With {
                 .AllBars = filteredBars,
-                .Ema21   = ema21Series,
-                .Ema50   = ema50Series
+                .Ema21 = ema21Series,
+                .Ema50 = ema50Series
             }
             If ema8Series IsNot Nothing Then indicators.Ema8 = ema8Series
 
             Select Case config.StrategyCondition
                 Case StrategyConditionType.MultiConfluence
-                    indicators.IchiTenkan    = mcIchiTenkan
-                    indicators.IchiKijun     = mcIchiKijun
-                    indicators.IchiSpanA     = mcIchiSpanA
-                    indicators.IchiSpanB     = mcIchiSpanB
-                    indicators.PlusDi        = mcPlusDI
-                    indicators.MinusDi       = mcMinusDI
-                    indicators.Adx           = mcAdxSeries
+                    indicators.IchiTenkan = mcIchiTenkan
+                    indicators.IchiKijun = mcIchiKijun
+                    indicators.IchiSpanA = mcIchiSpanA
+                    indicators.IchiSpanB = mcIchiSpanB
+                    indicators.PlusDi = mcPlusDI
+                    indicators.MinusDi = mcMinusDI
+                    indicators.Adx = mcAdxSeries
                     indicators.MacdHistogram = mcMacdHist
-                    indicators.StochRsiK     = mcStochRsiK
-                    indicators.Atr           = mcAtr14
+                    indicators.StochRsiK = mcStochRsiK
+                    indicators.Atr = mcAtr14
+                    indicators.VolMa20 = mcVolMa20
                 Case StrategyConditionType.ConnorsRsi2
                     indicators.Rsi2   = qlRsi2
                     indicators.Sma5   = qlSma5
@@ -902,6 +906,11 @@ Namespace TopStepTrader.Services.Backtest
                     indicators.Ema5     = bbsEma5
                     indicators.BbwSma   = bbsBbwSma
                     indicators.Atr      = bbsAtr10
+                Case StrategyConditionType.EmaRsiWeightedScore
+                    Dim emaRsiPeriod = If(config.IndicatorPeriod > 0, config.IndicatorPeriod, 14)
+                    indicators.Rsi = If(emaRsiPeriod = 14, rsi14Series, TechnicalIndicators.RSI(allCloses, emaRsiPeriod))
+                    indicators.Adx = adx14Series
+                    indicators.Atr = universalAtr14
                 Case Else
                     indicators.Rsi = rsi14Series
                     indicators.Adx = adx14Series

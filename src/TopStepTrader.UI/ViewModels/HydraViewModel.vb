@@ -886,10 +886,13 @@ Namespace TopStepTrader.UI.ViewModels
             NotifyPropertyChanged(NameOf(IsDamianSelected))
             NotifyPropertyChanged(NameOf(IsJoeSelected))
 
-            ' Sync ATR tier selection indicator to the closest tier for the new profile,
-            ' without overriding SlMultipleOfN (user may have already picked a different tier).
-            ' Lewis → Standard tier (1.5N/3.0N matches exactly).
-            ' Damian/Joe → both use 1.0N/2.0N which is closer to Tight — leave tier unchanged.
+            ' Damian + Gold: auto-select Standard tier. Damian's SlMultipleOfN=1.0 on Tight (0.75×) places
+            ' the stop within Gold's normal 15-min bar range, causing routine whipsaw exits.
+            If profile.Name.Contains("Damian") AndAlso
+               Assets.Any(Function(a) a.Symbol.Equals("Gold", StringComparison.OrdinalIgnoreCase) OrElse
+                                      a.ContractId.Contains("MGC")) Then
+                ApplyAtrTier("Standard")
+            End If
 
             ' Re-apply the current strategy template so the StrategyDefinition immediately
             ' picks up the new N-multiples, leverage, ADX gate, and confidence threshold.
@@ -1032,7 +1035,9 @@ Namespace TopStepTrader.UI.ViewModels
                 .SlMultipleOfN = _slMultipleOfN,
                 .TpMultipleOfN = _tpMultipleOfN,
                 .ExtendTpOnClose = _extendTpOnClose,
-                .PersonaName = _selectedProfileName
+                .PersonaName = _selectedProfileName,
+                .TradingWindowUtcStart = New TimeOnly(8, 0),
+                .TradingWindowUtcEnd = New TimeOnly(17, 0)
             }
 
             HasParsedStrategy = True
@@ -1384,6 +1389,8 @@ Namespace TopStepTrader.UI.ViewModels
                 ' All N-multiple, ADX, leverage and scale-in fields are copied from _currentStrategy
                 ' (which was already stamped with the active profile's values by Apply*).
                 Dim favContract = FavouriteContracts.TryGetBySymbol(assetVm.ContractId)
+                Dim isGoldAsset = assetVm.Symbol.IndexOf("Gold", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
+                                  assetVm.ContractId.IndexOf("MGC", StringComparison.OrdinalIgnoreCase) >= 0
                 Dim sd As New StrategyDefinition With {
                     .Name = _currentStrategy.Name,
                     .Indicator = _currentStrategy.Indicator,
@@ -1410,7 +1417,9 @@ Namespace TopStepTrader.UI.ViewModels
                     .SlMultipleOfN = _slMultipleOfN,
                     .TpMultipleOfN = _tpMultipleOfN,
                     .TickSize = If(favContract IsNot Nothing AndAlso favContract.PxTickSize > 0D, favContract.PxTickSize, 1D),
-                    .TickValue = If(favContract IsNot Nothing AndAlso favContract.PxTickValue > 0D, favContract.PxTickValue, 1D)
+                    .TickValue = If(favContract IsNot Nothing AndAlso favContract.PxTickValue > 0D, favContract.PxTickValue, 1D),
+                    .TradingWindowUtcStart = If(isGoldAsset, _currentStrategy.TradingWindowUtcStart, Nothing),
+                    .TradingWindowUtcEnd = If(isGoldAsset, _currentStrategy.TradingWindowUtcEnd, Nothing)
                 }
                 _engines(i).Start(sd)
                 LogLine($"[{assetVm.Symbol}] Session started")
@@ -1441,7 +1450,7 @@ Namespace TopStepTrader.UI.ViewModels
         ' ── Helpers ───────────────────────────────────────────────────────────────
 
         Private Sub LogLine(message As String)
-            LogEntries.Insert(0, message)
+            LogEntries.Insert(0, $"[{DateTime.Now:HH:mm}] {message}")
             Do While LogEntries.Count > 500
                 LogEntries.RemoveAt(LogEntries.Count - 1)
             Loop

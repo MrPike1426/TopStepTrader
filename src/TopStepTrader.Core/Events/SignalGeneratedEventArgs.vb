@@ -206,8 +206,10 @@ Namespace TopStepTrader.Core.Events
         Public Property TotalConditions As Integer = 0
 
         ' ── EMA/RSI Combined extended snapshot ──────────────────────────────────
-        ''' <summary>RSI14 value at bar-check time (EMA/RSI Combined). 0 when not applicable.</summary>
+        ''' <summary>RSI value at bar-check time (EMA/RSI Combined; period = IndicatorPeriod, default 14). 0 when not applicable.</summary>
         Public Property Rsi14 As Single = 0F
+        ''' <summary>Volume ratio (bar volume / 20-bar avg) for the EMA/RSI signal bar. 0 when volume absent.</summary>
+        Public Property VolumeRatio As Single = 0F
         ''' <summary>True when EMA21 is higher than its previous-bar value (EMA/RSI Combined condition 5). False when not applicable.</summary>
         Public Property Ema21Rising As Boolean = False
         ''' <summary>True when the majority of the last 3 candles closed above their open (EMA/RSI Combined condition 6). False when not applicable.</summary>

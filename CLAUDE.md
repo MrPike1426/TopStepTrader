@@ -44,6 +44,88 @@ dotnet test --no-build -v q
 - Never report a task complete until both build and test pass.
 - If a test failure is pre-existing (not caused by the current change), flag it explicitly — do not silently ignore it.
 
+## Ticket & Issue Tracking
+
+All bugs, features, and improvements are tracked in two artefacts:
+
+- **`REFACTOR_TRACKER.md`** — master status board, priority queue, and completion summary. Always kept current.
+- **`tickets/`** — one `.md` file per open ticket. Completed tickets move to `tickets/archive/`.
+
+### Ticket ID Prefixes
+
+| Prefix | Use |
+|---|---|
+| `BUG-XX` | Defects in existing behaviour |
+| `STRAT-XX` | Strategy logic changes / improvements |
+| `TEST-XX` | Missing or insufficient test coverage |
+| `QUAL-XX` | Code quality, naming, refactoring |
+| `UX-XX` | UI/UX improvements |
+| `ARCH-XX` | Architectural changes (DI, patterns, decomposition) |
+| `FEAT-XX` | New features that don't fit another prefix |
+
+Use the next sequential number within each prefix (check the Status Board for the current high-water mark).
+
+### T-Shirt Size Estimates
+
+Every ticket must carry a `**Size:**` estimate. Assess holistically across token burn, effort (build/test/review), and complexity:
+
+| Size | Token burn | Effort | Complexity |
+|---|---|---|---|
+| **XS** | Single-line / rename | Trivial — no new tests needed | Obvious — no design decisions |
+| **S** | < 50 lines changed | Low — 1–2 new tests | Straightforward — one clear approach |
+| **M** | 50–150 lines | Medium — several tests, build check | Some decisions, limited knock-on risk |
+| **L** | 150–400 lines | High — significant test work, review pass | Multiple components, non-trivial design |
+| **XL** | 400+ lines or multi-file refactor | Very high — extensive testing, phased review | High complexity, architectural impact |
+
+### Ticket File Format
+
+```markdown
+# [ID] Title
+
+**Status:** Open  
+**Category:** <category name>  
+**Size:** XS | S | M | L | XL  
+**Files:** `path/to/file.vb:line`
+
+## Problem
+<description of current behaviour and why it's wrong or missing>
+
+## Change  *(omit if no specific change is needed yet)*
+<code diff or description>
+
+## Acceptance Criteria
+- [ ] item 1
+- [ ] item 2
+- [ ] Build passes; all tests still pass
+```
+
+### Creating a New Ticket
+
+1. Choose the correct prefix and next ID (check Status Board in `REFACTOR_TRACKER.md`).
+2. Create `tickets/[ID].md` using the schema above, including a `**Size:**` estimate.
+3. Add a row to the **Status Board** table (`⬜ Open`, with size).
+4. Insert at the appropriate position in the **Priority Queue** if high-priority.
+5. Update the **Completion Summary** row count for the category.
+
+### Completing a Ticket
+
+1. Change ticket `**Status:**` to `✅ Complete`.
+2. Replace Problem / Change / Acceptance Criteria with a short `## Summary` of what was done.
+3. Move the file: `tickets/[ID].md` → `tickets/archive/[ID].md`.
+4. Update REFACTOR_TRACKER.md: Status Board cell → `✅ Done`; Completion Summary done-count += 1.
+5. Remove from Priority Queue.
+6. Update the `Last updated` date at the top of `REFACTOR_TRACKER.md`.
+
+### Running a Ticket
+
+```
+Execute [ID]
+```
+
+Claude loads `REFACTOR_TRACKER.md` + `tickets/[ID].md` + the referenced source files, implements the change, runs self-verification (build + tests), and completes all ticket artefacts as described above.
+
+---
+
 ## Project Structure
 
 Seven projects in `src/`:
@@ -95,7 +177,7 @@ Dependency flow: UI → Services → (Core, Data, API, ML)
 - **Synthetic OCO** — `FlattenContractAsync()` cancels resting SL bracket orders (type=4) before closing the position to prevent double-trigger
 - **Bracket tick sign convention** — long SL ticks are negative, short SL ticks are positive (ProjectX convention)
 - **Stale bar guard** — `StrategyExecutionEngine` declares a bar stale when `barAgeMins > TimeframeMinutes × 3` (e.g. 15 min for 5-min bars). The 3× multiplier accounts for the bar timestamp being the *start* of the period, Yahoo's 1–5 min API propagation lag, and the 30-second engine poll jitter — a stale threshold of 1× or 2× would produce false market-closed events during normal active trading. On the fresh→stale transition (market close) it fires exactly one `ConfidenceUpdated` event with `IsMarketClosed = True` and suppresses all entry signals. Position monitoring (broker sync + trail) continues. The `IsMarketClosed` flag causes Hydra/AssetBassett tiles to show `"⏸ Closed"`. The guard resets (`_lastBarWasStale = False`) on engine `Start()`.
-- **Live P&L — `GetLatestPriceAsync`** — TopStepX REST and SignalR both return `openPnL = 0` for futures. Real-time P&L is computed from `(_lastBarClose - entryPrice) × DollarPerPoint`. `_lastBarClose` is upgraded on every tick (when a position is open) by calling `IBarIngestionService.GetLatestPriceAsync`, which fetches a 15-second bar from `PXHistoryClient.RetrieveBarsAsync(unit:=1, unitNumber:=15, limit:=5)`. `unit=1` means Second; `unitNumber=15` means 15-second bars. The same `_lastBarClose` field is used by both the 30-second REST sync path and the real-time SignalR `GatewayUserPosition` handler so both tile updates are consistent.
+- **Live P&L — `GetLatestPriceAsync`** — TopStepX REST and SignalR both return `openPnL = 0` for futures. Real-time P&L is computed from `(currentPrice - entryPrice) × DollarPerPoint`. Price priority: (1) `_lastQuotePrice` — sub-second MarketHub tick; (2) `_lastBarClose` — updated every 15 s via `IBarIngestionService.GetLatestPriceAsync` (`PXHistoryClient.RetrieveBarsAsync(unit:=1, unitNumber:=15, limit:=5)`). Acceptable residual drift for M6E at 1× is $1–$1.50 (bid/ask spread + bar-close-to-fill lag). **Entry price correction** — `PlaceBracketOrdersAsync` stores `lastClose` as `_lastEntryPrice` (estimate). On the first REST sync after fill, if `snapshot.OpenRate` differs from the estimate by more than 1 tick, `_lastEntryPrice` is corrected to the actual broker fill rate (logged as `📌 Entry corrected`). **MarketHub roll safety** — `OnMarketQuoteReceived` accepts quotes by exact `ContractId` OR root-symbol match (e.g. `M6E`) so a quarterly roll from U26 → M26 does not silently freeze `_lastQuotePrice` at 0.
 
 ### Configuration
 Copy `appsettings.template.json` → `appsettings.json`. Key sections: `ProjectX` (TopStepX endpoints), `Risk`, `Trading`, `ML`, `Ingestion`, `Personas`.

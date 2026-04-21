@@ -814,8 +814,15 @@ Namespace TopStepTrader.UI.ViewModels
                              Dispatch(Sub()
                                            SetWorkPhase(WorkPhase.Idle)
                                            BarsAvailable = result.Success
-                                           BarsStatusText = result.Message
-                                           BarsStatusColor = If(result.Success, "BuyBrush", "SellBrush")
+                                           If result.Success Then
+                                               BarsStatusText = If(result.WasCacheHit,
+                                                   $"✓ {result.BarCount:N0} bars ready (cached)",
+                                                   $"✓ {result.BarCount:N0} bars ready (downloaded)")
+                                               BarsStatusColor = "BuyBrush"
+                                           Else
+                                               BarsStatusText = result.Message
+                                               BarsStatusColor = "SellBrush"
+                                           End If
                                        End Sub)
 
                          Catch ex As OperationCanceledException
@@ -1053,8 +1060,17 @@ Namespace TopStepTrader.UI.ViewModels
                      End Function)
         End Sub
 
+        ''' <summary>
+        ''' Maximum lookback days supported by TopStepX for each timeframe.
+        ''' 1-min: 7 days · 5/15/30-min: 60 days · 1-hr and above: 90 days.
+        ''' </summary>
         Public Shared Function GetMaxLookbackDays(tf As BarTimeframe) As Integer
-            Return 60
+            Select Case tf
+                Case BarTimeframe.OneMinute : Return 7
+                Case BarTimeframe.FiveMinute, BarTimeframe.TenMinute,
+                     BarTimeframe.FifteenMinute, BarTimeframe.ThirtyMinute : Return 60
+                Case Else : Return 90
+            End Select
         End Function
 
         Private Shared Function ParseIntervalToTimeframe(interval As String) As BarTimeframe

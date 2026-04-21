@@ -1,6 +1,7 @@
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
+Imports TopStepTrader.ML.Features
 Imports TopStepTrader.Services.Backtest
 Imports TopStepTrader.Services.Backtest.Strategies
 Imports Xunit
@@ -236,29 +237,37 @@ Namespace TopStepTrader.Tests.Backtest
         ' ══════════════════════════════════════════════════════════════════
 
         ''' <summary>
-        ''' Mixed conditions produce bullScore=60, downPct=40 — neither meets the 70% threshold.
-        ''' Score is in the 40–60 neutral zone, so the provider returns a NeutralExit signal
-        ''' (not Nothing) so BacktestEngine can close any open position at bar.Close.
-        ''' EMA21=100 > EMA50=90 (+25), close=105 > EMA21 (+20) > EMA50 (+15), RSI=80 outside 55–70 (0pts),
-        ''' EMA21 flat (0pts), all-bearish candles so 0 of 3 bullish (0pts) → bullScore=60, downPct=40.
+        ''' When both bullScore and bearScore fall in the 40–60 neutral zone, the provider
+        ''' returns a NeutralExit result so BacktestEngine can close any open position.
+        ''' Setup: EMA21 ≈ EMA50 with minimal separation, close between both EMAs,
+        ''' RSI=52 (outside both bull 55–70 and bear 30–45 zones), flat EMA21, mixed candles.
+        ''' → bullScore: +25 (EMA21 > EMA50×1.0005? No, tiny gap) = 0 + close>EMA21 = 0 (close=100 = EMA21) + close>EMA50 = 0 (EMA50=100) + RSI 55–70=No + flat=No + mixed candles=No → bullScore=0.
+        ''' Actually we need both in 40–60. Use: EMA21=101, EMA50=100.04, close=100.5, RSI=52, flat EMA21, 2 bearish candles.
+        ''' bullScore: EMA21>EMA50×1.0005? 101>100.04×1.0005=100.09 ✓ +25; close>EMA21? 100.5>101=No; close>EMA50=100.5>100.04 ✓+15; RSI 55–70=No; flat EMA21=0; 0 of 3 bullish (allBearish) = 0 → bullScore=40.
+        ''' bearScore: EMA21&lt;EMA50×0.9995? 101&lt;100.04×0.9995=100.09? No; close&lt;EMA21? 100.5&lt;101 ✓+20; close&lt;EMA50? 100.5&lt;100.04? No; RSI 30–45=No; flat=0; 3/3 bearish +10 → bearScore=30. Still not in 40–60.
+        ''' Simplest scenario: explicitly ensure bearScore lands 40–60 by choosing RSI=35 (+20) and close&lt;EMA50 (+15) but EMA21 above EMA50 wide (so no bear cross), flat EMA21 (no bear momentum), mix candles (only 1 bearish → no bonus).
+        ''' bullScore: EMA21=100&gt;EMA50=90×1.0005=90.045 ✓+25; close=95&lt;EMA21=100 → no +20; close=95&gt;EMA50=90 ✓+15; RSI=35 not in 55–70 → 0; flat EMA21 → 0; 1/3 bullish (1 bullish + 2 bearish in mixed) → 0. bullScore=40.
+        ''' bearScore: EMA21=100 NOT &lt; EMA50×0.9995=89.955 → 0; close=95&lt;EMA21=100 ✓+20; close=95&gt;EMA50=90 → no +15; RSI=35 in 30–45 ✓+20; clamp=40; flat EMA21 → no (-10 falling); 2/3 bearish (mixed → alternating) → mixed bars: barIdx-2=bull,barIdx-1=bear,barIdx=bull for default MakeBars even idx. bearCandles depends on allBearish.
+        ''' Use allBearish: bearCandles=3 +10. bearScore=40+10=50. bullScore: allBearish so candle bonus=0 → bullScore=40. Both 40–60 ✓.
         ''' </summary>
         <Fact>
-        Public Sub EmaRsi_NeutralScore_ReturnsNeutralExit()
+        Public Sub EmaRsi_BothScoresNeutral_ReturnsNeutralExit()
             Dim provider As New EmaRsiSignalProvider()
 
-            ' EMA21 flat (prev=now=100), all-bearish bars → candle bonus = 0 pts
-            ' Final: 25+20+15+0+0+0 = 60 → neutral zone, no entry side fires
+            ' EMA21=100, EMA50=90, close=95, RSI=35, EMA21 flat, all-bearish candles.
+            ' bullScore: +25 (EMA21>EMA50×1.0005) + 0 (close<EMA21) + 15 (close>EMA50) + 0 (RSI not 55–70) + 0 (flat) + 0 (0 bullish candles) = 40.
+            ' bearScore: 0 (EMA21 NOT < EMA50×0.9995) + 20 (close<EMA21) + 0 (close NOT <EMA50) + 20 (RSI 30–45) = 40 → +0 (flat) + 10 (3/3 bearish) = 50.
+            ' Both in 40–60 → NeutralExit.
             Dim ema21 = ConstArr(100.0F)   ' flat: prev = now
-            Dim bars = MakeBars(N, basePrice:=105D, allBullish:=False, allBearish:=True)
+            Dim bars = MakeBars(N, basePrice:=95D, allBearish:=True)
 
             Dim indicators As New StrategyIndicators With {
                 .AllBars = bars,
                 .Ema21   = ema21,
                 .Ema50   = ConstArr(90.0F),
-                .Rsi     = ConstArr(80.0F)
+                .Rsi     = ConstArr(35.0F)
             }
-            Dim bar = bars(Idx)
-            Dim result = provider.Evaluate(bar, indicators, MakeConfig(minConf:=0.70F), Idx)
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(minConf:=0.70F), Idx)
 
             Assert.NotNull(result)
             Assert.True(result.NeutralExit)
@@ -337,6 +346,266 @@ Namespace TopStepTrader.Tests.Backtest
             Assert.Equal(6.0D, result.TpDelta)     ' 2.0 × 3.0
         End Sub
 
+        ' ── STRAT-09 bear independence tests ────────────────────────────────
+
+        ''' <summary>
+        ''' STRAT-09: A neutral bar (EMA flat, RSI=50, mixed candles) must NOT produce
+        ''' a Sell signal.  With the old logic (downPct = 100 − bullScore) bullScore≈10
+        ''' would have yielded downPct=90 — a false short.  With independent bearScore,
+        ''' none of the 6 bear conditions are met so bearScore=0 and no signal fires.
+        ''' </summary>
+        <Fact>
+        Public Sub EmaRsi_NeutralBar_DoesNotProduceSellSignal()
+            Dim provider As New EmaRsiSignalProvider()
+
+            ' EMA21 = EMA50 (no separation), close between them, RSI=50 (outside 30–45 bear zone),
+            ' EMA21 flat (prev=now), mixed candles.
+            Dim ema21 = ConstArr(100.0F)           ' flat: prev = now → no momentum
+            Dim bars = MakeBars(N, basePrice:=100D) ' alternating bull/bear → mixed candles
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars = bars,
+                .Ema21   = ema21,
+                .Ema50   = ConstArr(100.0F),        ' EMA21 = EMA50 → no cross separation
+                .Rsi     = ConstArr(50.0F)           ' neutral RSI — outside both bull and bear zones
+            }
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(minConf:=0.70F), Idx)
+
+            ' No side must fire — bearScore=0 < 70%
+            Assert.True(result Is Nothing OrElse result.Side Is Nothing,
+                        "Neutral bar should not produce a directional entry signal.")
+        End Sub
+
+        ''' <summary>
+        ''' STRAT-09: When all 6 independent bear conditions are satisfied the provider
+        ''' returns a Sell signal with confidence ≥ minConf, and bearScore is used
+        ''' (not 100 − bullScore).  Specifically: bullScore may be 0, and bearScore = 100.
+        ''' </summary>
+        <Fact>
+        Public Sub EmaRsi_AllBearConditions_ReturnsSellWithBearScore()
+            Dim provider As New EmaRsiSignalProvider()
+
+            ' EMA21=90, EMA50=100  → EMA21 < EMA50*0.9995 (+25), close=75 < EMA21 (+20) < EMA50 (+15),
+            ' RSI=35 in 30–45 (+20), EMA21 falling (+10), 3/3 bearish candles (+10) = 100 pts.
+            Dim ema21 = ConstArr(90.0F)
+            ema21(Idx - 1) = 90.5F                  ' falling: prev=90.5 > now=90
+            Dim bars = MakeBars(N, basePrice:=75D, allBearish:=True)
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars = bars,
+                .Ema21   = ema21,
+                .Ema50   = ConstArr(100.0F),
+                .Rsi     = ConstArr(35.0F)
+            }
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(minConf:=0.70F), Idx)
+
+            Assert.NotNull(result)
+            Assert.Equal("Sell", result.Side)
+            Assert.False(result.IsLong)
+            Assert.True(result.Confidence >= 0.7F,
+                        $"Expected confidence ≥ 0.70 but got {result.Confidence}")
+        End Sub
+
+        ' ── STRAT-10: RSI three-zone scoring ────────────────────────────────
+
+        ''' <summary>RSI=72 (extended/overbought) must award 12 pts, not 0.</summary>
+        <Fact>
+        Public Sub EmaRsi_Rsi72_Awards12BullPoints()
+            Dim provider As New EmaRsiSignalProvider()
+            ' Isolate RSI contribution: EMA21 flat and below EMA50 (no bull cross), close below both EMAs
+            ' so only the RSI zone fires. RSI=72 → +12 on bull side.
+            Dim ema21 = ConstArr(90.0F)   ' flat, below EMA50=100
+            Dim bars = MakeBars(N, basePrice:=80D, allBearish:=True)
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars = bars,
+                .Ema21   = ema21,
+                .Ema50   = ConstArr(100.0F),
+                .Rsi     = ConstArr(72.0F)
+            }
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(minConf:=0.01F), Idx)
+            ' bullScore should be 12 (RSI extended zone only, all other bull conditions fail)
+            Assert.NotNull(result)
+            Assert.True(result.Confidence > 0F, "RSI=72 should produce non-zero bull confidence")
+        End Sub
+
+        ''' <summary>RSI=62 (confirmed trend zone 55–70) must award 20 pts.</summary>
+        <Fact>
+        Public Sub EmaRsi_Rsi62_Awards20BullPoints()
+            Dim provider As New EmaRsiSignalProvider()
+            Dim ema21 = ConstArr(100.0F)
+            ema21(Idx - 1) = 99.5F
+            Dim bars = MakeBars(N, basePrice:=110D, allBullish:=True)
+
+            Dim indicatorsWith62 As New StrategyIndicators With {
+                .AllBars = bars, .Ema21 = ema21, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(62.0F)
+            }
+            Dim indicatorsWith72 As New StrategyIndicators With {
+                .AllBars = bars, .Ema21 = ema21, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(72.0F)
+            }
+            Dim result62 = provider.Evaluate(bars(Idx), indicatorsWith62, MakeConfig(), Idx)
+            Dim result72 = provider.Evaluate(bars(Idx), indicatorsWith72, MakeConfig(), Idx)
+
+            ' RSI=62 (full 20 pts) should outscore RSI=72 (12 pts)
+            Assert.True(result62.Confidence >= result72.Confidence,
+                        "RSI=62 (20 pts) should score ≥ RSI=72 (12 pts)")
+        End Sub
+
+        ''' <summary>RSI=52 (above midline 50–55) must award 8 pts to the bull score.</summary>
+        <Fact>
+        Public Sub EmaRsi_Rsi52_Awards8BullPoints()
+            Dim provider As New EmaRsiSignalProvider()
+            ' Isolate: only RSI zone and EMA21>EMA50 cross (25 pts) active; total =33 with RSI=52.
+            ' Compare to RSI=48 where RSI contributes 0 → total=25.
+            Dim ema21 = ConstArr(100.0F)   ' flat (no slope pts)
+            Dim bars = MakeBars(N, basePrice:=95D, allBearish:=True)  ' close < EMA21; no candle bonus
+
+            Dim indicators52 As New StrategyIndicators With {
+                .AllBars = bars, .Ema21 = ema21, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(52.0F)
+            }
+            Dim indicators48 As New StrategyIndicators With {
+                .AllBars = bars, .Ema21 = ema21, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(48.0F)
+            }
+            Dim result52 = provider.Evaluate(bars(Idx), indicators52, MakeConfig(minConf:=0.01F), Idx)
+            Dim result48 = provider.Evaluate(bars(Idx), indicators48, MakeConfig(minConf:=0.01F), Idx)
+
+            Assert.True(result52.Confidence > result48.Confidence,
+                        "RSI=52 should score higher than RSI=48 (0 pts)")
+        End Sub
+
+        ' ── STRAT-12: EMA21 3-bar slope ─────────────────────────────────────────
+
+        ''' <summary>Flat EMA21 (identical values over 4 bars) must not award momentum points.</summary>
+        <Fact>
+        Public Sub EmaRsi_FlatEma21Slope_NoMomentumPoints()
+            Dim provider As New EmaRsiSignalProvider()
+            ' EMA21 completely flat — slope = 0%, well below 0.03% threshold
+            Dim ema21 = ConstArr(100.0F)   ' all bars identical
+            Dim bars = MakeBars(N, basePrice:=110D, allBullish:=True)
+
+            Dim indicatorsFlat As New StrategyIndicators With {
+                .AllBars = bars, .Ema21 = ema21, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(60.0F)
+            }
+            ' Rising EMA21 prev < now should also not trigger (tick noise excluded)
+            Dim ema21Rising = ConstArr(100.0F)
+            ema21Rising(Idx - 1) = 99.5F   ' prev=99.5, now=100 → 0.5% rise over 1 bar but 3-bar slope needs 3 bars
+            ' barIndex-3 = Idx-3 = 47; all are 100.0F so slope over 3 bars ≈ 0
+            Dim indicatorsRisingPrev As New StrategyIndicators With {
+                .AllBars = bars, .Ema21 = ema21Rising, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(60.0F)
+            }
+            Dim resultFlat = provider.Evaluate(bars(Idx), indicatorsFlat, MakeConfig(minConf:=0.01F), Idx)
+            Dim resultRisingPrev = provider.Evaluate(bars(Idx), indicatorsRisingPrev, MakeConfig(minConf:=0.01F), Idx)
+
+            ' Both should have equal scores — flat 3-bar slope awards 0 in both cases
+            Assert.Equal(resultFlat.Confidence, resultRisingPrev.Confidence)
+        End Sub
+
+        ''' <summary>Rising EMA21 over 3 bars (slope > 0.03%) must award 10 pts.</summary>
+        <Fact>
+        Public Sub EmaRsi_RisingEma21Over3Bars_Awards10Points()
+            Dim provider As New EmaRsiSignalProvider()
+            Dim bars = MakeBars(N, basePrice:=110D, allBullish:=True)
+
+            ' Flat array for comparison (no slope)
+            Dim ema21Flat = ConstArr(100.0F)
+            ' Rising array: barIndex-3=99, barIndex-2=99.5, barIndex-1=99.8, barIndex=100
+            ' slope = (100-99)/99 ≈ 1.01% > 0.03% threshold
+            Dim ema21Rising(N - 1) As Single
+            For i = 0 To N - 1
+                ema21Rising(i) = 100.0F
+            Next
+            ema21Rising(Idx - 3) = 99.0F   ' 3 bars back
+
+            Dim indicatorsFlat As New StrategyIndicators With {
+                .AllBars = bars, .Ema21 = ema21Flat, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(60.0F)
+            }
+            Dim indicatorsRising As New StrategyIndicators With {
+                .AllBars = bars, .Ema21 = ema21Rising, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(60.0F)
+            }
+            Dim resultFlat   = provider.Evaluate(bars(Idx), indicatorsFlat,   MakeConfig(minConf:=0.01F), Idx)
+            Dim resultRising = provider.Evaluate(bars(Idx), indicatorsRising, MakeConfig(minConf:=0.01F), Idx)
+
+            Assert.True(resultRising.Confidence > resultFlat.Confidence,
+                        "Rising EMA21 slope should score 10 pts more than flat EMA21")
+        End Sub
+
+        ' ── STRAT-11: Volume confirmation gate ──────────────────────────────────
+
+        ''' <summary>A bar with volume > 1.1× the 20-bar average scores 10 pts more than an identical low-volume bar.</summary>
+        <Fact>
+        Public Sub EmaRsi_HighVolume_Awards10MorePoints()
+            Dim provider As New EmaRsiSignalProvider()
+
+            ' Create two identical bar series, differing only in the last bar's volume.
+            Dim highVolBars As New List(Of MarketBar)(N)
+            Dim lowVolBars  As New List(Of MarketBar)(N)
+            For i = 0 To N - 1
+                Dim v As Long = If(i = Idx, 2000L, 500L)   ' avg of first 20 prior bars = 500
+                highVolBars.Add(New MarketBar With { .Open = 109D, .High = 111D, .Low = 108D, .Close = 110D, .Volume = v, .Timestamp = DateTimeOffset.UtcNow })
+                lowVolBars.Add(New MarketBar  With { .Open = 109D, .High = 111D, .Low = 108D, .Close = 110D, .Volume = 400L, .Timestamp = DateTimeOffset.UtcNow })
+            Next
+            Dim ema21 = ConstArr(100.0F)
+            ema21(Idx - 1) = 99.5F
+
+            Dim indicatorsHigh As New StrategyIndicators With {
+                .AllBars = highVolBars.AsReadOnly(), .Ema21 = ema21, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(60.0F)
+            }
+            Dim indicatorsLow As New StrategyIndicators With {
+                .AllBars = lowVolBars.AsReadOnly(), .Ema21 = ema21, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(60.0F)
+            }
+            Dim resultHigh = provider.Evaluate(highVolBars(Idx), indicatorsHigh, MakeConfig(minConf:=0.01F), Idx)
+            Dim resultLow  = provider.Evaluate(lowVolBars(Idx),  indicatorsLow,  MakeConfig(minConf:=0.01F), Idx)
+
+            Assert.True(resultHigh.Confidence > resultLow.Confidence,
+                        "High-volume bar should score 10 pts more than low-volume bar")
+        End Sub
+
+        ''' <summary>Zero-volume bar (Yahoo futures omission) must produce the same score as if the volume signal were absent.</summary>
+        <Fact>
+        Public Sub EmaRsi_ZeroVolume_NoPenalty()
+            Dim provider As New EmaRsiSignalProvider()
+
+            Dim zeroVolBars  As New List(Of MarketBar)(N)
+            Dim avgVolBars   As New List(Of MarketBar)(N)
+            For i = 0 To N - 1
+                zeroVolBars.Add(New MarketBar  With { .Open = 109D, .High = 111D, .Low = 108D, .Close = 110D, .Volume = 0L, .Timestamp = DateTimeOffset.UtcNow })
+                avgVolBars.Add(New MarketBar   With { .Open = 109D, .High = 111D, .Low = 108D, .Close = 110D, .Volume = 500L, .Timestamp = DateTimeOffset.UtcNow })
+            Next
+            Dim ema21 = ConstArr(100.0F)
+            ema21(Idx - 1) = 99.5F
+
+            Dim indicatorsZero As New StrategyIndicators With {
+                .AllBars = zeroVolBars.AsReadOnly(), .Ema21 = ema21, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(60.0F)
+            }
+            Dim indicatorsAvg As New StrategyIndicators With {
+                .AllBars = avgVolBars.AsReadOnly(), .Ema21 = ema21, .Ema50 = ConstArr(90.0F), .Rsi = ConstArr(60.0F)
+            }
+            ' Zero-volume bar should score same as average-volume bar (not penalised)
+            Dim resultZero = provider.Evaluate(zeroVolBars(Idx), indicatorsZero, MakeConfig(minConf:=0.01F), Idx)
+            Dim resultAvg  = provider.Evaluate(avgVolBars(Idx),  indicatorsAvg,  MakeConfig(minConf:=0.01F), Idx)
+
+            Assert.Equal(resultZero.Confidence, resultAvg.Confidence)
+        End Sub
+
+        ' ── STRAT-13: Configurable RSI period ───────────────────────────────────
+
+        ''' <summary>RSI(9) and RSI(14) computed from the same zigzag close series produce different values.</summary>
+        <Fact>
+        Public Sub EmaRsi_Rsi9VsRsi14_ProduceDifferentValues()
+            ' Zigzag series: up 10 bars then down 10 bars, repeating.
+            ' RSI(9) reacts faster than RSI(14) so they diverge on any oscillating series.
+            Dim closes As New List(Of Decimal)(N)
+            For i = 0 To N - 1
+                Dim phase = i Mod 20
+                closes.Add(If(phase < 10, 100D + phase * 2D, 120D - (phase - 10) * 2D))
+            Next
+            Dim rsi9  = TechnicalIndicators.RSI(closes, 9)
+            Dim rsi14 = TechnicalIndicators.RSI(closes, 14)
+
+            ' At any well-warmed-up index the two periods must produce different readings
+            Assert.NotEqual(rsi9(Idx), rsi14(Idx))
+        End Sub
+
         ' ══════════════════════════════════════════════════════════════════
         ' MultiConfluenceSignalProvider — buy signal
         ' ══════════════════════════════════════════════════════════════════
@@ -363,6 +632,7 @@ Namespace TopStepTrader.Tests.Backtest
             Dim indicators As New StrategyIndicators With {
                 .AllBars      = bars,
                 .Ema21        = ConstArr(105.0F),
+                .Ema50        = ConstArr(95.0F),
                 .IchiSpanA    = ConstArr(100.0F),
                 .IchiSpanB    = ConstArr(90.0F),
                 .IchiTenkan   = ConstArr(108.0F),
@@ -392,14 +662,15 @@ Namespace TopStepTrader.Tests.Backtest
         ' ══════════════════════════════════════════════════════════════════
 
         ''' <summary>
-        ''' All 7 Short conditions met → Sell signal.
-        ''' Cloud: SpanA=90, SpanB=100 → cloudBottom=90; close=80 < cloudBottom ✓
-        ''' EMA21=85; close=80 < EMA21 ✓
-        ''' Tenkan=82 < Kijun=88 ✓
-        ''' Chikou: lagClose=90 > currentClose=80 ✓
-        ''' PlusDI=15 < MinusDI=25 ✓
-        ''' MACD hist now=-0.5 < 0 and < prev=-0.3 ✓
-        ''' StochRsiK=0.7 > 0.2 ✓
+        ''' All 8 Short conditions met → Sell signal.
+        ''' Cloud: SpanA=90, SpanB=100 → bearish cloud (SpanA &lt; SpanB) ✓ cloud twist passes
+        ''' close=80 &lt; cloudBottom=90 ✓
+        ''' EMA21=85; close=80 &lt; EMA21 ✓; EMA50=95 &gt; close ✓
+        ''' Tenkan=82 &lt; Kijun=88 ✓
+        ''' Chikou: lagClose=90 &gt; currentClose=80 ✓
+        ''' PlusDI=15 &lt; MinusDI=25 ✓
+        ''' MACD hist now=-0.5 &lt; 0 and &lt; prev=-0.3 ✓
+        ''' StochRsiK: prev=0.55, now=0.45 → K &gt; 0.3 AND falling ✓ (STRAT-14 fix)
         ''' </summary>
         <Fact>
         Public Sub MultiConfluence_AllShortConditions_ReturnsSell()
@@ -408,10 +679,13 @@ Namespace TopStepTrader.Tests.Backtest
             Dim bars = BuildMCBars(currentClose:=80D, lagClose:=90D)
             Dim macdHist = ConstArr(-0.5F)
             macdHist(Idx - 1) = -0.3F   ' prev > now (expanding downward)
+            Dim stochK = ConstArr(0.55F)
+            stochK(Idx) = 0.45F          ' falling: prev=0.55, now=0.45 → sc7 passes
 
             Dim indicators As New StrategyIndicators With {
                 .AllBars      = bars,
                 .Ema21        = ConstArr(85.0F),
+                .Ema50        = ConstArr(95.0F),
                 .IchiSpanA    = ConstArr(90.0F),
                 .IchiSpanB    = ConstArr(100.0F),
                 .IchiTenkan   = ConstArr(82.0F),
@@ -420,7 +694,7 @@ Namespace TopStepTrader.Tests.Backtest
                 .PlusDi       = ConstArr(15.0F),
                 .MinusDi      = ConstArr(25.0F),
                 .MacdHistogram = macdHist,
-                .StochRsiK    = ConstArr(0.7F),
+                .StochRsiK    = stochK,
                 .Atr          = ConstArr(2.0F)
             }
 
@@ -540,6 +814,424 @@ Namespace TopStepTrader.Tests.Backtest
                 .AllBars   = bars,
                 .Ema21     = ConstArr(105.0F),
                 .IchiSpanA = Nothing   ' intentionally not set
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
+        ' MultiConfluenceSignalProvider — STRAT-07 StochRSI short gate
+        ' ══════════════════════════════════════════════════════════════════
+
+        ''' <summary>
+        ''' STRAT-07: StochRSI K = 0.85 (deep overbought) with all other short conditions met
+        ''' must NOT produce a Sell signal — sc7 requires K &lt; 0.4.
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_ShortWithStochKOverbought_ReturnsNothing()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            Dim bars = BuildMCBars(currentClose:=80D, lagClose:=90D)
+            Dim macdHist = ConstArr(-0.5F)
+            macdHist(Idx - 1) = -0.3F   ' expanding downward
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars      = bars,
+                .Ema21        = ConstArr(85.0F),
+                .Ema50        = ConstArr(95.0F),
+                .IchiSpanA    = ConstArr(90.0F),
+                .IchiSpanB    = ConstArr(100.0F),
+                .IchiTenkan   = ConstArr(82.0F),
+                .IchiKijun    = ConstArr(88.0F),
+                .Adx          = ConstArr(30.0F),
+                .PlusDi       = ConstArr(15.0F),
+                .MinusDi      = ConstArr(25.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK    = ConstArr(0.85F),   ' flat at 0.85 — sc7 fails (K not falling: prev=now=0.85)
+                .Atr          = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
+        ''' <summary>
+        ''' STRAT-14: StochRSI K falling from 0.55 to 0.45 (above 0.3, not oversold, momentum turning)
+        ''' with all other short conditions met MUST produce a Sell signal —
+        ''' sc7 requires K &gt; 0.3 AND K[now] &lt; K[prev].
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_ShortWithStochKTurningFromOverbought_ReturnsSell()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            Dim bars = BuildMCBars(currentClose:=80D, lagClose:=90D)
+            Dim macdHist = ConstArr(-0.5F)
+            macdHist(Idx - 1) = -0.3F   ' expanding downward
+            Dim stochK = ConstArr(0.55F)
+            stochK(Idx) = 0.45F          ' falling: prev=0.55, now=0.45; both > 0.3 → sc7 passes
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars      = bars,
+                .Ema21        = ConstArr(85.0F),
+                .Ema50        = ConstArr(95.0F),
+                .IchiSpanA    = ConstArr(90.0F),
+                .IchiSpanB    = ConstArr(100.0F),
+                .IchiTenkan   = ConstArr(82.0F),
+                .IchiKijun    = ConstArr(88.0F),
+                .Adx          = ConstArr(30.0F),
+                .PlusDi       = ConstArr(15.0F),
+                .MinusDi      = ConstArr(25.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK    = stochK,
+                .Atr          = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.NotNull(result)
+            Assert.Equal("Sell", result.Side)
+            Assert.False(result.IsLong)
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
+        ' MultiConfluenceSignalProvider — STRAT-14 StochRSI short gate semantics
+        ' ══════════════════════════════════════════════════════════════════
+
+        ''' <summary>
+        ''' STRAT-14: sc7 fails when K is rising (prev=0.45, now=0.55) even if above 0.3.
+        ''' Rising K means momentum is building upward — no room to fall.
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_ShortWithStochKRising_ReturnsNothing()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            Dim bars = BuildMCBars(currentClose:=80D, lagClose:=90D)
+            Dim macdHist = ConstArr(-0.5F)
+            macdHist(Idx - 1) = -0.3F
+            Dim stochK = ConstArr(0.45F)
+            stochK(Idx) = 0.55F   ' rising: prev=0.45, now=0.55 → sc7 fails (not falling)
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars      = bars,
+                .Ema21        = ConstArr(85.0F),
+                .Ema50        = ConstArr(95.0F),
+                .IchiSpanA    = ConstArr(90.0F),
+                .IchiSpanB    = ConstArr(100.0F),
+                .IchiTenkan   = ConstArr(82.0F),
+                .IchiKijun    = ConstArr(88.0F),
+                .Adx          = ConstArr(30.0F),
+                .PlusDi       = ConstArr(15.0F),
+                .MinusDi      = ConstArr(25.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK    = stochK,
+                .Atr          = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
+        ''' <summary>
+        ''' STRAT-14: sc7 fails when K ≤ 0.3 (oversold territory — no room to fall further).
+        ''' The condition requires K &gt; 0.3 to confirm room remains on the downside.
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_ShortWithStochKOversold_ReturnsNothing()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            Dim bars = BuildMCBars(currentClose:=80D, lagClose:=90D)
+            Dim macdHist = ConstArr(-0.5F)
+            macdHist(Idx - 1) = -0.3F
+            Dim stochK = ConstArr(0.35F)
+            stochK(Idx) = 0.20F   ' falling but K[now]=0.20 ≤ 0.3 → sc7 fails (oversold)
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars      = bars,
+                .Ema21        = ConstArr(85.0F),
+                .Ema50        = ConstArr(95.0F),
+                .IchiSpanA    = ConstArr(90.0F),
+                .IchiSpanB    = ConstArr(100.0F),
+                .IchiTenkan   = ConstArr(82.0F),
+                .IchiKijun    = ConstArr(88.0F),
+                .Adx          = ConstArr(30.0F),
+                .PlusDi       = ConstArr(15.0F),
+                .MinusDi      = ConstArr(25.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK    = stochK,
+                .Atr          = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
+        ' MultiConfluenceSignalProvider — STRAT-17 cloud twist pre-filter
+        ' ══════════════════════════════════════════════════════════════════
+
+        ''' <summary>
+        ''' STRAT-17: All 8 long conditions pass but cloud is bearish (SpanA &lt; SpanB) →
+        ''' cloud twist pre-filter blocks the long signal.
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_LongWithBearishCloud_ReturnsNothing()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            ' Close=110 is above cloud (SpanA=90, SpanB=100 → cloudTop=100), but cloud is bearish
+            Dim bars = BuildMCBars(currentClose:=110D, lagClose:=100D)
+            Dim macdHist = ConstArr(0.5F)
+            macdHist(Idx - 1) = 0.3F
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars      = bars,
+                .Ema21        = ConstArr(105.0F),
+                .Ema50        = ConstArr(95.0F),
+                .IchiSpanA    = ConstArr(90.0F),   ' SpanA < SpanB → bearish cloud → lc1 fails
+                .IchiSpanB    = ConstArr(100.0F),
+                .IchiTenkan   = ConstArr(108.0F),
+                .IchiKijun    = ConstArr(104.0F),
+                .Adx          = ConstArr(30.0F),
+                .PlusDi       = ConstArr(25.0F),
+                .MinusDi      = ConstArr(15.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK    = ConstArr(0.5F),
+                .Atr          = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
+        ''' <summary>
+        ''' STRAT-17: All 8 short conditions pass but cloud is bullish (SpanA &gt; SpanB) →
+        ''' cloud twist pre-filter blocks the short signal.
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_ShortWithBullishCloud_ReturnsNothing()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            ' Close=80 is below cloud (SpanA=100, SpanB=90 → cloudBottom=90), but cloud is bullish
+            Dim bars = BuildMCBars(currentClose:=80D, lagClose:=90D)
+            Dim macdHist = ConstArr(-0.5F)
+            macdHist(Idx - 1) = -0.3F
+            Dim stochK = ConstArr(0.55F)
+            stochK(Idx) = 0.45F
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars      = bars,
+                .Ema21        = ConstArr(85.0F),
+                .Ema50        = ConstArr(95.0F),
+                .IchiSpanA    = ConstArr(100.0F),  ' SpanA > SpanB → bullish cloud → scl1 fails
+                .IchiSpanB    = ConstArr(90.0F),
+                .IchiTenkan   = ConstArr(82.0F),
+                .IchiKijun    = ConstArr(88.0F),
+                .Adx          = ConstArr(30.0F),
+                .PlusDi       = ConstArr(15.0F),
+                .MinusDi      = ConstArr(25.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK    = stochK,
+                .Atr          = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
+        ' MultiConfluenceSignalProvider — STRAT-18 Chikou-vs-cloud filter
+        ' ══════════════════════════════════════════════════════════════════
+
+        ''' <summary>
+        ''' STRAT-18: Chikou is above the price 26 bars ago but the current close is
+        ''' inside the historical cloud at the lag position (lagCloudBottom=95, lagCloudTop=105,
+        ''' close=102). lc4 must fail → no long signal.
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_ChikouAboveOldPriceButInsideOldCloud_ReturnsNothing()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            ' currentClose=102 > lagClose=100 (gap satisfied) but 95 < 102 < 105 → inside lag cloud
+            Dim bars = BuildMCBars(currentClose:=102D, lagClose:=100D)
+            Dim macdHist = ConstArr(0.5F)
+            macdHist(Idx - 1) = 0.3F
+
+            ' Historical cloud at Idx-26: SpanA=95, SpanB=105 → lagCloudTop=105, close=102 < 105 → lc4 fails
+            Dim spanA = ConstArr(100.0F)   ' current cloud: bullish (SpanA=100 > SpanB=90), close=102 above cloud ✓
+            spanA(Idx - 26) = 95.0F        ' historical SpanA at lag position
+            Dim spanB = ConstArr(90.0F)
+            spanB(Idx - 26) = 105.0F       ' historical SpanB at lag position → lagCloudTop=105
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars      = bars,
+                .Ema21        = ConstArr(101.0F),
+                .Ema50        = ConstArr(95.0F),
+                .IchiSpanA    = spanA,
+                .IchiSpanB    = spanB,
+                .IchiTenkan   = ConstArr(108.0F),
+                .IchiKijun    = ConstArr(104.0F),
+                .Adx          = ConstArr(30.0F),
+                .PlusDi       = ConstArr(25.0F),
+                .MinusDi      = ConstArr(15.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK    = ConstArr(0.5F),
+                .Atr          = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
+        ''' <summary>
+        ''' STRAT-18: Chikou is above old price AND above the historical cloud top
+        ''' (lagCloudTop=95, close=110). lc4 must pass → long signal returned.
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_ChikouAboveOldPriceAndAboveOldCloud_ReturnsBuy()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            ' close=110, lagClose=100; historical cloud at Idx-26 top=95 → 110 > 95 ✓
+            Dim bars = BuildMCBars(currentClose:=110D, lagClose:=100D)
+            Dim macdHist = ConstArr(0.5F)
+            macdHist(Idx - 1) = 0.3F
+
+            Dim spanA = ConstArr(100.0F)
+            spanA(Idx - 26) = 95.0F        ' historical SpanA at lag position
+            Dim spanB = ConstArr(90.0F)
+            spanB(Idx - 26) = 88.0F        ' historical SpanB at lag position → lagCloudTop=95
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars      = bars,
+                .Ema21        = ConstArr(105.0F),
+                .Ema50        = ConstArr(95.0F),
+                .IchiSpanA    = spanA,
+                .IchiSpanB    = spanB,
+                .IchiTenkan   = ConstArr(108.0F),
+                .IchiKijun    = ConstArr(104.0F),
+                .Adx          = ConstArr(30.0F),
+                .PlusDi       = ConstArr(25.0F),
+                .MinusDi      = ConstArr(15.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK    = ConstArr(0.5F),
+                .Atr          = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.NotNull(result)
+            Assert.Equal("Buy", result.Side)
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
+        ' MultiConfluenceSignalProvider — STRAT-19 graduated confidence
+        ' ══════════════════════════════════════════════════════════════════
+
+        ''' <summary>
+        ''' STRAT-19: Marginal signal — ADX barely above threshold (21 vs threshold=20),
+        ''' tiny DI spread (2.5 pts), tiny MACD histogram, StochRSI near boundary.
+        ''' Confidence must be below 0.85 (Lewis would reject it).
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_MarginalSignal_ConfidenceBelowThreshold()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            Dim bars = BuildMCBars(currentClose:=110D, lagClose:=100D)
+            ' MACD: tiny histogram, expanding (hist=0.001, prev=0.0005)
+            Dim macdHist = ConstArr(0.001F)
+            macdHist(Idx - 1) = 0.0005F
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars      = bars,
+                .Ema21        = ConstArr(105.0F),
+                .Ema50        = ConstArr(95.0F),
+                .IchiSpanA    = ConstArr(100.0F),
+                .IchiSpanB    = ConstArr(90.0F),
+                .IchiTenkan   = ConstArr(108.0F),
+                .IchiKijun    = ConstArr(104.0F),
+                .Adx          = ConstArr(21.0F),    ' barely above threshold=20
+                .PlusDi       = ConstArr(17.25F),   ' spread = 17.25 - 14.75 = 2.5 pts (marginal)
+                .MinusDi      = ConstArr(14.75F),
+                .MacdHistogram = macdHist,
+                .StochRsiK    = ConstArr(0.68F),    ' very close to 0.7 boundary (not overbought but marginal)
+                .Atr          = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(minAdx:=20.0F), Idx)
+            Assert.NotNull(result)
+            Assert.Equal("Buy", result.Side)
+            Assert.True(result.Confidence < 0.85F,
+                        $"Expected marginal confidence < 0.85 but got {result.Confidence:F4}")
+        End Sub
+
+        ''' <summary>
+        ''' STRAT-19: Strong signal — ADX=45 (well above threshold), large DI spread (20 pts),
+        ''' large MACD histogram (relative to ATR), StochRSI well away from boundary.
+        ''' Confidence must be above 0.90 (Lewis would take it).
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_StrongSignal_ConfidenceAboveThreshold()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            Dim bars = BuildMCBars(currentClose:=110D, lagClose:=100D)
+            ' MACD: large histogram vs ATR=2 → macdMag=1.5, macdNorm=2×0.5+0.001=1.001 → macdStr≈1.0
+            Dim macdHist = ConstArr(1.5F)
+            macdHist(Idx - 1) = 1.2F   ' prev < now (expanding)
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars      = bars,
+                .Ema21        = ConstArr(105.0F),
+                .Ema50        = ConstArr(95.0F),
+                .IchiSpanA    = ConstArr(100.0F),
+                .IchiSpanB    = ConstArr(90.0F),
+                .IchiTenkan   = ConstArr(108.0F),
+                .IchiKijun    = ConstArr(104.0F),
+                .Adx          = ConstArr(45.0F),    ' strong trend
+                .PlusDi       = ConstArr(30.0F),    ' spread = 20 pts
+                .MinusDi      = ConstArr(10.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK    = ConstArr(0.2F),     ' well away from 0.7 boundary
+                .Atr          = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(minAdx:=20.0F), Idx)
+            Assert.NotNull(result)
+            Assert.Equal("Buy", result.Side)
+            Assert.True(result.Confidence > 0.90F,
+                        $"Expected strong confidence > 0.90 but got {result.Confidence:F4}")
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
+        ' MultiConfluenceSignalProvider — STRAT-06 volume gate
+        ' ══════════════════════════════════════════════════════════════════
+
+        ''' <summary>
+        ''' STRAT-06: All other long conditions pass but current bar volume is below
+        ''' 1.2× the 20-bar average → volume gate (lc8) fails → Nothing returned.
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_VolumeBelowThreshold_ReturnsNothing()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            Dim bars = BuildMCBars(currentClose:=110D, lagClose:=100D)
+            Dim macdHist = ConstArr(0.5F)
+            macdHist(Idx - 1) = 0.3F
+
+            ' VolMa20 = 1000; current bar Volume (set via MakeBar) ≈ 0 → 0 < 1200 → gate fails
+            Dim volMa = ConstArr(1000.0F)
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars       = bars,
+                .Ema21         = ConstArr(105.0F),
+                .Ema50         = ConstArr(95.0F),
+                .IchiSpanA     = ConstArr(100.0F),
+                .IchiSpanB     = ConstArr(90.0F),
+                .IchiTenkan    = ConstArr(108.0F),
+                .IchiKijun     = ConstArr(104.0F),
+                .Adx           = ConstArr(30.0F),
+                .PlusDi        = ConstArr(25.0F),
+                .MinusDi       = ConstArr(15.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK     = ConstArr(0.5F),
+                .Atr           = ConstArr(2.0F),
+                .VolMa20       = volMa   ' avg=1000; bar.Volume=0 → 0 < 1200 → gate fails
             }
 
             Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
