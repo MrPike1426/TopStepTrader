@@ -24,6 +24,8 @@ Namespace TopStepTrader.Services.Backtest
         Public Property BbIsLong As Boolean
         Public Property DbbInner As Decimal     ' DoubleBubbleButt inner-band exit
         Public Property DbbIsLong As Boolean
+        ''' <summary>True when the signal has partial conviction (8/9 MultiConfluence). Entry uses half quantity.</summary>
+        Public Property IsPartialSignal As Boolean
     End Class
 
 End Namespace

@@ -1055,8 +1055,9 @@ Namespace TopStepTrader.UI.ViewModels
                                        Dim done = TimeframeResults.Count
                                        Dim ok = TimeframeResults.Where(Function(r) r.IsSuccess).Count()
                                        ProgressText = $"Complete — {ok}/{done} timeframes succeeded"
-                                       cts?.Dispose()
-                                   End Sub)
+                                      cts?.Dispose()
+                                      _cancelSource = Nothing
+                                  End Sub)
                      End Function)
         End Sub
 

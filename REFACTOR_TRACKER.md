@@ -1,5 +1,6 @@
 # REFACTOR_TRACKER.md
-> Last updated: 2026-04-22 | Build target: `net10.0-windows` x64 | Language: VB.NET | Test count baseline: 357 passed, 0 failed
+> Last updated: 2026-04-23 | Build target: `net10.0-windows` x64 | Language: VB.NET | Test count baseline: 360 passed, 0 failed
+> Session 2026-04-23: Completed STRAT-16, STRAT-05 (partial-conviction hard-gate fix + confluence dissolution exit — 0 new tests, 7 pre-existing failures resolved)
 > Session 2026-04-22b: Completed STRAT-06 (Volume gate in MultiConfluence — 1 new test)
 > Session 2026-04-22: Completed STRAT-18, STRAT-19, QUAL-02 (Chikou-vs-cloud filter, graduated confidence, rename already applied — 4 new tests)
 > Session 2026-04-21e: Completed STRAT-14, STRAT-15, STRAT-17 (MultiConfluence: StochRSI short gate, MACD 8/17/9, cloud twist pre-filter — 4 new tests)
@@ -46,13 +47,7 @@ dotnet test --no-build -v q
 
 Next tickets to execute, in order:
 
-**MultiConfluence improvements (from SWOT review):**
-1. **[STRAT-06]** Volume confirmation gate in MultiConfluence — M
-2. **[STRAT-16]** 7/8 partial-conviction signal at half-size — M
-
-**Other:**
-3. **[STRAT-05]** Confluence dissolution exit — M
-4. **[STRAT-09]** Fix EMA/RSI bear scoring — independent signals — M
+All tracked tickets are now complete. ✅
 
 ---
 
@@ -95,7 +90,7 @@ Next tickets to execute, in order:
 | STRAT-02 | Time-of-day trading window gate | ✅ Done | Strategy | M |
 | STRAT-03 | Promote EMA50 to active gate condition | ✅ Done | Strategy | S |
 | STRAT-04 | Default ATR tier to Standard for Damian + Gold | ✅ Done | Strategy | XS |
-| STRAT-05 | Confluence dissolution exit | ⬜ Open | Strategy | M |
+| STRAT-05 | Confluence dissolution exit | ✅ Done | Strategy | M |
 | STRAT-06 | Volume confirmation gate in MultiConfluence | ✅ Done | Strategy | M |
 | STRAT-07 | Fix asymmetric StochRSI short gate | ✅ Done | Strategy | XS |
 | STRAT-08 | Raise FreeRoll activation to 66–75% of TP | ✅ Done | Strategy | S |
@@ -106,7 +101,7 @@ Next tickets to execute, in order:
 | STRAT-13 | Make RSI period configurable (not hardcoded 14) | ✅ Done | Strategy | S |
 | STRAT-14 | Correct StochRSI short gate semantics (K > 0.3 + falling) | ✅ Done | Strategy | XS |
 | STRAT-15 | Tune MACD parameters for intraday bars (8,17,9) | ✅ Done | Strategy | S |
-| STRAT-16 | 7/8 partial-conviction signal at half-size | ⬜ Open | Strategy | M |
+| STRAT-16 | 7/8 partial-conviction signal at half-size | ✅ Done | Strategy | M |
 | STRAT-17 | Add cloud twist pre-filter (bullish/bearish cloud alignment) | ✅ Done | Strategy | XS |
 | STRAT-18 | Add Chikou-vs-cloud filter | ✅ Done | Strategy | S |
 | STRAT-19 | Replace hardcoded Confidence=1.0 with graduated score | ✅ Done | Strategy | M |
@@ -122,8 +117,8 @@ Next tickets to execute, in order:
 | Tests | 6 | 6 |
 | Code Quality | 3 | 3 |
 | UI/UX | 4 | 4 |
-| Strategy | 19 | 18 |
-| **Total** | **50** | **48** |
+| Strategy | 19 | 19 |
+| **Total** | **50** | **50** |
 
 ---
 

@@ -1,4 +1,4 @@
-﻿Imports System.Threading
+Imports System.Threading
 Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Events
@@ -200,12 +200,16 @@ Namespace TopStepTrader.Services.Backtest
                             Dim isBuyFill  = (pending.Side = “Buy”)
                             Dim fillSlip   = If(config.TickSize > 0D, config.TickSize, 0D)
                             Dim fillPrice  = bar.Open + If(isBuyFill, fillSlip, -fillSlip)
+                            ' STRAT-16: partial-conviction entries use half quantity
+                            Dim fillQty = If(pending.IsPartialSignal,
+                                            Math.Max(1, config.Quantity \ 2),
+                                            config.Quantity)
                             Dim newLeg As New BacktestTrade With {
                                 .PositionGroupId = If(pending.IsScaleIn, openLegs(0).PositionGroupId, pending.GroupId),
                                 .EntryTime       = bar.Timestamp,
                                 .EntryPrice      = fillPrice,
                                 .Side            = pending.Side,
-                                .Quantity        = config.Quantity,
+                                .Quantity        = fillQty,
                                 .SignalConfidence = pending.Confidence
                             }
                             openLegs.Add(newLeg)
@@ -509,7 +513,8 @@ Namespace TopStepTrader.Services.Backtest
                             .TpDelta    = signal.TpDelta,
                             .AbsStSl    = signal.AbsoluteSlPrice,
                             .AbsStTp    = signal.AbsoluteTpPrice,
-                            .StIsLong   = signal.IsLong
+                            .StIsLong   = signal.IsLong,
+                            .IsPartialSignal = signal.IsPartialSignal
                         }
                         ‘ Indicator-channel exit level — strategy-specific pending field
                         If signal.IndicatorExitLevel <> 0D Then

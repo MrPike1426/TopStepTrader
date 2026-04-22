@@ -53,6 +53,12 @@ Namespace TopStepTrader.Core.Models
         ''' </summary>
         Public Property NeutralExit As Boolean
 
+        ''' <summary>
+        ''' True when the signal has partial conviction (e.g. 8/9 for MultiConfluence).
+        ''' BacktestEngine uses half of config.Quantity for the entry leg.
+        ''' </summary>
+        Public Property IsPartialSignal As Boolean
+
     End Class
 
 End Namespace

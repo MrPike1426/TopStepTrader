@@ -141,6 +141,28 @@ Namespace TopStepTrader.Services.Backtest.Strategies
                 mcTpCand = mcLastClose - (mcSlCand - mcLastClose) * 2D
             End If
 
+            ' STRAT-16: 8/9 partial-conviction — one lagging condition missing.
+            ' Hard-gate conditions (cloud direction, Chikou-vs-cloud, volume, short StochRSI gate)
+            ' must still pass — a partial signal is not valid when these fundamental filters fail.
+            Dim mcIsPartial = False
+            If mcSide Is Nothing Then
+                Dim longHits = {lcl1, lcl2, lcl2b, lcl3, lcl4, lcl5, lcl6, lcl7, lcl8}.Count(Function(c) c)
+                Dim shortHits = {scl1, scl2, scl2b, scl3, scl4, scl5, scl6, scl7, scl8}.Count(Function(c) c)
+                If longHits = 8 AndAlso lcl1 AndAlso lcl4 AndAlso lcl8 Then
+                    mcSide = "Buy"
+                    mcIsPartial = True
+                    Dim mcAtrSlLevel = mcLastClose - SafeD(mcAtrVal * 1.5F)
+                    mcSlCand = If(mcCloudBottom > mcAtrSlLevel, mcCloudBottom, mcAtrSlLevel)
+                    mcTpCand = mcLastClose + (mcLastClose - mcSlCand) * 2D
+                ElseIf shortHits = 8 AndAlso scl1 AndAlso scl4 AndAlso scl7 AndAlso scl8 Then
+                    mcSide = "Sell"
+                    mcIsPartial = True
+                    Dim mcAtrSlLevel2 = mcLastClose + SafeD(mcAtrVal * 1.5F)
+                    mcSlCand = If(mcCloudTop < mcAtrSlLevel2, mcCloudTop, mcAtrSlLevel2)
+                    mcTpCand = mcLastClose - (mcSlCand - mcLastClose) * 2D
+                End If
+            End If
+
             If mcSide Is Nothing OrElse mcSlCand = 0D Then Return Nothing
 
             ' ── STRAT-19: Graduated confidence ────────────────────────────────────
@@ -161,11 +183,12 @@ Namespace TopStepTrader.Services.Backtest.Strategies
 
             ' StopDelta/TpDelta are relative to signal close; fill block re-anchors to nextBar.Open.
             Return New SignalResult With {
-                .Side       = mcSide,
-                .Confidence = mcConfidence,
-                .IsLong     = (mcSide = "Buy"),
-                .StopDelta  = Math.Abs(mcLastClose - mcSlCand),
-                .TpDelta    = Math.Abs(mcTpCand - mcLastClose)
+                .Side            = mcSide,
+                .Confidence      = mcConfidence,
+                .IsLong          = (mcSide = "Buy"),
+                .StopDelta       = Math.Abs(mcLastClose - mcSlCand),
+                .TpDelta         = Math.Abs(mcTpCand - mcLastClose),
+                .IsPartialSignal = mcIsPartial
             }
         End Function
 

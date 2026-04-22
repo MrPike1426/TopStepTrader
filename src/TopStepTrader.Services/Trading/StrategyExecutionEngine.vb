@@ -158,6 +158,9 @@ Namespace TopStepTrader.Services.Trading
         ' Cloud-edge SL price set by the MultiConfluence case; consumed once by PlaceBracketOrdersAsync.
         ' Nothing for all other strategy types.
         Private _mcCloudSlPrice As Decimal? = Nothing
+        ' STRAT-16: True when the pending MultiConfluence signal is a partial 8/9 conviction signal.
+        ' Causes quantity to be halved for the entry order.
+        Private _mcPartialSignal As Boolean = False
         ' Absolute SL price for LULT Divergence — trigger wave extreme ± ATR-scaled tick buffer.
         ' Set when the 6-step LULT signal fires; Nothing for all other strategy types.
         Private _lultTriggerExtreme As Decimal? = Nothing
@@ -290,6 +293,7 @@ Namespace TopStepTrader.Services.Trading
             _lastPositionClosedAt = DateTimeOffset.MinValue
             _lastApiPnl = 0D
             _mcCloudSlPrice = Nothing
+            _mcPartialSignal = False
             _lultTriggerExtreme = Nothing
             _currentTrendSide = Nothing
             _reversalCandidateSide = Nothing
@@ -549,7 +553,7 @@ Namespace TopStepTrader.Services.Trading
             Dim opens = bars.Select(Function(b) b.Open).ToList()
             Dim highs = bars.Select(Function(b) b.High).ToList()
             Dim lows = bars.Select(Function(b) b.Low).ToList()
-            Dim volumes = bars.Select(Function(b) b.Volume).ToList()
+            Dim volumes = bars.Select(Function(b) CDec(b.Volume)).ToList()
 
             Dim lastBar = bars.Last()
             _lastBarClose = CDec(lastBar.Close)
@@ -849,6 +853,7 @@ Namespace TopStepTrader.Services.Trading
                         _currentAtrValue = mcResult.AtrValue
                         _lastAdxValue = CSng(mcResult.AdxValue)
                         _mcCloudSlPrice = Nothing   ' reset; will be set only when a signal fires
+                        _mcPartialSignal = False    ' reset each bar
 
                         ' Raise live confidence telemetry every bar regardless of signal state
                         Dim mcArgs As New ConfidenceUpdatedEventArgs(mcResult.BullScore, mcResult.BearScore, adxValue:=mcResult.AdxValue, lastClose:=CDec(lastBar.Close)) With {
@@ -871,14 +876,38 @@ Namespace TopStepTrader.Services.Trading
                         }
                         RaiseEvent ConfidenceUpdated(Me, mcArgs)
 
+                        ' ── STRAT-05: Confluence dissolution exit ─────────────────────────────
+                        ' On each new bar while a position is open, check how many conditions
+                        ' remain active in the entry direction.  If conviction has decayed below
+                        ' the threshold, flatten the position before checking for a new signal.
+                        Const DissolutionThreshold As Integer = 3
+                        If _positionOpen AndAlso isNewBar Then
+                            Dim activeCount = If(_lastEntrySide = OrderSide.Buy, mcResult.LongCount, mcResult.ShortCount)
+                            If activeCount < DissolutionThreshold Then
+                                Log($"⚠️  Confluence dissolved ({activeCount}/9 conditions active) — flattening position")
+                                Await DoNeutralFlattenAsync(ct)
+                                Return
+                            End If
+                        End If
+
                         If mcResult.Side.HasValue Then
                             Dim mcSide = mcResult.Side.Value
-                            _pendingConfidencePct = 100   ' all 7 conditions met = full confluence
+                            _pendingConfidencePct = 100
                             _mcCloudSlPrice = mcResult.CloudEdgeSl
-                            If mcSide = OrderSide.Buy Then
-                                Log($"✅ Multi-Confluence LONG — all 7 conditions met! {mcResult.StatusLine} | {remStr}")
+                            _mcPartialSignal = mcResult.IsPartialSignal
+                            If mcResult.IsPartialSignal Then
+                                Dim partialCount = If(mcSide = OrderSide.Buy, mcResult.LongCount, mcResult.ShortCount)
+                                If mcSide = OrderSide.Buy Then
+                                    Log($"⚡ Multi-Confluence LONG — partial {partialCount}/9 conviction (half-size) | {mcResult.StatusLine} | {remStr}")
+                                Else
+                                    Log($"⚡ Multi-Confluence SHORT — partial {partialCount}/9 conviction (half-size) | {mcResult.StatusLine} | {remStr}")
+                                End If
                             Else
-                                Log($"✅ Multi-Confluence SHORT — all 7 conditions met! {mcResult.StatusLine} | {remStr}")
+                                If mcSide = OrderSide.Buy Then
+                                    Log($"✅ Multi-Confluence LONG — all 9 conditions met! {mcResult.StatusLine} | {remStr}")
+                                Else
+                                    Log($"✅ Multi-Confluence SHORT — all 9 conditions met! {mcResult.StatusLine} | {remStr}")
+                                End If
                             End If
                             side = mcSide
                         Else
@@ -1797,6 +1826,12 @@ Namespace TopStepTrader.Services.Trading
             End If
 
             Dim contracts = If(_strategy.Contracts > 0, _strategy.Contracts, 1)
+            ' STRAT-16: halve size for partial 8/9 MultiConfluence signals
+            If _mcPartialSignal Then
+                contracts = Math.Max(1, contracts \ 2)
+                Log($"⚡ Partial-conviction entry: quantity halved to {contracts} contract(s)")
+            End If
+            _mcPartialSignal = False   ' consume; cleared after order is placed
             Dim tickSize = If(_strategy.TickSize > 0D, _strategy.TickSize, fav.PxTickSize)
             Dim tickValue = If(_strategy.TickValue > 0D, _strategy.TickValue, fav.PxTickValue)
 

@@ -1239,6 +1239,114 @@ Namespace TopStepTrader.Tests.Backtest
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════
+        ' MultiConfluenceSignalProvider — STRAT-16 partial-conviction (8/9)
+        ' ══════════════════════════════════════════════════════════════════
+
+        ''' <summary>
+        ''' STRAT-16: 8 of 9 long conditions pass — EMA50 fails (close below EMA50) →
+        ''' provider returns Buy with IsPartialSignal = True.
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_EightOfNineLong_ReturnsBuyPartial()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            Dim bars = BuildMCBars(currentClose:=110D, lagClose:=100D)
+            Dim macdHist = ConstArr(0.5F)
+            macdHist(Idx - 1) = 0.3F   ' expanding upward
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars       = bars,
+                .Ema21         = ConstArr(105.0F),
+                .Ema50         = ConstArr(115.0F),   ' close=110 < EMA50=115 → lcl2b fails (8/9)
+                .IchiSpanA     = ConstArr(100.0F),
+                .IchiSpanB     = ConstArr(90.0F),
+                .IchiTenkan    = ConstArr(108.0F),
+                .IchiKijun     = ConstArr(104.0F),
+                .Adx           = ConstArr(30.0F),
+                .PlusDi        = ConstArr(25.0F),
+                .MinusDi       = ConstArr(15.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK     = ConstArr(0.5F),
+                .Atr           = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+
+            Assert.NotNull(result)
+            Assert.Equal("Buy", result.Side)
+            Assert.True(result.IsPartialSignal, "Expected IsPartialSignal = True for 8/9 long")
+        End Sub
+
+        ''' <summary>
+        ''' STRAT-16: 8 of 9 short conditions pass — EMA50 fails (close above EMA50) →
+        ''' provider returns Sell with IsPartialSignal = True.
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_EightOfNineShort_ReturnsSellPartial()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            Dim bars = BuildMCBars(currentClose:=80D, lagClose:=90D)
+            Dim macdHist = ConstArr(-0.5F)
+            macdHist(Idx - 1) = -0.3F   ' expanding downward
+            Dim stochK = ConstArr(0.55F)
+            stochK(Idx) = 0.45F          ' falling: sc7 passes
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars       = bars,
+                .Ema21         = ConstArr(85.0F),
+                .Ema50         = ConstArr(75.0F),    ' close=80 > EMA50=75 → scl2b fails (8/9)
+                .IchiSpanA     = ConstArr(90.0F),
+                .IchiSpanB     = ConstArr(100.0F),
+                .IchiTenkan    = ConstArr(82.0F),
+                .IchiKijun     = ConstArr(88.0F),
+                .Adx           = ConstArr(30.0F),
+                .PlusDi        = ConstArr(15.0F),
+                .MinusDi       = ConstArr(25.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK     = stochK,
+                .Atr           = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+
+            Assert.NotNull(result)
+            Assert.Equal("Sell", result.Side)
+            Assert.True(result.IsPartialSignal, "Expected IsPartialSignal = True for 8/9 short")
+        End Sub
+
+        ''' <summary>
+        ''' STRAT-16: Only 7 of 9 long conditions pass (EMA50 and DI-spread both fail) →
+        ''' below the 8/9 threshold → Nothing returned.
+        ''' </summary>
+        <Fact>
+        Public Sub MultiConfluence_SevenOfNineLong_ReturnsNothing()
+            Dim provider As New MultiConfluenceSignalProvider()
+
+            Dim bars = BuildMCBars(currentClose:=110D, lagClose:=100D)
+            Dim macdHist = ConstArr(0.5F)
+            macdHist(Idx - 1) = 0.3F
+
+            Dim indicators As New StrategyIndicators With {
+                .AllBars       = bars,
+                .Ema21         = ConstArr(105.0F),
+                .Ema50         = ConstArr(115.0F),   ' close=110 < EMA50=115 → lcl2b fails
+                .IchiSpanA     = ConstArr(100.0F),
+                .IchiSpanB     = ConstArr(90.0F),
+                .IchiTenkan    = ConstArr(108.0F),
+                .IchiKijun     = ConstArr(104.0F),
+                .Adx           = ConstArr(30.0F),
+                .PlusDi        = ConstArr(15.0F),    ' PlusDI < MinusDI → lcl5 fails
+                .MinusDi       = ConstArr(25.0F),
+                .MacdHistogram = macdHist,
+                .StochRsiK     = ConstArr(0.5F),
+                .Atr           = ConstArr(2.0F)
+            }
+
+            Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
+            Assert.Null(result)
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
         ' Helper — build MultiConfluence bar list
         ' ══════════════════════════════════════════════════════════════════
 
