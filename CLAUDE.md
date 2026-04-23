@@ -140,8 +140,16 @@ This section governs the **Ticket Handler** Claude agent (and any other automate
 | Item | Value |
 |---|---|
 | Remote | `origin` → `https://github.com/MrPike1426/TopStepTrader.git` |
-| Default target branch | Current working branch (run `git branch --show-current` to confirm) |
-| Push style | `git push origin HEAD` — **no pull requests**, direct push only |
+| Target branch | **`clean-start`** — always, no exceptions |
+| Push style | `git push origin clean-start` — **no pull requests**, direct push only |
+
+**Do NOT create a worktree.** Claude Code creates an isolated worktree by default — override this behaviour. Always clone or check out the `clean-start` branch directly and commit there. Never create a branch named `worktree-*` or any other side branch.
+
+```bash
+# Confirm you are on the correct branch before making any changes:
+git checkout clean-start
+git pull origin clean-start
+```
 
 Never reference the old `eToroTrader` repository — it no longer exists.
 
@@ -182,7 +190,7 @@ chore(BUG-12): mark ticket resolved in REFACTOR_TRACKER.md
    ```bash
    git add -A
    git commit -m "fix(ID): <description>"
-   git push origin HEAD
+   git push origin clean-start
    ```
 7. Complete ticket artefacts (see **Completing a Ticket** above):
    - Delete `tickets/[ID].md`
@@ -190,7 +198,7 @@ chore(BUG-12): mark ticket resolved in REFACTOR_TRACKER.md
    ```bash
    git add -A
    git commit -m "chore(ID): mark ticket resolved in REFACTOR_TRACKER.md"
-   git push origin HEAD
+   git push origin clean-start
    ```
 8. Run `/clear` to reset the context window.
 9. Move to the next ticket **only if explicitly instructed** to process multiple tickets.
