@@ -49,7 +49,7 @@ dotnet test --no-build -v q
 All bugs, features, and improvements are tracked in two artefacts:
 
 - **`REFACTOR_TRACKER.md`** — master status board, priority queue, and completion summary. Always kept current.
-- **`tickets/`** — one `.md` file per open ticket. Completed tickets move to `tickets/archive/`.
+- **`tickets/`** — one `.md` file per open ticket. Completed tickets are deleted (Git history is the archive).
 
 ### Ticket ID Prefixes
 
@@ -61,6 +61,7 @@ All bugs, features, and improvements are tracked in two artefacts:
 | `QUAL-XX` | Code quality, naming, refactoring |
 | `UX-XX` | UI/UX improvements |
 | `ARCH-XX` | Architectural changes (DI, patterns, decomposition) |
+| `OBS-XX` | Observability — logging, diagnostics, status lines |
 | `FEAT-XX` | New features that don't fit another prefix |
 
 Use the next sequential number within each prefix (check the Status Board for the current high-water mark).
@@ -82,38 +83,42 @@ Every ticket must carry a `**Size:**` estimate. Assess holistically across token
 ```markdown
 # [ID] Title
 
-**Status:** Open  
+**Status:** Open | In Progress | Blocked | UAT-Pending  
 **Category:** <category name>  
 **Size:** XS | S | M | L | XL  
+**Source:** UAT | Code-Review | Manual  
 **Files:** `path/to/file.vb:line`
 
 ## Problem
 <description of current behaviour and why it's wrong or missing>
 
-## Change  *(omit if no specific change is needed yet)*
-<code diff or description>
+## Proposed Fix
+<approach or code description>
+
+## UAT Evidence  *(omit if Source is not UAT)*
+Session: YYYY-MM-DD, instrument, persona, conditions observed.
+Log/repro: <paste relevant output>
 
 ## Acceptance Criteria
 - [ ] item 1
-- [ ] item 2
 - [ ] Build passes; all tests still pass
 ```
 
 ### Creating a New Ticket
 
-1. Choose the correct prefix and next ID (check Status Board in `REFACTOR_TRACKER.md`).
-2. Create `tickets/[ID].md` using the schema above, including a `**Size:**` estimate.
-3. Add a row to the **Status Board** table (`⬜ Open`, with size).
-4. Insert at the appropriate position in the **Priority Queue** if high-priority.
-5. Update the **Completion Summary** row count for the category.
+1. Choose the correct prefix and next ID (check Open Tickets table in `REFACTOR_TRACKER.md` for the current high-water mark).
+2. Create `tickets/[ID].md` using the schema above, including `**Size:**` and `**Source:**`.
+3. Add a row to the **Open Tickets** table in `REFACTOR_TRACKER.md`.
+4. Insert at the appropriate position in the **Priority Queue**.
+5. Update the **Completion Summary** row count for the category if it is a new category.
 
 ### Completing a Ticket
 
-1. Change ticket `**Status:**` to `✅ Complete`.
-2. Replace Problem / Change / Acceptance Criteria with a short `## Summary` of what was done.
-3. Move the file: `tickets/[ID].md` → `tickets/archive/[ID].md`.
-4. Update REFACTOR_TRACKER.md: Status Board cell → `✅ Done`; Completion Summary done-count += 1.
-5. Remove from Priority Queue.
+1. Verify build passes and all tests pass.
+2. Delete `tickets/[ID].md` — Git history is the archive.
+3. Remove the row from the **Open Tickets** table in `REFACTOR_TRACKER.md`.
+4. Remove from **Priority Queue**.
+5. Increment the **Done** count in the **Completion Summary** and append the ID to the IDs column.
 6. Update the `Last updated` date at the top of `REFACTOR_TRACKER.md`.
 
 ### Running a Ticket
@@ -123,6 +128,80 @@ Execute [ID]
 ```
 
 Claude loads `REFACTOR_TRACKER.md` + `tickets/[ID].md` + the referenced source files, implements the change, runs self-verification (build + tests), and completes all ticket artefacts as described above.
+
+---
+
+## Automated Agent Workflow
+
+This section governs the **Ticket Handler** Claude agent (and any other automated agent) that commits fixes directly to the repository. Manual Claude sessions follow the same rules.
+
+### Repository & Branch
+
+| Item | Value |
+|---|---|
+| Remote | `origin` → `https://github.com/MrPike1426/TopStepTrader.git` |
+| Default target branch | Current working branch (run `git branch --show-current` to confirm) |
+| Push style | `git push origin HEAD` — **no pull requests**, direct push only |
+
+Never reference the old `eToroTrader` repository — it no longer exists.
+
+### Commit Message Format
+
+```
+<type>(<ID>): <short imperative description>
+```
+
+| Type | When to use |
+|---|---|
+| `fix` | Bug fix (BUG-XX) |
+| `feat` | New feature or strategy change (FEAT-XX, STRAT-XX) |
+| `test` | Test coverage (TEST-XX) |
+| `refactor` | Code quality / architecture (QUAL-XX, ARCH-XX) |
+| `obs` | Observability / logging (OBS-XX) |
+| `chore` | Tracker / documentation update only |
+
+Examples:
+```
+fix(BUG-12): increase fetchCount to 80 to satisfy MinBarsRequired
+chore(BUG-12): mark ticket resolved in REFACTOR_TRACKER.md
+```
+
+### Per-Ticket Procedure (automated)
+
+1. Read `CLAUDE.md` (this file) and `REFACTOR_TRACKER.md`.
+2. Pick the **highest-priority unchecked ticket** from the Priority Queue (or the ticket explicitly requested).
+3. Read `tickets/[ID].md` and all files listed under `**Files:**`.
+4. Implement the fix following the code style and conventions in this file.
+5. Run self-verification:
+   ```bash
+   dotnet build --no-restore -v q
+   dotnet test --no-build -v q
+   ```
+   Fix any compilation errors or test failures before continuing.
+6. Stage and commit the code change:
+   ```bash
+   git add -A
+   git commit -m "fix(ID): <description>"
+   git push origin HEAD
+   ```
+7. Complete ticket artefacts (see **Completing a Ticket** above):
+   - Delete `tickets/[ID].md`
+   - Update `REFACTOR_TRACKER.md` (remove from Open Tickets + Priority Queue, increment Done count, update date)
+   ```bash
+   git add -A
+   git commit -m "chore(ID): mark ticket resolved in REFACTOR_TRACKER.md"
+   git push origin HEAD
+   ```
+8. Run `/clear` to reset the context window.
+9. Move to the next ticket **only if explicitly instructed** to process multiple tickets.
+
+### Rules
+
+- **One ticket at a time** unless the user says otherwise.
+- Never open a pull request — push commits directly to the branch.
+- If a task description is ambiguous, ask for clarification **before** making changes.
+- Never leave the repository in a broken build or failing test state between commits.
+- If a test failure is pre-existing (not caused by the current change), flag it explicitly — do not silently ignore it.
 
 ---
 

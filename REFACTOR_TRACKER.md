@@ -1,126 +1,110 @@
-# REFACTOR_TRACKER.md
-> Last updated: 2026-04-23 | Build target: `net10.0-windows` x64 | Language: VB.NET | Test count baseline: 360 passed, 0 failed
-> Session 2026-04-23: Completed STRAT-16, STRAT-05 (partial-conviction hard-gate fix + confluence dissolution exit — 0 new tests, 7 pre-existing failures resolved)
-> Session 2026-04-22b: Completed STRAT-06 (Volume gate in MultiConfluence — 1 new test)
-> Session 2026-04-22: Completed STRAT-18, STRAT-19, QUAL-02 (Chikou-vs-cloud filter, graduated confidence, rename already applied — 4 new tests)
-> Session 2026-04-21e: Completed STRAT-14, STRAT-15, STRAT-17 (MultiConfluence: StochRSI short gate, MACD 8/17/9, cloud twist pre-filter — 4 new tests)
-> Session 2026-04-21d: Completed STRAT-10, STRAT-11, STRAT-12, STRAT-13 (EMA/RSI: 3-zone RSI, 3-bar slope, volume gate, configurable RSI period — 10 new tests)
-> Session 2026-04-21c: Raised STRAT-14–STRAT-19 (MultiConfluence SWOT — StochRSI semantics, MACD tuning, 7/8 partial signal, cloud twist, Chikou-vs-cloud, graduated confidence)
-> Session 2026-04-21b: Raised STRAT-09–STRAT-13 (EMA/RSI strategy review); Completed STRAT-09
-> Session 2026-04-20: Completed STRAT-01, STRAT-03, STRAT-08, UX-01, UX-02, UX-04, QUAL-03, TEST-02, TEST-03 (9 tickets)
-> Session 2026-04-21: Completed STRAT-02 (1 ticket)
-
----
-
-## Project Context
-
-Seven-project WPF desktop trading application targeting TopStepX (ProjectX REST/SignalR API).
-
-| Project | Role |
-|---|---|
-| `TopStepTrader.Core` | Domain models, interfaces, enums, tick math, FavouriteContracts |
-| `TopStepTrader.API` | HTTP/SignalR clients, ProjectX token manager |
-| `TopStepTrader.Data` | EF Core + SQLite repositories |
-| `TopStepTrader.ML` | Technical indicators (pure math, no ML runtime currently) |
-| `TopStepTrader.Services` | Business logic — backtest engine, bar collection, trading engines |
-| `TopStepTrader.UI` | WPF MVVM — ViewModels, Views, ViewModelLocator, AppBootstrapper |
-| `TopStepTrader.Tests` | xUnit, 320 tests across multiple files |
-
-**Key architectural facts:**
-- Persona system: `IPersonaService` → `PersonaService` (Singleton) → SQLite persistence. Never call `RiskProfile.Lewis/Damian/Joe` directly in ViewModels.
-- `StrategyConditionType` enum integer values are DB discriminators — must not be changed once data is stored.
-- `FavouriteContracts.vb` holds master instrument list. Always call `contract.GetTickSize(_session.ActiveBroker)` — never hardcode specs.
-- Signal providers: all strategies implement `IStrategySignalProvider` (ARCH-01 complete). Factory: `StrategySignalProviderFactory`.
-- `BacktestViewModel` is now a thin shell over 4 sub-VMs: `BacktestRunViewModel`, `MaxEffortViewModel`, `PinnedResultsViewModel`, `PreviousRunsViewModel` (ARCH-02 complete).
-
-**Self-verification rule (must run after every file edit):**
-```bash
-dotnet build src/TopStepTrader.Services/TopStepTrader.Services.vbproj --no-restore -v q
-dotnet build --no-restore -v q
-dotnet test --no-build -v q
-# Expected: 356 passed, 0 failed
-```
+﻿# REFACTOR_TRACKER.md
+> Last updated: 2026-04-26 | Build: `net10.0-windows` x64 | Tests: 360 passed, 0 failed
+> Session 2026-04-26: Pump-n-Dump code review vs new live TP/SL system. Raised BUG-15–21, STRAT-28–29, OBS-06, TEST-10.
+> Session 2026-04-25: UAT — OIL/Damian/WIDE ATR, 1 trade/$57, missed ~09:00 and ~13:30 uptrends. Raised BUG-12, BUG-13, BUG-14, STRAT-27, OBS-02–05, TEST-09.
+> Session 2026-04-24: Multi-Confluence code review. Raised ARCH-04, BUG-07–11, STRAT-20–26, TEST-07, TEST-08, OBS-01.
 
 ---
 
 ## Priority Queue
 
-Next tickets to execute, in order:
-
-All tracked tickets are now complete. ✅
+1. **BUG-12** — `fetchCount` (70) < `MinBarsRequired` (80) — perpetual MC warm-up (High)
+2. **BUG-13** — MC same-direction scale-in blocked by `_positionOpen` guard (High)
+3. **BUG-14** — `TrailHardStopBracketAsync` resets TP to `DefaultTpTicks`, discards WIDE-tier TP (High)
+4. **BUG-07** — Live partial-signal (8/9) missing hard-gate guard (Blocker)
+5. **BUG-08** — StochRSI long threshold mismatch live(0.7) vs backtest(0.8) (Blocker)
+6. **BUG-09** — DI-spread / Chikou-gap / MACD-mag filters absent in backtest (High)
+7. **ARCH-04** — Consolidate MC live + backtest evaluators (High)
+8. **BUG-10** — `Confidence` computed when `Side = Nothing` in live evaluator (High)
+9. **STRAT-21** — Volume gate fail-open in backtest, fail-closed in live (High)
+10. **STRAT-26** — Backtest does not clamp SL to broker minimum ticks (High)
+11. **STRAT-20** — `min(1.5xATR, cloud edge)` picks the tighter SL — clarify or invert (High)
+12. **TEST-07** — Live vs backtest MC evaluator parity tests (High)
+13. **STRAT-22** — Yahoo intraday volume unreliable for futures — replace for live vol gate (Med)
+14. **STRAT-25** — Add spread/slippage/commission to backtest fills (Med)
+15. **STRAT-23** — Verify MC respects TOD / news / contract-roll no-trade windows (Med)
+16. **STRAT-24** — Externalise MC hard-coded thresholds to config/persona (Med)
+17. **OBS-01** — Enrich MC StatusLine with diagnostic signal components (Med)
+18. **BUG-11** — lc2 missing Single.IsNaN(ema21Now) guard (Med)
+19. **TEST-08** — NaN warm-up paths for MC indicators (Med)
+20. **STRAT-27** — Make MACD histogram minimum ATR fraction persona-configurable (Med)
+21. **OBS-02** — Emit FailedConditions list from MultiConfluenceStrategy.Evaluate (Med)
+22. **OBS-03** — Log StrategyDefinition config snapshot at engine Start() (Med)
+23. **OBS-04** — Write AI pre-trade veto outcome to DiagnosticLogger (Med)
+24. **OBS-05** — Emit bracket state-transition entries to DiagnosticLogger (Med)
+25. **TEST-09** — Verify ATR-tier bracket ticks applied in PlaceBracketOrdersAsync (Med)
+26. **BUG-15** — PumpNDump silently overrides user-provided TP/SL ticks (Blocker)
+27. **BUG-17** — PumpNDump ViewModel passes eToro BrokerType to TopStepX engine (Blocker)
+28. **BUG-16** — PumpNDump bracket close detection has no miss tolerance (High)
+29. **BUG-18** — PumpNDump EmergencyCloseAsync uses stale internal qty (High)
+30. **BUG-19** — PumpNDump average entry derived from bar close not fill price (High)
+31. **BUG-20** — PumpNDump TP tighten + SL trail can produce SL/TP inversion (High)
+32. **BUG-21** — PumpNDump OnOrderFilled re-triggers DoCheckAsync — immediate re-entry after TP fill (High)
+33. **STRAT-28** — PumpNDump missing trading hours and stale-bar entry suppression (Med)
+34. **STRAT-29** — PumpNDump free-ride drops heat to zero — scale-in cap bypass (Med)
+35. **OBS-06** — PumpNDump missing DiagnosticLogger integration (Med)
+36. **TEST-10** — PumpNDump has no backtest signal provider (Med)
 
 ---
 
-## Status Board
+## Open Tickets
 
-| ID | Title | Status | Category | Size |
+| ID | Title | Category | Size | Source |
 |---|---|---|---|---|
-| ARCH-01a | Define scaffold — interface, SignalResult, factory | ✅ Done | Architecture | — |
-| ARCH-01b | Extract EmaRsi + MultiConfluence providers | ✅ Done | Architecture | — |
-| ARCH-01c | Extract remaining live-trading providers | ✅ Done | Architecture | — |
-| ARCH-01d | Extract QuantLab providers | ✅ Done | Architecture | — |
-| ARCH-01e | Gut BacktestEngine main loop | ✅ Done | Architecture | — |
-| ARCH-01f | Unit test per signal provider | ✅ Done | Architecture | — |
-| ARCH-02a | Extract BacktestRunViewModel | ✅ Done | Architecture | — |
-| ARCH-02b | Extract MaxEffortViewModel | ✅ Done | Architecture | — |
-| ARCH-02c | Extract PinnedResultsViewModel | ✅ Done | Architecture | — |
-| ARCH-02d | Extract PreviousRunsViewModel | ✅ Done | Architecture | — |
-| ARCH-02e | Wire shell BacktestViewModel + XAML | ✅ Done | Architecture | — |
-| ARCH-03 | Replace IsWorking booleans with WorkPhase enum | ✅ Done | Architecture | — |
-| BUG-01 | Replace pending-state locals with PendingEntry record | ✅ Done | Bugs | — |
-| BUG-02 | Cap LogEntries at 1,000 in SniperViewModel | ✅ Done | Bugs | — |
-| BUG-03 | Add IDisposable to BacktestViewModel | ✅ Done | Bugs | — |
-| BUG-04 | TickSize > 0 guard in CalculatePnL | ✅ Done | Bugs | — |
-| BUG-05 | NaN propagation guard in BacktestEngine | ✅ Done | Bugs | — |
-| BUG-06 | DonchianBreakout exit de-bounce | ✅ Done | Bugs | — |
-| TEST-01 | UpdateDynamicExits unit tests | ✅ Done | Tests | — |
-| TEST-02 | Scale-in multi-leg exit tests | ✅ Done | Tests | S |
-| TEST-03 | BarCollectionService aggregation tests | ✅ Done | Tests | S |
-| TEST-04 | BarCollectionService staleness + dedup tests | ✅ Done | Tests | — |
-| TEST-05 | NaN warm-up propagation tests | ✅ Done | Tests | — |
-| TEST-06 | ViewModel input validation tests | ✅ Done | Tests | — |
-| QUAL-01 | Extract duplicated long/short exit check | ✅ Done | Code Quality | — |
-| QUAL-02 | Rename InitialSlAmount / InitialTpAmount | ✅ Done | Code Quality | M |
-| QUAL-03 | Extract DatePicker styling to resource dictionary | ✅ Done | Code Quality | S |
-| UX-01 | Cache/fresh indicator on bar download status | ✅ Done | UI/UX | S |
-| UX-02 | Indeterminate progress during bar download | ✅ Done | UI/UX | S |
-| UX-03 | CSV export on background thread | ✅ Done | UI/UX | XS |
-| UX-04 | Max Effort cancellation path state reset | ✅ Done | UI/UX | S |
-| STRAT-01 | Raise re-entry cooldown to 2 full bars | ✅ Done | Strategy | S |
-| STRAT-02 | Time-of-day trading window gate | ✅ Done | Strategy | M |
-| STRAT-03 | Promote EMA50 to active gate condition | ✅ Done | Strategy | S |
-| STRAT-04 | Default ATR tier to Standard for Damian + Gold | ✅ Done | Strategy | XS |
-| STRAT-05 | Confluence dissolution exit | ✅ Done | Strategy | M |
-| STRAT-06 | Volume confirmation gate in MultiConfluence | ✅ Done | Strategy | M |
-| STRAT-07 | Fix asymmetric StochRSI short gate | ✅ Done | Strategy | XS |
-| STRAT-08 | Raise FreeRoll activation to 66–75% of TP | ✅ Done | Strategy | S |
-| STRAT-09 | Fix EMA/RSI bear scoring — independent signals | ✅ Done | Strategy | M |
-| STRAT-10 | Fix RSI zone boundary (include RSI > 70) | ✅ Done | Strategy | XS |
-| STRAT-11 | Add volume confirmation gate to EMA/RSI | ✅ Done | Strategy | S |
-| STRAT-12 | Replace single-bar EMA21 momentum with 3-bar slope | ✅ Done | Strategy | XS |
-| STRAT-13 | Make RSI period configurable (not hardcoded 14) | ✅ Done | Strategy | S |
-| STRAT-14 | Correct StochRSI short gate semantics (K > 0.3 + falling) | ✅ Done | Strategy | XS |
-| STRAT-15 | Tune MACD parameters for intraday bars (8,17,9) | ✅ Done | Strategy | S |
-| STRAT-16 | 7/8 partial-conviction signal at half-size | ✅ Done | Strategy | M |
-| STRAT-17 | Add cloud twist pre-filter (bullish/bearish cloud alignment) | ✅ Done | Strategy | XS |
-| STRAT-18 | Add Chikou-vs-cloud filter | ✅ Done | Strategy | S |
-| STRAT-19 | Replace hardcoded Confidence=1.0 with graduated score | ✅ Done | Strategy | M |
+| ARCH-04 | Consolidate MC live + backtest evaluators | Architecture | L | Code-Review |
+| BUG-07 | Live partial-signal (8/9) missing hard-gate guard | Bugs | S | Code-Review |
+| BUG-08 | StochRSI long threshold mismatch live(0.7)/backtest(0.8) | Bugs | XS | Code-Review |
+| BUG-09 | MC DI-spread / Chikou-gap / MACD-mag filters absent in backtest | Bugs | M | Code-Review |
+| BUG-10 | MC live Confidence computed when Side = Nothing | Bugs | XS | Code-Review |
+| BUG-11 | MC lc2 missing Single.IsNaN(ema21Now) guard | Bugs | XS | Code-Review |
+| BUG-12 | fetchCount (70) < MinBarsRequired (80) — perpetual MC warm-up | Bugs | S | UAT |
+| BUG-13 | MC same-direction scale-in blocked by _positionOpen guard | Bugs | M | UAT |
+| BUG-14 | TrailHardStopBracketAsync resets TP to DefaultTpTicks — discards WIDE-tier TP | Bugs | S | UAT |
+| STRAT-20 | Clarify/rename min(1.5xATR, cloud edge) SL selection | Strategy | S | Code-Review |
+| STRAT-21 | Volume gate fail-open in backtest, fail-closed in live | Strategy | S | Code-Review |
+| STRAT-22 | Replace Yahoo intraday volume with ProjectX source for live vol gate | Strategy | M | Code-Review |
+| STRAT-23 | Verify MC respects TOD / news / contract-roll no-trade windows | Strategy | S | Code-Review |
+| STRAT-24 | Externalise MC hard-coded thresholds to config/persona | Strategy | M | Code-Review |
+| STRAT-25 | Add spread/slippage/commission to backtest fills | Strategy | M | Code-Review |
+| STRAT-26 | Clamp backtest SL to broker minimum ticks (parity with live) | Strategy | S | Code-Review |
+| STRAT-27 | Make MACD histogram minimum ATR fraction persona-configurable | Strategy | S | UAT |
+| TEST-07 | Live vs backtest MC evaluator parity tests | Tests | M | Code-Review |
+| TEST-08 | NaN warm-up paths for MC indicators | Tests | S | Code-Review |
+| TEST-09 | Verify ATR-tier bracket ticks applied in PlaceBracketOrdersAsync | Tests | S | UAT |
+| OBS-01 | Enrich MC StatusLine with diagnostic signal components | Observability | XS | Code-Review |
+| OBS-02 | Emit FailedConditions list from MultiConfluenceStrategy.Evaluate | Observability | S | UAT |
+| OBS-03 | Log StrategyDefinition config snapshot at engine Start() | Observability | XS | UAT |
+| OBS-04 | Write AI pre-trade veto outcome to DiagnosticLogger | Observability | XS | UAT |
+| OBS-05 | Emit bracket state-transition entries to DiagnosticLogger | Observability | S | UAT |
+| BUG-15 | PumpNDump silently overrides user-provided TP/SL ticks | Bugs | S | Code-Review |
+| BUG-16 | PumpNDump bracket close detection has no miss tolerance | Bugs | S | Code-Review |
+| BUG-17 | PumpNDump ViewModel passes eToro BrokerType to TopStepX engine | Bugs | XS | Code-Review |
+| BUG-18 | PumpNDump EmergencyCloseAsync uses stale internal qty | Bugs | S | Code-Review |
+| BUG-19 | PumpNDump average entry derived from bar close not fill price | Bugs | S | Code-Review |
+| BUG-20 | PumpNDump TP tighten and SL trail can produce SL/TP inversion | Bugs | S | Code-Review |
+| BUG-21 | PumpNDump OnOrderFilled re-triggers DoCheckAsync — immediate re-entry after TP fill | Bugs | M | Code-Review |
+| STRAT-28 | PumpNDump missing trading hours and stale-bar entry suppression | Strategy | M | Code-Review |
+| STRAT-29 | PumpNDump free-ride drops heat to zero — scale-in cap bypass after activation | Strategy | S | Code-Review |
+| OBS-06 | PumpNDump missing DiagnosticLogger integration | Observability | L | Code-Review |
+| TEST-10 | PumpNDump has no backtest signal provider | Tests | M | Code-Review |
 
 ---
 
 ## Completion Summary
 
-| Category | Tickets | Done |
+| Category | Done | IDs |
 |---|---|---|
-| Architecture | 12 | 12 |
-| Bugs | 6 | 6 |
-| Tests | 6 | 6 |
-| Code Quality | 3 | 3 |
-| UI/UX | 4 | 4 |
-| Strategy | 19 | 19 |
-| **Total** | **50** | **50** |
+| Architecture | 12 | ARCH-01a–f, ARCH-02a–e, ARCH-03 |
+| Bugs | 6 | BUG-01–06 |
+| Strategy | 19 | STRAT-01–19 |
+| Tests | 6 | TEST-01–06 |
+| Code Quality | 3 | QUAL-01–03 |
+| UI/UX | 4 | UX-01–04 |
+| Observability | 0 | — |
+| **Total** | **50** | |
 
 ---
 
-*To start a ticket: load `REFACTOR_TRACKER.md` + `tickets/[ID].md` + the relevant source files, then say "Execute [TICKET-ID]".*  
-*Completed ticket specs live in `tickets/archive/`. Open ticket specs live in `tickets/`.*
+*To execute a ticket manually: tell Claude or Copilot `Execute [ID]` — they will load this file + `tickets/[ID].md` + the referenced source files.*
+
+*To run tickets automatically: start the **Ticket Handler** agent. It reads this file, picks the highest-priority open ticket, implements the fix, commits and pushes directly to the current branch (`origin HEAD`), marks the ticket resolved here, and runs `/clear` before moving on. See `CLAUDE.md → Automated Agent Workflow` for the full procedure.*
