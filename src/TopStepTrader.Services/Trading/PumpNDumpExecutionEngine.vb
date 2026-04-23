@@ -62,8 +62,10 @@ Namespace TopStepTrader.Services.Trading
             Public Property EntryPrice As Decimal
             Public Property CurrentSlPrice As Decimal
             Public Property CurrentTpPrice As Decimal
+            Public Property MissCount As Integer = 0
         End Class
         Private ReadOnly _brackets As New List(Of BracketPair)
+        Private Const BracketMissThreshold As Integer = 3
 
         Private _freeRideActive As Boolean = False
 
@@ -148,10 +150,10 @@ Namespace TopStepTrader.Services.Trading
 
             _contractId = contractId
             _accountId = accountId
-            ' Fixed $100 SL / $1000 TP — convert to ticks; tickValue is set below
+            ' Honour caller-provided ticks; fall back to $100/$1000 formula only when <= 0
             Dim tv = If(tickValue > 0, tickValue, 1.25D)
-            _stopLossTicks = Math.Max(1, CInt(Math.Ceiling(100D / tv)))
-            _takeProfitTicks = Math.Max(1, CInt(Math.Ceiling(1000D / tv)))
+            _stopLossTicks  = If(stopLossTicks  > 0, stopLossTicks,  Math.Max(1, CInt(Math.Ceiling(100D  / tv))))
+            _takeProfitTicks = If(takeProfitTicks > 0, takeProfitTicks, Math.Max(1, CInt(Math.Ceiling(1000D / tv))))
             _freeRidePnlThreshold = If(freeRidePnlThreshold > 0, freeRidePnlThreshold, 50D)
             _scaleInTicks = Math.Max(1, scaleInTicks)
             _maxRiskHeatTicks = If(maxRiskHeatTicks > 0, maxRiskHeatTicks, Integer.MaxValue)
@@ -170,8 +172,8 @@ Namespace TopStepTrader.Services.Trading
                 If fav.PxTickSize > 0 Then _tickSize = fav.PxTickSize
                 If fav.PxTickValue > 0 Then
                     _tickValue = fav.PxTickValue
-                    _stopLossTicks = Math.Max(1, CInt(Math.Ceiling(100D / _tickValue)))
-                    _takeProfitTicks = Math.Max(1, CInt(Math.Ceiling(1000D / _tickValue)))
+                    If stopLossTicks  <= 0 Then _stopLossTicks  = Math.Max(1, CInt(Math.Ceiling(100D  / _tickValue)))
+                    If takeProfitTicks <= 0 Then _takeProfitTicks = Math.Max(1, CInt(Math.Ceiling(1000D / _tickValue)))
                 End If
             Else
                 _effectiveContractId = contractId
@@ -381,6 +383,12 @@ Namespace TopStepTrader.Services.Trading
                                    Not liveOrders.Any(Function(o) o.ExternalOrderId = bracket.SlOrderId.Value)
 
                     If tpMissing OrElse slMissing Then
+                        bracket.MissCount += 1
+                        If bracket.MissCount < BracketMissThreshold Then
+                            Log($"⚠️  Bracket miss {bracket.MissCount}/{BracketMissThreshold} — order(s) not visible; will retry.")
+                            Continue For
+                        End If
+
                         ' Cancel the orphaned surviving leg
                         If bracket.TpOrderId.HasValue AndAlso Not tpMissing Then
                             Try
@@ -434,6 +442,8 @@ Namespace TopStepTrader.Services.Trading
                         totalClosedPnl += bracketPnl
                         primaryExitReason = exitReason
                         bracketsToRemove.Add(bracket)
+                    Else
+                        bracket.MissCount = 0
                     End If
                 Next
 
@@ -576,6 +586,9 @@ Namespace TopStepTrader.Services.Trading
             _averageEntry = entryPrice
             _lastEntryPrice = entryPrice
 
+            ' BUG-19: correct average entry from broker-confirmed fill price
+            Await CorrectEntryFromFillAsync(ct)
+
             RaiseEvent TradeOpened(Me, New TradeOpenedEventArgs(side, _contractId, 100,
                                                                 DateTimeOffset.UtcNow,
                                                                 entryOrder.ExternalOrderId))
@@ -629,6 +642,9 @@ Namespace TopStepTrader.Services.Trading
             _entryPrices.Add(currentPrice)
             _averageEntry = _entryPrices.Average()
             _lastEntryPrice = currentPrice
+
+            ' BUG-19: correct average entry from broker-confirmed fill price
+            Await CorrectEntryFromFillAsync(ct)
 
             Log($"✅ Scale-in @ {currentPrice:F2} | New AvgEntry={_averageEntry:F2} | Qty={_currentQty}/{_targetTotalSize}")
             RaisePositionChanged()
@@ -932,6 +948,37 @@ Namespace TopStepTrader.Services.Trading
 
         ' ── Helpers ─────────────────────────────────────────────────────────────
 
+        ''' <summary>BUG-19: Poll broker up to 3×750ms to get the confirmed fill price and
+        ''' correct _averageEntry / _lastEntryPrice when the drift exceeds one tick.</summary>
+        Private Async Function CorrectEntryFromFillAsync(ct As CancellationToken) As Task
+            Const MaxAttempts As Integer = 3
+            Const DelayMs As Integer = 750
+            For attempt = 1 To MaxAttempts
+                Try
+                    Await Task.Delay(DelayMs, ct)
+                    Dim snapshot = Await _orderService.GetLivePositionSnapshotAsync(_accountId, _contractId, Nothing, ct)
+                    If snapshot IsNot Nothing AndAlso snapshot.OpenRate > 0D Then
+                        Dim drift = Math.Abs(snapshot.OpenRate - _lastEntryPrice)
+                        If drift > _tickSize Then
+                            Dim before = _averageEntry
+                            ' Replace the last entry price estimate with the confirmed fill
+                            If _entryPrices.Count > 0 Then
+                                _entryPrices(_entryPrices.Count - 1) = snapshot.OpenRate
+                            End If
+                            _lastEntryPrice = snapshot.OpenRate
+                            _averageEntry = _entryPrices.Average()
+                            Log($"📌 Fill corrected {before:F2} → {snapshot.OpenRate:F2} (Δ={drift:F2})")
+                        End If
+                        Return
+                    End If
+                Catch ex As OperationCanceledException
+                    Return
+                Catch
+                    ' Ignore and retry
+                End Try
+            Next
+        End Function
+
         Private Function CalculateCurrentHeat() As Decimal
             Dim total As Decimal = 0D
             For Each b In _brackets
@@ -947,13 +994,29 @@ Namespace TopStepTrader.Services.Trading
 
         Private Async Function EmergencyCloseAsync(ct As CancellationToken) As Task
             Dim exitSide = If(_tradeSide = OrderSide.Buy, OrderSide.Sell, OrderSide.Buy)
+
+            ' BUG-18: use broker-confirmed qty to avoid over/under-close on rejected fills
+            Dim closeQty As Integer = _currentQty
+            Try
+                Dim snapshot = Await _orderService.GetLivePositionSnapshotAsync(_accountId, _contractId, Nothing, ct)
+                If snapshot IsNot Nothing AndAlso snapshot.Units > 0 Then
+                    Dim brokerQty = CInt(snapshot.Units)
+                    If brokerQty <> _currentQty Then
+                        Log($"⚠️  Emergency close qty mismatch: internal={_currentQty}, broker={brokerQty} — using broker qty")
+                    End If
+                    closeQty = brokerQty
+                End If
+            Catch ex As Exception
+                Log($"⚠️  Could not fetch broker position snapshot ({ex.Message}) — falling back to internal qty {_currentQty}")
+            End Try
+
             Dim closeOrder As New Order With {
                 .AccountId = _accountId,
                 .Broker = _brokerType,
                 .ContractId = _effectiveContractId,
                 .Side = exitSide,
                 .OrderType = OrderType.Market,
-                .Quantity = _currentQty,
+                .Quantity = closeQty,
                 .Status = OrderStatus.Pending,
                 .PlacedAt = DateTimeOffset.UtcNow,
                 .Notes = "Pump-n-Dump: emergency close"

@@ -92,3 +92,13 @@ build2.ps1
 # Build logs
 build_full.log
 msbuild.binlog
+
+# Ticket tracking — local workflow files, not pushed to remote
+Open_TICKETS.md
+Closed_Tickets.md
+REFACTOR_TRACKER.md
+tickets/
+TODO.md
+TICKET_AI_AUGMENTATION.md
+ADAPTIVE_ENGINE_PLAN.md
+AI_AUGMENTATION_PLAN.md

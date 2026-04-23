@@ -328,6 +328,16 @@ Namespace TopStepTrader.Services.Trading
             Log($"Strategy started — {strategy.ContractId} | {strategy.Name}")
             Log($"Duration: {strategy.DurationHours}hrs | Expires: {strategy.ExpiresAt:HH:mm} UTC")
             Log($"Checking bars every 30 seconds...")
+            Log("── Strategy Config ─────────────────────────────")
+            Log($"  Condition       : {strategy.Condition}")
+            Log($"  Instrument      : {strategy.ContractId}  TF: {strategy.TimeframeMinutes}m")
+            Log($"  Persona         : {If(String.IsNullOrEmpty(strategy.PersonaName), "(none)", strategy.PersonaName)}  ADX≥{strategy.AdxThreshold}")
+            Log($"  SL×{strategy.SlMultipleOfN}N  TP×{strategy.TpMultipleOfN}N")
+            Log($"  MaxScaleIns     : {strategy.MaxScaleIns}")
+            Log($"  Trading Hours   : {strategy.TradingStartHourUtc:D2}:00–{strategy.TradingEndHourUtc:D2}:00 UTC")
+            Log($"  Pre-trade AI    : {If(strategy.UsePreTradeAiCheck, "ON", "OFF")}")
+            Log($"  Re-entry cool   : {strategy.TimeframeMinutes * 2 * 60}s")
+            Log("────────────────────────────────────────────────")
 
             ' ── Existing-position check on startup ──────────────────────────────
             ' Query the broker immediately so the engine knows about any open
@@ -498,7 +508,12 @@ Namespace TopStepTrader.Services.Trading
             ' Previously IngestAsync was called with 50 while minBars = IndicatorPeriod+5 = 55,
             ' causing a ~25-min accumulation wait (5 live bars × 5 min) before the strategy
             ' could evaluate at all.  fetchCount = max(minBars+15, 70) eliminates that delay.
-            Dim minBars = _strategy.IndicatorPeriod + 5
+            ' BUG-12: MultiConfluence requires 80 bars (Ichimoku Span B warm-up) — use its own
+            ' MinBarsRequired constant instead of the generic IndicatorPeriod+5 formula which
+            ' yielded fetchCount=70 < MinBarsRequired=80, keeping the strategy in perpetual warm-up.
+            Dim minBars = If(_strategy.Indicator = StrategyIndicatorType.MultiConfluence,
+                             MultiConfluenceStrategy.MinBarsRequired,
+                             _strategy.IndicatorPeriod + 5)
             Dim fetchCount = Math.Max(minBars + 15, 70)  ' buffer above minBars guard
 
             ' Ingest fresh bars — on the very first call this populates the DB with fetchCount
@@ -911,7 +926,11 @@ Namespace TopStepTrader.Services.Trading
                             End If
                             side = mcSide
                         Else
-                            Log($"Bar checked — Multi-Confluence: {mcResult.StatusLine} | {remStr}")
+                            If mcResult.StatusLine.Contains("Warming up") Then
+                                Log($"⏳ Multi-Confluence warming up — {mcResult.StatusLine} | {remStr}")
+                            Else
+                                Log($"Bar checked — Multi-Confluence: {mcResult.StatusLine} | {remStr}")
+                            End If
                         End If
 
                     Case StrategyConditionType.LultDivergence
@@ -1702,7 +1721,13 @@ Namespace TopStepTrader.Services.Trading
                 Await EvaluateConfidenceActionsAsync(rawUpPct, rawDownPct, side, CDec(lastBar.Close), isNewBar, ct)
             Else
                 If side.HasValue Then
-                    If _positionOpen Then
+                    ' BUG-13: MC same-direction signal should scale into an open position rather
+                    ' than being blocked.  All other strategies retain the single-trade guardrail.
+                    Dim isMcScaleIn = _strategy.Condition = StrategyConditionType.MultiConfluence AndAlso
+                                      _positionOpen AndAlso
+                                      side.Value = _lastEntrySide AndAlso
+                                      _scaleInTradeCount < MaxScaleInTrades
+                    If _positionOpen AndAlso Not isMcScaleIn Then
                         Log($"⛔ Signal ({side.Value}) blocked — position already open (positionId={If(_openPositionId.HasValue, _openPositionId.Value.ToString(), "pending")}). Waiting for close before next entry.")
                         If _pendingDiagEntry IsNot Nothing Then
                             _pendingDiagEntry.EventType = "REJECT"
@@ -1785,8 +1810,22 @@ Namespace TopStepTrader.Services.Trading
                             Dim aiResult = Await _claudeService.PreTradeCheckAsync(aiCtx, ct)
                             If aiResult.Proceed Then
                                 Log($"🤖 AI pre-check: PROCEED — {aiResult.Reasoning}")
+                                _diagLogger?.WriteEntry(New DiagnosticLogEntry With {
+                                    .EventType = "AI_PASS",
+                                    .Action = If(side.Value = OrderSide.Buy, "BUY", "SELL"),
+                                    .Symbol = _strategy.ContractId,
+                                    .Strategy = _strategy.Name,
+                                    .Why = $"AI approved {If(side.Value = OrderSide.Buy, "BUY", "SELL")} entry — {aiResult.Reasoning}"
+                                })
                             Else
                                 Log($"🤖 AI pre-check: VETO — {aiResult.Reasoning}")
+                                _diagLogger?.WriteEntry(New DiagnosticLogEntry With {
+                                    .EventType = "AI_VETO",
+                                    .Action = If(side.Value = OrderSide.Buy, "BUY", "SELL"),
+                                    .Symbol = _strategy.ContractId,
+                                    .Strategy = _strategy.Name,
+                                    .RejectionReason = $"AI pre-check VETO: {aiResult.Reasoning}"
+                                })
                                 If _pendingDiagEntry IsNot Nothing Then
                                     _pendingDiagEntry.EventType = "REJECT"
                                     _pendingDiagEntry.RejectionReason = $"AI pre-check VETO: {aiResult.Reasoning}"
@@ -1798,6 +1837,10 @@ Namespace TopStepTrader.Services.Trading
                         End If
 
                         Await PlaceBracketOrdersAsync(side.Value, CDec(lastBar.Close), cloudSlArg)
+                        If isMcScaleIn Then
+                            _scaleInTradeCount += 1
+                            Log($"📈 MC SCALE-IN #{_scaleInTradeCount}/{MaxScaleInTrades} — added to {side.Value} position.")
+                        End If
                     End If
                 Else
                     ' No signal this tick — log the diagnostic snapshot if one was built
@@ -2268,7 +2311,8 @@ Namespace TopStepTrader.Services.Trading
         Private Async Function TrailHardStopBracketAsync(currentPrice As Decimal, isBuy As Boolean,
                                                           tickSize As Decimal, ct As CancellationToken) As Task
             Dim slTicks = If(_initialSlTicks > 0, _initialSlTicks, Math.Max(1, _pxSettings.DefaultSlTicks))
-            Dim tpTicks = Math.Max(1, _pxSettings.DefaultTpTicks)
+            ' BUG-14: use the tier-correct TP tick distance stored at entry, not the config default
+            Dim tpTicks = If(_initialTpTicks > 0, _initialTpTicks, Math.Max(1, _pxSettings.DefaultTpTicks))
 
             Dim profitable = If(isBuy, currentPrice > _lastEntryPrice, currentPrice < _lastEntryPrice)
             If Not profitable Then Return

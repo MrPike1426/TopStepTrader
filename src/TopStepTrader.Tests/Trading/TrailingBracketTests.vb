@@ -1,4 +1,5 @@
 Imports TopStepTrader.Core.Enums
+Imports TopStepTrader.Core.Trading
 Imports Xunit
 
 Namespace TopStepTrader.Tests.Trading
@@ -350,6 +351,37 @@ Namespace TopStepTrader.Tests.Trading
             Assert.Equal(rLong.slPct, rShort.slPct)     ' same SL profit%
             Assert.True(rLong.slPrice > entry)            ' Long SL above entry
             Assert.True(rShort.slPrice < entry)           ' Short SL below entry
+        End Sub
+
+        ' ════════════════════════════════════════════════════════════════════
+        ' 8 — BUG-14: TrailHardStopBracketAsync must use _initialTpTicks
+        ' ════════════════════════════════════════════════════════════════════
+
+        ''' <summary>
+        ''' Regression for BUG-14: when a WIDE-tier bracket is placed with initialTpTicks=80,
+        ''' the first profitable trail tick must compute the new TP from 80 ticks,
+        ''' not from DefaultTpTicks (e.g. 10).
+        ''' Mirrors the fixed formula:
+        '''   tpTicks = If(_initialTpTicks > 0, _initialTpTicks, Math.Max(1, DefaultTpTicks))
+        ''' </summary>
+        <Fact>
+        Public Sub TrailHardStop_WIDETierEntry_TPUsesInitialTpTicks_NotDefault()
+            Dim initialTpTicks As Integer = 80
+            Dim defaultTpTicks As Integer = 10
+            Dim tickSize As Decimal = 0.01D
+            Dim currentPrice As Decimal = 50.01D   ' 1 tick above entry (profitable)
+
+            ' Formula from fixed TrailHardStopBracketAsync
+            Dim tpTicks = If(initialTpTicks > 0, initialTpTicks, Math.Max(1, defaultTpTicks))
+
+            ' Long: TP is tpTicks above currentPrice
+            Dim newTp = TickMath.PriceFromTicks(currentPrice, tpTicks, tickSize, isBuy:=True, isStop:=False)
+
+            Dim expectedTp = currentPrice + (initialTpTicks * tickSize)   ' 80 ticks
+            Dim wrongTp = currentPrice + (defaultTpTicks * tickSize)      ' 10 ticks
+
+            Assert.Equal(expectedTp, newTp)
+            Assert.NotEqual(wrongTp, newTp)
         End Sub
 
         <Fact>

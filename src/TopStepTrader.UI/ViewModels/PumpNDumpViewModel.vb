@@ -181,7 +181,8 @@ Namespace TopStepTrader.UI.ViewModels
             Get
                 Return Not _isRunning AndAlso
                        Not String.IsNullOrEmpty(_contractId) AndAlso
-                       _selectedAccount IsNot Nothing
+                       _selectedAccount IsNot Nothing AndAlso
+                       _selectedAccount.Broker = BrokerType.TopStepX
             End Get
         End Property
 

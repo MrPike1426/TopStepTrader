@@ -192,7 +192,7 @@ Namespace TopStepTrader.Services.Trading
             Dim tenkanKijunValid = Not Single.IsNaN(tenkanNow) AndAlso Not Single.IsNaN(kijunNow)
 
             Dim lc1 = (bullishCloud AndAlso lastClose > cloudTop)                           ' 1. Price above cloud in bullish cloud (cloud twist pre-filter)
-            Dim lc2 = (lastClose > CDec(ema21Now))                                          ' 2. Price above EMA 21
+            Dim lc2 = (Not Single.IsNaN(ema21Now) AndAlso lastClose > CDec(ema21Now))         ' 2. Price above EMA 21
             Dim lc2b = (Not Single.IsNaN(ema50Now) AndAlso lastClose > CDec(ema50Now))     ' 2b. Price above EMA 50 (big-picture trend anchor)
             Dim lc3 = (tenkanKijunValid AndAlso tenkanNow > kijunNow)                       ' 3. Tenkan-sen > Kijun-sen
             Dim lc4 = (lagIdx >= 0 AndAlso lastClose > lagClose + chikouMinGap AndAlso
@@ -240,14 +240,7 @@ Namespace TopStepTrader.Services.Trading
             result.LongCount = longCount
             result.ShortCount = shortCount
 
-            ' ── Build diagnostic status line ───────────────────────────────────────
-            result.StatusLine =
-                $"Close={lastClose:F4} | Cloud=[{cloudBottom:F4}–{cloudTop:F4}] | " &
-                $"T={CDec(tenkanNow):F4} K={CDec(kijunNow):F4} | " &
-                $"EMA21={CDec(ema21Now):F4} EMA50={CDec(ema50Now):F4} | " &
-                $"ADX={adxNow:F1} DI+={plusDINow:F1} DI-={minusDINow:F1} | " &
-                $"MACD-H={histNow:F4}(prev={histPrev:F4}) | StochRSI={stochKNow:F3} | " &
-                $"VolGate={lc8} | Long={longCount}/9 Short={shortCount}/9"
+            ' ── StatusLine built after confidence block (see below) ───────────────
 
             ' ── Signal: all 9 conditions met in one direction ─────────────────────
             If longCount = 9 Then
@@ -270,18 +263,40 @@ Namespace TopStepTrader.Services.Trading
 
             ' ── STRAT-19: Graduated confidence ────────────────────────────────────
             ' Weight: ADX 35%, DI-spread 25%, MACD magnitude 25%, StochRSI distance 15%
-            Dim isLong       = (result.Side = OrderSide.Buy)
-            Dim adxStr       = CSng(Math.Min(1.0F, 0.5F + (adxNow - adxThreshold) / 60.0F))
-            Dim diSpreadVal  = If(isLong, plusDINow - minusDINow, minusDINow - plusDINow)
-            Dim diStr        = CSng(Math.Min(1.0F, (diSpreadVal - MinDiSpread) / 20.0F + 0.5F))
-            Dim macdMagVal   = Math.Abs(histNow)
-            Dim macdNormVal  = CSng(result.AtrValue) * 0.5F + 0.001F
-            Dim macdStr      = CSng(Math.Min(1.0F, macdMagVal / macdNormVal))
-            Dim stochDist    = If(isLong, 0.7F - stochKNow, stochKNow - 0.3F)
-            Dim stochStr     = CSng(Math.Max(0.0F, Math.Min(1.0F, stochDist / 0.7F)))
-            result.Confidence = CSng(Math.Max(0.0F, Math.Min(1.0F,
-                                    adxStr * 0.35F + diStr * 0.25F +
-                                    macdStr * 0.25F + stochStr * 0.15F)))
+            ' Confidence is 0 when no signal fires (Side = Nothing).
+            Dim confAdx  As Single = 0.0F
+            Dim confDi   As Single = 0.0F
+            Dim confMacd As Single = 0.0F
+            Dim confStoch As Single = 0.0F
+            If result.Side IsNot Nothing Then
+                Dim isLong       = (result.Side = OrderSide.Buy)
+                confAdx          = CSng(Math.Min(1.0F, 0.5F + (adxNow - adxThreshold) / 60.0F))
+                Dim diSpreadVal  = If(isLong, plusDINow - minusDINow, minusDINow - plusDINow)
+                confDi           = CSng(Math.Min(1.0F, (diSpreadVal - MinDiSpread) / 20.0F + 0.5F))
+                Dim macdMagVal   = Math.Abs(histNow)
+                Dim macdNormVal  = CSng(result.AtrValue) * 0.5F + 0.001F
+                confMacd         = CSng(Math.Min(1.0F, macdMagVal / macdNormVal))
+                Dim stochDist    = If(isLong, 0.7F - stochKNow, stochKNow - 0.3F)
+                confStoch        = CSng(Math.Max(0.0F, Math.Min(1.0F, stochDist / 0.7F)))
+                result.Confidence = CSng(Math.Max(0.0F, Math.Min(1.0F,
+                                        confAdx * 0.35F + confDi * 0.25F +
+                                        confMacd * 0.25F + confStoch * 0.15F)))
+            End If
+
+            ' ── Build diagnostic status line ───────────────────────────────────────
+            Dim curVol       = volumes(n - 1)
+            Dim chikouGap    = If(lagIdx >= 0, lastClose - closes(lagIdx), 0D)
+            Dim diSpreadDisp = plusDINow - minusDINow
+            result.StatusLine =
+                $"Close={lastClose:F4} | Cloud=[{cloudBottom:F4}–{cloudTop:F4}] | " &
+                $"T={CDec(tenkanNow):F4} K={CDec(kijunNow):F4} | " &
+                $"EMA21={CDec(ema21Now):F4} EMA50={CDec(ema50Now):F4} | " &
+                $"ADX={adxNow:F1} DI+={plusDINow:F1} DI-={minusDINow:F1} | " &
+                $"MACD-H={histNow:F4}(prev={histPrev:F4}) | StochRSI={stochKNow:F3} | " &
+                $"VolGate={lc8} | Long={longCount}/9 Short={shortCount}/9 | " &
+                $"Vol={curVol:F0}/{volAvg * 1.2D:F0} | ChikouGap={chikouGap:F4} | " &
+                $"MACDmag={Math.Abs(histNow):F4}/floor={macdMinMag:F4} | DIspread={diSpreadDisp:F1} | " &
+                $"Conf=adx{confAdx:F2}/di{confDi:F2}/macd{confMacd:F2}/stoch{confStoch:F2}"
 
             Return result
         End Function

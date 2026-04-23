@@ -29,26 +29,30 @@ Consequence observed in UAT: the engine placed exactly one trade at ~14:40 and l
 Replace the flat `If _positionOpen Then → block` guard with a direction-aware split:
 
 ```vb
-If _positionOpen Then
-    Dim cooldownSecs = (DateTimeOffset.UtcNow - _lastPositionClosedAt).TotalSeconds
-    Dim isSameDirection = (_currentTrendSide.HasValue AndAlso side.Value = _currentTrendSide.Value)
-
-    If isSameDirection AndAlso _scaleInTradeCount < MaxScaleInTrades Then
-        ' Same-direction scale-in — allowed
-        If Not IsOrderingAllowed.Invoke() Then
-            Log($"⏸  Scale-in suppressed — market closed")
-        ElseIf _lastApiPnl < 0D Then
-            Log($"📊 Scale-in suppressed — position not profitable (P&L=${_lastApiPnl:F2})")
-        Else
-            Log($"📈 MC SCALE-IN #{_scaleInTradeCount + 1}/{MaxScaleInTrades} — {side.Value} signal while {_currentTrendSide.Value} position open | {mcResult.StatusLine}")
-            Await PlaceBracketOrdersAsync(side.Value, CDec(lastBar.Close), cloudSlArg)
-            _scaleInTradeCount += 1
-        End If
-    ElseIf isSameDirection Then
-        Log($"⛔ Scale-in cap reached ({_scaleInTradeCount}/{MaxScaleInTrades}) — signal: {side.Value}")
-    Else
-        Log($"⛔ Opposite-direction signal ({side.Value}) blocked — position open in {_currentTrendSide.Value} direction")
-    End If
+                    If _positionOpen Then
+                        Dim isSameDirection = (_currentTrendSide.HasValue AndAlso side.Value = _currentTrendSide.Value)
+                        If isSameDirection AndAlso _scaleInTradeCount < MaxScaleInTrades Then
+                            ' Same-direction scale-in — allowed
+                            If Not IsOrderingAllowed.Invoke() Then
+                                Log($"⏸  Scale-in suppressed — market closed")
+                            ElseIf _lastApiPnl < 0D Then
+                                Log($"📊 Scale-in suppressed — position not profitable (P&L=${_lastApiPnl:F2})")
+                            Else
+                                Log($"📈 MC SCALE-IN #{_scaleInTradeCount + 1}/{MaxScaleInTrades} — {side.Value} signal while {_currentTrendSide.Value} position open | {mcResult.StatusLine}")
+                                Await PlaceBracketOrdersAsync(side.Value, CDec(lastBar.Close), cloudSlArg)
+                                _scaleInTradeCount += 1
+                            End If
+                        ElseIf isSameDirection Then
+                            Log($"⛔ Scale-in cap reached ({_scaleInTradeCount}/{MaxScaleInTrades}) — signal: {side.Value}")
+                        Else
+                            Log($"⛔ Opposite-direction signal ({side.Value}) blocked — position open in {_currentTrendSide.Value} direction")
+                        End If
+                        If _pendingDiagEntry IsNot Nothing Then
+                            _pendingDiagEntry.EventType = "REJECT"
+                            _pendingDiagEntry.RejectionReason = $"Position open — {If(isSameDirection, "scale-in suppressed", "opposite-direction blocked")}"
+                            _diagLogger?.WriteEntry(_pendingDiagEntry)
+                            _pendingDiagEntry = Nothing
+                        End If
 ```
 
 Key constraints to preserve:

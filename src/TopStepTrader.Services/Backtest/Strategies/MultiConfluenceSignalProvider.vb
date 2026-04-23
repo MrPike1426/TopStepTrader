@@ -99,7 +99,7 @@ Namespace TopStepTrader.Services.Backtest.Strategies
                         Not Single.IsNaN(mcPlusDI) AndAlso Not Single.IsNaN(mcMinusDI) AndAlso
                         mcPlusDI > mcMinusDI)
             Dim lcl6 = (mcHistNow > 0 AndAlso mcHistNow > mcHistPrev)
-            Dim lcl7 = (mcStochK < 0.8F)
+            Dim lcl7 = (mcStochK < 0.7F)
 
             ' ── Volume gate: current bar volume ≥ 1.2× 20-bar average ───────────
             ' When VolMa20 is not populated (e.g. in unit tests) the gate is skipped.

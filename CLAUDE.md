@@ -46,10 +46,23 @@ dotnet test --no-build -v q
 
 ## Ticket & Issue Tracking
 
-All bugs, features, and improvements are tracked in two artefacts:
+All open work is tracked in two artefacts — no separate Priority Queue:
 
-- **`REFACTOR_TRACKER.md`** — master status board, priority queue, and completion summary. Always kept current.
-- **`tickets/`** — one `.md` file per open ticket. Completed tickets are deleted (Git history is the archive).
+- **`Open_TICKETS.md`** — single source of truth: one row per open ticket, with explicit Priority (P0–P3) and Status. Replaces the old `REFACTOR_TRACKER.md`.
+- **`tickets/<ID>.md`** — full description, problem, proposed fix, and acceptance criteria for each open ticket.
+- **`Closed_Tickets.md`** — append-only log of every completed ticket.
+- **`tickets/archive/<ID>.md`** — completed ticket files (moved here on close, never deleted).
+
+These files are local-only (`Open_TICKETS.md`, `Closed_Tickets.md`, `tickets/`) and excluded from the GitHub remote via `.gitignore`.
+
+### Priority Tags
+
+| Tag | Meaning |
+|---|---|
+| P0 | Blocker — fix before next live session |
+| P1 | High — fix this sprint |
+| P2 | Medium — scheduled backlog |
+| P3 | Low — nice-to-have / future |
 
 ### Ticket ID Prefixes
 
@@ -64,7 +77,7 @@ All bugs, features, and improvements are tracked in two artefacts:
 | `OBS-XX` | Observability — logging, diagnostics, status lines |
 | `FEAT-XX` | New features that don't fit another prefix |
 
-Use the next sequential number within each prefix (check the Status Board for the current high-water mark).
+Use the next sequential number within each prefix (check `Open_TICKETS.md` + `Closed_Tickets.md` for the current high-water mark).
 
 ### T-Shirt Size Estimates
 
@@ -106,20 +119,17 @@ Log/repro: <paste relevant output>
 
 ### Creating a New Ticket
 
-1. Choose the correct prefix and next ID (check Open Tickets table in `REFACTOR_TRACKER.md` for the current high-water mark).
-2. Create `tickets/[ID].md` using the schema above, including `**Size:**` and `**Source:**`.
-3. Add a row to the **Open Tickets** table in `REFACTOR_TRACKER.md`.
-4. Insert at the appropriate position in the **Priority Queue**.
-5. Update the **Completion Summary** row count for the category if it is a new category.
+1. Choose the correct prefix and next ID (check `Open_TICKETS.md` + `Closed_Tickets.md` for the high-water mark).
+2. Create `tickets/[ID].md` using the schema above, including `**Size:**`, `**Source:**`, and `**Priority:**`.
+3. Add a row to **`Open_TICKETS.md`** (sorted by priority then ID).
 
 ### Completing a Ticket
 
 1. Verify build passes and all tests pass.
-2. Delete `tickets/[ID].md` — Git history is the archive.
-3. Remove the row from the **Open Tickets** table in `REFACTOR_TRACKER.md`.
-4. Remove from **Priority Queue**.
-5. Increment the **Done** count in the **Completion Summary** and append the ID to the IDs column.
-6. Update the `Last updated` date at the top of `REFACTOR_TRACKER.md`.
+2. Move `tickets/[ID].md` → `tickets/archive/[ID].md` (do not delete it).
+3. Append one row to **`Closed_Tickets.md`**.
+4. Remove the row from **`Open_TICKETS.md`** and update its `Last updated` date.
+5. Increment the **Done** count in the **Completion Summary** table inside `Open_TICKETS.md`.
 
 ### Running a Ticket
 
@@ -127,7 +137,7 @@ Log/repro: <paste relevant output>
 Execute [ID]
 ```
 
-Claude loads `REFACTOR_TRACKER.md` + `tickets/[ID].md` + the referenced source files, implements the change, runs self-verification (build + tests), and completes all ticket artefacts as described above.
+Claude loads `Open_TICKETS.md` + `tickets/[ID].md` + the referenced source files, implements the change, runs self-verification (build + tests), and completes all ticket artefacts as described above.
 
 ---
 
@@ -171,13 +181,13 @@ Never reference the old `eToroTrader` repository — it no longer exists.
 Examples:
 ```
 fix(BUG-12): increase fetchCount to 80 to satisfy MinBarsRequired
-chore(BUG-12): mark ticket resolved in REFACTOR_TRACKER.md
+chore(BUG-12): mark ticket resolved in Open_TICKETS.md
 ```
 
 ### Per-Ticket Procedure (automated)
 
-1. Read `CLAUDE.md` (this file) and `REFACTOR_TRACKER.md`.
-2. Pick the **highest-priority unchecked ticket** from the Priority Queue (or the ticket explicitly requested).
+1. Read `CLAUDE.md` (this file) and `Open_TICKETS.md`.
+2. Pick the **highest-priority open row** (lowest P-number, then lowest ID) from `Open_TICKETS.md` (or the ticket explicitly requested).
 3. Read `tickets/[ID].md` and all files listed under `**Files:**`.
 4. Implement the fix following the code style and conventions in this file.
 5. Run self-verification:
@@ -193,11 +203,12 @@ chore(BUG-12): mark ticket resolved in REFACTOR_TRACKER.md
    git push origin clean-start
    ```
 7. Complete ticket artefacts (see **Completing a Ticket** above):
-   - Delete `tickets/[ID].md`
-   - Update `REFACTOR_TRACKER.md` (remove from Open Tickets + Priority Queue, increment Done count, update date)
+   - Move `tickets/[ID].md` → `tickets/archive/[ID].md`
+   - Append row to `Closed_Tickets.md`
+   - Remove row from `Open_TICKETS.md`, update Done count + Last updated date
    ```bash
    git add -A
-   git commit -m "chore(ID): mark ticket resolved in REFACTOR_TRACKER.md"
+   git commit -m "chore(ID): mark ticket resolved in Open_TICKETS.md"
    git push origin clean-start
    ```
 8. Run `/clear` to reset the context window.
