@@ -52,7 +52,7 @@
 | ID | Title | Category | Size | Source |
 |---|---|---|---|---|
 | ARCH-04 | Consolidate MC live + backtest evaluators | Architecture | L | Code-Review |
-| BUG-07 | Live partial-signal (8/9) missing hard-gate guard | Bugs | S | Code-Review |
+| ~~BUG-07~~ | ~~Live partial-signal (8/9) missing hard-gate guard~~ | Bugs | S | ✅ Done |
 | BUG-08 | StochRSI long threshold mismatch live(0.7)/backtest(0.8) | Bugs | XS | Code-Review |
 | BUG-09 | MC DI-spread / Chikou-gap / MACD-mag filters absent in backtest | Bugs | M | Code-Review |
 | BUG-10 | MC live Confidence computed when Side = Nothing | Bugs | XS | Code-Review |
@@ -95,7 +95,7 @@
 | Category | Done | IDs |
 |---|---|---|
 | Architecture | 12 | ARCH-01a–f, ARCH-02a–e, ARCH-03 |
-| Bugs | 6 | BUG-01–06 |
+| Bugs | 7 | BUG-01–07 |
 | Strategy | 19 | STRAT-01–19 |
 | Tests | 6 | TEST-01–06 |
 | Code Quality | 3 | QUAL-01–03 |
