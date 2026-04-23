@@ -1,4 +1,4 @@
-Imports TopStepTrader.Core.Enums
+﻿Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.ML.Features
 
 Namespace TopStepTrader.Services.Trading
@@ -256,12 +256,12 @@ Namespace TopStepTrader.Services.Trading
             ElseIf shortCount = 9 Then
                 result.Side = OrderSide.Sell
                 result.CloudEdgeSl = cloudTop       ' cloud ceiling = Short SL candidate
-            ElseIf longCount = 8 Then
+            ElseIf longCount = 8 AndAlso lc1 AndAlso lc4 AndAlso lc8 Then
                 ' STRAT-16: 8/9 partial-conviction long — one lagging indicator pending
                 result.Side = OrderSide.Buy
                 result.IsPartialSignal = True
                 result.CloudEdgeSl = cloudBottom
-            ElseIf shortCount = 8 Then
+            ElseIf shortCount = 8 AndAlso sc1 AndAlso sc4 AndAlso sc7 AndAlso sc8 Then
                 ' STRAT-16: 8/9 partial-conviction short — one lagging indicator pending
                 result.Side = OrderSide.Sell
                 result.IsPartialSignal = True
