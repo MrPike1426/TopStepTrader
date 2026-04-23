@@ -45,6 +45,8 @@ Namespace TopStepTrader.Services
             services.AddScoped(Of IBarIngestionService, TopStepXBarIngestionService)()
             ' TICKET-006: bar download + caching for the Backtest page
             services.AddScoped(Of IBarCollectionService, BarCollectionService)()
+            ' Startup bar gap check + backfill for all favourite contracts (past 60 days)
+            services.AddScoped(Of IStartupBarCheckService, StartupBarCheckService)()
 
             ' ── Contract metadata (TopStepX — resolves via PXContractClient)
             services.AddScoped(Of IContractMetadataService, ContractMetadataService)()
