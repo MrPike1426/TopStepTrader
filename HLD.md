@@ -1,7 +1,7 @@
 # TopStepTrader — High-Level Design (HLD)
 
-**Version:** 1.5
-**Date:** 2026-04-09
+**Version:** 1.6
+**Date:** 2026-04-25
 **Status:** Current
 
 ---
@@ -126,7 +126,7 @@ Four independent, transient trading engine types operate on the same `IOrderServ
 | `StrategyExecutionEngine` | Hydra, Asset Bassett | Multi-confluence confidence scoring, multi-asset or single-asset multi-strategy coordinator | Fixed ClaudeTrader ticks (50 SL / 25 TP from `ProjectXSettings`); adaptive timer (5s open / 60s idle) trails both SL+TP when profitable (ratchet never reverses); Danger Zone snaps SL to breakeven |
 | `SniperExecutionEngine` | Sniper | 3-EMA Cascade pyramid (TripleEmaCascade) | Tick-based trail (SL + TP ratchet away) |
 | `CryptoStrategyExecutionEngine` | CryptoJoe | Two CME crypto futures (MBT, GMET) | ATR trail (SL + TP ratchet away) |
-| `PumpNDumpExecutionEngine` | PumpNDump | 3-bar price-action scalp | TP tightens on fade; free-ride then SL ratchet |
+| `PumpNDumpExecutionEngine` | PumpNDump | 3-bar price-action scalp | TP tightens on fade; free-ride then SL ratchet; trading hours guard (default 06-21 UTC); stale-bar guard (>5 min suppresses entry); 30s re-entry cooldown after close |
 
 Each engine:
 - Is resolved as **Transient** — a fresh instance per engine start
@@ -160,6 +160,14 @@ Two hosted services run for the lifetime of the application:
 ### 4.7 Backtesting
 
 `IBacktestService` / `BacktestEngine` (Scoped) runs historical simulations using locally-cached bar data. If bars are missing, `IBarCollectionService` downloads them from Yahoo Finance. Results are persisted to SQLite and recalled by `QuantLab` and the Sniper's Backtest tab.
+
+Key engine behaviours:
+
+- **End-of-day forced close** — detects day boundaries; closes all open legs at the prior bar's `Close` with SL-slippage applied (`ExitReason = "EndOfDay"`). 1-bar re-entry cooldown follows. `BacktestResult.EndOfDayCloseCount` tracks these.
+- **Per-contract commission** — `FavouriteContract.RoundTripFee` is deducted on every open and close leg (OIL=$1.04, GOLD=$1.24, MES=$0.74, M6E=$0.74, MBT=$2.34; default=$0.80).
+- **Train/test split** — `BacktestConfiguration.TrainTestSplit = 0.6` runs the first 60% of bars as in-sample and the last 40% as out-of-sample. `TestPnL` and `DegradationPct` surface on result rows.
+- **Market regime filter** — `RegimeClassifier.Classify(atr, adx, threshold)` can route each bar to a `TrendingStrategyOverride` or `RangingStrategyOverride` condition type before signal evaluation.
+- **VolumeGateEnabled** — MC volume condition can be disabled per-run via `BacktestConfiguration.McVolumeGateEnabled = False` for zero-PX-volume instruments.
 
 ---
 

@@ -676,6 +676,7 @@
                                     <DataGridTextColumn Header="Degrad%" Binding="{Binding DegradationPct}" Width="65"/>
                                     <DataGridTextColumn Header="Sharpe"       Binding="{Binding Sharpe}"       Width="60"/>
                                     <DataGridTextColumn Header="Avg P&amp;L"  Binding="{Binding AvgPnLPerTrade}" Width="80"/>
+                                    <DataGridTextColumn Header="Commission"   Binding="{Binding CommissionPaid}" Width="80"/>
                                     <DataGridTextColumn Header="Max DD"       Binding="{Binding MaxDrawdown}"  Width="*"/>
                                 </DataGrid.Columns>
                             </DataGrid>
@@ -936,6 +937,7 @@
                             <DataGridTextColumn Header="Degrad%" Binding="{Binding DegradationPct}" Width="65"/>
                             <DataGridTextColumn Header="Sharpe"     Binding="{Binding Sharpe}"     Width="60"/>
                             <DataGridTextColumn Header="Avg P&amp;L" Binding="{Binding AvgPnL}"    Width="75"/>
+                            <DataGridTextColumn Header="Commission" Binding="{Binding CommissionPaid}" Width="80"/>
                             <DataGridTextColumn Header="Max DD"     Binding="{Binding MaxDD}"      Width="*"/>
                         </DataGrid.Columns>
                     </DataGrid>
@@ -1094,6 +1096,7 @@
                                 </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="Sharpe"     Binding="{Binding Sharpe}"     Width="70"/>
                                 <DataGridTextColumn Header="Avg P&amp;L" Binding="{Binding AvgPnL}"   Width="90"/>
+                                <DataGridTextColumn Header="Commission"  Binding="{Binding CommissionPaid}" Width="80"/>
                                 <DataGridTextColumn Header="Max DD"     Binding="{Binding MaxDD}"      Width="*"/>
                             </DataGrid.Columns>
                         </DataGrid>

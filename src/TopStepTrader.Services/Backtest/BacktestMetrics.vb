@@ -308,6 +308,7 @@ Namespace TopStepTrader.Services.Backtest
                                             .Select(Function(t) t.PositionGroupId) _
                                             .Distinct().Count(),
                 .RoundTripFeeUsd = config.CommissionPerSideUsd * 2D,
+                .CommissionPaid = config.CommissionPerSideUsd * 2D * CDec(trades.Sum(Function(t) t.Quantity)),
                 .Trades = trades
             }
         End Function

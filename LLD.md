@@ -1,7 +1,7 @@
 # TopStepTrader — Low-Level Design (LLD)
 
-**Version:** 1.5
-**Date:** 2026-04-09
+**Version:** 1.6
+**Date:** 2026-04-25
 **Status:** Current
 
 ---
@@ -232,6 +232,10 @@ The full parameter set passed to an execution engine at startup. The ViewModel d
 | `TickSize` | Decimal | Stamped from FavouriteContracts at start |
 | `TickValue` | Decimal | Stamped from FavouriteContracts at start |
 | `Leverage` | Integer | Capital scaling factor for contract count computation |
+| `ExtendTpOnClose` | Boolean | When True, TP advances by `TpMultipleOfN × ATR` each time a completed bar closes at or beyond the current TP price (max 3 advances per trade) |
+| `TrendingStrategyOverride` | StrategyConditionType? | When set (with `RangingStrategyOverride`), `RegimeClassifier` routes trending bars to this strategy instead of `Condition` |
+| `RangingStrategyOverride` | StrategyConditionType? | Ranging/choppy bars routed here when regime filter is active |
+| `UsePreTradeAiCheck` / `UseAiPreTradeGate` | Boolean | When True, a pre-trade Haiku call vetoes low-confidence entries; result logged as `↳ AI: PROCEED` or `↳ AI: VETO` |
 | `MaxScaleIns` | Integer | Maximum additional entries after initial |
 | `ScaleInAmount` | Decimal | Dollar amount per scale-in |
 | `ScaleInLeverage` | Integer | Leverage factor for scale-in entries |
@@ -494,6 +498,12 @@ PlaceBracketOrdersAsync()
 
 Note: ATR-based sizing (`slN × ATR × DollarPerPoint`) was removed. `SlMultipleOfN` / `TpMultipleOfN` are now **backtest-only** parameters and have no effect on live order sizing.
 
+**Partial-bar guard:** After `GetBarsForMLAsync`, the engine checks the last bar's timestamp. If `UtcNow - lastBar.Timestamp < TimeframeMinutes`, the bar is still forming and is dropped from the series before passing to the indicator evaluator. This prevents all nine MC indicator values from being computed on a repaint-prone forming bar.
+
+**Market regime filter:** When both `TrendingStrategyOverride` and `RangingStrategyOverride` are set on `StrategyDefinition`, the engine calls `RegimeClassifier.Classify(atrValue, adxValue, adxThreshold)` before the strategy `Select Case`. The classifier returns `Trending`, `Ranging`, or `Neutral` and the engine substitutes the appropriate `activeCondition` for that bar's evaluation. Regime classification uses ATR-over-SMA20 ratio combined with ADX level.
+
+**AI pre-trade gate:** When `UseAiPreTradeGate = True`, the engine calls `IClaudeReviewService.PreTradeCheckAsync(PreTradeContext)` before `PlaceBracketOrdersAsync`. `PreTradeContext` carries `ConsecutiveLosses`, `TotalTradesThisSession`, `EffectiveMinConfidence`, and current bar metrics. A VETO result suppresses the entry and logs `↳ AI: VETO`. Engine fields: `_consecutiveLosses As Integer` (incremented on loss, reset on win), `_totalTradesThisSession As Integer`, `_lastAiVerdict As String`.
+
 **Adaptive bracket trail (`TrailBracketAsync`):**
 
 ```
@@ -651,9 +661,21 @@ EditPositionSlTpAsync(positionId, slRate:=newSlPrice, tpRate:=newTpPrice?)
 
 **Purpose:** 3-bar price-action scalp. Intentionally tightens TP on momentum fade — the only engine where TP moves toward price. After a configured P&L threshold is hit, it switches to a free-ride + SL ratchet mode to close the trade when the trend reverses.
 
+**Entry guards (evaluated before signal logic):**
+
+| Guard | Detail |
+|---|---|
+| Trading hours | Entry suppressed when `UtcNow.Hour` is outside `[tradingStartHourUtc, tradingEndHourUtc)` (default 06-21 UTC; passed via `IPumpNDumpExecutionEngine.Start()`) |
+| Stale-bar | Entry suppressed when the most recent bar is older than 5 minutes (`barAge > 300s`) |
+| Re-entry cooldown | Entry suppressed for 30s after a full position close (`_lastPositionClosedAt`) |
+
 **Entry:** Three consecutive same-direction bars trigger entry. Direction determined by comparing `bar.Close > bar.Open` (bullish) or `bar.Close < bar.Open` (bearish).
 
-**TP tightening (`TightenTakeProfitsAsync`):** On each poll, if `barRange < FadeAtrFraction × ATR` (bar is smaller than the fade threshold), `currentTp` is adjusted by `TightenTicksPerBar × tickSize` toward entry. This continues until `_freeRideActive` becomes True, at which point TP management stops and SL ratcheting begins.
+**Entry correction (`CorrectEntryFromFillAsync`):** After initial entry and each scale-in, the engine polls `GetLivePositionSnapshotAsync` up to 3 times at 750ms intervals. If `snapshot.OpenRate` differs from the bar-close estimate, `_averageEntry` and `_lastEntryPrice` are corrected to the actual fill rate.
+
+**TP tightening (`TightenTakeProfitsAsync`):** On each poll, if `barRange < FadeAtrFraction × ATR` (bar is smaller than the fade threshold), `currentTp` is adjusted by `TightenTicksPerBar × tickSize` toward entry. **SL/TP inversion guard:** if the candidate `newTpPrice` would come within `minSafeDistance` of `CurrentSlPrice` (i.e., the spread would collapse), the tighten step is skipped and a warning is logged. This continues until `_freeRideActive` becomes True, at which point TP management stops and SL ratcheting begins.
+
+**Bracket miss tolerance (`BracketMissThreshold`):** `BracketPair` carries a `MissCount As Integer`. When a bracket order is not visible in the open-orders API response, `MissCount` is incremented rather than immediately treating the trade as closed. The trade is only declared closed when `MissCount ≥ BracketMissThreshold` (= 3). `MissCount` resets to 0 on a successful API hit for that bracket.
 
 **Free-ride (`ApplyFreeRideAsync`):** Triggered once when `UnrealisedPnl ≥ _freeRidePnlThreshold`. Moves all bracket SLs to breakeven (entry price). Sets `_freeRideActive = True`.
 
@@ -858,7 +880,11 @@ ClampStopTicksAsync(rootSymbol, requestedTicks)
 | `LultDivergence` | Hydra, CryptoJoe | WaveTrend anchor/trigger divergence, time-gated |
 | `BBSqueezeScalper` | Hydra, CryptoJoe | %B + RSI7, dual-mode (breakout + bounce) |
 | `VidyaCross` | Hydra, CryptoJoe | VIDYA(14) adaptive EMA crossover |
-| `ConnorsRsi2` | Backtest | ConnorsRSI-2 mean-reversion |
-| `SuperTrend` | Backtest | SuperTrend trend-following |
-| `DonchianBreakout` | Backtest | Donchian channel breakout |
-| `BbRsiReversion` | Backtest | Bollinger Bands + RSI mean reversion |
+| `ConnorsRsi2` | QuantLab | ConnorsRSI-2 mean-reversion |
+| `SuperTrend` | QuantLab | SuperTrend trend-following |
+| `DonchianBreakout` | QuantLab | Donchian channel breakout |
+| `BbRsiMeanReversion` | QuantLab | Bollinger Bands + RSI mean reversion |
+| `NakedTrader` | Hydra, CryptoJoe | 4-vote consensus: EMA(9/21), MACD(8,17,9), DMI/ADX(14), VWAP |
+| `DoubleBubbleButt` | Hydra, QuantLab | Double Bollinger Bands (±1.0 SD / ±2.0 SD) zone system; ATR multiples from persona config |
+| `OpeningRangeBreakout` | Backtest | First-30-min OR breakout with volume confirmation; SL = opposite OR extreme; TP = 1.5× OR width |
+| `PumpNDump` | PumpNDump | 3 consecutive same-direction 1-min bars; ATR-based SL/TP |

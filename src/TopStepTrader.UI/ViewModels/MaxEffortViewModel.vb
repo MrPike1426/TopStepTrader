@@ -325,7 +325,7 @@ Namespace TopStepTrader.UI.ViewModels
 
                     Dim sb As New StringBuilder()
                     sb.AppendLine($"Backtest results — {rawResults.Count} combinations across {contracts.Count} instruments, 7 strategies, 8 timeframes, 3 personas (Lewis/Damian/Joe).")
-                    sb.AppendLine($"Date range: 60 days (TopStepX API limit). Commission $4.50/side modelled.")
+                    sb.AppendLine($"Date range: 60 days (TopStepX API limit). Commission = contract round-trip fee (OIL=$1.04, Gold=$1.24, MES=$0.74, M6E=$0.74, MBT=$2.34) + 1-tick slippage per entry.")
                     sb.AppendLine($"ATR-based stops: Lewis SL=1.5×/TP=3.0×N  Damian SL=1.0×/TP=2.0×N  Joe SL=0.75×/TP=2.0×N  (N = ATR14 × point value).")
                     If capValidateSplit Then
                         sb.AppendLine("OUT-OF-SAMPLE VALIDATION: 60/40 train/test split applied. Results sorted by Test P&L.")
@@ -403,6 +403,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property AvgPnL As String
         Public ReadOnly Property MaxDD As String
         Public ReadOnly Property EndOfDayCount As String
+        Public ReadOnly Property CommissionPaid As String
         ' Out-of-sample split columns (FEAT-13) — "—" when no split active
         Public ReadOnly Property TestPnL As String
         Public ReadOnly Property TestPnLRaw As Decimal
@@ -425,6 +426,7 @@ Namespace TopStepTrader.UI.ViewModels
             AvgPnL = result.AveragePnLPerTrade.ToString("C0")
             MaxDD = result.MaxDrawdown.ToString("C0")
             EndOfDayCount = result.EndOfDayCloseCount.ToString()
+            CommissionPaid = result.CommissionPaid.ToString("C0")
             If result.OutOfSampleResult IsNot Nothing Then
                 Dim oos = result.OutOfSampleResult
                 TestPnLRaw = oos.TotalPnL
@@ -467,6 +469,7 @@ Namespace TopStepTrader.UI.ViewModels
             Me.Sharpe = sharpe.ToString("F2")
             AvgPnL = avgPnL.ToString("C0")
             MaxDD = maxDD.ToString("C0")
+            CommissionPaid = "—"
             TestPnL = "—"
             TestPnLColor = "TextSecondaryBrush"
             DegradationPct = "—"

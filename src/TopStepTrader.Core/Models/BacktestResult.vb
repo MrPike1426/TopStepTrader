@@ -18,6 +18,8 @@ Namespace TopStepTrader.Core.Models
         Public Property AveragePnLPerTrade As Decimal
         Public Property EndOfDayCloseCount As Integer
         Public Property RoundTripFeeUsd As Decimal
+        ''' <summary>Total commission deducted across all trade legs in this result.</summary>
+        Public Property CommissionPaid As Decimal
         Public Property Trades As New List(Of BacktestTrade)
         ''' <summary>Out-of-sample test result when TrainTestSplit &gt; 0; Nothing otherwise.</summary>
         Public Property OutOfSampleResult As BacktestResult = Nothing

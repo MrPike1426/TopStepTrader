@@ -1273,6 +1273,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property AvgPnLPerTrade As String
         Public ReadOnly Property MaxDrawdown As String
         Public ReadOnly Property EndOfDayCount As String
+        Public ReadOnly Property CommissionPaid As String
         Public ReadOnly Property IsSuccess As Boolean
         ' Out-of-sample split columns (FEAT-13) — "—" when no split active
         Public ReadOnly Property TestPnL As String
@@ -1292,6 +1293,7 @@ Namespace TopStepTrader.UI.ViewModels
             AvgPnLPerTrade = result.AveragePnLPerTrade.ToString("C0")
             MaxDrawdown = result.MaxDrawdown.ToString("C0")
             EndOfDayCount = result.EndOfDayCloseCount.ToString()
+            CommissionPaid = result.CommissionPaid.ToString("C0")
             IsSuccess = True
             If result.OutOfSampleResult IsNot Nothing Then
                 Dim oos = result.OutOfSampleResult
@@ -1331,6 +1333,7 @@ Namespace TopStepTrader.UI.ViewModels
             AvgPnLPerTrade = "—"
             MaxDrawdown = "—"
             EndOfDayCount = "—"
+            CommissionPaid = "—"
             IsSuccess = False
             TestPnL = "—"
             TestPnLColor = "TextSecondaryBrush"

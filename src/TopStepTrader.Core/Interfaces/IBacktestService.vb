@@ -134,7 +134,7 @@ Namespace TopStepTrader.Core.Interfaces
         ''' <summary>
         ''' Exchange + clearing + platform commission per side per contract, in USD.
         ''' Deducted as a round-trip cost (2×) per closed trade leg in CalculatePnL.
-        ''' TopStepX micro futures standard rate: $4.50/side = $9.00 round trip.
+        ''' Set from FavouriteContract.RoundTripFee / 2 (OIL=$0.52, Gold=$0.62, MES=$0.37, M6E=$0.37, MBT=$1.17).
         ''' Default 0 preserves existing behaviour for callers that do not set it.
         ''' </summary>
         Public Property CommissionPerSideUsd As Decimal = 0D

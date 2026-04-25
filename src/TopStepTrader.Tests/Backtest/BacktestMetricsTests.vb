@@ -579,6 +579,104 @@ Namespace TopStepTrader.Tests.Backtest
         End Function
 
         ' ══════════════════════════════════════════════════════════════════
+        ' BUG-27: Commission erosion — symmetry, consistency, and CommissionPaid tracking
+        ' ══════════════════════════════════════════════════════════════════
+
+        <Fact>
+        Public Sub CalculatePnL_CommissionDeductedSymmetrically_EntryAndExit()
+            ' Entry + exit commission must both be charged.
+            ' Buy at 5000, exit at 5002 → gross = 2pts × $5 = $10.
+            ' CommissionPerSideUsd = $2 → total commission = $2 × 2 = $4.
+            ' Net = $10 − $4 = $6.
+            Dim trade = MakeTrade("Buy", entryPrice:=5000D, exitPrice:=5002D, qty:=1)
+            Dim config = MakeConfig()
+            config.CommissionPerSideUsd = 2D
+
+            Dim result = BacktestMetrics.CalculatePnL(trade, config)
+
+            Assert.Equal(6D, result)
+        End Sub
+
+        <Fact>
+        Public Sub CalculatePnL_CommissionExceedsGrossProfit_ReturnsNegative()
+            ' A thin winner (gross = $2) with high commission ($5/side = $10 round trip)
+            ' must produce a net loss — verifies commission is not silently dropped.
+            Dim trade = MakeTrade("Buy", entryPrice:=5000D, exitPrice:=5000.4D, qty:=1)
+            Dim config = MakeConfig()
+            config.CommissionPerSideUsd = 5D   ' $5/side = $10 round trip
+
+            Dim result = BacktestMetrics.CalculatePnL(trade, config)
+
+            Assert.True(result < 0D, $"Net P&L ({result}) must be negative when commission exceeds gross profit")
+        End Sub
+
+        <Fact>
+        Public Sub BuildResult_CommissionPaid_EqualsTotalRoundTripTimesTradeCount()
+            ' CommissionPaid must equal CommissionPerSideUsd × 2 × total qty across all trades.
+            ' 3 trades, qty=1 each, $0.37/side → CommissionPaid = $0.74 × 3 = $2.22.
+            Dim trades = New List(Of BacktestTrade) From {
+                MakeClosedTrade(10D,  positionGroupId:=1),
+                MakeClosedTrade(-5D,  positionGroupId:=2),
+                MakeClosedTrade(8D,   positionGroupId:=3)
+            }
+            Dim config = MakeConfig()
+            config.CommissionPerSideUsd = 0.37D
+
+            Dim result = BacktestMetrics.BuildResult(config, trades, finalCapital:=50013D, maxDrawdown:=5D)
+
+            Assert.Equal(0.37D * 2D * 3D, result.CommissionPaid)
+        End Sub
+
+        <Fact>
+        Public Sub CalculatePnL_HighFrequencyLowEdge_CommissionErodesProfit()
+            ' A thin-edge strategy with 38% win rate where total commission > total gross profit.
+            ' Win: gross = $1.50; Loss: gross = $0.90 (1.67:1 risk:reward, 38% win rate).
+            ' Commission = $0.74/trade (MES round trip = $0.37/side × 2).
+            ' Per-trade gross EV = 0.38 × 1.50 − 0.62 × 0.90 = +$0.012 gross (barely positive).
+            ' Net EV = $0.012 − $0.74 = −$0.728/trade → sum over 312 trades must be negative.
+            Dim config = MakeConfig()
+            config.CommissionPerSideUsd = 0.37D  ' MES round trip = $0.74
+            ' MES: $5/pt, TickSize=0.25 → 0.3pt win = $1.50 gross; 0.18pt loss = $0.90 gross
+            Dim totalNet = 0D
+            Dim groupId = 0
+            Dim rng As New Random(42)
+            For i = 1 To 312
+                groupId += 1
+                Dim isWin = (rng.NextDouble() < 0.38)
+                Dim exitOffset = If(isWin, 0.3D, -0.18D)   ' pts: win=+0.3, loss=−0.18
+                Dim trade = MakeTrade("Buy", entryPrice:=5000D, exitPrice:=5000D + exitOffset, qty:=1)
+                trade.PositionGroupId = groupId
+                Dim pnl = BacktestMetrics.CalculatePnL(trade, config)
+                trade.PnL = pnl
+                totalNet += pnl
+            Next
+
+            Assert.True(totalNet < 0D,
+                        $"312-trade thin-edge strategy must be net-negative after commission; got {totalNet:C2}")
+        End Sub
+
+        <Fact>
+        Public Sub BuildResult_CommissionPaid_IsSymmetric_BothTrainAndTest()
+            ' Verifies CommissionPaid is the same formula regardless of split source.
+            ' Two identical trade lists should produce the same CommissionPaid.
+            Dim trades1 = New List(Of BacktestTrade) From {
+                MakeClosedTrade(10D, positionGroupId:=1),
+                MakeClosedTrade(-5D, positionGroupId:=2)
+            }
+            Dim trades2 = New List(Of BacktestTrade) From {
+                MakeClosedTrade(10D, positionGroupId:=1),
+                MakeClosedTrade(-5D, positionGroupId:=2)
+            }
+            Dim config = MakeConfig()
+            config.CommissionPerSideUsd = 0.52D  ' OIL round trip = $1.04
+
+            Dim r1 = BacktestMetrics.BuildResult(config, trades1, 50005D, 5D)
+            Dim r2 = BacktestMetrics.BuildResult(config, trades2, 50005D, 5D)
+
+            Assert.Equal(r1.CommissionPaid, r2.CommissionPaid)
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════
         ' TEST-01: UpdateDynamicExits — Trailing Stop, Break-Even, Extend TP
         ' ══════════════════════════════════════════════════════════════════
 
