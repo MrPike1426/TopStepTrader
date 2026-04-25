@@ -69,6 +69,7 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of ApiKeysViewModel)()
                         services.AddTransient(Of QuantLabViewModel)()
                         services.AddTransient(Of PersonaViewModel)()
+                        services.AddTransient(Of ProTraderViewModel)()
 
                         ' Views — Transient; resolved from per-view scope inside Locator
                         services.AddTransient(Of DashboardView)()
@@ -87,8 +88,9 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of ApiKeysView)()
                         services.AddTransient(Of QuantLabView)()
                         services.AddTransient(Of PersonaView)()
+                        services.AddTransient(Of ProTraderView)()
 
-                        ' Main window — Singleton (one window per app session)
+                        ' Main window
                         services.AddSingleton(Of MainWindow)()
 
                     End Sub) _

@@ -77,6 +77,8 @@ Namespace TopStepTrader.UI
                     NavigateToTradingView(_viewModelLocator.CryptoJoeView)
                 Case "Settings"
                     MainContent.Content = _viewModelLocator.SettingsView
+                Case "ProTrader"
+                    MainContent.Content = _viewModelLocator.ProTraderView
                 Case "Persona"
                     MainContent.Content = _viewModelLocator.PersonaView
                 Case "ApiKeys"

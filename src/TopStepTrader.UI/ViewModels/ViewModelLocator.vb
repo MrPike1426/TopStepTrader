@@ -115,6 +115,12 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        Public ReadOnly Property ProTraderView As Views.ProTraderView
+            Get
+                Return Resolve(Of Views.ProTraderView)("ProTrader")
+            End Get
+        End Property
+
         Public Sub Dispose() Implements IDisposable.Dispose
             If Not _disposed Then
                 _instances.Clear()

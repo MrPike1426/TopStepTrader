@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Output Style
+
+Be maximally terse. No preamble, no summaries, no "done", no trailing confirmation. Report only failures or decisions that require user input. A single sentence is the maximum acceptable response for any completed task.
+
 ## Build & Test Commands
 
 ```bash
