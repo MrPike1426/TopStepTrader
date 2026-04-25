@@ -66,6 +66,30 @@ Namespace TopStepTrader.Services.Backtest
                     $"Insufficient bars for backtest: {filteredBars.Count}. Need at least 50.")
             End If
 
+            ' ── Train/test split (FEAT-13) ──────────────────────────────────────
+            If config.TrainTestSplit > 0.0 AndAlso config.TrainTestSplit < 1.0 Then
+                Dim splitIdx = CInt(Math.Floor(filteredBars.Count * config.TrainTestSplit))
+                If splitIdx >= 50 AndAlso (filteredBars.Count - splitIdx) >= 50 Then
+                    _logger.LogInformation(
+                        "Train/test split {Split:P0}: {Train} train bars / {Test} test bars",
+                        config.TrainTestSplit, splitIdx, filteredBars.Count - splitIdx)
+                    Dim trainBars = filteredBars.Take(splitIdx).ToList()
+                    Dim testBars  = filteredBars.Skip(splitIdx).ToList()
+                    Dim trainResult = RunReplay(config, trainBars, cancel)
+                    Dim testResult  = RunReplay(config, testBars,  cancel)
+                    trainResult.OutOfSampleResult = testResult
+                    Try
+                        Await PersistResultAsync(trainResult, splitIdx, config.Timeframe)
+                    Catch ex As Exception
+                        _logger.LogError(ex, "Failed to persist backtest result")
+                    End Try
+                    _logger.LogInformation(
+                        "Train/test complete: Train PnL={TrainPnL:C}, Test PnL={TestPnL:C}",
+                        trainResult.TotalPnL, testResult.TotalPnL)
+                    Return trainResult
+                End If
+            End If
+
             _logger.LogInformation("Replaying {N} bars", filteredBars.Count)
             Dim result = RunReplay(config, filteredBars, cancel)
 

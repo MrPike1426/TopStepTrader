@@ -289,6 +289,10 @@
                                     <TextBox Text="{Binding ForceCloseAmount, UpdateSourceTrigger=PropertyChanged}"
                                              Width="52" Height="24" VerticalAlignment="Center"
                                              ToolTip="Dollar profit threshold. Default $50 — close the position when unrealised P&amp;L ≥ this amount."/>
+                                    <CheckBox IsChecked="{Binding ValidateSplitEnabled}"
+                                              Content="Validate (60/40 split)"
+                                              Margin="20,0,0,0"
+                                              ToolTip="Splits bars into 60% training / 40% test sets. Adds Test P&amp;L and Degradation% columns. Amber row = degradation &gt;50%; red row = negative test P&amp;L."/>
                                 </StackPanel>
 
                             </StackPanel>
@@ -632,11 +636,24 @@
                                         <Setter Property="VerticalAlignment" Value="Center"/>
                                     </Style>
                                 </DataGrid.CellStyle>
+                                <DataGrid.RowStyle>
+                                    <Style TargetType="DataGridRow">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding RowBackground}" Value="#220000">
+                                                <Setter Property="Background" Value="#220000"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding RowBackground}" Value="#1A1200">
+                                                <Setter Property="Background" Value="#1A1200"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </DataGrid.RowStyle>
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Timeframe"    Binding="{Binding Timeframe}"    Width="70"/>
                                     <DataGridTextColumn Header="Trades"       Binding="{Binding Trades}"       Width="60"/>
                                     <DataGridTextColumn Header="Win Rate"     Binding="{Binding WinRate}"      Width="80"/>
-                                    <DataGridTemplateColumn Header="Total P&amp;L" Width="90" SortMemberPath="TotalPnLRaw">
+                                    <DataGridTemplateColumn Header="Train P&amp;L" Width="90" SortMemberPath="TotalPnLRaw">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate>
                                                 <TextBlock Text="{Binding TotalPnL}"
@@ -646,6 +663,17 @@
                                             </DataTemplate>
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="Test P&amp;L" Width="90" SortMemberPath="TestPnLRaw">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding TestPnL}"
+                                                           Padding="8,2"
+                                                           Foreground="{Binding TestPnLColor,
+                                                               Converter={StaticResource BrushKeyConverter}}"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTextColumn Header="Degrad%" Binding="{Binding DegradationPct}" Width="65"/>
                                     <DataGridTextColumn Header="Sharpe"       Binding="{Binding Sharpe}"       Width="60"/>
                                     <DataGridTextColumn Header="Avg P&amp;L"  Binding="{Binding AvgPnLPerTrade}" Width="80"/>
                                     <DataGridTextColumn Header="Max DD"       Binding="{Binding MaxDrawdown}"  Width="*"/>
@@ -741,6 +769,34 @@
                             Visibility="{Binding MaxEffortIsRunning,
                                         Converter={StaticResource BoolToVisibilityConverter}}"/>
 
+                    <!-- Validate split toggle -->
+                    <Border CornerRadius="4" Margin="12,0,0,0" Cursor="Hand" VerticalAlignment="Center">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background"     Value="#1A1A2E"/>
+                                <Setter Property="BorderThickness" Value="1"/>
+                                <Setter Property="BorderBrush"    Value="#4A4A6A"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ValidateSplitEnabled}" Value="True">
+                                        <Setter Property="Background"  Value="#1B3A5C"/>
+                                        <Setter Property="BorderBrush" Value="#63B3ED"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <Border.InputBindings>
+                            <MouseBinding MouseAction="LeftClick"
+                                          Command="{Binding ToggleValidateSplitCommand}"/>
+                        </Border.InputBindings>
+                        <CheckBox IsChecked="{Binding ValidateSplitEnabled}"
+                                  Content="Validate (60/40 split)"
+                                  Padding="8,5"
+                                  FontSize="12"
+                                  IsHitTestVisible="False"
+                                  Foreground="{StaticResource TextPrimaryBrush}"
+                                  ToolTip="Enables 60/40 train/test split. Results sorted by Test P&amp;L. Amber rows = degradation &gt;50%; red rows = negative out-of-sample P&amp;L."/>
+                    </Border>
+
                     <StackPanel Margin="20,0,0,0" VerticalAlignment="Center">
                         <TextBlock FontSize="14" FontWeight="SemiBold"
                                    Foreground="{StaticResource TextPrimaryBrush}"
@@ -823,6 +879,19 @@
                                 <Setter Property="VerticalAlignment" Value="Center"/>
                             </Style>
                         </DataGrid.CellStyle>
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding RowBackground}" Value="#220000">
+                                        <Setter Property="Background" Value="#220000"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding RowBackground}" Value="#1A1200">
+                                        <Setter Property="Background" Value="#1A1200"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
                         <DataGrid.Columns>
                             <DataGridTemplateColumn Header="" Width="30">
                                 <DataGridTemplateColumn.CellTemplate>
@@ -846,7 +915,7 @@
                             <DataGridTextColumn Header="Timeframe"  Binding="{Binding Timeframe}"  Width="70"/>
                             <DataGridTextColumn Header="Trades"     Binding="{Binding Trades}"     Width="60"/>
                             <DataGridTextColumn Header="Win%"       Binding="{Binding WinRate}"    Width="60"/>
-                            <DataGridTemplateColumn Header="P&amp;L" Width="90" SortMemberPath="TotalPnLRaw">
+                            <DataGridTemplateColumn Header="Train P&amp;L" Width="90" SortMemberPath="TotalPnLRaw">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding TotalPnL}" Padding="8,2"
@@ -855,6 +924,16 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Test P&amp;L" Width="90" SortMemberPath="TestPnLRaw">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding TestPnL}" Padding="8,2"
+                                                   Foreground="{Binding TestPnLColor,
+                                                       Converter={StaticResource BrushKeyConverter}}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Degrad%" Binding="{Binding DegradationPct}" Width="65"/>
                             <DataGridTextColumn Header="Sharpe"     Binding="{Binding Sharpe}"     Width="60"/>
                             <DataGridTextColumn Header="Avg P&amp;L" Binding="{Binding AvgPnL}"    Width="75"/>
                             <DataGridTextColumn Header="Max DD"     Binding="{Binding MaxDD}"      Width="*"/>

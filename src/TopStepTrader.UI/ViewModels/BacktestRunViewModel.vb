@@ -189,6 +189,18 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── Train/test split ───────────────────────────────────────────────────
+
+        Private _validateSplitEnabled As Boolean = False
+        Public Property ValidateSplitEnabled As Boolean
+            Get
+                Return _validateSplitEnabled
+            End Get
+            Set(value As Boolean)
+                SetProperty(_validateSplitEnabled, value)
+            End Set
+        End Property
+
         ' ── Force Close ────────────────────────────────────────────────────────
 
         Private _forceCloseEnabled As Boolean = False
@@ -927,6 +939,7 @@ Namespace TopStepTrader.UI.ViewModels
             Dim capForceAmt     As Decimal = 50D
             Decimal.TryParse(_forceCloseAmount, capForceAmt)
             If capForceAmt <= 0 Then capForceAmt = 50D
+            Dim capValidateSplit = ValidateSplitEnabled
             Dim capStart = _startDate
             Dim capEnd = _endDate
             Dim capStrategy = _selectedStrategyName
@@ -1007,7 +1020,8 @@ Namespace TopStepTrader.UI.ViewModels
                                      .ForceCloseEnabled = capForceClose,
                                      .ForceCloseAmount = capForceAmt,
                                      .SlippageTicks = 1,
-                                     .CommissionPerSideUsd = GetCommissionPerSide(capContractId)
+                                     .CommissionPerSideUsd = GetCommissionPerSide(capContractId),
+                                     .TrainTestSplit = If(capValidateSplit, 0.6, 0.0)
                                  }
 
                                  Dim result = Await _backtestService.RunBacktestAsync(config, cts.Token)
@@ -1258,6 +1272,12 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property MaxDrawdown As String
         Public ReadOnly Property EndOfDayCount As String
         Public ReadOnly Property IsSuccess As Boolean
+        ' Out-of-sample split columns (FEAT-13) — "—" when no split active
+        Public ReadOnly Property TestPnL As String
+        Public ReadOnly Property TestPnLRaw As Decimal
+        Public ReadOnly Property TestPnLColor As String
+        Public ReadOnly Property DegradationPct As String
+        Public ReadOnly Property RowBackground As String
 
         Public Sub New(label As String, result As BacktestResult)
             Timeframe = label
@@ -1271,6 +1291,31 @@ Namespace TopStepTrader.UI.ViewModels
             MaxDrawdown = result.MaxDrawdown.ToString("C0")
             EndOfDayCount = result.EndOfDayCloseCount.ToString()
             IsSuccess = True
+            If result.OutOfSampleResult IsNot Nothing Then
+                Dim oos = result.OutOfSampleResult
+                TestPnLRaw = oos.TotalPnL
+                TestPnL = oos.TotalPnL.ToString("C0")
+                TestPnLColor = If(oos.TotalPnL >= 0, "BuyBrush", "SellBrush")
+                If result.TotalPnL <> 0D Then
+                    Dim deg = (result.TotalPnL - oos.TotalPnL) / Math.Abs(result.TotalPnL) * 100D
+                    DegradationPct = deg.ToString("F0") & "%"
+                    If oos.TotalPnL < 0D Then
+                        RowBackground = "#220000"
+                    ElseIf deg > 50D Then
+                        RowBackground = "#1A1200"
+                    Else
+                        RowBackground = "Transparent"
+                    End If
+                Else
+                    DegradationPct = "—"
+                    RowBackground = "Transparent"
+                End If
+            Else
+                TestPnL = "—"
+                TestPnLColor = "TextSecondaryBrush"
+                DegradationPct = "—"
+                RowBackground = "Transparent"
+            End If
         End Sub
 
         Public Sub New(label As String, errorMessage As String)
@@ -1285,6 +1330,10 @@ Namespace TopStepTrader.UI.ViewModels
             MaxDrawdown = "—"
             EndOfDayCount = "—"
             IsSuccess = False
+            TestPnL = "—"
+            TestPnLColor = "TextSecondaryBrush"
+            DegradationPct = "—"
+            RowBackground = "Transparent"
         End Sub
     End Class
 

@@ -39,6 +39,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property MaximumEffortCancelCommand As RelayCommand
         Public ReadOnly Property PinResultCommand As RelayCommand
         Public ReadOnly Property CopyAiAnalysisCommand As RelayCommand
+        Public ReadOnly Property ToggleValidateSplitCommand As RelayCommand
 
         ' ══════════════════════════════════════════════════════════════════════
         ' COLLECTIONS
@@ -114,6 +115,16 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Private _validateSplitEnabled As Boolean = False
+        Public Property ValidateSplitEnabled As Boolean
+            Get
+                Return _validateSplitEnabled
+            End Get
+            Set(value As Boolean)
+                SetProperty(_validateSplitEnabled, value)
+            End Set
+        End Property
+
         ' ══════════════════════════════════════════════════════════════════════
         ' CONSTRUCTOR
         ' ══════════════════════════════════════════════════════════════════════
@@ -138,6 +149,7 @@ Namespace TopStepTrader.UI.ViewModels
 
             MaximumEffortCommand = New RelayCommand(AddressOf ExecuteMaximumEffort, Function() Not _isRunning)
             MaximumEffortCancelCommand = New RelayCommand(Sub() _cancelSource?.Cancel(), Function() _isRunning)
+            ToggleValidateSplitCommand = New RelayCommand(Sub() ValidateSplitEnabled = Not ValidateSplitEnabled)
             PinResultCommand = New RelayCommand(
                 Sub(param)
                     Dim row = TryCast(param, MaxEffortRowVm)
@@ -200,6 +212,7 @@ Namespace TopStepTrader.UI.ViewModels
             Dim capForceAmt As Decimal = 50D
             Decimal.TryParse(_runVm.ForceCloseAmount, capForceAmt)
             If capForceAmt <= 0 Then capForceAmt = 50D
+            Dim capValidateSplit = ValidateSplitEnabled
 
             _cancelSource = New CancellationTokenSource()
             Dim cts = _cancelSource
@@ -267,7 +280,8 @@ Namespace TopStepTrader.UI.ViewModels
                                         .ForceCloseEnabled = capForceClose,
                                         .ForceCloseAmount = capForceAmt,
                                         .SlippageTicks = 1,
-                                        .CommissionPerSideUsd = contract.RoundTripFee / 2D
+                                        .CommissionPerSideUsd = contract.RoundTripFee / 2D,
+                                        .TrainTestSplit = If(capValidateSplit, 0.6, 0.0)
                                     }
 
                                     Dim result = Await _backtestService.RunBacktestAsync(config, cts.Token)
@@ -277,7 +291,9 @@ Namespace TopStepTrader.UI.ViewModels
                                     Dispatch(Sub()
                                         Dim insertAt = MaxEffortResults.Count
                                         For j = 0 To MaxEffortResults.Count - 1
-                                            If MaxEffortResults(j).TotalPnLRaw < row.TotalPnLRaw Then
+                                            Dim cmpKey = If(capValidateSplit, MaxEffortResults(j).TestPnLRaw, MaxEffortResults(j).TotalPnLRaw)
+                                            Dim rowKey  = If(capValidateSplit, row.TestPnLRaw, row.TotalPnLRaw)
+                                            If cmpKey < rowKey Then
                                                 insertAt = j
                                                 Exit For
                                             End If
@@ -297,7 +313,9 @@ Namespace TopStepTrader.UI.ViewModels
                     If cts.IsCancellationRequested Then Exit For
                 Next
 
-                Dim top20 = rawResults.OrderByDescending(Function(r) r.TotalPnLRaw).Take(20).ToList()
+                Dim top20 = If(capValidateSplit,
+                               rawResults.OrderByDescending(Function(r) r.TestPnLRaw).Take(20).ToList(),
+                               rawResults.OrderByDescending(Function(r) r.TotalPnLRaw).Take(20).ToList())
                 If top20.Count > 0 AndAlso Not cts.IsCancellationRequested Then
                     Dispatch(Sub()
                         MaxEffortProgress = 100
@@ -309,14 +327,28 @@ Namespace TopStepTrader.UI.ViewModels
                     sb.AppendLine($"Backtest results — {rawResults.Count} combinations across {contracts.Count} instruments, 7 strategies, 8 timeframes, 3 personas (Lewis/Damian/Joe).")
                     sb.AppendLine($"Date range: 60 days (TopStepX API limit). Commission $4.50/side modelled.")
                     sb.AppendLine($"ATR-based stops: Lewis SL=1.5×/TP=3.0×N  Damian SL=1.0×/TP=2.0×N  Joe SL=0.75×/TP=2.0×N  (N = ATR14 × point value).")
+                    If capValidateSplit Then
+                        sb.AppendLine("OUT-OF-SAMPLE VALIDATION: 60/40 train/test split applied. Results sorted by Test P&L.")
+                        sb.AppendLine("Degradation = (TrainPnL − TestPnL) / |TrainPnL| × 100. >50% = possible overfit; negative TestPnL = strategy reverses out-of-sample.")
+                    End If
                     sb.AppendLine()
-                    sb.AppendLine("TOP 20 BY TOTAL P&L:")
-                    sb.AppendLine("Rank | Persona | Contract | Strategy | Timeframe | Trades | Win% | P&L | Sharpe | Avg P&L")
-                    sb.AppendLine("-----|---------|----------|----------|-----------|--------|------|-----|--------|--------")
-                    For rank = 1 To top20.Count
-                        Dim r = top20(rank - 1)
-                        sb.AppendLine($"{rank,4} | {r.Persona,-7} | {r.Contract,-12} | {r.Strategy,-17} | {r.Timeframe,8} | {r.Trades,6} | {r.WinRate,5} | {r.TotalPnL,8} | {r.Sharpe,6} | {r.AvgPnL}")
-                    Next
+                    If capValidateSplit Then
+                        sb.AppendLine("TOP 20 BY TEST P&L (out-of-sample):")
+                        sb.AppendLine("Rank | Persona | Contract | Strategy | Timeframe | Trades | Win% | Train P&L | Test P&L | Degradation%")
+                        sb.AppendLine("-----|---------|----------|----------|-----------|--------|------|-----------|----------|-------------")
+                        For rank = 1 To top20.Count
+                            Dim r = top20(rank - 1)
+                            sb.AppendLine($"{rank,4} | {r.Persona,-7} | {r.Contract,-12} | {r.Strategy,-17} | {r.Timeframe,8} | {r.Trades,6} | {r.WinRate,5} | {r.TotalPnL,9} | {r.TestPnL,8} | {r.DegradationPct,12}")
+                        Next
+                    Else
+                        sb.AppendLine("TOP 20 BY TOTAL P&L:")
+                        sb.AppendLine("Rank | Persona | Contract | Strategy | Timeframe | Trades | Win% | P&L | Sharpe | Avg P&L")
+                        sb.AppendLine("-----|---------|----------|----------|-----------|--------|------|-----|--------|--------")
+                        For rank = 1 To top20.Count
+                            Dim r = top20(rank - 1)
+                            sb.AppendLine($"{rank,4} | {r.Persona,-7} | {r.Contract,-12} | {r.Strategy,-17} | {r.Timeframe,8} | {r.Trades,6} | {r.WinRate,5} | {r.TotalPnL,8} | {r.Sharpe,6} | {r.AvgPnL}")
+                        Next
+                    End If
 
                     Dim analysis = Await _claudeReviewService.AnalyseBacktestResultsAsync(sb.ToString(), cts.Token)
                     Dispatch(Sub()
@@ -371,6 +403,12 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property AvgPnL As String
         Public ReadOnly Property MaxDD As String
         Public ReadOnly Property EndOfDayCount As String
+        ' Out-of-sample split columns (FEAT-13) — "—" when no split active
+        Public ReadOnly Property TestPnL As String
+        Public ReadOnly Property TestPnLRaw As Decimal
+        Public ReadOnly Property TestPnLColor As String
+        Public ReadOnly Property DegradationPct As String
+        Public ReadOnly Property RowBackground As String
 
         Public Sub New(personaName As String, contractName As String, strategyName As String,
                        timeframeLabel As String, result As BacktestResult)
@@ -387,6 +425,31 @@ Namespace TopStepTrader.UI.ViewModels
             AvgPnL = result.AveragePnLPerTrade.ToString("C0")
             MaxDD = result.MaxDrawdown.ToString("C0")
             EndOfDayCount = result.EndOfDayCloseCount.ToString()
+            If result.OutOfSampleResult IsNot Nothing Then
+                Dim oos = result.OutOfSampleResult
+                TestPnLRaw = oos.TotalPnL
+                TestPnL = oos.TotalPnL.ToString("C0")
+                TestPnLColor = If(oos.TotalPnL >= 0, "BuyBrush", "SellBrush")
+                If result.TotalPnL <> 0D Then
+                    Dim deg = (result.TotalPnL - oos.TotalPnL) / Math.Abs(result.TotalPnL) * 100D
+                    DegradationPct = deg.ToString("F0") & "%"
+                    If oos.TotalPnL < 0D Then
+                        RowBackground = "#220000"
+                    ElseIf deg > 50D Then
+                        RowBackground = "#1A1200"
+                    Else
+                        RowBackground = "Transparent"
+                    End If
+                Else
+                    DegradationPct = "—"
+                    RowBackground = "Transparent"
+                End If
+            Else
+                TestPnL = "—"
+                TestPnLColor = "TextSecondaryBrush"
+                DegradationPct = "—"
+                RowBackground = "Transparent"
+            End If
         End Sub
 
         Public Sub New(personaName As String, contractName As String, strategyName As String,
@@ -404,6 +467,10 @@ Namespace TopStepTrader.UI.ViewModels
             Me.Sharpe = sharpe.ToString("F2")
             AvgPnL = avgPnL.ToString("C0")
             MaxDD = maxDD.ToString("C0")
+            TestPnL = "—"
+            TestPnLColor = "TextSecondaryBrush"
+            DegradationPct = "—"
+            RowBackground = "Transparent"
         End Sub
     End Class
 

@@ -205,6 +205,17 @@ Namespace TopStepTrader.Core.Interfaces
         End Property
         Private _maxScaleIns As Integer = 2
 
+        ' ── Out-of-sample train/test split ───────────────────────────────────────
+
+        ''' <summary>
+        ''' Fraction of bars used as the in-sample training window.
+        ''' 0.0 (default) disables the split — preserves current behaviour.
+        ''' 0.6 = first 60% are training, last 40% are test.
+        ''' When active, <see cref="BacktestResult.OutOfSampleResult"/> carries the test metrics.
+        ''' Both subsets must contain at least 50 bars, otherwise the split is skipped.
+        ''' </summary>
+        Public Property TrainTestSplit As Double = 0.0
+
     End Class
 
 End Namespace
