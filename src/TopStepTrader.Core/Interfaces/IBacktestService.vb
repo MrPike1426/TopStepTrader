@@ -165,6 +165,16 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Public Property TpDollarBracket As Decimal = 0D
 
+        ' ── MultiConfluence volume gate ──────────────────────────────────────────
+
+        ''' <summary>
+        ''' STRAT-22: When False, the MultiConfluence volume gate (condition 8) is bypassed.
+        ''' Set to False when backtesting instruments where the ProjectX bar feed returns 0 volume
+        ''' (e.g. M6E EUR/USD micro currency futures).  Default True (gate active).
+        ''' Must be kept in sync with <see cref="TopStepTrader.Core.Settings.MultiConfluenceConfig.VolumeGateEnabled"/>.
+        ''' </summary>
+        Public Property McVolumeGateEnabled As Boolean = True
+
         ' ── Indicator period ─────────────────────────────────────────────────────
 
         ''' <summary>

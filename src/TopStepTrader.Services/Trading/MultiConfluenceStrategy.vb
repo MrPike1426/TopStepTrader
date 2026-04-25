@@ -227,8 +227,16 @@ Namespace TopStepTrader.Services.Trading
             Dim lc7 = (Not Single.IsNaN(stochKNow) AndAlso stochKNow < cfg.StochRsiOverbought)               ' 7. StochRSI K < 0.7 (not overbought)
 
             ' ── Volume gate: current bar volume must be ≥ 1.2× the 20-bar average ──────
+            ' STRAT-22: ProjectX is the authoritative volume source for the live path.
+            ' When VolumeGateEnabled=False the gate is bypassed for instruments where PX
+            ' returns 0 volume consistently (e.g. M6E EUR/USD micro currency futures).
             Dim volAvg = If(n >= 21, volumes.Skip(n - 21).Take(20).Average(), 0D)
-            Dim lc8 = (volAvg > 0D AndAlso volumes(n - 1) >= volAvg * CDec(cfg.VolumeMultiple))                ' 8. Volume ≥ 1.2× 20-bar average
+            Dim lc8 As Boolean
+            If cfg.VolumeGateEnabled Then
+                lc8 = (volAvg > 0D AndAlso volumes(n - 1) >= volAvg * CDec(cfg.VolumeMultiple))
+            Else
+                lc8 = True   ' bypass — no reliable PX volume data for this instrument
+            End If
             Dim sc8 = lc8   ' same gate for shorts
 
             ' ── Short conditions (all 9 must be True) ─────────────────────────────
@@ -330,7 +338,7 @@ Namespace TopStepTrader.Services.Trading
                 $"EMA21={CDec(ema21Now):F4} EMA50={CDec(ema50Now):F4} | " &
                 $"ADX={adxNow:F1} DI+={plusDINow:F1} DI-={minusDINow:F1} | " &
                 $"MACD-H={histNow:F4}(prev={histPrev:F4}) | StochRSI={stochKNow:F3} | " &
-                $"VolGate={lc8} | Long={longCount}/9 Short={shortCount}/9 | " &
+                $"VolGate={If(cfg.VolumeGateEnabled, lc8.ToString(), "SKIP(PX-no-vol)")} | Long={longCount}/9 Short={shortCount}/9 | " &
                 $"Vol={curVol:F0}/{volAvg * 1.2D:F0} | ChikouGap={chikouGap:F4} | " &
                 $"MACDmag={Math.Abs(histNow):F4}/floor={macdMinMag:F4} | DIspread={diSpreadDisp:F1} | " &
                 $"Conf=adx{confAdx:F2}/di{confDi:F2}/macd{confMacd:F2}/stoch{confStoch:F2}"

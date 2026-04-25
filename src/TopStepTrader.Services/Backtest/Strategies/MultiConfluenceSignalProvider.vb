@@ -111,9 +111,14 @@ Namespace TopStepTrader.Services.Backtest.Strategies
             Dim mcVolMa = If(indicators.VolMa20 IsNot Nothing AndAlso Not Single.IsNaN(indicators.VolMa20(barIndex)),
                              CDec(indicators.VolMa20(barIndex)), 0D)
             Dim mcCurVol = indicators.AllBars(barIndex).Volume
-            ' STRAT-21: fail-closed when volume data is missing (volMa = 0) — matches live behaviour.
-            ' Previously: fail-open (gate passed when VolMa20 unavailable), causing live-vs-backtest divergence.
-            Dim lcl8 = (mcVolMa > 0D AndAlso mcCurVol >= mcVolMa * 1.2D)   ' 8. Volume gate (fail-closed: no data = no trade)
+            Dim lcl8 As Boolean
+            If config.McVolumeGateEnabled Then
+                ' STRAT-21: fail-closed when volume data is missing (volMa = 0) — matches live behaviour.
+                lcl8 = (mcVolMa > 0D AndAlso mcCurVol >= mcVolMa * 1.2D)
+            Else
+                ' STRAT-22: bypass for instruments where PX returns 0 volume (e.g. M6E).
+                lcl8 = True
+            End If
             Dim scl8 = lcl8   ' same gate for shorts
 
             ' ── Short: all 9 conditions ───────────────────────────────────────────

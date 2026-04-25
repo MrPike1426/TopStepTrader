@@ -52,6 +52,14 @@ Namespace TopStepTrader.Core.Settings
         ''' <summary>Current bar volume must be at least this multiple of the 20-bar average. Default 1.2.</summary>
         Public Property VolumeMultiple As Double = 1.2
 
+        ''' <summary>
+        ''' STRAT-22: When False, condition 8 (volume gate) is bypassed unconditionally.
+        ''' Set to False for instruments where the ProjectX bar feed returns 0 volume consistently
+        ''' (e.g. M6E EUR/USD micro currency futures).  Default True (gate active).
+        ''' Both the live evaluator and the backtest signal provider honour this flag.
+        ''' </summary>
+        Public Property VolumeGateEnabled As Boolean = True
+
         ' ── SL / TP sizing ────────────────────────────────────────────────────────
         ''' <summary>Stop-loss as a multiple of ATR(14). Default 1.5.</summary>
         Public Property SlAtrMultiple As Decimal = 1.5D
