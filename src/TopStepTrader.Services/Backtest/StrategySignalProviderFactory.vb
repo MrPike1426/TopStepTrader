@@ -28,6 +28,8 @@ Namespace TopStepTrader.Services.Backtest
                 Case StrategyConditionType.SuperTrend        : Return New SuperTrendSignalProvider()
                 Case StrategyConditionType.DonchianBreakout  : Return New DonchianBreakoutSignalProvider()
                 Case StrategyConditionType.BbRsiMeanReversion : Return New BbRsiReversionSignalProvider()
+                ' STRAT-29
+                Case StrategyConditionType.OpeningRangeBreakout : Return New OrbSignalProvider()
                 Case Else
                     Throw New NotImplementedException(
                         $"No signal provider implemented for strategy '{condition}'.")

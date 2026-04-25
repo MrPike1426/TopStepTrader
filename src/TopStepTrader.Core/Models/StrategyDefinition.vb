@@ -191,6 +191,21 @@ Namespace TopStepTrader.Core.Models
         ''' </summary>
         Public Property ExtendTpOnClose As Boolean = False
 
+        ' ── STRAT-30: Regime overrides ───────────────────────────────────────────
+        ''' <summary>
+        ''' STRAT-30: When both overrides are set, the engine classifies the market regime each bar
+        ''' (Trending = ATR ≥ its 20-bar SMA AND ADX ≥ AdxThreshold) and substitutes this strategy
+        ''' in trending conditions.  Nothing = feature disabled (base Condition is used as-is).
+        ''' </summary>
+        Public Property TrendingStrategyOverride As StrategyConditionType? = Nothing
+
+        ''' <summary>
+        ''' STRAT-30: Strategy to use when regime = Ranging (ATR contracting or ADX &lt; threshold).
+        ''' Only active when <see cref="TrendingStrategyOverride"/> is also set.
+        ''' Nothing = feature disabled.
+        ''' </summary>
+        Public Property RangingStrategyOverride As StrategyConditionType? = Nothing
+
         ''' <summary>
         ''' When True, the engine calls Claude Haiku for a pre-trade macro/session sanity check
         ''' immediately before placing an entry order. A VETO response suppresses the trade and

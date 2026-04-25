@@ -672,7 +672,21 @@ Namespace TopStepTrader.Services.Trading
 
             If Not barIsStale Then
 
-                Select Case _strategy.Condition
+                ' ── STRAT-30: Regime filter — classify market and route to override strategy ──
+                ' Both TrendingStrategyOverride and RangingStrategyOverride must be set to activate.
+                ' When disabled (either is Nothing), activeCondition = base Condition (no-op, backwards-compatible).
+                Dim activeCondition = _strategy.Condition
+                If _strategy.TrendingStrategyOverride.HasValue AndAlso _strategy.RangingStrategyOverride.HasValue Then
+                    Dim regimeAtr = TechnicalIndicators.ATR(highs, lows, closes, 14)
+                    Dim regimeAdx = TechnicalIndicators.LastValid(TechnicalIndicators.DMI(highs, lows, closes).ADX)
+                    Dim regime = TopStepTrader.Services.Backtest.RegimeClassifier.Classify(regimeAtr, regimeAdx, _strategy.AdxThreshold)
+                    activeCondition = If(regime = TopStepTrader.Services.Backtest.RegimeType.Trending,
+                                         _strategy.TrendingStrategyOverride.Value,
+                                         _strategy.RangingStrategyOverride.Value)
+                    Log($"Regime: {regime} → {activeCondition} | ATR={TechnicalIndicators.LastValid(regimeAtr):F4} ADX={regimeAdx:F1} threshold={_strategy.AdxThreshold:F0}")
+                End If
+
+                Select Case activeCondition
                     Case StrategyConditionType.FullCandleOutsideBands,
                      StrategyConditionType.CloseOutsideBands
                         Dim bands = TechnicalIndicators.BollingerBands(closes,
@@ -1486,8 +1500,67 @@ Namespace TopStepTrader.Services.Trading
                             Log($"Bar checked — DBB: Neutral Zone | Close={dbbClose:F4} inner=[{dbbInnerLow:F4}–{dbbInnerUp:F4}] | {remStr}")
                         End If
 
+                    Case StrategyConditionType.OpeningRangeBreakout
+                        ' ── Opening Range Breakout ────────────────────────────────────────────
+                        ' The first 30 minutes of the session establish OR high/low.
+                        ' Entry: close breaks OR with volume ≥ 1.2× 20-bar avg; SL = opposite OR extreme;
+                        ' TP = 1.5× OR width.  No-trade: OR > 2× ATR, or past session midpoint.
+                        Dim orbMinutes = _strategy.TimeframeMinutes
+                        Dim orbBarCount = Math.Max(1, If(orbMinutes > 0, 30 \ orbMinutes, 6))
+                        Dim orbAtrVals = TechnicalIndicators.ATR(highs, lows, closes, 14)
+                        _currentAtrValue = CDec(TechnicalIndicators.LastValid(orbAtrVals))
+
+                        Dim orbDate = lastBar.Timestamp.Date
+                        Dim orbSessionStart = bars.Count - 1
+                        Do While orbSessionStart > 0 AndAlso bars(orbSessionStart - 1).Timestamp.Date = orbDate
+                            orbSessionStart -= 1
+                        Loop
+                        Dim orbSessionBarCount = bars.Count - orbSessionStart
+                        Dim orbEndBarIdx = orbSessionStart + orbBarCount - 1  ' index within bars list
+
+                        If bars.Count - 1 <= orbEndBarIdx Then
+                            Log($"Bar checked — ORB: building opening range ({orbSessionBarCount}/{orbBarCount} bars in session) | {remStr}")
+                        ElseIf orbSessionBarCount > orbBarCount * 4 Then
+                            ' Past session midpoint approximation: more than 4× the OR duration has elapsed
+                            Log($"Bar checked — ORB: past session midpoint ({orbSessionBarCount} bars into session) — entries suppressed | {remStr}")
+                        Else
+                            ' Compute OR high/low from session-start bars
+                            Dim orbHigh As Decimal = Decimal.MinValue
+                            Dim orbLow As Decimal = Decimal.MaxValue
+                            For oi = orbSessionStart To Math.Min(orbEndBarIdx, bars.Count - 1)
+                                orbHigh = Math.Max(orbHigh, bars(oi).High)
+                                orbLow = Math.Min(orbLow, bars(oi).Low)
+                            Next
+                            Dim orbWidth = orbHigh - orbLow
+
+                            If _currentAtrValue > 0D AndAlso orbWidth > _currentAtrValue * 2D Then
+                                Log($"Bar checked — ORB: range too wide (OR={orbWidth:F4} > 2×ATR={_currentAtrValue * 2D:F4}) | {remStr}")
+                            Else
+                                ' Volume gate
+                                Dim orbVolGate = True
+                                If bars.Count >= 20 Then
+                                    Dim avgVol = bars.Skip(bars.Count - 20).Average(Function(b) CDbl(b.Volume))
+                                    If avgVol > 0 AndAlso lastBar.Volume > 0 Then
+                                        orbVolGate = (lastBar.Volume >= avgVol * 1.2)
+                                    End If
+                                End If
+                                Dim orbClose = CDec(lastBar.Close)
+                                If Not orbVolGate Then
+                                    Log($"Bar checked — ORB: volume gate failed | Close={orbClose:F4} OR=[{orbLow:F4}–{orbHigh:F4}] | {remStr}")
+                                ElseIf orbClose > orbHigh Then
+                                    Log($"✅ ORB LONG! Close={orbClose:F4} > OR High={orbHigh:F4} | OR=[{orbLow:F4}–{orbHigh:F4}] Width={orbWidth:F4} ATR={_currentAtrValue:F4} | {remStr}")
+                                    side = OrderSide.Buy
+                                ElseIf orbClose < orbLow Then
+                                    Log($"✅ ORB SHORT! Close={orbClose:F4} < OR Low={orbLow:F4} | OR=[{orbLow:F4}–{orbHigh:F4}] Width={orbWidth:F4} ATR={_currentAtrValue:F4} | {remStr}")
+                                    side = OrderSide.Sell
+                                Else
+                                    Log($"Bar checked — ORB: no breakout | Close={orbClose:F4} OR=[{orbLow:F4}–{orbHigh:F4}] ATR={_currentAtrValue:F4} | {remStr}")
+                                End If
+                            End If
+                        End If
+
                     Case Else
-                        Log($"Condition '{_strategy.Condition}' not yet implemented")
+                        Log($"Condition '{activeCondition}' not yet implemented")
 
                 End Select
 
