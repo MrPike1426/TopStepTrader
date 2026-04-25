@@ -30,6 +30,8 @@ Namespace TopStepTrader.Services.Backtest
                 Case StrategyConditionType.BbRsiMeanReversion : Return New BbRsiReversionSignalProvider()
                 ' STRAT-29
                 Case StrategyConditionType.OpeningRangeBreakout : Return New OrbSignalProvider()
+                ' TEST-10
+                Case StrategyConditionType.PumpNDump : Return New PumpNDumpSignalProvider()
                 Case Else
                     Throw New NotImplementedException(
                         $"No signal provider implemented for strategy '{condition}'.")

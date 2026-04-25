@@ -128,6 +128,14 @@ Namespace TopStepTrader.Core.Enums
         ''' Best instruments: MNQ, MES (NY open momentum), MGC (Gold 08:20–10:30 ET window).
         ''' </summary>
         OpeningRangeBreakout = 18
+
+        ''' <summary>
+        ''' Pump-n-Dump: 3 consecutive 1-minute bars all closing in the same direction.
+        ''' Long  when the last 3 bars all have Close &gt; Open (3 green bars → momentum pump).
+        ''' Short when the last 3 bars all have Close &lt; Open (3 red bars  → momentum dump).
+        ''' SL/TP are ATR-based (SlAtrMultiple / TpAtrMultiple on BacktestConfiguration).
+        ''' </summary>
+        PumpNDump = 19
     End Enum
 
 End Namespace

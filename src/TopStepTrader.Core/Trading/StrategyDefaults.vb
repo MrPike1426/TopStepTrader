@@ -26,7 +26,8 @@ Namespace TopStepTrader.Core.Trading
                 {"VIDYA Cross",            New StrategyParameterSet("1000", "1")},
                 {"Naked Trader",           New StrategyParameterSet("1000", "1")},
                 {"Double Bubble Butt",     New StrategyParameterSet("1000", "1")},
-                {"Opening Range Breakout", New StrategyParameterSet("1000", "1")}
+                {"Opening Range Breakout", New StrategyParameterSet("1000", "1")},
+                {"Pump-n-Dump",           New StrategyParameterSet("1000", "1")}
             }
 
         ''' <summary>
