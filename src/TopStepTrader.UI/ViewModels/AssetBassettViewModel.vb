@@ -148,6 +148,51 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── STRAT-30: Regime override ──────────────────────────────────────────
+        Public ReadOnly Property AvailableRegimeOverrides As New List(Of String) From {
+            "— Off —",
+            "Multi-Confluence",
+            "BB Squeeze Scalper",
+            "EMA/RSI Combined",
+            "Naked Trader",
+            "VIDYA Cross",
+            "BB+RSI Reversion",
+            "Opening Range Breakout"
+        }
+
+        Private _selectedTrendingOverrideName As String = "— Off —"
+        Public Property SelectedTrendingOverrideName As String
+            Get
+                Return _selectedTrendingOverrideName
+            End Get
+            Set(value As String)
+                SetProperty(_selectedTrendingOverrideName, value)
+            End Set
+        End Property
+
+        Private _selectedRangingOverrideName As String = "— Off —"
+        Public Property SelectedRangingOverrideName As String
+            Get
+                Return _selectedRangingOverrideName
+            End Get
+            Set(value As String)
+                SetProperty(_selectedRangingOverrideName, value)
+            End Set
+        End Property
+
+        Private Shared Function ParseRegimeOverride(name As String) As Core.Enums.StrategyConditionType?
+            Select Case name
+                Case "Multi-Confluence"       : Return Core.Enums.StrategyConditionType.MultiConfluence
+                Case "BB Squeeze Scalper"     : Return Core.Enums.StrategyConditionType.BbSqueezeScalper
+                Case "EMA/RSI Combined"       : Return Core.Enums.StrategyConditionType.EmaRsiWeightedScore
+                Case "Naked Trader"           : Return Core.Enums.StrategyConditionType.NakedTrader
+                Case "VIDYA Cross"            : Return Core.Enums.StrategyConditionType.VidyaCross
+                Case "BB+RSI Reversion"       : Return Core.Enums.StrategyConditionType.BbRsiMeanReversion
+                Case "Opening Range Breakout" : Return Core.Enums.StrategyConditionType.OpeningRangeBreakout
+                Case Else                     : Return Nothing
+            End Select
+        End Function
+
         Private _capitalAtRisk As Decimal = 500D
         Public Property CapitalAtRisk As Decimal
             Get
@@ -519,7 +564,9 @@ Namespace TopStepTrader.UI.ViewModels
                         .Leverage = _leverage, .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = _maxScaleIns, .ScaleInAmount = _capitalAtRisk, .ScaleInLeverage = _leverage,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
-                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName
+                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName,
+                        .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
+                        .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
                 Case 1  ' Multi-Confluence — 15-min; uses ATR tier SL/TP multiples
                     Return New StrategyDefinition With {
@@ -535,7 +582,9 @@ Namespace TopStepTrader.UI.ViewModels
                         .Leverage = _leverage, .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = _maxScaleIns, .ScaleInAmount = _capitalAtRisk, .ScaleInLeverage = _leverage,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
-                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName
+                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName,
+                        .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
+                        .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
                 Case 2  ' LULT Divergence — 5-min; uses ATR tier SL/TP multiples, no scale-in
                     Return New StrategyDefinition With {
@@ -551,7 +600,9 @@ Namespace TopStepTrader.UI.ViewModels
                         .Leverage = _leverage, .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = 0, .ScaleInAmount = 0D, .ScaleInLeverage = 1,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
-                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName
+                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName,
+                        .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
+                        .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
                 Case 3  ' BB Squeeze Scalper — 5-min, SlN=0.8, TpN=1.6, no scale-in
                     Return New StrategyDefinition With {
@@ -567,7 +618,9 @@ Namespace TopStepTrader.UI.ViewModels
                         .Leverage = _leverage, .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = 0, .ScaleInAmount = 0D, .ScaleInLeverage = 1,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
-                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName
+                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName,
+                        .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
+                        .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
                 Case 4  ' VIDYA Cross — 15-min; uses ATR tier SL/TP multiples
                     Return New StrategyDefinition With {
@@ -583,7 +636,9 @@ Namespace TopStepTrader.UI.ViewModels
                         .Leverage = _leverage, .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = _maxScaleIns, .ScaleInAmount = _capitalAtRisk, .ScaleInLeverage = _leverage,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
-                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName
+                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName,
+                        .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
+                        .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
                 Case 5  ' Naked Trader — 5-min; uses ATR tier SL/TP multiples
                     Return New StrategyDefinition With {
@@ -599,7 +654,9 @@ Namespace TopStepTrader.UI.ViewModels
                         .Leverage = _leverage, .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = _maxScaleIns, .ScaleInAmount = _capitalAtRisk, .ScaleInLeverage = _leverage,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
-                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName
+                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName,
+                        .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
+                        .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
                 Case 6  ' Double Bubble Butt — 5-min; inner BB 1.0 SD / outer BB 2.0 SD; EUR/USD only (London+NY session)
                     ' DBB was designed by Kathy Lien for EUR/USD on daily/4H FX charts.
@@ -623,7 +680,9 @@ Namespace TopStepTrader.UI.ViewModels
                         .Leverage = _leverage, .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = 0, .ScaleInAmount = _capitalAtRisk, .ScaleInLeverage = _leverage,
                         .MinConfidencePct = _minConfidencePct, .TickSize = dbbTickSz, .TickValue = dbbTickVal,
-                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName
+                        .ExtendTpOnClose = _extendTpOnClose, .PersonaName = _selectedProfileName,
+                        .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
+                        .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
                 Case Else
                     Throw New ArgumentOutOfRangeException(NameOf(slotIdx), $"Slot {slotIdx} is out of range")

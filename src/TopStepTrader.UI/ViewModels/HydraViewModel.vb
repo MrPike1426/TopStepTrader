@@ -283,6 +283,51 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── STRAT-30: Regime override ──────────────────────────────────────────
+        Public ReadOnly Property AvailableRegimeOverrides As New List(Of String) From {
+            "— Off —",
+            "Multi-Confluence",
+            "BB Squeeze Scalper",
+            "EMA/RSI Combined",
+            "Naked Trader",
+            "VIDYA Cross",
+            "BB+RSI Reversion",
+            "Opening Range Breakout"
+        }
+
+        Private _selectedTrendingOverrideName As String = "— Off —"
+        Public Property SelectedTrendingOverrideName As String
+            Get
+                Return _selectedTrendingOverrideName
+            End Get
+            Set(value As String)
+                SetProperty(_selectedTrendingOverrideName, value)
+            End Set
+        End Property
+
+        Private _selectedRangingOverrideName As String = "— Off —"
+        Public Property SelectedRangingOverrideName As String
+            Get
+                Return _selectedRangingOverrideName
+            End Get
+            Set(value As String)
+                SetProperty(_selectedRangingOverrideName, value)
+            End Set
+        End Property
+
+        Private Shared Function ParseRegimeOverride(name As String) As Core.Enums.StrategyConditionType?
+            Select Case name
+                Case "Multi-Confluence"       : Return Core.Enums.StrategyConditionType.MultiConfluence
+                Case "BB Squeeze Scalper"     : Return Core.Enums.StrategyConditionType.BbSqueezeScalper
+                Case "EMA/RSI Combined"       : Return Core.Enums.StrategyConditionType.EmaRsiWeightedScore
+                Case "Naked Trader"           : Return Core.Enums.StrategyConditionType.NakedTrader
+                Case "VIDYA Cross"            : Return Core.Enums.StrategyConditionType.VidyaCross
+                Case "BB+RSI Reversion"       : Return Core.Enums.StrategyConditionType.BbRsiMeanReversion
+                Case "Opening Range Breakout" : Return Core.Enums.StrategyConditionType.OpeningRangeBreakout
+                Case Else                     : Return Nothing
+            End Select
+        End Function
+
         ' ── Bars-updated status label ─────────────────────────────────────────────
         Private _barsUpdatedText As String = "Bars updated @ --:--:--"
         ''' <summary>Displayed in the ATR-tier panel. Updated each time all assets complete a bar check.</summary>
@@ -1435,7 +1480,9 @@ Namespace TopStepTrader.UI.ViewModels
                     .TickSize = If(favContract IsNot Nothing AndAlso favContract.PxTickSize > 0D, favContract.PxTickSize, 1D),
                     .TickValue = If(favContract IsNot Nothing AndAlso favContract.PxTickValue > 0D, favContract.PxTickValue, 1D),
                     .TradingWindowUtcStart = If(isGoldAsset, _currentStrategy.TradingWindowUtcStart, Nothing),
-                    .TradingWindowUtcEnd = If(isGoldAsset, _currentStrategy.TradingWindowUtcEnd, Nothing)
+                    .TradingWindowUtcEnd = If(isGoldAsset, _currentStrategy.TradingWindowUtcEnd, Nothing),
+                    .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
+                    .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                 }
                 _engines(i).Start(sd)
                 LogLine($"[{assetVm.Symbol}] Session started")

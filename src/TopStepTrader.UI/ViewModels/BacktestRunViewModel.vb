@@ -595,6 +595,7 @@ Namespace TopStepTrader.UI.ViewModels
             AvailableStrategies.Add("VIDYA Cross")
             AvailableStrategies.Add("Naked Trader")
             AvailableStrategies.Add("Double Bubble Butt")
+            AvailableStrategies.Add("Opening Range Breakout")
 
             AvailableIntervals.Add("1 min")
             AvailableIntervals.Add("5 min")
@@ -916,6 +917,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Case "VIDYA Cross"             : strategyCondition = StrategyConditionType.VidyaCross
                 Case "Naked Trader"            : strategyCondition = StrategyConditionType.NakedTrader
                 Case "Double Bubble Butt"      : strategyCondition = StrategyConditionType.DoubleBubbleButt
+                Case "Opening Range Breakout"  : strategyCondition = StrategyConditionType.OpeningRangeBreakout
                 Case Else                      : strategyCondition = StrategyConditionType.EmaRsiWeightedScore
             End Select
 

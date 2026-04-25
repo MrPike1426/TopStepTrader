@@ -247,6 +247,24 @@
                                   ToolTip="When a bar closes at or beyond the TP, advance the target by one TpMultiple × ATR (up to 3 times). Lets winning trades run further.">
                             <TextBlock Text="Extend TP on close" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
                         </CheckBox>
+
+                        <!-- STRAT-30: Regime override dropdowns -->
+                        <Border Width="1" Height="16" Margin="10,0"
+                                Background="{StaticResource BorderBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Trending→" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"
+                                   ToolTip="STRAT-30: Override all 6 strategy slots when regime = Trending (expanding ATR + ADX above threshold)."/>
+                        <ComboBox ItemsSource="{Binding AvailableRegimeOverrides}"
+                                  SelectedItem="{Binding SelectedTrendingOverrideName, Mode=TwoWay}"
+                                  Width="130" Height="22" FontSize="10" VerticalAlignment="Center" Margin="0,0,8,0"
+                                  ToolTip="Strategy used in trending conditions. Both dropdowns must be set to activate."/>
+                        <TextBlock Text="Ranging→" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"
+                                   ToolTip="STRAT-30: Override all 6 strategy slots when regime = Ranging (contracting ATR or ADX below threshold)."/>
+                        <ComboBox ItemsSource="{Binding AvailableRegimeOverrides}"
+                                  SelectedItem="{Binding SelectedRangingOverrideName, Mode=TwoWay}"
+                                  Width="130" Height="22" FontSize="10" VerticalAlignment="Center"
+                                  ToolTip="Strategy used in ranging conditions. Both dropdowns must be set to activate."/>
                     </StackPanel>
                 </Border>
 

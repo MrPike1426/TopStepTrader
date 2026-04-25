@@ -391,6 +391,24 @@
                             <TextBlock Text="Extend TP on close" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
                         </CheckBox>
 
+                        <!-- STRAT-30: Regime override dropdowns -->
+                        <Border Width="1" Height="16" Margin="10,0"
+                                Background="{StaticResource BorderBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Trending→" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"
+                                   ToolTip="STRAT-30: Override strategy used in trending markets (expanding ATR + ADX above threshold). Off = disabled."/>
+                        <ComboBox ItemsSource="{Binding AvailableRegimeOverrides}"
+                                  SelectedItem="{Binding SelectedTrendingOverrideName, Mode=TwoWay}"
+                                  Width="130" Height="22" FontSize="10" VerticalAlignment="Center" Margin="0,0,8,0"
+                                  ToolTip="Strategy to use when regime = Trending. Both dropdowns must be set to activate the regime filter."/>
+                        <TextBlock Text="Ranging→" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"
+                                   ToolTip="STRAT-30: Override strategy used in ranging markets (contracting ATR or ADX below threshold). Off = disabled."/>
+                        <ComboBox ItemsSource="{Binding AvailableRegimeOverrides}"
+                                  SelectedItem="{Binding SelectedRangingOverrideName, Mode=TwoWay}"
+                                  Width="130" Height="22" FontSize="10" VerticalAlignment="Center"
+                                  ToolTip="Strategy to use when regime = Ranging. Both dropdowns must be set to activate the regime filter."/>
+
                         <!-- Vertical separator -->
                         <Border Width="1" Height="16" Margin="14,0"
                                 Background="{StaticResource BorderBrush}" VerticalAlignment="Center"/>
