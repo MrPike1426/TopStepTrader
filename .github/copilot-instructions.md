@@ -11,7 +11,8 @@ Short version:
 2. **Fix the code** exactly as the ticket specifies.
 3. **Build** — confirm clean (`dotnet build --no-restore -v q && dotnet test --no-build -v q`).
 4. **Close the ticket** — move `tickets/<ID>.md` → `tickets/archive/<ID>.md`, append a row to `Closed_Tickets.md`, remove the row from `Open_TICKETS.md`.
+5. **Commit, push, and pull** — stage everything, commit with `git add -A && git commit -m "<ticket-id>: <short description>"`, push with `git push origin HEAD`, then `git pull`. Never mark a ticket done without completing this step.
 
-Never reference `REFACTOR_TRACKER.md` — it has been superseded by `Open_TICKETS.md`.
+Never reference `REFACTOR_TRACKER.md`
 Never close a ticket without first confirming the build and tests pass.
 Keep the ticket description concise; let code comments and tests capture details.

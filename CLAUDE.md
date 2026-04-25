@@ -130,6 +130,14 @@ Log/repro: <paste relevant output>
 3. Append one row to **`Closed_Tickets.md`**.
 4. Remove the row from **`Open_TICKETS.md`** and update its `Last updated` date.
 5. Increment the **Done** count in the **Completion Summary** table inside `Open_TICKETS.md`.
+6. **Commit, push, and pull** — stage all changes and push to origin:
+   ```bash
+   git add -A
+   git commit -m "<type>(<ID>): <short description>"
+   git push origin HEAD
+   git pull
+   ```
+   Never mark a ticket done without completing this step.
 
 ### Running a Ticket
 
