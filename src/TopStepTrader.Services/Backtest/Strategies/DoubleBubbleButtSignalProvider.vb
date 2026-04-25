@@ -67,14 +67,18 @@ Namespace TopStepTrader.Services.Backtest.Strategies
             ' Inner band level stored at signal time for the neutral-zone exit
             Dim innerExitLevel = If(isDbbBuy, SafeD(dbbIU), SafeD(dbbIL))
 
-            ' Stop = distance to the opposite outer band (beyond 2 SD)
+            ' Stop = distance to the opposite outer band (beyond 2 SD).
+            ' Fallback uses persona's SlAtrMultiple × ATR so different personas produce different SL widths.
+            ' TP uses persona's TpAtrMultiple × ATR so Lewis/Damian/Joe targets are independent.
             Dim dbbAtr = If(Not Single.IsNaN(dbbAtrVal), SafeD(dbbAtrVal), 0D)
+            Dim slMult = If(config.SlAtrMultiple > 0D, config.SlAtrMultiple, 2D)
+            Dim tpMult = If(config.TpAtrMultiple > 0D, config.TpAtrMultiple, 2D)
             Dim outerBandDist = If(isDbbBuy,
                                    bar.Close - SafeD(dbbOL),
                                    SafeD(dbbOU) - bar.Close)
             Dim stopDelta = If(outerBandDist > 0D, outerBandDist,
-                               If(dbbAtr > 0D, dbbAtr * 2D, 0D))
-            Dim tpDelta = If(dbbAtr > 0D, dbbAtr * 2D, stopDelta)
+                               If(dbbAtr > 0D, dbbAtr * slMult, 0D))
+            Dim tpDelta = If(dbbAtr > 0D, dbbAtr * tpMult, stopDelta)
 
             Return New SignalResult With {
                 .Side               = dbbSide,

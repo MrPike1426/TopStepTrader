@@ -945,50 +945,63 @@
                 <Border Grid.Column="2"
                         Background="{StaticResource SurfaceBrush}"
                         CornerRadius="6" Padding="16,12">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <TextBlock Text="🤖  AI ANALYSIS"
-                                       Style="{StaticResource SectionHeadingStyle}" Margin="0"/>
-                            <Button Content="📋"
-                                    Margin="8,0,0,0" Padding="6,1"
-                                    FontSize="11" VerticalAlignment="Center"
-                                    Command="{Binding CopyAiAnalysisCommand}"
-                                    ToolTip="Copy the full analysis text to clipboard"/>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>  <!-- header + model label -->
+                            <RowDefinition Height="*"/>     <!-- scrollable text area -->
+                        </Grid.RowDefinitions>
+                        <!-- Header: title + copy button + model label -->
+                        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Text="🤖  AI ANALYSIS"
+                                           Style="{StaticResource SectionHeadingStyle}" Margin="0"/>
+                                <Button Content="📋"
+                                        Margin="8,0,0,0" Padding="6,1"
+                                        FontSize="11" VerticalAlignment="Center"
+                                        Command="{Binding CopyAiAnalysisCommand}"
+                                        ToolTip="Copy the full analysis text to clipboard"/>
+                            </StackPanel>
+                            <TextBlock Text="claude-haiku-4-5 · top 20 results"
+                                       FontSize="9" FontFamily="Consolas"
+                                       Foreground="{StaticResource TextSecondaryBrush}"/>
                         </StackPanel>
-                        <TextBlock Text="claude-haiku-4-5 · top 20 results"
-                                   FontSize="9" FontFamily="Consolas"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   Margin="0,0,0,8"/>
-                        <!-- Placeholder shown while no analysis is available -->
-                        <TextBlock FontSize="11" TextWrapping="Wrap"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   FontStyle="Italic"
-                                   Text="Run Maximum Effort! to generate an AI analysis of the top 20 results."
-                                   Visibility="{Binding MaxEffortAiAnalysis,
-                                       Converter={StaticResource StringToVisibilityConverter},
-                                       ConverterParameter=Empty}"/>
-                        <!-- Loading indicator while Claude is thinking -->
-                        <TextBlock FontSize="11" TextWrapping="Wrap"
-                                   Foreground="{StaticResource AccentBrush}"
-                                   Text="⏳  Asking Claude Haiku..."
-                                   Visibility="{Binding MaxEffortAiIsLoading,
-                                       Converter={StaticResource BoolToVisibilityConverter}}"/>
-                        <!-- Analysis text -->
-                        <TextBox Text="{Binding MaxEffortAiAnalysis, Mode=OneWay}"
-                                 IsReadOnly="True"
-                                 TextWrapping="Wrap"
-                                 FontSize="11"
-                                 VerticalScrollBarVisibility="Auto"
-                                 HorizontalScrollBarVisibility="Disabled"
-                                 Foreground="{StaticResource TextPrimaryBrush}"
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 Padding="0"
-                                 FontFamily="{StaticResource {x:Static SystemFonts.MessageFontFamilyKey}}"
-                                 Visibility="{Binding MaxEffortAiAnalysis,
-                                     Converter={StaticResource StringToVisibilityConverter},
-                                     ConverterParameter=NotEmpty}"/>
-                    </StackPanel>
+                        <!-- Scrollable body -->
+                        <ScrollViewer Grid.Row="1"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
+                                <!-- Placeholder shown while no analysis is available -->
+                                <TextBlock FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontStyle="Italic"
+                                           Text="Run Maximum Effort! to generate an AI analysis of the top 20 results."
+                                           Visibility="{Binding MaxEffortAiAnalysis,
+                                               Converter={StaticResource StringToVisibilityConverter},
+                                               ConverterParameter=Empty}"/>
+                                <!-- Loading indicator while Claude is thinking -->
+                                <TextBlock FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           Text="⏳  Asking Claude Haiku..."
+                                           Visibility="{Binding MaxEffortAiIsLoading,
+                                               Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                <!-- Analysis text -->
+                                <TextBox Text="{Binding MaxEffortAiAnalysis, Mode=OneWay}"
+                                         IsReadOnly="True"
+                                         TextWrapping="Wrap"
+                                         FontSize="11"
+                                         VerticalScrollBarVisibility="Disabled"
+                                         HorizontalScrollBarVisibility="Disabled"
+                                         Foreground="{StaticResource TextPrimaryBrush}"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         Padding="0"
+                                         FontFamily="{StaticResource {x:Static SystemFonts.MessageFontFamilyKey}}"
+                                         Visibility="{Binding MaxEffortAiAnalysis,
+                                             Converter={StaticResource StringToVisibilityConverter},
+                                             ConverterParameter=NotEmpty}"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
                 </Border>
 
                 </Grid>  <!-- end side-by-side grid -->

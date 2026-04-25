@@ -120,7 +120,71 @@ Namespace TopStepTrader.Tests.Backtest
             Assert.Empty(result.Trades)
         End Sub
 
-    End Class
+            ' ══════════════════════════════════════════════════════════════════
+            ' BUG-26: DoubleBubbleButt P&L must differ between personas
 
-End Namespace
+            ''' <summary>
+            ''' BUG-26: Two configs with different SlAtrMultiple/TpAtrMultiple (simulating
+            ''' two personas) must produce different TotalPnL when the DoubleBubbleButt
+            ''' strategy fires trades.  Identical P&L indicated a hardcoded ATR multiplier
+            ''' was ignoring per-persona config values.
+            ''' </summary>
+            <Fact>
+            Public Sub RunReplay_DoubleBubbleButt_DifferentPersonaMultiples_ProduceDifferentPnL()
+                ' Use enough bars to clear the 25-bar warm-up and trigger at least one entry.
+                ' Bars are constructed so close repeatedly crosses above the inner upper BB band.
+                Dim t0 = New DateTimeOffset(2026, 1, 6, 9, 30, 0, TimeSpan.Zero)
+                Dim bars As New List(Of MarketBar)(200)
+                For i As Integer = 0 To 199
+                    Dim basePrice = 5000D + i * 0.5D
+                    bars.Add(New MarketBar With {
+                        .ContractId = "MES",
+                        .Timeframe = BarTimeframe.OneMinute,
+                        .Timestamp = t0.AddMinutes(i),
+                        .Open = basePrice,
+                        .High = basePrice + 15D,
+                        .Low = basePrice - 5D,
+                        .Close = basePrice + 10D,
+                        .Volume = 200L,
+                        .VWAP = basePrice + 5D
+                    })
+                Next
+
+                Dim configLewis As New BacktestConfiguration() With {
+                    .ContractId = "MES",
+                    .PointValue = 5.0D,
+                    .TickSize = 0.25D,
+                    .StrategyCondition = StrategyConditionType.DoubleBubbleButt,
+                    .UseAtrMode = True,
+                    .SlAtrMultiple = 1.5D,
+                    .TpAtrMultiple = 3.0D
+                }
+
+                Dim configJoe As New BacktestConfiguration() With {
+                    .ContractId = "MES",
+                    .PointValue = 5.0D,
+                    .TickSize = 0.25D,
+                    .StrategyCondition = StrategyConditionType.DoubleBubbleButt,
+                    .UseAtrMode = True,
+                    .SlAtrMultiple = 0.75D,
+                    .TpAtrMultiple = 2.0D
+                }
+
+                Dim resultLewis = _sut.RunReplay(configLewis, bars, CancellationToken.None)
+                Dim resultJoe   = _sut.RunReplay(configJoe,   bars, CancellationToken.None)
+
+                ' If both run produced trades, P&L must differ (different SL/TP multiples).
+                ' If neither produced trades the indicator bands never fired — that is an
+                ' environment issue, not the bug; assert at least one side traded.
+                Assert.True(resultLewis.TotalTrades > 0 OrElse resultJoe.TotalTrades > 0,
+                            "Expected at least one persona to produce trades on the synthetic bars.")
+
+                If resultLewis.TotalTrades > 0 AndAlso resultJoe.TotalTrades > 0 Then
+                    Assert.NotEqual(resultLewis.TotalPnL, resultJoe.TotalPnL)
+                End If
+            End Sub
+
+        End Class
+
+    End Namespace
 
