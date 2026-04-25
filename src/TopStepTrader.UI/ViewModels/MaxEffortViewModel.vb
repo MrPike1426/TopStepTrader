@@ -1,4 +1,5 @@
 Imports System.Collections.ObjectModel
+Imports System.Linq
 Imports System.Text
 Imports System.Threading
 Imports System.Windows
@@ -125,6 +126,33 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Private _bestPickLine1 As String = ""
+        Public Property BestPickLine1 As String
+            Get
+                Return _bestPickLine1
+            End Get
+            Set(value As String)
+                SetProperty(_bestPickLine1, value)
+                OnPropertyChanged(NameOf(HasBestPick))
+            End Set
+        End Property
+
+        Private _bestPickLine2 As String = ""
+        Public Property BestPickLine2 As String
+            Get
+                Return _bestPickLine2
+            End Get
+            Set(value As String)
+                SetProperty(_bestPickLine2, value)
+            End Set
+        End Property
+
+        Public ReadOnly Property HasBestPick As Boolean
+            Get
+                Return Not String.IsNullOrEmpty(_bestPickLine1)
+            End Get
+        End Property
+
         ' ══════════════════════════════════════════════════════════════════════
         ' CONSTRUCTOR
         ' ══════════════════════════════════════════════════════════════════════
@@ -174,6 +202,8 @@ Namespace TopStepTrader.UI.ViewModels
         Private Sub ExecuteMaximumEffort()
             MaxEffortResults.Clear()
             MaxEffortAiAnalysis = ""
+            BestPickLine1 = ""
+            BestPickLine2 = ""
             MaxEffortIsRunning = True
             MaxEffortProgress = 0
             MaxEffortProgressText = "Starting Maximum Effort run..."
@@ -354,6 +384,7 @@ Namespace TopStepTrader.UI.ViewModels
                     Dispatch(Sub()
                         MaxEffortAiAnalysis = analysis
                         MaxEffortAiIsLoading = False
+                        ParseBestPick(analysis)
                     End Sub)
                 Else
                     Dispatch(Sub()
@@ -374,6 +405,27 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════════
+        ' BEST PICK PARSER
+        ' ══════════════════════════════════════════════════════════════════════
+
+        Private Sub ParseBestPick(analysis As String)
+            Dim candidate = BestPickParser.ParseRecommendation(analysis)
+            If candidate Is Nothing Then Return
+
+            Dim matchedRow = MaxEffortResults.FirstOrDefault(
+                Function(r)
+                    Return r.Persona.Equals(candidate.Persona, StringComparison.OrdinalIgnoreCase) AndAlso
+                           candidate.RecommendationLine.IndexOf(r.Contract, StringComparison.OrdinalIgnoreCase) >= 0
+                End Function)
+
+            If matchedRow IsNot Nothing Then
+                BestPickLine1 = $"{matchedRow.Persona} · {matchedRow.Contract} · {matchedRow.Strategy} · {matchedRow.Timeframe}"
+                BestPickLine2 = $"Sharpe {matchedRow.Sharpe} · Win {matchedRow.WinRate} · {matchedRow.AvgPnL}/trade"
+                matchedRow.IsRecommended = True
+            End If
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════════
         ' INFRASTRUCTURE
         ' ══════════════════════════════════════════════════════════════════════
 
@@ -390,6 +442,8 @@ Namespace TopStepTrader.UI.ViewModels
     ' ══════════════════════════════════════════════════════════════════════════
 
     Public Class MaxEffortRowVm
+        Inherits ViewModelBase
+
         Public ReadOnly Property Persona As String
         Public ReadOnly Property Contract As String
         Public ReadOnly Property Strategy As String
@@ -409,7 +463,27 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property TestPnLRaw As Decimal
         Public ReadOnly Property TestPnLColor As String
         Public ReadOnly Property DegradationPct As String
+
+        Private _oosBackground As String = "Transparent"
+        Private _isRecommended As Boolean
+
+        Public Property IsRecommended As Boolean
+            Get
+                Return _isRecommended
+            End Get
+            Set(value As Boolean)
+                _isRecommended = value
+                OnPropertyChanged(NameOf(IsRecommended))
+                OnPropertyChanged(NameOf(RowBackground))
+            End Set
+        End Property
+
         Public ReadOnly Property RowBackground As String
+            Get
+                If _isRecommended Then Return "#2D2000"
+                Return _oosBackground
+            End Get
+        End Property
 
         Public Sub New(personaName As String, contractName As String, strategyName As String,
                        timeframeLabel As String, result As BacktestResult)
@@ -436,21 +510,21 @@ Namespace TopStepTrader.UI.ViewModels
                     Dim deg = (result.TotalPnL - oos.TotalPnL) / Math.Abs(result.TotalPnL) * 100D
                     DegradationPct = deg.ToString("F0") & "%"
                     If oos.TotalPnL < 0D Then
-                        RowBackground = "#220000"
+                        _oosBackground = "#220000"
                     ElseIf deg > 50D Then
-                        RowBackground = "#1A1200"
+                        _oosBackground = "#1A1200"
                     Else
-                        RowBackground = "Transparent"
+                        _oosBackground = "Transparent"
                     End If
                 Else
                     DegradationPct = "—"
-                    RowBackground = "Transparent"
+                    _oosBackground = "Transparent"
                 End If
             Else
                 TestPnL = "—"
                 TestPnLColor = "TextSecondaryBrush"
                 DegradationPct = "—"
-                RowBackground = "Transparent"
+                _oosBackground = "Transparent"
             End If
         End Sub
 
@@ -473,7 +547,7 @@ Namespace TopStepTrader.UI.ViewModels
             TestPnL = "—"
             TestPnLColor = "TextSecondaryBrush"
             DegradationPct = "—"
-            RowBackground = "Transparent"
+            _oosBackground = "Transparent"
         End Sub
     End Class
 

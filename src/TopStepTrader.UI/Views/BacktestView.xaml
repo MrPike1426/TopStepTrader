@@ -890,6 +890,9 @@
                                     <DataTrigger Binding="{Binding RowBackground}" Value="#1A1200">
                                         <Setter Property="Background" Value="#1A1200"/>
                                     </DataTrigger>
+                                    <DataTrigger Binding="{Binding RowBackground}" Value="#2D2000">
+                                        <Setter Property="Background" Value="#2D2000"/>
+                                    </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </DataGrid.RowStyle>
@@ -950,6 +953,7 @@
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>  <!-- header + model label -->
+                            <RowDefinition Height="Auto"/>  <!-- best pick banner -->
                             <RowDefinition Height="*"/>     <!-- scrollable text area -->
                         </Grid.RowDefinitions>
                         <!-- Header: title + copy button + model label -->
@@ -967,8 +971,33 @@
                                        FontSize="9" FontFamily="Consolas"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                         </StackPanel>
+                        <!-- Best Pick banner — shown when Claude identifies a recommendation -->
+                        <Border Grid.Row="1"
+                                Background="#1E1400" BorderBrush="#B7791F" BorderThickness="1"
+                                CornerRadius="4" Padding="10,8" Margin="0,0,0,8"
+                                Visibility="{Binding HasBestPick,
+                                    Converter={StaticResource BoolToVisibilityConverter}}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,3">
+                                    <TextBlock Text="🏆" FontSize="13" Margin="0,0,6,0"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="BEST PICK" FontSize="10" FontWeight="Bold"
+                                               Foreground="#D69E2E" VerticalAlignment="Center"
+                                               FontFamily="Consolas"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding BestPickLine1}"
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="#FEFCBF" TextWrapping="Wrap"/>
+                                <TextBlock Text="{Binding BestPickLine2}"
+                                           FontSize="10" Foreground="#D69E2E"
+                                           FontFamily="Consolas" Margin="0,2,0,0"
+                                           Visibility="{Binding BestPickLine2,
+                                               Converter={StaticResource StringToVisibilityConverter},
+                                               ConverterParameter=NotEmpty}"/>
+                            </StackPanel>
+                        </Border>
                         <!-- Scrollable body -->
-                        <ScrollViewer Grid.Row="1"
+                        <ScrollViewer Grid.Row="2"
                                       VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
                             <StackPanel>
