@@ -41,7 +41,7 @@ dotnet build --no-restore -v q
 dotnet test --no-build -v q
 ```
 
-**Expected output:** `453 passed, 0 failed` (as of 2026-04-25). If the count changes after adding new tests, update this number.
+**Expected output:** `462 passed, 0 failed` (as of 2026-04-25). If the count changes after adding new tests, update this number.
 
 **Rules:**
 - Never leave the project in a broken build state.
@@ -288,6 +288,9 @@ Dependency flow: UI → Services → (Core, Data, API, ML)
 - **Synthetic OCO** — `FlattenContractAsync()` cancels resting SL bracket orders (type=4) before closing the position to prevent double-trigger
 - **Bracket tick sign convention** — long SL ticks are negative, short SL ticks are positive (ProjectX convention)
 - **Stale bar guard** — `StrategyExecutionEngine` declares a bar stale when `barAgeMins > TimeframeMinutes × 3` (e.g. 15 min for 5-min bars). The 3× multiplier accounts for the bar timestamp being the *start* of the period, Yahoo's 1–5 min API propagation lag, and the 30-second engine poll jitter — a stale threshold of 1× or 2× would produce false market-closed events during normal active trading. On the fresh→stale transition (market close) it fires exactly one `ConfidenceUpdated` event with `IsMarketClosed = True` and suppresses all entry signals. Position monitoring (broker sync + trail) continues. The `IsMarketClosed` flag causes Hydra/AssetBassett tiles to show `"⏸ Closed"`. The guard resets (`_lastBarWasStale = False`) on engine `Start()`.
+- **Partial-bar guard** — after `GetBarsForMLAsync`, the engine drops the last bar when its timestamp falls within the still-open strategy-TF period (i.e., `UtcNow - barTimestamp < TimeframeMinutes`). This prevents repaint on all nine Multi-Confluence indicators caused by an incomplete forming bar being fed into the evaluator.
+- **Market regime filter** — when both `StrategyDefinition.TrendingStrategyOverride` and `RangingStrategyOverride` are set, `RegimeClassifier.Classify(atr, adx, adxThreshold)` runs before the strategy `Select Case` and injects the appropriate `activeCondition` (trending → `TrendingStrategyOverride`; ranging → `RangingStrategyOverride`). Regime overrides are configurable via ComboBoxes on Hydra and AssetBassett views.
+- **AI pre-trade gate** — when `StrategyDefinition.UseAiPreTradeGate = True`, the engine calls `IClaudeReviewService.PreTradeCheckAsync` before placing an order. Result is logged as `↳ AI: PROCEED` or `↳ AI: VETO`. Engine tracks `_consecutiveLosses` and `_totalTradesThisSession` and includes them in `PreTradeContext`.
 - **Live P&L — `GetLatestPriceAsync`** — TopStepX REST and SignalR both return `openPnL = 0` for futures. Real-time P&L is computed from `(currentPrice - entryPrice) × DollarPerPoint`. Price priority: (1) `_lastQuotePrice` — sub-second MarketHub tick; (2) `_lastBarClose` — updated every 15 s via `IBarIngestionService.GetLatestPriceAsync` (`PXHistoryClient.RetrieveBarsAsync(unit:=1, unitNumber:=15, limit:=5)`). Acceptable residual drift for M6E at 1× is $1–$1.50 (bid/ask spread + bar-close-to-fill lag). **Entry price correction** — `PlaceBracketOrdersAsync` stores `lastClose` as `_lastEntryPrice` (estimate). On the first REST sync after fill, if `snapshot.OpenRate` differs from the estimate by more than 1 tick, `_lastEntryPrice` is corrected to the actual broker fill rate (logged as `📌 Entry corrected`). **MarketHub roll safety** — `OnMarketQuoteReceived` accepts quotes by exact `ContractId` OR root-symbol match (e.g. `M6E`) so a quarterly roll from U26 → M26 does not silently freeze `_lastQuotePrice` at 0.
 
 ### Configuration
@@ -375,33 +378,6 @@ The `Leverage` field is carried in `PersonaProfile` and `StrategyDefinition` but
 
 **N** = ATR(14) × dollar-per-point for the instrument. SL/TP distances are expressed as multiples of N so brackets automatically scale with market volatility.
 
-### How Lewis Identifies and Manages a Trade (plain-English)
-
-Lewis is the most patient and defensive of the three personas. Here is his full trade lifecycle:
-
-**1. The trend gate — ADX ≥ 25**
-Before considering any trade, the system checks ADX (a 0–100 score of how strongly the market is trending). Lewis only acts when ADX ≥ 25 — a clear, committed directional move. Sideways or choppy markets are ignored entirely. Most of the time, nothing happens.
-
-**2. Signal scoring — 90% minimum**
-When the trend gate passes, the selected strategy scores the current bar across multiple indicators (moving averages, momentum, volume, etc.) on a 0–100 scale. Lewis requires a score of **90 or above** before entering. This means the evidence must be overwhelming — most signals that Damian or Joe would take, Lewis will not.
-
-**3. Position sizing — $200 capital, 1 contract**
-Lewis commits $200 per trade as a risk budget. For TopStepX futures, the engine trades 1 contract (defined by `StrategyDefinition.Quantity`). The ATR-based SL in ticks is derived from `SlMultipleOfN × ATR × (tickValue / tickSize)`.
-
-**4. Stop loss — 1.5 × ATR below entry**
-The moment the trade opens, a stop loss is placed automatically at **1.5 × ATR(14)** below the entry price. ATR is the instrument's average daily price range. If Gold normally moves $8/day, Lewis's stop sits $12 away. The trade is automatically closed at a small loss if price reaches this level — no manual intervention required.
-
-**5. Take profit — 3.0 × ATR above entry**
-The take-profit target is set at **3.0 × ATR(14)** above entry — twice the stop distance. This 1:2 risk-to-reward ratio means Lewis can be wrong nearly half the time and still profit overall across many trades.
-
-**6. One scale-in allowed**
-If the trade moves in Lewis's favour, the system may add one additional position (`MaxScaleIns = 1`), effectively doubling down while the market is proving him right. Damian can do this twice; Joe three times.
-
-**7. Trade management until close**
-The trade runs on autopilot. If the ATR tier is Standard or Wide, the stop loss trails upward as price rises (locking in profit). The stop only ever moves in the trade's favour — it never widens. When price reaches the take-profit level, the trade closes automatically and the system returns to watching.
-
-**Summary:** Lewis trades infrequently, requires strong conviction before entering, risks a small fixed amount, targets twice that amount in profit, and lets the computer handle everything from entry to exit.
-
 ## Backtest Architecture
 
 ### Bar Collection (`BarCollectionService.vb`)
@@ -426,40 +402,26 @@ Default parameters: **Capital = $1,000 · Qty = 1** — TP and SL vary by strate
 | Strategy | TP | SL |
 |---|---|---|
 | EMA/RSI Combined | $20 | $15 |
-| Multi-Confluence Engine | $20 | $15 |
-| BB Squeeze Scalper | $8 | $4 |
-| LULT Divergence | $20 | $10 |
-| VIDYA Cross | $20 | $10 |
-| Naked Trader | $20 | $10 |
-| Double Bubble Butt | $20 | $10 |
+| Multi-Confluence Engine | ATR | ATR |
+| BB Squeeze Scalper | ATR | ATR |
+| LULT Divergence | ATR | ATR |
+| VIDYA Cross | ATR | ATR |
+| Naked Trader | ATR | ATR |
+| Double Bubble Butt | ATR | ATR |
+| Opening Range Breakout | ATR | ATR |
+| Pump-n-Dump | ATR | ATR |
 
 `MinConfidence` is stored in the ViewModel as a whole-number percentage (e.g. `"90"`) and divided by 100 before being passed to the engine.
 
 ### Strategy Condition / Indicator Enums
-`Core/Enums/StrategyConditionType.vb` and `Core/Enums/StrategyIndicatorType.vb` enumerate all supported strategies. The integer values are used as DB discriminators and must not change once data is stored.
+Integer values are DB discriminators — must not change once data is stored. See **REFERENCE.md** for full enum tables.
 
-**Trading strategies (Hydra / AssetBassett / Backtest):**
+### Backtest Engine — Notable Behaviours
 
-| Value | ConditionType | Description |
-|---|---|---|
-| 6 | `EmaRsiWeightedScore` | Six-signal EMA/RSI weighted score (buy >60%, sell <40%) |
-| 7 | `TripleEmaCascade` | 3-EMA Cascade on 1-min bars — Sniper strategy |
-| 8 | `MultiConfluence` | Ichimoku + EMA21/50 + MACD + StochRSI + DMI/ADX (all 7 must align) |
-| 9 | `LultDivergence` | WaveTrend Anchor/Trigger divergence — 6-step gate, NQ 5-min, 11:00–17:00 UTC |
-| 10 | `BbSqueezeScalper` | Dual-mode BB scalper — Squeeze Breakout or Band Bounce |
-| 15 | `VidyaCross` | VIDYA CMO-adaptive EMA crossover + delta-volume filter |
-| 16 | `NakedTrader` | 4-vote consensus: EMA(9/21), MACD(8,17,9), DMI/ADX(14), VWAP |
-| 17 | `DoubleBubbleButt` | Double Bollinger Bands (±1.0 SD inner / ±2.0 SD outer) zone system |
-
-**QuantLab research-only strategies (not live-traded):**
-
-| Value | ConditionType | Description |
-|---|---|---|
-| 11 | `ConnorsRsi2` | RSI(2) mean reversion filtered by SMA(200); 67–72% win rate |
-| 12 | `SuperTrend` | ATR(10)×3.0 trend flip; 40–52% win rate |
-| 13 | `DonchianBreakout` | 20-bar Turtle breakout; 30–40% win rate |
-| 14 | `BbRsiMeanReversion` | BB(20,2) + RSI(14) dual-confirmation reversion; 55–65% win rate |
-| 17 | `DoubleBubbleButt` | Also available in QuantLab |
+- **End-of-day forced close** — `BacktestEngine.RunReplay` detects day boundaries by comparing adjacent bar dates. When a new trading day starts, all open legs are closed at the previous bar's `Close` price with `ExitReason = "EndOfDay"` and 1-bar SL-slippage applied. A 1-bar re-entry cooldown follows. `BacktestResult.EndOfDayCloseCount` tracks how many trades were force-closed this way.
+- **Per-contract round-trip commission** — `FavouriteContract.RoundTripFee` stores the full round-trip fee (OIL=$1.04, GOLD=$1.24, MES=$0.74, M6E=$0.74, MBT=$2.34; default=$0.80). `BacktestEngine` deducts `RoundTripFee / 2` per entry leg and per exit leg. `RoundTripFeeUsd` is stored on `BacktestResult` and surfaced in `ParametersJson` on `BacktestRunEntity`.
+- **Train/test split** — `BacktestConfiguration.TrainTestSplit` (0.0 = off; 0.6 = 60/40). When set, the engine runs the training set first (first `TrainTestSplit` fraction of bars), then the out-of-sample test set (remaining bars). `BacktestResult.OutOfSampleResult` carries the test-set result. `TestPnL` and `DegradationPct` appear on `TimeframeResultRowVm` and `MaxEffortRowVm` with amber/red row highlighting.
+- **VolumeGateEnabled** — `MultiConfluenceConfig.VolumeGateEnabled` (default `True`). When `False`, the volume condition (Close-volume ≥ 1.2× 20-bar average) is bypassed entirely. Set `McVolumeGateEnabled = False` on `BacktestConfiguration` for instruments where PX returns zero intraday volume (e.g. M6E). The `StatusLine` shows `SKIP(PX-no-vol)` when skipped in live mode.
 
 ### ATR-Based SL/TP Mode (`BacktestConfiguration.UseAtrMode`)
 When `UseAtrMode = True`, stop loss and take profit are expressed as ATR multiples rather than fixed dollar amounts. At each entry the engine pre-calculates `ATR(14)` across all bars and sets:
@@ -483,9 +445,9 @@ Persona controls capital, leverage, ADX gate, and confidence. Tier controls brac
 
 ### BacktestView — Four Tabs
 
-**Tab 1 — Run Backtest**: Persona selector (Lewis / Damian / Joe) at the top of the config form pre-fills Capital, Min ADX, Min Confidence, and ATR multiples (when ATR mode is on). Runs the selected strategy across **8 timeframes** (1min, 5min, 10min, 15min, 30min, 1hr, 2hr, 4hr) simultaneously. Each timeframe's effective date range is clamped to Yahoo's limit. Results appear in a live-filling, **sortable** grid (column headers are clickable; `TotalPnLRaw As Decimal` on `TimeframeResultRowVm` drives numeric sort on the P&L column). Default date range: today − 180 days (clamped per timeframe).
+**Tab 1 — Run Backtest**: Persona selector (Lewis / Damian / Joe) at the top of the config form pre-fills Capital, Min ADX, Min Confidence, and ATR multiples (when ATR mode is on). Runs the selected strategy across **8 timeframes** (1min, 5min, 10min, 15min, 30min, 1hr, 2hr, 4hr) simultaneously. Each timeframe's effective date range is clamped to Yahoo's limit. Results appear in a live-filling, **sortable** grid (column headers are clickable; `TotalPnLRaw As Decimal` on `TimeframeResultRowVm` drives numeric sort on the P&L column). Default date range: today − 180 days (clamped per timeframe). **Validate (60/40 split)** toggle enables `TrainTestSplit = 0.6` — the engine runs both the training set (first 60% of bars) and the out-of-sample test set (last 40%), surfacing `TestPnL` and `DegradationPct` with amber/red highlighting on the results grid.
 
-**Tab 2 — Maximum Effort!** (Deadpool button): Runs every combination of **3 personas × 5 instruments × 7 strategies × 8 timeframes = 840 backtest runs**. Each run uses its persona's capital, ADX threshold, confidence, and ATR SL/TP multiples — sourced from `IPersonaService.GetAllProfiles()` so any saved overrides from the Persona config page are automatically reflected. Results populate a sortable DataGrid in real time (with a Persona column), sorted by P&L descending as each run completes. The tab uses a **side-by-side layout**: results grid on the left (`*` width), Claude Haiku analysis panel on the right (380px fixed) — always visible without scrolling. Each result row has a **📌 pin button** (`PinResultCommand` on the ViewModel, bound via `RelativeSource` to the DataGrid's DataContext) that appends the row to `PinnedResults`. On completion, the top 20 results are sent to **Claude Haiku** (`claude-haiku-4-5-20251001`) for a concise analysis covering top persona/instrument/strategy combinations, overfitting warnings, and a live-trade recommendation. Requires Claude API key configured on the API Keys page.
+**Tab 2 — Maximum Effort!** (Deadpool button): Runs every combination of **3 personas × 5 instruments × 7 strategies × 8 timeframes = 840 backtest runs**. Each run uses its persona's capital, ADX threshold, confidence, and ATR SL/TP multiples — sourced from `IPersonaService.GetAllProfiles()` so any saved overrides from the Persona config page are automatically reflected. Results populate a sortable DataGrid in real time (with a Persona column), sorted by P&L descending as each run completes. The tab uses a **side-by-side layout**: results grid on the left (`*` width), Claude Haiku analysis panel on the right (380px fixed) — always visible without scrolling. Each result row has a **📌 pin button** (`PinResultCommand` on the ViewModel, bound via `RelativeSource` to the DataGrid's DataContext) that appends the row to `PinnedResults`. On completion, the top 20 results are sent to **Claude Haiku** (`claude-haiku-4-5-20251001`) for a concise analysis covering top persona/instrument/strategy combinations, overfitting warnings, and a live-trade recommendation. Requires Claude API key configured on the API Keys page. **Validate (60/40 split)** toggle activates `TrainTestSplit` for all 840 runs; MaxEffort then sorts by `TestPnL` instead of in-sample P&L; Haiku prompt includes train/test metrics.
 
 **Tab 3 — Pinned**: Shows `PinnedResults` — an `ObservableCollection(Of MaxEffortRowVm)` seeded in the constructor with the 2025-07 Gold/Multi-Confluence/1hr baseline, and extended at runtime whenever the user pins a row from Maximum Effort. The tab caption explains the 📌 workflow.
 
@@ -531,12 +493,7 @@ Both buttons are only visible when `HasOpenPosition` is `True` (derived from `_p
 
 A dedicated research page for testing academically-validated strategies that are **not** used in live Hydra/AssetBassett trading. Accessed via sidebar.
 
-**Five strategy cards:**
-1. **Connors RSI-2** — Mean reversion · RSI(2) dips vs SMA(200) trend · 67–72% win rate · Sharpe 1.0–1.5
-2. **SuperTrend** — Trend-following · ATR(10)×3.0 direction flip · 40–52% win rate · Sharpe 0.70–1.05
-3. **Donchian Breakout** — Turtle breakout · 20-bar high/low channel · 30–40% win rate · Sharpe 0.4–0.8
-4. **BB + RSI Reversion** — Dual-confirm reversion · BB(20,2) AND RSI(14) · 55–65% win rate · Sharpe 0.6–1.2
-5. **Double Bubble Butt** — Zone momentum · ±1.0 SD inner / ±2.0 SD outer BB · 45–60% win rate · Sharpe 0.6–1.1
+Five strategy cards (descriptions in **REFERENCE.md**): Connors RSI-2, SuperTrend, Donchian Breakout, BB+RSI Reversion, Double Bubble Butt.
 
 **Workflow:** Select card → choose contract + date range + interval → Run Backtest → view results (win rate, Sharpe, P&L, drawdown) → optionally "Ask Claude" for AI analysis.
 
@@ -557,32 +514,7 @@ Live trading interface for the **3-EMA Cascade** strategy (`TripleEmaCascade = 7
 - `SniperViewModel` accepts: `IAccountService`, `IBacktestService`, `IBarCollectionService`, `ClaudeReviewService`, `ISniperExecutionEngine`, `ITradingSessionContext`
 
 ### Technical Indicators (`ML/Features/TechnicalIndicators.vb`)
-
-Pure-math module — no external dependencies, fully unit-testable. All methods take `IList(Of Decimal)` price series and return `Single()` arrays (NaN-padded during warm-up).
-
-| Function | Description |
-|---|---|
-| `EMA(prices, period)` | Exponential Moving Average (k = 2/(period+1)) |
-| `SMA(prices, period)` | Simple Moving Average |
-| `RSI(closes, period)` | Wilder-smoothed RSI |
-| `MACD(closes, fast, slow, signal)` | Returns (Line, Signal, Histogram) |
-| `ATR(highs, lows, closes, period)` | Wilder-smoothed ATR |
-| `VWAP(highs, lows, closes, volumes)` | Cumulative VWAP |
-| `BollingerBands(closes, period, sd)` | Returns (Upper, Middle, Lower) |
-| `BollingerBandWidth(closes, period, sd)` | (Upper−Lower)/Middle×100 |
-| `BollingerPercentB(closes, period, sd)` | 0=lower band, 1=upper band |
-| `DMI(highs, lows, closes, period)` | Returns (+DI, −DI, ADX) — Wilder smoothing |
-| `IchimokuCloud(highs, lows, closes, ...)` | Returns (Tenkan, Kijun, SpanA, SpanB) — projected 26 bars forward |
-| `StochasticRSI(closes, rsi, stoch, signal)` | Returns (%K, %D) normalised 0–1 |
-| `WaveTrend(highs, lows, closes, ...)` | Market Cipher B simulation — (WT1, WT2) |
-| `SuperTrend(highs, lows, closes, period, mult)` | ATR-based trend line; returns (Line, Direction) |
-| `DonchianChannel(highs, lows, period)` | Rolling high/low channel; returns (Upper, Lower, Middle) |
-| `CMO(closes, period)` | Chande Momentum Oscillator normalised to [−1, +1] |
-| `VIDYA(closes, vidyaLen, cmoLen)` | CMO-adaptive EMA — fast in trends, slow in chop |
-| `DeltaVolume(closes, opens, volumes, window)` | Net buy/sell pressure normalised to [−1, +1] |
-| `Rsi2(closes)` | Convenience wrapper for RSI(closes, 2) |
-| `LastValid(series)` | Last non-NaN value in array |
-| `PreviousValid(series)` | Second-to-last non-NaN value |
+Pure-math module — no external dependencies; methods take `IList(Of Decimal)`, return `Single()` (NaN-padded). See **REFERENCE.md** for the full function table.
 
 ### API Keys View (`UI/Views/ApiKeysView.xaml`)
 
