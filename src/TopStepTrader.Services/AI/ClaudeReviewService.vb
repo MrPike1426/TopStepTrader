@@ -16,6 +16,7 @@ Namespace TopStepTrader.Services.AI
     ''' (defaults to claude-haiku for cost efficiency).
     ''' </summary>
     Public Class ClaudeReviewService
+        Implements IClaudeReviewService
 
         Private ReadOnly _settings As ClaudeSettings
         Private ReadOnly _apiKeyStore As IApiKeyStore
@@ -64,7 +65,7 @@ Namespace TopStepTrader.Services.AI
         ''' user-friendly message if the API key is not yet configured.
         ''' </summary>
         Public Async Function ReviewStrategyAsync(strategy As StrategyDefinition,
-                                                   Optional cancel As CancellationToken = Nothing) As Task(Of String)
+                                                   Optional cancel As CancellationToken = Nothing) As Task(Of String) Implements IClaudeReviewService.ReviewStrategyAsync
             Dim apiKey = ResolveApiKey()
             If String.IsNullOrWhiteSpace(apiKey) Then
                 Return "⚠️  Claude API key not configured — add it on the API Keys page."
@@ -119,7 +120,7 @@ Namespace TopStepTrader.Services.AI
         ''' Returns bullet-point market context — does NOT access live data.
         ''' </summary>
         Public Async Function ConfidenceCheckAsync(contractId As String,
-                                                    Optional cancel As CancellationToken = Nothing) As Task(Of String)
+                                                    Optional cancel As CancellationToken = Nothing) As Task(Of String) Implements IClaudeReviewService.ConfidenceCheckAsync
             Dim apiKey = ResolveApiKey()
             If String.IsNullOrWhiteSpace(apiKey) Then
                 Return "⚠️  Claude API key not configured — add it on the API Keys page."
@@ -175,7 +176,7 @@ Namespace TopStepTrader.Services.AI
         ''' top 3 combinations, overfitting warnings, and one live-trade recommendation.
         ''' </summary>
         Public Async Function AnalyseBacktestResultsAsync(resultsSummary As String,
-                                                           Optional cancel As CancellationToken = Nothing) As Task(Of String)
+                                                           Optional cancel As CancellationToken = Nothing) As Task(Of String) Implements IClaudeReviewService.AnalyseBacktestResultsAsync
             Dim apiKey = ResolveApiKey()
             If String.IsNullOrWhiteSpace(apiKey) Then
                 Return "⚠️  Claude API key not configured — add it on the API Keys page."
@@ -255,7 +256,7 @@ Namespace TopStepTrader.Services.AI
         ''' The prompt instructs the model to respond with "PROCEED" or "VETO" as its first word.
         ''' </summary>
         Public Async Function PreTradeCheckAsync(ctx As PreTradeContext,
-                                                  Optional cancel As CancellationToken = Nothing) As Task(Of (Proceed As Boolean, Reasoning As String))
+                                                  Optional cancel As CancellationToken = Nothing) As Task(Of (Proceed As Boolean, Reasoning As String)) Implements IClaudeReviewService.PreTradeCheckAsync
             Dim apiKey = ResolveApiKey()
             If String.IsNullOrWhiteSpace(apiKey) Then
                 Return (True, "Claude API key not configured — pre-trade check skipped.")
@@ -404,7 +405,7 @@ Namespace TopStepTrader.Services.AI
         ''' </summary>
         Public Async Function TradeAdviceAsync(contractName As String,
                                                bars As IReadOnlyList(Of MarketBar),
-                                               Optional cancel As CancellationToken = Nothing) As Task(Of (Direction As String, Rationale As String))
+                                               Optional cancel As CancellationToken = Nothing) As Task(Of (Direction As String, Rationale As String)) Implements IClaudeReviewService.TradeAdviceAsync
             Dim apiKey = ResolveApiKey()
             If String.IsNullOrWhiteSpace(apiKey) Then
                 Return ("—", "⚠️ Claude API key not configured — add it on the API Keys page.")
@@ -507,6 +508,71 @@ Namespace TopStepTrader.Services.AI
                 sb.AppendLine(strategy.RawDescription)
             End If
             Return sb.ToString()
+        End Function
+
+        ''' <summary>
+        ''' Stub post-trade analysis: calls Claude Haiku with a summary of the closed trade
+        ''' and returns AI commentary. On failure defaults to a Succeeded=False result.
+        ''' </summary>
+        Public Async Function PostTradeAnalysisAsync(ctx As PostTradeContext,
+                                                      Optional cancel As CancellationToken = Nothing) As Task(Of PostTradeAnalysisResult) Implements IClaudeReviewService.PostTradeAnalysisAsync
+            Dim apiKey = ResolveApiKey()
+            If String.IsNullOrWhiteSpace(apiKey) Then
+                Return PostTradeAnalysisResult.Failure("Claude API key not configured.")
+            End If
+
+            Const sysPrompt As String =
+                "You are a post-trade analyst for a retail futures trader. " &
+                "Given a summary of a closed trade, provide 2-3 concise observations: " &
+                "what went well, what could be improved, and whether the exit was well-timed. " &
+                "Be direct and specific. Keep your response under 120 words."
+
+            Dim userMsg As New System.Text.StringBuilder()
+            userMsg.AppendLine($"Instrument: {ctx.ContractDescription} ({ctx.ContractId})")
+            userMsg.AppendLine($"Direction: {ctx.Side}")
+            userMsg.AppendLine($"Entry: {ctx.EntryPrice:F4}  Exit: {ctx.ExitPrice:F4}")
+            userMsg.AppendLine($"P&L: {If(ctx.RealizedPnlUsd >= 0, "+", "")}${ctx.RealizedPnlUsd:F2}")
+            userMsg.AppendLine($"Hold: {ctx.HoldDurationMinutes:F0} min  Strategy: {ctx.StrategyName}")
+            userMsg.AppendLine($"Confidence at entry: {ctx.ConfidencePct}%  ADX: {ctx.AdxValue:F1}")
+            userMsg.AppendLine($"Session P&L after trade: {If(ctx.SessionPnlUsd >= 0, "+", "")}${ctx.SessionPnlUsd:F2}")
+
+            Try
+                Dim requestBody = New ClaudeRequest With {
+                    .Model = "claude-haiku-4-5-20251001",
+                    .MaxTokens = 200,
+                    .System = sysPrompt,
+                    .Messages = New List(Of ClaudeMessage) From {
+                        New ClaudeMessage With {.Role = "user", .Content = userMsg.ToString()}
+                    }
+                }
+
+                Using request As New HttpRequestMessage(HttpMethod.Post, AnthropicMessagesUrl)
+                    request.Headers.Add("x-api-key", apiKey)
+                    request.Headers.Add("anthropic-version", AnthropicVersion)
+                    request.Content = JsonContent.Create(requestBody)
+
+                    Dim response = Await _http.SendAsync(request, cancel)
+
+                    If Not response.IsSuccessStatusCode Then
+                        Dim errorBody = Await response.Content.ReadAsStringAsync(cancel)
+                        _logger.LogWarning("PostTradeAnalysisAsync API error {Status}: {Body}", response.StatusCode, errorBody)
+                        Return PostTradeAnalysisResult.Failure($"API error {CInt(response.StatusCode)}.")
+                    End If
+
+                    Dim result = Await response.Content.ReadFromJsonAsync(Of ClaudeResponse)(cancellationToken:=cancel)
+                    Dim text = result?.Content?.FirstOrDefault()?.Text?.Trim()
+                    If String.IsNullOrWhiteSpace(text) Then
+                        Return PostTradeAnalysisResult.Failure("Empty AI response.")
+                    End If
+                    Return New PostTradeAnalysisResult With {.Analysis = text, .Succeeded = True}
+                End Using
+
+            Catch ex As TaskCanceledException
+                Return PostTradeAnalysisResult.Failure("Request timed out.")
+            Catch ex As Exception
+                _logger.LogError(ex, "PostTradeAnalysisAsync error")
+                Return PostTradeAnalysisResult.Failure($"Unexpected error: {ex.Message}")
+            End Try
         End Function
 
         ' ── JSON DTOs ─────────────────────────────────────────────────────────────

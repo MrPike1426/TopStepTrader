@@ -108,6 +108,17 @@ Namespace TopStepTrader.Services.Market
         End Function
 
         ''' <summary>
+        ''' FEAT-11: Yahoo Finance does not support live sub-minute bar fetches.
+        ''' Returns an empty list; callers fall back gracefully.
+        ''' </summary>
+        Public Function GetLiveBarsAsync(contractId As String,
+                                         timeframe As BarTimeframe,
+                                         barCount As Integer,
+                                         Optional cancel As CancellationToken = Nothing) As Task(Of IList(Of MarketBar)) Implements IBarIngestionService.GetLiveBarsAsync
+            Return Task.FromResult(CType(New List(Of MarketBar)(), IList(Of MarketBar)))
+        End Function
+
+        ''' <summary>
         ''' Maximum historical lookback Yahoo Finance supports for each timeframe.
         ''' Used when no bars are stored yet.
         ''' </summary>

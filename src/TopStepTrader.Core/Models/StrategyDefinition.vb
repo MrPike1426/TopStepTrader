@@ -131,6 +131,13 @@ Namespace TopStepTrader.Core.Models
         Public Property AdxThreshold As Single = 20.0F
 
         ''' <summary>
+        ''' STRAT-27: Minimum MACD histogram magnitude as a fraction of ATR(14).
+        ''' Passed to MultiConfluenceStrategy.Evaluate. Default 0.05 (Damian baseline).
+        ''' Lewis = 0.07 (higher bar for entry); Joe = 0.03 (more signals allowed).
+        ''' </summary>
+        Public Property MacdHistMinAtrFraction As Double = 0.05
+
+        ''' <summary>
         ''' Maximum number of additional scale-in positions after the initial entry.
         ''' Profile defaults — Lewis (Averse): 1  Damian (Moderate): 2  Joe (Aggressive): 3
         ''' </summary>
@@ -191,6 +198,13 @@ Namespace TopStepTrader.Core.Models
         ''' issue never silently blocks all trading. Adds ~$0.01 per signal. Default True.
         ''' </summary>
         Public Property UsePreTradeAiCheck As Boolean = True
+
+        ''' <summary>
+        ''' Alias for <see cref="UsePreTradeAiCheck"/>. When False, the pre-trade Haiku call is
+        ''' skipped entirely — no log line, no API call. Set False for sub-second strategies
+        ''' (PumpNDump, Sniper) where the gate latency is unacceptable.
+        ''' </summary>
+        Public Property UseAiPreTradeGate As Boolean = True
 
         ''' <summary>
         ''' Active persona name applied to this strategy ("Lewis", "Damian", "Joe", or empty).

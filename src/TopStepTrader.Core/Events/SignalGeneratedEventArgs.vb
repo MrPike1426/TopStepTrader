@@ -104,9 +104,11 @@ Namespace TopStepTrader.Core.Events
         Inherits EventArgs
         Public ReadOnly Property ExitReason As String   ' "TP", "SL", "Reversal", or "Closed"
         Public ReadOnly Property PnL As Decimal
-        Public Sub New(exitReason As String, pnl As Decimal)
+        Public ReadOnly Property ExitPrice As Decimal
+        Public Sub New(exitReason As String, pnl As Decimal, Optional exitPrice As Decimal = 0D)
             Me.ExitReason = exitReason
             Me.PnL = pnl
+            Me.ExitPrice = exitPrice
         End Sub
     End Class
 
@@ -235,6 +237,15 @@ Namespace TopStepTrader.Core.Events
         ''' All other properties are 0 / default when this is True.
         ''' </summary>
         Public Property IsMarketClosed As Boolean = False
+
+        ''' <summary>
+        ''' True when this event carries a live-indicator display refresh only.
+        ''' The grid columns (Close, Tenkan, Kijun, EMA21/50, ADX, Cloud) are updated using
+        ''' intra-bar 15-second data; bull/bear scores, SummaryLine, and all tile state are
+        ''' intentionally left unchanged.  Set by the engine after substituting the latest
+        ''' 15-second bar close into the indicator series for MultiConfluence flat sessions.
+        ''' </summary>
+        Public Property IsDisplayOnly As Boolean = False
 
         ' ── VIDYA Cross extended snapshot (TotalConditions = -1) ────────────────
         ''' <summary>Current VIDYA line value. 0 when strategy is not VIDYA.</summary>

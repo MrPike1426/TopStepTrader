@@ -150,16 +150,27 @@ Credentials are never stored in `appsettings.json`; they are saved to `%LOCALAPP
 
 Default roster: OIL · GOLD · SPX500 (MES) · EUR/USD (M6E) · BTC (MBT)
 
-Default settings: **Multi-Confluence strategy (5-min timeframe) · ADX ≥ 25 · ClaudeTrader fixed brackets (50-tick SL / 25-tick TP)**
+Default settings: **Multi-Confluence strategy · per-asset bar timeframe (see below) · ADX ≥ 25 · ClaudeTrader fixed brackets (50-tick SL / 25-tick TP)**
 
 #### How It Works
 
 1. User selects account and persona (Lewis / Damian / Joe) to pre-fill risk parameters.
 2. The strategy is pre-selected as Multi-Confluence on launch. The user can switch via the strategy tile grid.
-3. For each bar, a confidence score (0–100%) and direction are calculated per instrument.
-4. New entries are blocked for equity index futures (MES) outside London main session (08:30–13:30 UTC) and US main session (14:00–20:00 UTC).
-5. When confidence exceeds the threshold and entry conditions are met, the engine opens a trade automatically.
-6. Per-asset cards update in real-time showing confidence, direction, live P&L, and bracket prices.
+3. For each strategy-timeframe bar close, a confidence score (0–100%) and direction are calculated per instrument. Signal evaluation always uses completed strategy-timeframe bars.
+4. Between strategy-bar evaluations, the indicator grid (Close, Ichimoku, ADX, EMA21/50) refreshes every ~15 seconds from live 15-second bar data without affecting signal scores.
+5. New entries are blocked for equity index futures (MES) outside London main session (08:30–13:30 UTC) and US main session (14:00–20:00 UTC).
+6. When confidence exceeds the threshold and entry conditions are met, the engine opens a trade automatically.
+7. Per-asset cards update in real-time showing confidence, direction, live P&L, and bracket prices.
+
+#### Multi-Confluence Per-Asset Bar Timeframes
+
+| Asset | Instrument | MC Bar Timeframe |
+|---|---|---|
+| OIL | MCLE (Micro Crude) | 5 min |
+| GOLD | MGC (Micro Gold) | 10 min |
+| SPX500 | MES (Micro S&P) | 5 min |
+| EUR/USD | M6E (Micro Euro FX) | 10 min |
+| BTC | MBT (Micro Bitcoin) | 15 min |
 
 #### Strategy Presets
 

@@ -44,6 +44,8 @@ Namespace TopStepTrader.Services.Trading
         Public Property Confidence As Single = 0F
         ''' <summary>True when 8/9 conditions align but not all 9. Entry at reduced (half) size.</summary>
         Public Property IsPartialSignal As Boolean = False
+        ''' <summary>Names of conditions that failed on this evaluation. Empty when all conditions pass.</summary>
+        Public Property FailedConditions As New List(Of String)()
     End Class
 
     ''' <summary>
@@ -64,6 +66,12 @@ Namespace TopStepTrader.Services.Trading
     ''' all nine short conditions must align for a Short entry.
     ''' SL = min(1.5×ATR, Ichimoku cloud edge); TP = 2:1 reward-to-risk.
     ''' Minimum <see cref="MinBarsRequired"/> bars required for full warm-up.
+    '''
+    ''' NOTE (STRAT-23): This class has no time-of-day (TOD) or session awareness.
+    ''' The CME daily maintenance window (17:00–18:00 ET), news blackouts, and
+    ''' contract-roll windows are enforced upstream in
+    ''' <see cref="StrategyExecutionEngine.DoCheckAsync"/> — look for the
+    ''' "STRAT-23: TOD gate" comment block in the MultiConfluence Case branch.
     ''' </summary>
     Public NotInheritable Class MultiConfluenceStrategy
 
@@ -74,9 +82,7 @@ Namespace TopStepTrader.Services.Trading
         Private Const TenkanPeriod As Integer = 9
         Private Const KijunPeriod As Integer = 26
         Private Const SenkouBPeriod As Integer = 52
-        Private Const IchimokuDisplacement As Integer = 26
-
-        ''' <summary>
+        Private Const IchimokuDisplacement As Integer = 26        ''' <summary>
         ''' Minimum number of bars required for all indicators to fully warm up.
         ''' Senkou Span B needs senkouBPeriod(52) + displacement(26) = 78 bars minimum;
         ''' an 80-bar buffer provides a small safety margin.
@@ -91,16 +97,34 @@ Namespace TopStepTrader.Services.Trading
         ''' <param name="lows">Bar low prices.</param>
         ''' <param name="closes">Bar close prices.</param>
         ''' <param name="volumes">Bar volumes (used for condition 8 volume gate).</param>
+        ''' <param name="config">
+        ''' Threshold configuration (STRAT-24). When Nothing the default values reproduce the
+        ''' original hard-coded constants exactly, ensuring snapshot-identical behaviour.
+        ''' </param>
         ''' <param name="adxThreshold">
         ''' Minimum ADX(14) for condition 5 (trend-strength gate). Defaults to 20 (Damian profile).
         ''' Lewis (Averse) = 25; Joe (Aggressive) = 15.
+        ''' Ignored when <paramref name="config"/> is supplied — use config.AdxThreshold instead.
         ''' </param>
         Public Shared Function Evaluate(
                 highs As IList(Of Decimal),
                 lows As IList(Of Decimal),
                 closes As IList(Of Decimal),
                 volumes As IList(Of Decimal),
-                Optional adxThreshold As Single = 20.0F) As MultiConfluenceResult
+                Optional config As Core.Settings.MultiConfluenceConfig = Nothing,
+                Optional adxThreshold As Single = 20.0F,
+                Optional macdHistMinAtrFraction As Double = 0.05) As MultiConfluenceResult
+
+            ' Resolve effective config: caller-supplied > legacy optional params > defaults
+            Dim cfg As Core.Settings.MultiConfluenceConfig
+            If config IsNot Nothing Then
+                cfg = config
+            Else
+                cfg = New Core.Settings.MultiConfluenceConfig() With {
+                    .AdxThreshold          = adxThreshold,
+                    .MacdHistMinAtrFraction = macdHistMinAtrFraction
+                }
+            End If
 
             Dim result As New MultiConfluenceResult()
             Dim n = closes.Count
@@ -112,7 +136,7 @@ Namespace TopStepTrader.Services.Trading
 
             ' ── Ichimoku Cloud ────────────────────────────────────────────────────
             Dim ichi = TechnicalIndicators.IchimokuCloud(highs, lows, closes,
-                TenkanPeriod, KijunPeriod, SenkouBPeriod, IchimokuDisplacement)
+                cfg.TenkanPeriod, cfg.KijunPeriod, cfg.SenkouBPeriod, cfg.IchimokuDisplacement)
 
             Dim spanANow = ichi.SpanA(n - 1)
             Dim spanBNow = ichi.SpanB(n - 1)
@@ -132,7 +156,7 @@ Namespace TopStepTrader.Services.Trading
             ' ── Lagging span: current close vs price 26 bars ago ──────────────────
             ' Chikou confirmation: close must be above (Long) / below (Short) the price
             ' that appeared 26 bars ago on the chart AND must clear the cloud at that position.
-            Dim lagIdx = n - 1 - IchimokuDisplacement
+            Dim lagIdx = n - 1 - cfg.IchimokuDisplacement
             Dim lagClose = If(lagIdx >= 0, closes(lagIdx), Decimal.MinValue)
 
             ' Historical cloud at the Chikou lag position — guard for index < 0 and NaN.
@@ -157,7 +181,7 @@ Namespace TopStepTrader.Services.Trading
             Dim adxNow = TechnicalIndicators.LastValid(dmi.ADX)
 
             ' ── MACD (8, 17, 9) — intraday-tuned ─────────────────────────────────
-            Dim macd = TechnicalIndicators.MACD(closes, fastPeriod:=8, slowPeriod:=17, signalPeriod:=9)
+            Dim macd = TechnicalIndicators.MACD(closes, fastPeriod:=cfg.MacdFastPeriod, slowPeriod:=cfg.MacdSlowPeriod, signalPeriod:=cfg.MacdSignalPeriod)
             Dim histNow = TechnicalIndicators.LastValid(macd.Histogram)
             Dim histPrev = TechnicalIndicators.PreviousValid(macd.Histogram)
 
@@ -174,19 +198,19 @@ Namespace TopStepTrader.Services.Trading
             ' DI spread: require at least 2 points of separation between DI+ and DI-.
             ' A 0.01-point lead satisfies the raw > comparison but represents no real
             ' directional conviction — this filters out trending-indicator chop.
-            Const MinDiSpread As Single = 2.0F
+            Dim minDiSpread = cfg.MinDiSpread
 
             ' Chikou gap: require current close to clear the 26-bar-old price by at least
-            ' 0.1% of the current price.  A 1-tick gap across 130 minutes (on 5-min bars)
-            ' or 390 minutes (15-min) is statistically meaningless — this prevents the
-            ' Chikou condition being satisfied during flat consolidation.
-            Dim chikouMinGap = lastClose * 0.001D   ' 0.1% of close
+            ' ChikouMinGapFraction of the current price (default 0.1%).  A 1-tick gap across
+            ' 130 minutes (on 5-min bars) or 390 minutes (15-min) is statistically meaningless —
+            ' this prevents the Chikou condition being satisfied during flat consolidation.
+            Dim chikouMinGap = lastClose * CDec(cfg.ChikouMinGapFraction)
 
-            ' MACD histogram minimum magnitude: must be at least 5% of ATR(14) in absolute
-            ' terms.  Zero-crossings where the histogram is ~0 indicate MACD is flat/choppy —
-            ' requiring a meaningful magnitude ensures the histogram represents real momentum.
+            ' MACD histogram minimum magnitude: must be at least MacdHistMinAtrFraction of ATR(14).
             ' When ATR = 0 (warm-up) this degrades to the original > 0 / < 0 check.
-            Dim macdMinMag = CSng(result.AtrValue * 0.05D)
+            Dim macdMinMag = CSng(result.AtrValue * CDec(cfg.MacdHistMinAtrFraction))
+
+            Dim adxThresholdEff = cfg.AdxThreshold
 
             ' ── Long conditions (all 8 must be True) ──────────────────────────────
             Dim tenkanKijunValid = Not Single.IsNaN(tenkanNow) AndAlso Not Single.IsNaN(kijunNow)
@@ -197,14 +221,14 @@ Namespace TopStepTrader.Services.Trading
             Dim lc3 = (tenkanKijunValid AndAlso tenkanNow > kijunNow)                       ' 3. Tenkan-sen > Kijun-sen
             Dim lc4 = (lagIdx >= 0 AndAlso lastClose > lagClose + chikouMinGap AndAlso
                        lastClose > lagCloudTop)                                              ' 4. Chikou above price 26 bars ago by ≥0.1% AND above historical cloud top
-            Dim lc5 = (adxNow >= adxThreshold AndAlso plusDINow - minusDINow >= MinDiSpread) ' 5. ADX gate + DI spread ≥ 2 pts
+            Dim lc5 = (adxNow >= adxThresholdEff AndAlso plusDINow - minusDINow >= minDiSpread) ' 5. ADX gate + DI spread ≥ 2 pts
             Dim lc6 = (histNow >= macdMinMag AndAlso histNow > histPrev _
                        AndAlso Not Single.IsNaN(histPrev))                                  ' 6. MACD histogram positive by ≥5% ATR and rising
-            Dim lc7 = (Not Single.IsNaN(stochKNow) AndAlso stochKNow < 0.7F)               ' 7. StochRSI K < 0.7 (not overbought)
+            Dim lc7 = (Not Single.IsNaN(stochKNow) AndAlso stochKNow < cfg.StochRsiOverbought)               ' 7. StochRSI K < 0.7 (not overbought)
 
             ' ── Volume gate: current bar volume must be ≥ 1.2× the 20-bar average ──────
             Dim volAvg = If(n >= 21, volumes.Skip(n - 21).Take(20).Average(), 0D)
-            Dim lc8 = (volAvg > 0D AndAlso volumes(n - 1) >= volAvg * 1.2D)                ' 8. Volume ≥ 1.2× 20-bar average
+            Dim lc8 = (volAvg > 0D AndAlso volumes(n - 1) >= volAvg * CDec(cfg.VolumeMultiple))                ' 8. Volume ≥ 1.2× 20-bar average
             Dim sc8 = lc8   ' same gate for shorts
 
             ' ── Short conditions (all 9 must be True) ─────────────────────────────
@@ -214,10 +238,10 @@ Namespace TopStepTrader.Services.Trading
             Dim sc3 = (tenkanKijunValid AndAlso tenkanNow < kijunNow)                        ' 3. Tenkan-sen < Kijun-sen
             Dim sc4 = (lagIdx >= 0 AndAlso lastClose < lagClose - chikouMinGap AndAlso
                        lastClose < lagCloudBottom)                                           ' 4. Chikou below price 26 bars ago by ≥0.1% AND below historical cloud bottom
-            Dim sc5 = (adxNow >= adxThreshold AndAlso minusDINow - plusDINow >= MinDiSpread) ' 5. ADX gate + DI spread ≥ 2 pts
+            Dim sc5 = (adxNow >= adxThresholdEff AndAlso minusDINow - plusDINow >= minDiSpread) ' 5. ADX gate + DI spread ≥ 2 pts
             Dim sc6 = (histNow <= -macdMinMag AndAlso histNow < histPrev _
                        AndAlso Not Single.IsNaN(histPrev))                                   ' 6. MACD histogram negative by ≥5% ATR and falling
-            Dim sc7 = (Not Single.IsNaN(stochKNow) AndAlso stochKNow > 0.3F _
+            Dim sc7 = (Not Single.IsNaN(stochKNow) AndAlso stochKNow > cfg.StochRsiOversold _
                        AndAlso Not Single.IsNaN(stochKPrev) AndAlso stochKNow < stochKPrev) ' 7. StochRSI K not oversold AND falling (room to fall, turning from overbought)
 
             Dim longCount = {lc1, lc2, lc2b, lc3, lc4, lc5, lc6, lc7, lc8}.Count(Function(c) c)
@@ -239,6 +263,19 @@ Namespace TopStepTrader.Services.Trading
             result.StochRsiK = If(Single.IsNaN(stochKNow), 0F, stochKNow)
             result.LongCount = longCount
             result.ShortCount = shortCount
+
+            ' ── Collect failed condition names ────────────────────────────────────
+            Dim longLabels = {"Ichimoku", "EMA21", "EMA50", "TenkanKijun", "Chikou", "ADX/DMI", "MACD", "StochRSI", "Volume"}
+            Dim longFlags  = {lc1, lc2, lc2b, lc3, lc4, lc5, lc6, lc7, lc8}
+            Dim shortLabels = {"Ichimoku", "EMA21", "EMA50", "TenkanKijun", "Chikou", "ADX/DMI", "MACD", "StochRSI", "Volume"}
+            Dim shortFlags  = {sc1, sc2, sc2b, sc3, sc4, sc5, sc6, sc7, sc8}
+            ' Report failures for the dominant direction (more conditions met)
+            Dim reportLong = (longCount >= shortCount)
+            Dim evalLabels = If(reportLong, longLabels, shortLabels)
+            Dim evalFlags  = If(reportLong, longFlags, shortFlags)
+            For i = 0 To evalLabels.Length - 1
+                If Not evalFlags(i) Then result.FailedConditions.Add(evalLabels(i))
+            Next
 
             ' ── StatusLine built after confidence block (see below) ───────────────
 
@@ -270,13 +307,13 @@ Namespace TopStepTrader.Services.Trading
             Dim confStoch As Single = 0.0F
             If result.Side IsNot Nothing Then
                 Dim isLong       = (result.Side = OrderSide.Buy)
-                confAdx          = CSng(Math.Min(1.0F, 0.5F + (adxNow - adxThreshold) / 60.0F))
+                confAdx          = CSng(Math.Min(1.0F, 0.5F + (adxNow - adxThresholdEff) / 60.0F))
                 Dim diSpreadVal  = If(isLong, plusDINow - minusDINow, minusDINow - plusDINow)
-                confDi           = CSng(Math.Min(1.0F, (diSpreadVal - MinDiSpread) / 20.0F + 0.5F))
+                confDi           = CSng(Math.Min(1.0F, (diSpreadVal - minDiSpread) / 20.0F + 0.5F))
                 Dim macdMagVal   = Math.Abs(histNow)
                 Dim macdNormVal  = CSng(result.AtrValue) * 0.5F + 0.001F
                 confMacd         = CSng(Math.Min(1.0F, macdMagVal / macdNormVal))
-                Dim stochDist    = If(isLong, 0.7F - stochKNow, stochKNow - 0.3F)
+                Dim stochDist    = If(isLong, cfg.StochRsiOverbought - stochKNow, stochKNow - cfg.StochRsiOversold)
                 confStoch        = CSng(Math.Max(0.0F, Math.Min(1.0F, stochDist / 0.7F)))
                 result.Confidence = CSng(Math.Max(0.0F, Math.Min(1.0F,
                                         confAdx * 0.35F + confDi * 0.25F +

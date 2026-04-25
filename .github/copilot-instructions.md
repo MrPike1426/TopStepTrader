@@ -14,3 +14,4 @@ Short version:
 
 Never reference `REFACTOR_TRACKER.md` — it has been superseded by `Open_TICKETS.md`.
 Never close a ticket without first confirming the build and tests pass.
+Keep the ticket description concise; let code comments and tests capture details.

@@ -39,6 +39,9 @@ Namespace TopStepTrader.Data.Entities
 
         Public Property DefaultConfidencePct As Integer
 
+        ''' <summary>Minimum MACD histogram magnitude as a fraction of ATR(14). Default 0.05.</summary>
+        Public Property MacdHistMinAtrFraction As Double = 0.05
+
         Public Property LastModifiedAt As DateTimeOffset = DateTimeOffset.UtcNow
 
     End Class

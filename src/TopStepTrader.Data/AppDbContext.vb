@@ -18,6 +18,9 @@ Namespace TopStepTrader.Data
         Public Property BacktestTrades As DbSet(Of BacktestTradeEntity)
         Public Property RiskEvents As DbSet(Of RiskEventEntity)
         Public Property TradeOutcomes As DbSet(Of TradeOutcomeEntity)
+        Public Property TradeSetupSnapshots As DbSet(Of TradeSetupSnapshotEntity)
+        Public Property TradeLifespanRecords As DbSet(Of TradeLifespanRecordEntity)
+        Public Property AdaptiveParameters As DbSet(Of AdaptiveParametersEntity)
         Public Property BalanceHistory As DbSet(Of BalanceHistoryEntity)
         Public Property PersonaSettings As DbSet(Of PersonaSettingsEntity)
 
@@ -302,6 +305,119 @@ Namespace TopStepTrader.Data
                 End If
             Finally
                 If mustClose4 Then conn.Close()
+            End Try
+
+            ' ── FEAT-01: extend TradeOutcomes + new tables ───────────────────────
+            ' Idempotent ALTER TABLE columns; "duplicate column name" is swallowed.
+            Dim mustClose5 = (conn.State <> ConnectionState.Open)
+            If mustClose5 Then conn.Open()
+            Try
+                Dim tradeOutcomeAlters = New String() {
+                    "ALTER TABLE ""TradeOutcomes"" ADD COLUMN ""RMultiple"" REAL",
+                    "ALTER TABLE ""TradeOutcomes"" ADD COLUMN ""AiPostMortem"" TEXT",
+                    "ALTER TABLE ""TradeOutcomes"" ADD COLUMN ""AiSetupQuality"" TEXT",
+                    "ALTER TABLE ""TradeOutcomes"" ADD COLUMN ""AiExecutionQuality"" TEXT",
+                    "ALTER TABLE ""TradeOutcomes"" ADD COLUMN ""AiPatternTag"" TEXT",
+                    "ALTER TABLE ""TradeOutcomes"" ADD COLUMN ""AiRecommendation"" TEXT",
+                    "ALTER TABLE ""TradeOutcomes"" ADD COLUMN ""AiPreTradeVerdict"" TEXT",
+                    "ALTER TABLE ""TradeOutcomes"" ADD COLUMN ""AiPreTradeReasoning"" TEXT",
+                    "ALTER TABLE ""TradeOutcomes"" ADD COLUMN ""MacroPostureAtEntry"" TEXT"
+                }
+                For Each ddl In tradeOutcomeAlters
+                    Try
+                        Using cmd = conn.CreateCommand()
+                            cmd.CommandText = ddl
+                            cmd.ExecuteNonQuery()
+                        End Using
+                    Catch ex As Exception
+                        If Not ex.Message.Contains("duplicate column") Then Throw
+                    End Try
+                Next
+
+                Dim newTableDdl = New String() {
+                    "CREATE TABLE IF NOT EXISTS ""TradeSetupSnapshots"" (
+                         ""Id""                   INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                         ""TradeOutcomeId""        INTEGER NOT NULL DEFAULT 0,
+                         ""CapturedAt""            TEXT    NOT NULL DEFAULT '',
+                         ""Tenkan""                TEXT    NOT NULL DEFAULT '0',
+                         ""Kijun""                 TEXT    NOT NULL DEFAULT '0',
+                         ""Cloud1""                TEXT    NOT NULL DEFAULT '0',
+                         ""Cloud2""                TEXT    NOT NULL DEFAULT '0',
+                         ""Ema21""                 TEXT    NOT NULL DEFAULT '0',
+                         ""Ema50""                 TEXT    NOT NULL DEFAULT '0',
+                         ""MacdHist""              REAL    NOT NULL DEFAULT 0,
+                         ""MacdHistPrev""          REAL    NOT NULL DEFAULT 0,
+                         ""StochRsiK""             REAL    NOT NULL DEFAULT 0,
+                         ""PlusDI""                REAL    NOT NULL DEFAULT 0,
+                         ""MinusDI""               REAL    NOT NULL DEFAULT 0,
+                         ""AdxValue""              REAL    NOT NULL DEFAULT 0,
+                         ""Rsi14""                 REAL    NOT NULL DEFAULT 0,
+                         ""VidyaValue""            TEXT    NOT NULL DEFAULT '0',
+                         ""CmoValue""              REAL    NOT NULL DEFAULT 0,
+                         ""DeltaVol""              REAL    NOT NULL DEFAULT 0,
+                         ""LongCount""             INTEGER NOT NULL DEFAULT 0,
+                         ""ShortCount""            INTEGER NOT NULL DEFAULT 0,
+                         ""TotalConditions""       INTEGER NOT NULL DEFAULT 0,
+                         ""UpPct""                 INTEGER NOT NULL DEFAULT 0,
+                         ""DownPct""               INTEGER NOT NULL DEFAULT 0,
+                         ""SignalBarOpen""          TEXT    NOT NULL DEFAULT '0',
+                         ""SignalBarHigh""          TEXT    NOT NULL DEFAULT '0',
+                         ""SignalBarLow""           TEXT    NOT NULL DEFAULT '0',
+                         ""SignalBarClose""         TEXT    NOT NULL DEFAULT '0',
+                         ""SignalBarVolume""        INTEGER NOT NULL DEFAULT 0,
+                         ""AtrValue""              TEXT    NOT NULL DEFAULT '0',
+                         ""SessionWindow""          TEXT    NOT NULL DEFAULT '',
+                         ""DayOfWeek""              INTEGER NOT NULL DEFAULT 0,
+                         ""HourOfDay""              INTEGER NOT NULL DEFAULT 0,
+                         ""StrategyName""           TEXT    NOT NULL DEFAULT '',
+                         ""PersonaName""            TEXT    NOT NULL DEFAULT '',
+                         ""SlMultiple""             REAL    NOT NULL DEFAULT 0,
+                         ""TpMultiple""             REAL    NOT NULL DEFAULT 0,
+                         ""TimeframeMinutes""       INTEGER NOT NULL DEFAULT 0)",
+                    "CREATE INDEX IF NOT EXISTS ""IX_TradeSetupSnapshots_TradeOutcomeId"" ON ""TradeSetupSnapshots"" (""TradeOutcomeId"")",
+                    "CREATE TABLE IF NOT EXISTS ""TradeLifespanRecords"" (
+                         ""Id""                                INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                         ""TradeOutcomeId""                    INTEGER NOT NULL DEFAULT 0,
+                         ""MaxAdverseExcursionDollars""        TEXT    NOT NULL DEFAULT '0',
+                         ""MaxFavorableExcursionDollars""      TEXT    NOT NULL DEFAULT '0',
+                         ""MaxAdverseExcursionTicks""          INTEGER NOT NULL DEFAULT 0,
+                         ""MaxFavorableExcursionTicks""        INTEGER NOT NULL DEFAULT 0,
+                         ""SlRatchetCount""                    INTEGER NOT NULL DEFAULT 0,
+                         ""TpAdvanceCount""                    INTEGER NOT NULL DEFAULT 0,
+                         ""FreeRideActivated""                 INTEGER NOT NULL DEFAULT 0,
+                         ""FreeRideActivatedAtMinutes""        REAL    NOT NULL DEFAULT 0,
+                         ""DurationMinutes""                   REAL    NOT NULL DEFAULT 0,
+                         ""BarsInTrade""                       INTEGER NOT NULL DEFAULT 0,
+                         ""EntrySessionWindow""                TEXT    NOT NULL DEFAULT '',
+                         ""ExitSessionWindow""                 TEXT    NOT NULL DEFAULT '',
+                         ""CrossedSessionBoundary""            INTEGER NOT NULL DEFAULT 0,
+                         ""RMultiple""                         REAL    NOT NULL DEFAULT 0,
+                         ""CreatedAt""                         TEXT    NOT NULL DEFAULT '',
+                         ""UpdatedAt""                         TEXT    NOT NULL DEFAULT '')",
+                    "CREATE INDEX IF NOT EXISTS ""IX_TradeLifespanRecords_TradeOutcomeId"" ON ""TradeLifespanRecords"" (""TradeOutcomeId"")",
+                    "CREATE TABLE IF NOT EXISTS ""AdaptiveParameters"" (
+                         ""Id""                INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                         ""StrategyName""       TEXT    NOT NULL DEFAULT '',
+                         ""PersonaName""        TEXT    NOT NULL DEFAULT '',
+                         ""ParameterName""      TEXT    NOT NULL DEFAULT '',
+                         ""BaseValue""          REAL    NOT NULL DEFAULT 0,
+                         ""AdjustmentValue""    REAL    NOT NULL DEFAULT 0,
+                         ""EffectiveValue""     REAL    NOT NULL DEFAULT 0,
+                         ""Rationale""          TEXT    NOT NULL DEFAULT '',
+                         ""IsActive""           INTEGER NOT NULL DEFAULT 1,
+                         ""SourceTradeCount""   INTEGER NOT NULL DEFAULT 0,
+                         ""CreatedAt""          TEXT    NOT NULL DEFAULT '',
+                         ""UpdatedAt""          TEXT    NOT NULL DEFAULT '')",
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ""UQ_AdaptiveParameters_Key"" ON ""AdaptiveParameters"" (""StrategyName"", ""PersonaName"", ""ParameterName"")"
+                }
+                For Each ddl In newTableDdl
+                    Using cmd = conn.CreateCommand()
+                        cmd.CommandText = ddl
+                        cmd.ExecuteNonQuery()
+                    End Using
+                Next
+            Finally
+                If mustClose5 Then conn.Close()
             End Try
         End Sub
 

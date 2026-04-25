@@ -154,6 +154,7 @@ This section governs the **Ticket Handler** Claude agent (and any other automate
 | Push style | `git push origin clean-start` — **no pull requests**, direct push only |
 
 **Do NOT create a worktree.** Claude Code creates an isolated worktree by default — override this behaviour. Always clone or check out the `clean-start` branch directly and commit there. Never create a branch named `worktree-*` or any other side branch.
+git config set advice.addIgnoredFile false
 
 ```bash
 # Confirm you are on the correct branch before making any changes:

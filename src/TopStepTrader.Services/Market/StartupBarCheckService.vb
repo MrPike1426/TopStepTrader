@@ -47,6 +47,7 @@ Namespace TopStepTrader.Services.Market
 
         ''' <summary>Timeframes checked at startup — covers all strategy and backtest use-cases.</summary>
         Private Shared ReadOnly CheckTimeframes As BarTimeframe() = {
+            BarTimeframe.FifteenSecond,
             BarTimeframe.FiveMinute,
             BarTimeframe.FifteenMinute,
             BarTimeframe.OneHour,

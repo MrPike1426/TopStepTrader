@@ -121,7 +121,9 @@ Namespace TopStepTrader.Services.Personas
                 .LeveragedSlMultipleOfN = s.LeveragedSlMultipleOfN,
                 .TpMultipleOfN         = s.TpMultipleOfN,
                 .AdxThreshold          = s.AdxThreshold,
-                .DefaultConfidencePct  = s.DefaultConfidencePct
+                .DefaultConfidencePct  = s.DefaultConfidencePct,
+                .MacdHistMinAtrFraction = s.MacdHistMinAtrFraction,
+                .MultiConfluence       = s.MultiConfluence
             }
         End Function
 
@@ -135,7 +137,8 @@ Namespace TopStepTrader.Services.Personas
                 .LeveragedSlMultipleOfN = e.LeveragedSlMultipleOfN,
                 .TpMultipleOfN         = e.TpMultipleOfN,
                 .AdxThreshold          = e.AdxThreshold,
-                .DefaultConfidencePct  = e.DefaultConfidencePct
+                .DefaultConfidencePct  = e.DefaultConfidencePct,
+                .MacdHistMinAtrFraction = e.MacdHistMinAtrFraction
             }
         End Function
 
@@ -148,6 +151,7 @@ Namespace TopStepTrader.Services.Personas
             entity.TpMultipleOfN         = profile.TpMultipleOfN
             entity.AdxThreshold          = profile.AdxThreshold
             entity.DefaultConfidencePct  = profile.DefaultConfidencePct
+            entity.MacdHistMinAtrFraction = profile.MacdHistMinAtrFraction
             entity.LastModifiedAt        = DateTimeOffset.UtcNow
         End Sub
 
@@ -161,7 +165,9 @@ Namespace TopStepTrader.Services.Personas
                 .LeveragedSlMultipleOfN = p.LeveragedSlMultipleOfN,
                 .TpMultipleOfN         = p.TpMultipleOfN,
                 .AdxThreshold          = p.AdxThreshold,
-                .DefaultConfidencePct  = p.DefaultConfidencePct
+                .DefaultConfidencePct  = p.DefaultConfidencePct,
+                .MacdHistMinAtrFraction = p.MacdHistMinAtrFraction,
+                .MultiConfluence       = p.MultiConfluence
             }
         End Function
 

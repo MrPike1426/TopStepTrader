@@ -34,6 +34,16 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>Recommended minimum confidence score (0–100) to fire a trade.</summary>
         Public Property DefaultConfidencePct As Integer
 
+        ''' <summary>Minimum MACD histogram magnitude as a fraction of ATR(14). Default 0.05.
+        ''' Lewis = 0.07 (higher bar); Joe = 0.03 (more signals).</summary>
+        Public Property MacdHistMinAtrFraction As Double = 0.05D
+
+        ''' <summary>
+        ''' Per-persona overrides for <see cref="TopStepTrader.Core.Settings.MultiConfluenceConfig"/> thresholds.
+        ''' Nothing = use the global "Strategies:MultiConfluence" defaults (STRAT-24).
+        ''' </summary>
+        Public Property MultiConfluence As TopStepTrader.Core.Settings.MultiConfluenceConfig = Nothing
+
     End Class
 
 End Namespace

@@ -68,6 +68,7 @@ Namespace TopStepTrader.Services.Trading
         Private Const BracketMissThreshold As Integer = 3
 
         Private _freeRideActive As Boolean = False
+        Private _lastPositionClosedAt As DateTimeOffset = DateTimeOffset.MinValue
 
         ' ── Engine state ─────────────────────────────────────────────────────────
         Private _running As Boolean = False
@@ -277,16 +278,6 @@ Namespace TopStepTrader.Services.Trading
                                      End SyncLock
                                  End Try
                              End If
-
-                             If Interlocked.CompareExchange(_callbackRunning, 1, 0) = 0 Then
-                                 Try
-                                     Await DoCheckAsync()
-                                 Catch ex As Exception
-                                     Log($"⚠️  Error during event-triggered check: {ex.Message}")
-                                 Finally
-                                     Interlocked.Exchange(_callbackRunning, 0)
-                                 End Try
-                             End If
                          End Function)
             End If
         End Sub
@@ -462,6 +453,7 @@ Namespace TopStepTrader.Services.Trading
                         _lastEntryPrice = 0D
                         _brackets.Clear()
                         _freeRideActive = False
+                        _lastPositionClosedAt = DateTimeOffset.UtcNow
                         RaisePositionChanged()
                         Return
                     Else
@@ -482,7 +474,9 @@ Namespace TopStepTrader.Services.Trading
                 End If
 
                 ' ── Scale-in check ────────────────────────────────────────────────
-                If _currentQty < _targetTotalSize Then
+                If _freeRideActive Then
+                    Log("⏸ Scale-in suppressed — free-ride is active.")
+                ElseIf _currentQty < _targetTotalSize Then
                     Dim scaleDistance = _scaleInTicks * _tickSize
                     Dim priceMovedEnough As Boolean
                     If _tradeSide = OrderSide.Buy Then
@@ -518,6 +512,11 @@ Namespace TopStepTrader.Services.Trading
             ' ── FLAT: look for 3-bar entry signal ────────────────────────────────
             ' Yahoo Finance historical endpoint returns only closed bars — no forming bar is included.
             ' Use the 3 most recent bars directly.
+            Const ReEntryCooldownSecs As Integer = 30
+            If (DateTimeOffset.UtcNow - _lastPositionClosedAt).TotalSeconds < ReEntryCooldownSecs Then
+                Log($"⏸  Re-entry cooldown ({ReEntryCooldownSecs}s) — skipping entry signal")
+                Return
+            End If
             Dim completedBars = bars.TakeLast(3).ToList()
 
             Dim allGreen = completedBars.All(Function(b) b.Close > b.Open)
@@ -904,12 +903,26 @@ Namespace TopStepTrader.Services.Trading
                     End If
                     ' Don't tighten past existing TP (no loosening)
                     If newTpPrice >= b.CurrentTpPrice Then Continue For
+                    ' Don't tighten to or below the current SL (inversion guard)
+                    If b.CurrentSlPrice > 0D Then
+                        If newTpPrice <= b.CurrentSlPrice + minSafeDistance Then
+                            Log($"⚠️  TP tighten skipped — would invert bracket (SL={b.CurrentSlPrice:F2} TP={newTpPrice:F2})")
+                            Continue For
+                        End If
+                    End If
                 Else
                     newTpPrice = b.CurrentTpPrice + tightenAmount
                     If newTpPrice > currentPrice - minSafeDistance Then
                         newTpPrice = currentPrice - minSafeDistance
                     End If
                     If newTpPrice <= b.CurrentTpPrice Then Continue For
+                    ' Don't tighten to or above the current SL (inversion guard)
+                    If b.CurrentSlPrice > 0D Then
+                        If newTpPrice >= b.CurrentSlPrice - minSafeDistance Then
+                            Log($"⚠️  TP tighten skipped — would invert bracket (SL={b.CurrentSlPrice:F2} TP={newTpPrice:F2})")
+                            Continue For
+                        End If
+                    End If
                 End If
 
                 ' Cancel old TP and replace

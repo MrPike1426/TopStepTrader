@@ -36,6 +36,17 @@ Namespace TopStepTrader.Services.Market
         Function GetLatestPriceAsync(contractId As String,
                                      Optional cancel As CancellationToken = Nothing) As Task(Of Decimal)
 
+        ''' <summary>
+        ''' FEAT-11: Fetch the N most recent 15-second bars directly from the broker API
+        ''' without persisting them to the database.  Used by MultiConfluence flat sessions
+        ''' so indicators advance on 15-second closes without accumulating high-frequency rows.
+        ''' Returns an empty list on failure; callers must handle gracefully.
+        ''' </summary>
+        Function GetLiveBarsAsync(contractId As String,
+                                  timeframe As BarTimeframe,
+                                  barCount As Integer,
+                                  Optional cancel As CancellationToken = Nothing) As Task(Of IList(Of MarketBar))
+
     End Interface
 
 End Namespace

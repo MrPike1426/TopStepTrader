@@ -29,7 +29,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public Sub New(backtestService As IBacktestService,
                        barCollectionService As IBarCollectionService,
-                       claudeReviewService As ClaudeReviewService,
+                       claudeReviewService As IClaudeReviewService,
                        session As ITradingSessionContext,
                        personaService As IPersonaService)
 

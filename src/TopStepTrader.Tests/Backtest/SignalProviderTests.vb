@@ -642,7 +642,8 @@ Namespace TopStepTrader.Tests.Backtest
                 .MinusDi      = ConstArr(15.0F),
                 .MacdHistogram = macdHist,
                 .StochRsiK    = ConstArr(0.5F),
-                .Atr          = ConstArr(2.0F)
+                .Atr          = ConstArr(2.0F),
+                .VolMa20      = ConstArr(1000.0F)
             }
 
             Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
@@ -695,7 +696,8 @@ Namespace TopStepTrader.Tests.Backtest
                 .MinusDi      = ConstArr(25.0F),
                 .MacdHistogram = macdHist,
                 .StochRsiK    = stochK,
-                .Atr          = ConstArr(2.0F)
+                .Atr          = ConstArr(2.0F),
+                .VolMa20      = ConstArr(1000.0F)
             }
 
             Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
@@ -884,7 +886,8 @@ Namespace TopStepTrader.Tests.Backtest
                 .MinusDi      = ConstArr(25.0F),
                 .MacdHistogram = macdHist,
                 .StochRsiK    = stochK,
-                .Atr          = ConstArr(2.0F)
+                .Atr          = ConstArr(2.0F),
+                .VolMa20      = ConstArr(1000.0F)
             }
 
             Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
@@ -1112,7 +1115,8 @@ Namespace TopStepTrader.Tests.Backtest
                 .MinusDi      = ConstArr(15.0F),
                 .MacdHistogram = macdHist,
                 .StochRsiK    = ConstArr(0.5F),
-                .Atr          = ConstArr(2.0F)
+                .Atr          = ConstArr(2.0F),
+                .VolMa20      = ConstArr(1000.0F)
             }
 
             Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
@@ -1151,7 +1155,8 @@ Namespace TopStepTrader.Tests.Backtest
                 .MinusDi      = ConstArr(14.75F),
                 .MacdHistogram = macdHist,
                 .StochRsiK    = ConstArr(0.68F),    ' very close to 0.7 boundary (not overbought but marginal)
-                .Atr          = ConstArr(2.0F)
+                .Atr          = ConstArr(2.0F),
+                .VolMa20      = ConstArr(1000.0F)
             }
 
             Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(minAdx:=20.0F), Idx)
@@ -1188,7 +1193,8 @@ Namespace TopStepTrader.Tests.Backtest
                 .MinusDi      = ConstArr(10.0F),
                 .MacdHistogram = macdHist,
                 .StochRsiK    = ConstArr(0.2F),     ' well away from 0.7 boundary
-                .Atr          = ConstArr(2.0F)
+                .Atr          = ConstArr(2.0F),
+                .VolMa20      = ConstArr(1000.0F)
             }
 
             Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(minAdx:=20.0F), Idx)
@@ -1211,10 +1217,14 @@ Namespace TopStepTrader.Tests.Backtest
             Dim provider As New MultiConfluenceSignalProvider()
 
             Dim bars = BuildMCBars(currentClose:=110D, lagClose:=100D)
+            ' Override volume to 0 so the volume gate fails (bar.Volume=0 < 1.2×1000=1200)
+            For Each b In bars
+                b.Volume = 0L
+            Next
             Dim macdHist = ConstArr(0.5F)
             macdHist(Idx - 1) = 0.3F
 
-            ' VolMa20 = 1000; current bar Volume (set via MakeBar) ≈ 0 → 0 < 1200 → gate fails
+            ' VolMa20 = 1000; current bar Volume=0 → 0 < 1200 → gate fails
             Dim volMa = ConstArr(1000.0F)
 
             Dim indicators As New StrategyIndicators With {
@@ -1267,7 +1277,8 @@ Namespace TopStepTrader.Tests.Backtest
                 .MinusDi       = ConstArr(15.0F),
                 .MacdHistogram = macdHist,
                 .StochRsiK     = ConstArr(0.5F),
-                .Atr           = ConstArr(2.0F)
+                .Atr           = ConstArr(2.0F),
+                .VolMa20       = ConstArr(1000.0F)
             }
 
             Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
@@ -1304,7 +1315,8 @@ Namespace TopStepTrader.Tests.Backtest
                 .MinusDi       = ConstArr(25.0F),
                 .MacdHistogram = macdHist,
                 .StochRsiK     = stochK,
-                .Atr           = ConstArr(2.0F)
+                .Atr           = ConstArr(2.0F),
+                .VolMa20       = ConstArr(1000.0F)
             }
 
             Dim result = provider.Evaluate(bars(Idx), indicators, MakeConfig(), Idx)
@@ -1360,7 +1372,9 @@ Namespace TopStepTrader.Tests.Backtest
             Dim bars As New List(Of MarketBar)(N)
             For i = 0 To N - 1
                 Dim c = If(i = Idx - 26, lagClose, currentClose)
-                bars.Add(MakeBar(c, c + 1D, c - 1D, c))
+                Dim bar = MakeBar(c, c + 1D, c - 1D, c)
+                bar.Volume = 1500L   ' above 1.2× VolMa20=1000 so volume gate passes
+                bars.Add(bar)
             Next
             Return bars.AsReadOnly()
         End Function

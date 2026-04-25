@@ -215,6 +215,46 @@ Namespace TopStepTrader.Services.Diagnostics
         End Sub
 
         ''' <summary>
+        ''' Writes a bracket state-transition entry to the JSONL log.
+        ''' EventType values: BRACKET_TRAIL | FREE_ROLL_ON | POSITION_CLOSED.
+        ''' No-op when no session is active.
+        ''' </summary>
+        Public Sub WriteBracketEvent(eventType As String,
+                                      side As String,
+                                      price As Decimal,
+                                      stopLoss As Decimal,
+                                      takeProfit As Decimal,
+                                      statusNote As String)
+            If _writer Is Nothing Then Return
+            SyncLock _lock
+                Try
+                    If _writer Is Nothing Then Return
+                    Dim entry As New DiagnosticLogEntry With {
+                        .EventType = eventType,
+                        .Action    = side,
+                        .Strategy  = "BRACKET",
+                        .Why       = statusNote,
+                        .Settings  = New DiagSettings With {
+                            .SlPrice = stopLoss,
+                            .TpPrice = takeProfit,
+                            .SlDollarBracket = 0D,
+                            .TpDollarBracket = 0D
+                        },
+                        .MetricsAtEntry = New DiagMetricsAtEntry With {
+                            .PriceEntry = price
+                        }
+                    }
+                    entry.SessionId = _sessionId
+                    Dim json = JsonSerializer.Serialize(entry, _jsonOpts)
+                    _writer.WriteLine(json)
+                    _entryCount += 1
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "[Diagnostics] WriteBracketEvent failed for {Type}", eventType)
+                End Try
+            End SyncLock
+        End Sub
+
+        ''' <summary>
         ''' Writes a summary footer comment and closes the log file.
         ''' Called automatically by Stop() and Dispose().
         ''' </summary>

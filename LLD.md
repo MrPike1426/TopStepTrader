@@ -304,6 +304,7 @@ Static module (`FavouriteContracts.vb`) providing the master instrument list. Ne
 | `PxMinStopDollars` | 15.0 (minimum stop in dollars for MES) |
 | `PxMinStopTicks` | 4 (local fallback; catalog provides live value) |
 | `YahooSymbol` | "GC=F" (used by BarCollectionService for Yahoo Finance requests) |
+| `MultiConfluenceTimeframeMinutes` | 5 (bar timeframe used by the Multi-Confluence strategy for this instrument: Oil=5, Gold=10, S&P=5, EUR/USD=10, BTC=15) |
 
 ### 3.5 TickMath
 
@@ -736,6 +737,40 @@ Extend TP on bar-close (if ExtendTpOnClose = True and _tpAdvanceCount < 3):
 **State reset on close:** `_initialSlPrice = 0D` and `_tpAdvanceCount = 0` are cleared in both `CloseTradeAsync` and `StopStrategy`.
 
 **P&L computation:** TopStepX returns `openPnL = 0` for futures. The ViewModel fetches current price via `GetLivePositionSnapshotAsync` and derives P&L from `(currentPrice - entryPrice) × DollarPerPoint × direction`.
+
+---
+
+### 6.9 Multi-Confluence Dual-Frequency Evaluation (Hydra)
+
+The Multi-Confluence strategy in Hydra uses two independent evaluation cadences:
+
+#### Per-Asset Bar Timeframe
+
+`FavouriteContracts.MultiConfluenceTimeframeMinutes` stores the correct strategy-bar timeframe for each MC asset. `HydraViewModel.ExecuteStart` reads this value and stamps `sd.TimeframeMinutes` per engine — overriding the strategy-level default when `Condition = MultiConfluence`.
+
+| Asset | MC Timeframe |
+|---|---|
+| OIL (MCLE) | 5 min |
+| GOLD (MGC) | 10 min |
+| S&P 500 (MES) | 5 min |
+| EUR/USD (M6E) | 10 min |
+| BTC (MBT) | 15 min |
+
+#### 15-Second Live Indicator Refresh
+
+Between strategy-bar evaluations (every 5–15 min) the Hydra indicator grid would otherwise show stale Close, Ichimoku, ADX, and EMA values. A best-effort live-refresh block fires inside `DoCheckAsync` whenever the engine is in flat MC mode (`isMcFlat = True`):
+
+```
+1. GetLiveBarsAsync(contractId, BarTimeframe.FifteenSecond, 3)  — fetches the last three 15-second bars
+2. Substitute the live bar's Close into the existing strategy-tf bar series (last element replaced)
+3. MultiConfluenceStrategy.Evaluate(highs, lows, liveCloses, ...) → liveResult
+4. Raise ConfidenceUpdated with IsDisplayOnly = True carrying:
+     liveResult.Cloud1/2, Tenkan, Kijun, Ema21/50, PlusDI, MinusDI, AdxValue, LastClose = live close
+     Bull/bear scores, MACD, StochRSI, LongCount, ShortCount preserved from the real mcArgs
+5. Wrapped in Try/Catch — failure is silent; does not affect signal logic
+```
+
+**`ConfidenceUpdatedEventArgs.IsDisplayOnly`** — when `True`, `HydraAssetViewModel.ApplyConfidence` takes a fast path that updates only the indicator grid columns (GridClose, GridCloud1/2, GridTenkan, GridKijun, GridEma21/50, GridAdx, GridDiPlus/Minus) and returns immediately without touching confidence scores, signal summary, or tile state. Signal-path events (`IsDisplayOnly = False`) continue unchanged.
 
 ---
 

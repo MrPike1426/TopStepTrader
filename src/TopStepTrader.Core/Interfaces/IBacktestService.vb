@@ -139,6 +139,16 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Public Property CommissionPerSideUsd As Decimal = 0D
 
+        ''' <summary>
+        ''' Bid-ask spread applied to entry fills, expressed in ticks.
+        ''' Models the half-spread cost: a Buy entry fills <c>SpreadTicks × TickSize</c>
+        ''' above bar.Open; a Sell entry fills the same distance below bar.Open.
+        ''' This is in addition to the existing 1-tick adverse slippage already applied
+        ''' at entry — set SpreadTicks = 0 (default) to preserve the existing behaviour.
+        ''' Typical micro futures value: 1 (one tick, e.g. 0.25 pts on MES/MNQ).
+        ''' </summary>
+        Public Property SpreadTicks As Integer = 0
+
         ' ── Dollar-based fixed SL/TP bracket ─────────────────────────────────────
 
         ''' <summary>
@@ -163,6 +173,17 @@ Namespace TopStepTrader.Core.Interfaces
         ''' Ignored by strategies that do not use a configurable RSI period.
         ''' </summary>
         Public Property IndicatorPeriod As Integer = 14
+
+        ' ── Broker minimum stop ──────────────────────────────────────────────────
+
+        ''' <summary>
+        ''' STRAT-26: Minimum stop-loss distance in dollars enforced by the exchange/broker.
+        ''' When &gt; 0, backtest SL deltas are clamped so the stop is never tighter than this floor.
+        ''' Maps to <see cref="TopStepTrader.Core.Trading.FavouriteContract.PxMinStopDollars"/> at runtime.
+        ''' Default 0 = no clamping (preserves existing behaviour).
+        ''' Example: M6E minimum = $12.50 (10 ticks × $1.25/tick).
+        ''' </summary>
+        Public Property MinStopDollars As Decimal = 0D
 
         ' ── Scale-in cap ─────────────────────────────────────────────────────────
 

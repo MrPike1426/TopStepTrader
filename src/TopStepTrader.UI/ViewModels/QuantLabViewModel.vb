@@ -67,7 +67,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private ReadOnly _backtestService As IBacktestService
         Private ReadOnly _barCollectionService As IBarCollectionService
-        Private ReadOnly _claudeReviewService As ClaudeReviewService
+        Private ReadOnly _claudeReviewService As IClaudeReviewService
 
         Private _cancelSource As CancellationTokenSource
 
@@ -376,7 +376,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public Sub New(backtestService As IBacktestService,
                        barCollectionService As IBarCollectionService,
-                       claudeReviewService As ClaudeReviewService)
+                       claudeReviewService As IClaudeReviewService)
             _backtestService = backtestService
             _barCollectionService = barCollectionService
             _claudeReviewService = claudeReviewService

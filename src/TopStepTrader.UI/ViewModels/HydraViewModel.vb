@@ -188,6 +188,8 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Private _macdHistMinAtrFraction As Double = 0.05   ' Minimum MACD histogram magnitude as fraction of ATR(14). Lewis=0.07 Damian=0.05 Joe=0.03
+
         Private _slMultipleOfN As Decimal = 2.5D   ' Wide tier default — survives bar noise on index futures
         ''' <summary>Initial SL as a multiple of N (ATR × DollarPerPoint). Wide=2.5, Standard=1.5, Tight=0.75.</summary>
         Public Property SlMultipleOfN As Decimal
@@ -696,6 +698,11 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Sub WireEngineEvents(engine As StrategyExecutionEngine,
                                      assetVm As HydraAssetViewModel)
+            AddHandler engine.BarPriceUpdated,
+                Sub(s As Object, price As Decimal)
+                    Dispatch(Sub() assetVm.UpdateLivePrice(price))
+                End Sub
+
             AddHandler engine.ConfidenceUpdated,
                 Sub(s As Object, e As ConfidenceUpdatedEventArgs)
                     Dispatch(Sub()
@@ -881,6 +888,7 @@ Namespace TopStepTrader.UI.ViewModels
             MinConfidencePct = profile.DefaultConfidencePct
             SlMultipleOfN = profile.SlMultipleOfN
             TpMultipleOfN = profile.TpMultipleOfN
+            _macdHistMinAtrFraction = profile.MacdHistMinAtrFraction
 
             NotifyPropertyChanged(NameOf(IsLewisSelected))
             NotifyPropertyChanged(NameOf(IsDamianSelected))
@@ -1036,6 +1044,7 @@ Namespace TopStepTrader.UI.ViewModels
                 .TpMultipleOfN = _tpMultipleOfN,
                 .ExtendTpOnClose = _extendTpOnClose,
                 .PersonaName = _selectedProfileName,
+                .MacdHistMinAtrFraction = _macdHistMinAtrFraction,
                 .TradingWindowUtcStart = New TimeOnly(8, 0),
                 .TradingWindowUtcEnd = New TimeOnly(17, 0)
             }
@@ -1391,6 +1400,13 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim favContract = FavouriteContracts.TryGetBySymbol(assetVm.ContractId)
                 Dim isGoldAsset = assetVm.Symbol.IndexOf("Gold", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
                                   assetVm.ContractId.IndexOf("MGC", StringComparison.OrdinalIgnoreCase) >= 0
+                ' For MultiConfluence use the per-asset timeframe stored on FavouriteContract
+                ' (Oil/MES=5m, Gold/M6E=10m, BTC=15m). All other strategies use the template value.
+                Dim assetTimeframeMinutes As Integer = _currentStrategy.TimeframeMinutes
+                If _currentStrategy.Condition = StrategyConditionType.MultiConfluence AndAlso
+                   favContract IsNot Nothing AndAlso favContract.MultiConfluenceTimeframeMinutes > 0 Then
+                    assetTimeframeMinutes = favContract.MultiConfluenceTimeframeMinutes
+                End If
                 Dim sd As New StrategyDefinition With {
                     .Name = _currentStrategy.Name,
                     .Indicator = _currentStrategy.Indicator,
@@ -1400,7 +1416,7 @@ Namespace TopStepTrader.UI.ViewModels
                     .IndicatorMultiplier = _currentStrategy.IndicatorMultiplier,
                     .GoLongWhenBelowBands = _currentStrategy.GoLongWhenBelowBands,
                     .GoShortWhenAboveBands = _currentStrategy.GoShortWhenAboveBands,
-                    .TimeframeMinutes = _currentStrategy.TimeframeMinutes,
+                    .TimeframeMinutes = assetTimeframeMinutes,
                     .DurationHours = _currentStrategy.DurationHours,
                     .ContractId = assetVm.ContractId,
                     .AccountId = SelectedAccount.Id,

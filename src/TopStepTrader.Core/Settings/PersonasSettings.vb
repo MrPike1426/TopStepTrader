@@ -13,6 +13,15 @@ Namespace TopStepTrader.Core.Settings
         Public Property TpMultipleOfN As Decimal = 2.0D
         Public Property AdxThreshold As Single = 20.0F
         Public Property DefaultConfidencePct As Integer = 80
+        ''' <summary>Minimum MACD histogram magnitude as a fraction of ATR(14). Default 0.05 (Damian baseline).
+        ''' Lewis (aggressive entry filter) = 0.07; Joe (conservative, more signals) = 0.03.</summary>
+        Public Property MacdHistMinAtrFraction As Double = 0.05
+
+        ''' <summary>
+        ''' Optional per-persona overrides for MultiConfluenceConfig thresholds (STRAT-24).
+        ''' Null = use the global "Strategies:MultiConfluence" defaults.
+        ''' </summary>
+        Public Property MultiConfluence As MultiConfluenceConfig = Nothing
     End Class
 
     ''' <summary>

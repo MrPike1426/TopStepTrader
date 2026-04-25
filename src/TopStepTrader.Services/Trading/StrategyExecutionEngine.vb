@@ -9,8 +9,9 @@ Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Models.Diagnostics
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Core.Trading
+Imports TopStepTrader.Data.Entities
+Imports TopStepTrader.Data.Repositories
 Imports TopStepTrader.ML.Features
-Imports TopStepTrader.Services.AI
 Imports TopStepTrader.Services.Diagnostics
 Imports TopStepTrader.Services.Market
 
@@ -39,9 +40,12 @@ Namespace TopStepTrader.Services.Trading
         Private ReadOnly _orderService As IOrderService
         Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _logger As ILogger(Of StrategyExecutionEngine)
-        Private ReadOnly _claudeService As ClaudeReviewService
+        Private ReadOnly _claudeService As IClaudeReviewService
         Private ReadOnly _pxSettings As ProjectXSettings
         Private ReadOnly _marketHub As MarketHubClient
+        Private ReadOnly _outcomeRepo As TradeOutcomeRepository
+        Private ReadOnly _snapshotRepo As ITradeSetupSnapshotRepository
+        Private ReadOnly _lifespanRepo As ITradeLifespanRepository
 
         ' ── Real-time price (MarketHub) ───────────────────────────────────────────
         ' Updated by OnMarketQuoteReceived on every GatewayQuote push.
@@ -201,6 +205,12 @@ Namespace TopStepTrader.Services.Trading
         ' Used by the AI pre-check so it can judge whether session drawdown warrants a VETO.
         Private _sessionPnl As Decimal = 0D
         Private _sessionTradeCount As Integer = 0
+        ' Consecutive-loss and total-trades counters — enriches PreTradeContext for Phases 4–5.
+        Private _consecutiveLosses As Integer = 0
+        Private _totalTradesThisSession As Integer = 0
+        ' Last AI pre-trade verdict — stored for capture into TradeSetupSnapshot.
+        Private _lastAiVerdict As String = String.Empty
+        Private _lastAiReasoning As String = String.Empty
 
         ' Turtle bracket instance for managing SL/TP levels
         Private ReadOnly _turtleBracket As Object = Nothing
@@ -253,14 +263,33 @@ Namespace TopStepTrader.Services.Trading
         Private Const AdverseConfidenceBars As Integer = 3     ' 3 new bars = 3 × timeframe minutes of confirmation
         Private _adverseConfidenceCount As Integer = 0         ' consecutive new-bar adverse ticks
 
+        ' ── FEAT-01: outcome / lifespan tracking ─────────────────────────────────
+        Private _openTradeOutcomeId As Long? = Nothing
+        Private _openLifespanId As Integer? = Nothing
+        Private _runningMaeDollars As Decimal = 0D
+        Private _runningMfeDollars As Decimal = 0D
+        Private _slRatchetCount As Integer = 0
+        Private _freeRideActivatedAt As DateTimeOffset? = Nothing
+        Private _tradeEntrySessionWindow As String = String.Empty
+        Private _barsInTrade As Integer = 0
+        Private _lastSignalArgs As ConfidenceUpdatedEventArgs = Nothing
+        Private _lastSignalBar As MarketBar = Nothing
+        ' Stores the most recent ConfidenceUpdatedEventArgs raised this tick (any strategy).
+        ' Written just before RaiseEvent ConfidenceUpdated so it is always current when
+        ' PlaceBracketOrdersAsync is called in the same tick.
+        Private _latestConfidenceArgs As ConfidenceUpdatedEventArgs = Nothing
+
         Public Sub New(ingestionService As IBarIngestionService,
                        orderService As IOrderService,
                        session As ITradingSessionContext,
                        logger As ILogger(Of StrategyExecutionEngine),
                        diagLogger As DiagnosticLogger,
-                       claudeService As ClaudeReviewService,
+                       claudeService As IClaudeReviewService,
                        pxOptions As IOptions(Of ProjectXSettings),
-                       marketHub As MarketHubClient)
+                       marketHub As MarketHubClient,
+                       Optional outcomeRepo As TradeOutcomeRepository = Nothing,
+                       Optional snapshotRepo As ITradeSetupSnapshotRepository = Nothing,
+                       Optional lifespanRepo As ITradeLifespanRepository = Nothing)
             _ingestionService = ingestionService
             _orderService = orderService
             _session = session
@@ -269,6 +298,9 @@ Namespace TopStepTrader.Services.Trading
             _claudeService = claudeService
             _pxSettings = pxOptions.Value
             _marketHub = marketHub
+            _outcomeRepo = outcomeRepo
+            _snapshotRepo = snapshotRepo
+            _lifespanRepo = lifespanRepo
         End Sub
 
         ' ── Public API ────────────────────────────────────────────────────────────
@@ -306,6 +338,10 @@ Namespace TopStepTrader.Services.Trading
             _syncMissCount = 0
             _sessionPnl = 0D
             _sessionTradeCount = 0
+            _consecutiveLosses = 0
+            _totalTradesThisSession = 0
+            _lastAiVerdict = String.Empty
+            _lastAiReasoning = String.Empty
             _currentAtrValue = 0D
             _currentEma21 = 0D
             _totalDollarPerPoint = 0D
@@ -335,7 +371,7 @@ Namespace TopStepTrader.Services.Trading
             Log($"  SL×{strategy.SlMultipleOfN}N  TP×{strategy.TpMultipleOfN}N")
             Log($"  MaxScaleIns     : {strategy.MaxScaleIns}")
             Log($"  Trading Hours   : {strategy.TradingStartHourUtc:D2}:00–{strategy.TradingEndHourUtc:D2}:00 UTC")
-            Log($"  Pre-trade AI    : {If(strategy.UsePreTradeAiCheck, "ON", "OFF")}")
+            Log($"  Pre-trade AI    : {If(strategy.UseAiPreTradeGate AndAlso strategy.UsePreTradeAiCheck, "ON", "OFF")}")
             Log($"  Re-entry cool   : {strategy.TimeframeMinutes * 2 * 60}s")
             Log("────────────────────────────────────────────────")
 
@@ -351,6 +387,7 @@ Namespace TopStepTrader.Services.Trading
                              If snapshot IsNot Nothing Then
                                  _tradePhase = TradePhase.HardStop
                                  SetTrailTimerInterval(True)
+                                 SetBarCheckInterval(True)   ' FEAT-11: position detected — revert to 30s poll
                                  _openPositionId = snapshot.PositionId
                                  _positionOpenedAt = DateTimeOffset.UtcNow.AddSeconds(-61) ' skip propagation guard
                                  If snapshot.OpenRate > 0D Then
@@ -410,11 +447,17 @@ Namespace TopStepTrader.Services.Trading
             ' 3-second initial delay gives the startup position-check Task.Run time to complete
             ' before the first bar-check tick fires, eliminating a race where _positionOpen
             ' could still be False when the timer's first callback runs.
+            ' FEAT-11: MultiConfluence starts at 15-second cadence when flat.
+            ' SetBarCheckInterval(positionOpen:=False) below fires after the timer is created
+            ' so that non-MC strategies remain at 30s (SetBarCheckInterval is a no-op until
+            ' the timer object exists).
             _timer = New System.Threading.Timer(AddressOf TimerCallback, Nothing,
                                                 TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(30))
+            ' FEAT-11: switch to 15s immediately for flat MultiConfluence sessions
+            SetBarCheckInterval(False)
 
             ' Bracket trail timer — fires independently of the 30-second bar-check.
-            ' Period adapts: 5s while a position is open, 60s when idle.
+            ' Period adapts: 1s while a position is open, 60s when idle.
             ' SetTrailTimerInterval() switches the period at each position open/close.
             Interlocked.Exchange(_positionCallbackRunning, 0)
             _positionTimer = New System.Threading.Timer(AddressOf PositionTimerCallback, Nothing,
@@ -497,30 +540,34 @@ Namespace TopStepTrader.Services.Trading
             Dim remStr = $"{CInt(remaining.TotalHours)}h {remaining.Minutes}m remaining"
 
             ' ── Fetch bars ────────────────────────────────────────────────────────
-            Dim timeframe = CType(If(_strategy.TimeframeMinutes = 1, BarTimeframe.OneMinute,
-                                  If(_strategy.TimeframeMinutes = 5, BarTimeframe.FiveMinute,
-                                  If(_strategy.TimeframeMinutes = 15, BarTimeframe.FifteenMinute,
-                                  If(_strategy.TimeframeMinutes = 60, BarTimeframe.OneHour,
-                                     BarTimeframe.FiveMinute)))), BarTimeframe)
+            ' Indicators are always computed from strategy-native timeframe bars
+            ' (5/10/15-min depending on the contract).  The timer fires every 15 seconds
+            ' for MultiConfluence flat sessions (SetBarCheckInterval) so conditions are
+            ' re-evaluated on the most recently closed strategy bar without waiting for the
+            ' next full bar close.  This avoids the unreliable 15-second bar feed entirely.
+            Dim isMcFlat = (_strategy.Condition = StrategyConditionType.MultiConfluence AndAlso
+                            Not _positionOpen)
+            Dim timeframe As BarTimeframe = CType(
+                If(_strategy.TimeframeMinutes = 1, BarTimeframe.OneMinute,
+                If(_strategy.TimeframeMinutes = 5, BarTimeframe.FiveMinute,
+                If(_strategy.TimeframeMinutes = 15, BarTimeframe.FifteenMinute,
+                If(_strategy.TimeframeMinutes = 60, BarTimeframe.OneHour,
+                   BarTimeframe.FiveMinute)))), BarTimeframe)
 
             ' Compute minimum bars required by the strategy and request a generous buffer
             ' above that threshold so the DB is fully populated on the very first tick.
-            ' Previously IngestAsync was called with 50 while minBars = IndicatorPeriod+5 = 55,
-            ' causing a ~25-min accumulation wait (5 live bars × 5 min) before the strategy
-            ' could evaluate at all.  fetchCount = max(minBars+15, 70) eliminates that delay.
             ' BUG-12: MultiConfluence requires 80 bars (Ichimoku Span B warm-up) — use its own
-            ' MinBarsRequired constant instead of the generic IndicatorPeriod+5 formula which
-            ' yielded fetchCount=70 < MinBarsRequired=80, keeping the strategy in perpetual warm-up.
+            ' MinBarsRequired constant instead of the generic IndicatorPeriod+5 formula.
             Dim minBars = If(_strategy.Indicator = StrategyIndicatorType.MultiConfluence,
                              MultiConfluenceStrategy.MinBarsRequired,
                              _strategy.IndicatorPeriod + 5)
             Dim fetchCount = Math.Max(minBars + 15, 70)  ' buffer above minBars guard
 
             ' Ingest fresh bars — on the very first call this populates the DB with fetchCount
-            ' bars (e.g. 70 for EMA/RSI Combined) so the strategy can run immediately.
+            ' bars so the strategy can evaluate immediately.
+            Dim bars As IList(Of MarketBar)
             Await _ingestionService.IngestAsync(_strategy.ContractId, timeframe, fetchCount, ct)
-
-            Dim bars = Await _ingestionService.GetBarsForMLAsync(_strategy.ContractId, timeframe, fetchCount, ct)
+            bars = Await _ingestionService.GetBarsForMLAsync(_strategy.ContractId, timeframe, fetchCount, ct)
 
             If bars Is Nothing OrElse bars.Count < minBars Then
                 Dim barCount = If(bars Is Nothing, 0, bars.Count)
@@ -586,11 +633,9 @@ Namespace TopStepTrader.Services.Trading
 
             ' ── Bar-period de-duplication guard ─────────────────────────────────
             ' The BarIngestionService may store a partially-formed "current" bar whose
-            ' sub-minute timestamp advances on every 30-second API poll.  Without
-            ' snapping to the canonical period boundary, isNewBar would be True on every
-            ' tick, firing scale-ins every 90 seconds instead of every 15 minutes (3 bars).
-            ' Snap to the start of the current period (floor to timeframe minutes).
-            Dim periodTicks = TimeSpan.FromMinutes(_strategy.TimeframeMinutes).Ticks
+            ' sub-minute timestamp advances on every poll.  Without snapping to the
+            ' canonical period boundary, isNewBar would be True on every tick.
+            Dim periodTicks As Long = TimeSpan.FromMinutes(_strategy.TimeframeMinutes).Ticks
             Dim barPeriodStart = New DateTimeOffset(
                 lastBar.Timestamp.Ticks - (lastBar.Timestamp.Ticks Mod periodTicks),
                 lastBar.Timestamp.Offset)
@@ -600,33 +645,30 @@ Namespace TopStepTrader.Services.Trading
             ' ── Stale bar guard ──────────────────────────────────────────────────────
             ' When the market is closed the ingestion service stops receiving new bars
             ' but the DB retains the last session's history.  barIsStale = True when the
-            ' most recent bar is older than 3× the timeframe — a reliable sign the market
-            ' is not currently producing data (after-hours, weekend, or daily maintenance break).
-            '
-            ' WHY 3× and not a tighter value:
-            ' Yahoo Finance (the bar data source) does not always include the currently-forming
-            ' bar immediately in its API response for CME futures (CL=F, GC=F, ES=F).  The last
-            ' bar in the DB is the most recently COMPLETED bar, whose timestamp is the START of
-            ' that bar period — so it is already TimeframeMinutes old when it closes.  Add Yahoo's
-            ' ~1-5 min API propagation lag and a normal 30-second engine poll jitter, and the
-            ' last bar can legitimately be up to (TimeframeMinutes + ~7 min) old during active
-            ' trading.  A threshold of TimeframeMinutes * 3 (e.g. 15 min for 5-min bars) provides
-            ' a safe buffer above that without delaying genuine-close detection — CME's daily
-            ' maintenance window is 60 min, and weekend gaps are measured in hours.
-            '
+            ' most recent bar is older than 3× the strategy timeframe cadence.
             ' Entry signals and order placement are suppressed; position monitoring
             ' (broker sync + trailing bracket) continues normally.
-            Dim barAgeMins = (DateTimeOffset.UtcNow - lastBar.Timestamp).TotalMinutes
+            Dim barAgeSeconds = (DateTimeOffset.UtcNow - lastBar.Timestamp).TotalSeconds
+            Dim barAgeMins = barAgeSeconds / 60.0
             Dim barStaleThresholdMins = _strategy.TimeframeMinutes * 3.0
-            Dim barIsStale = barAgeMins > barStaleThresholdMins
+            Dim barIsStale As Boolean = barAgeMins > barStaleThresholdMins
+            Dim staleDesc As String = $"{barAgeMins:F0}m old (threshold {CInt(barStaleThresholdMins)}m)"
 
             ' On the fresh→stale transition: fire one ConfidenceUpdated with IsMarketClosed=True
             ' so every tile immediately shows a neutral "closed" state instead of frozen indicator values.
             If barIsStale AndAlso Not _lastBarWasStale Then
                 RaiseEvent ConfidenceUpdated(Me, New ConfidenceUpdatedEventArgs(0, 0) With {.IsMarketClosed = True})
-                Log($"⏸ Market closed — last bar {barAgeMins:F0} min old (threshold {CInt(barStaleThresholdMins)} min). Entry signals suppressed.")
+                Log($"⏸ Market closed — last bar {staleDesc}. Entry signals suppressed.")
+            End If
+            ' On the stale→fresh recovery: clear the market-closed state so the tile and engine log
+            ' reflect that the market has reopened.  Without this the UI stays dimmed forever.
+            If Not barIsStale AndAlso _lastBarWasStale Then
+                RaiseEvent ConfidenceUpdated(Me, New ConfidenceUpdatedEventArgs(0, 0) With {.IsMarketClosed = False})
+                Log($"▶ Market open — fresh bar received. Resuming signal evaluation.")
             End If
             _lastBarWasStale = barIsStale
+
+
 
             If Not barIsStale Then
 
@@ -833,7 +875,7 @@ Namespace TopStepTrader.Services.Trading
 
                         ' Raise ConfidenceUpdated AFTER the ADX gate is known so the UI can
                         ' display the suppressed state (amber ⊘) instead of a misleading green arrow.
-                        RaiseEvent ConfidenceUpdated(Me, New ConfidenceUpdatedEventArgs(CInt(upPct), CInt(downPct), adxGatePassed, CSng(adxNow), lastClose) With {
+                        Dim emaRsiArgs As New ConfidenceUpdatedEventArgs(CInt(upPct), CInt(downPct), adxGatePassed, CSng(adxNow), lastClose) With {
                             .Ema21 = CDec(ema21Now),
                             .Ema50 = CDec(ema50Now),
                             .Rsi14 = CSng(rsiVal),
@@ -845,7 +887,9 @@ Namespace TopStepTrader.Services.Trading
                             .TotalConditions = 6,
                             .AdxThreshold = _strategy.AdxThreshold,
                             .MinConfidencePct = _strategy.MinConfidencePct
-                        })
+                        }
+                        _latestConfidenceArgs = emaRsiArgs   ' FEAT-01
+                        RaiseEvent ConfidenceUpdated(Me, emaRsiArgs)
 
                         If _currentAtrValue <= 0 Then
                             Log($"Bar checked — EMA/RSI: ATR too low (degenerate bar) — signal suppressed | {remStr}")
@@ -864,7 +908,24 @@ Namespace TopStepTrader.Services.Trading
                         End If
 
                     Case StrategyConditionType.MultiConfluence
-                        Dim mcResult = MultiConfluenceStrategy.Evaluate(highs, lows, closes, volumes, _strategy.AdxThreshold)
+                        ' STRAT-23: TOD gate — suppress new entries during CME daily maintenance (17:00–18:00 ET).
+                        ' MultiConfluenceStrategy.Evaluate() has no session awareness.  This upstream check
+                        ' in the engine is the single TOD gate for all MC signals.
+                        ' For news/roll blackouts, see STRAT-23 open items in Open_TICKETS.md.
+                        Dim nowEt As DateTimeOffset
+                        Try
+                            Dim etZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time")
+                            nowEt = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, etZone)
+                        Catch
+                            nowEt = DateTimeOffset.UtcNow.AddHours(-5)  ' UTC-5 fallback
+                        End Try
+                        Dim todHour = nowEt.Hour
+                        Dim isCmeMaintenance = (todHour = 17)   ' 17:00–17:59 ET = CME daily maintenance window
+                        If isCmeMaintenance AndAlso Not _positionOpen Then
+                            Log($"⏸  TOD gate: CME daily maintenance window (17:xx ET) — new entries suppressed | {remStr}")
+                        End If
+
+                        Dim mcResult = MultiConfluenceStrategy.Evaluate(highs, lows, closes, volumes, adxThreshold:=_strategy.AdxThreshold, macdHistMinAtrFraction:=_strategy.MacdHistMinAtrFraction)
                         _currentAtrValue = mcResult.AtrValue
                         _lastAdxValue = CSng(mcResult.AdxValue)
                         _mcCloudSlPrice = Nothing   ' reset; will be set only when a signal fires
@@ -890,8 +951,62 @@ Namespace TopStepTrader.Services.Trading
                             .MinConfidencePct = _strategy.MinConfidencePct
                         }
                         RaiseEvent ConfidenceUpdated(Me, mcArgs)
+                        _latestConfidenceArgs = mcArgs   ' FEAT-01
 
-                        ' ── STRAT-05: Confluence dissolution exit ─────────────────────────────
+                        ' ── Live 15-second display refresh ───────────────────────────────────
+                        ' Fetch the latest 15-second bar close and substitute it as the last
+                        ' bar in the series so Close, Tenkan, Kijun, EMA21/50, ADX and Cloud
+                        ' columns in the Hydra grid update intra-bar rather than waiting for
+                        ' the next strategy-timeframe bar close.
+                        ' Signal evaluation always uses the unmodified strategy-timeframe bars
+                        ' above — this refresh is display-only and does not affect entry logic.
+                        If isMcFlat Then
+                            Try
+                                Dim live15sBars = Await _ingestionService.GetLiveBarsAsync(
+                                    _strategy.ContractId, BarTimeframe.FifteenSecond, 3, ct)
+                                If live15sBars IsNot Nothing AndAlso live15sBars.Count > 0 Then
+                                    Dim liveClose = live15sBars.Last().Close
+                                    If liveClose > 0D Then
+                                        ' Build a working copy of the bar arrays with the live close
+                                        ' substituted for the last element.
+                                        Dim liveCloses = New List(Of Decimal)(closes)
+                                        liveCloses(liveCloses.Count - 1) = liveClose
+                                        Dim liveResult = MultiConfluenceStrategy.Evaluate(
+                                            highs, lows, liveCloses, volumes,
+                                            adxThreshold:=_strategy.AdxThreshold,
+                                            macdHistMinAtrFraction:=_strategy.MacdHistMinAtrFraction)
+                                        Dim displayArgs As New ConfidenceUpdatedEventArgs(
+                                            mcArgs.UpPct, mcArgs.DownPct,
+                                            adxValue:=liveResult.AdxValue,
+                                            lastClose:=liveClose) With {
+                                            .Cloud1 = liveResult.Cloud1,
+                                            .Cloud2 = liveResult.Cloud2,
+                                            .Tenkan = liveResult.Tenkan,
+                                            .Kijun = liveResult.Kijun,
+                                            .Ema21 = liveResult.Ema21,
+                                            .Ema50 = liveResult.Ema50,
+                                            .PlusDI = liveResult.PlusDI,
+                                            .MinusDI = liveResult.MinusDI,
+                                            .MacdHist = mcArgs.MacdHist,
+                                            .MacdHistPrev = mcArgs.MacdHistPrev,
+                                            .StochRsiK = mcArgs.StochRsiK,
+                                            .LongCount = mcArgs.LongCount,
+                                            .ShortCount = mcArgs.ShortCount,
+                                            .TotalConditions = 7,
+                                            .AdxThreshold = _strategy.AdxThreshold,
+                                            .MinConfidencePct = _strategy.MinConfidencePct,
+                                            .IsDisplayOnly = True
+                                        }
+                                        RaiseEvent ConfidenceUpdated(Me, displayArgs)
+                                    End If
+                                End If
+                            Catch ex As Exception
+                                ' Non-fatal: live display refresh is best-effort.
+                                _logger.LogDebug(ex, "MC live display refresh failed for {Id}", _strategy.ContractId)
+                            End Try
+                        End If
+
+                        ' ── STRAT-05: Confluence dissolution exit
                         ' On each new bar while a position is open, check how many conditions
                         ' remain active in the entry direction.  If conviction has decayed below
                         ' the threshold, flatten the position before checking for a new signal.
@@ -925,11 +1040,11 @@ Namespace TopStepTrader.Services.Trading
                                 End If
                             End If
                             side = mcSide
+                            ' STRAT-23: suppress new entry (not position monitoring) during CME maintenance
+                            If isCmeMaintenance Then side = Nothing
                         Else
                             If mcResult.StatusLine.Contains("Warming up") Then
                                 Log($"⏳ Multi-Confluence warming up — {mcResult.StatusLine} | {remStr}")
-                            Else
-                                Log($"Bar checked — Multi-Confluence: {mcResult.StatusLine} | {remStr}")
                             End If
                         End If
 
@@ -1347,12 +1462,12 @@ Namespace TopStepTrader.Services.Trading
                         ' Short when close enters Sell Zone (close < lower inner 1.0 SD band).
                         ' Neutral Zone (between inner bands) → no signal / stay flat.
                         Dim dbbInner = TechnicalIndicators.BollingerBands(closes, 20, 1.0)
-                        Dim dbbInnerUp  = CDec(TechnicalIndicators.LastValid(dbbInner.Upper))
+                        Dim dbbInnerUp = CDec(TechnicalIndicators.LastValid(dbbInner.Upper))
                         Dim dbbInnerLow = CDec(TechnicalIndicators.LastValid(dbbInner.Lower))
                         Dim dbbOuter = TechnicalIndicators.BollingerBands(closes, 20, 2.0)
-                        Dim dbbOuterUp  = CDec(TechnicalIndicators.LastValid(dbbOuter.Upper))
+                        Dim dbbOuterUp = CDec(TechnicalIndicators.LastValid(dbbOuter.Upper))
                         Dim dbbOuterLow = CDec(TechnicalIndicators.LastValid(dbbOuter.Lower))
-                        Dim dbbAtrVals  = TechnicalIndicators.ATR(highs, lows, closes, 20)
+                        Dim dbbAtrVals = TechnicalIndicators.ATR(highs, lows, closes, 20)
                         _currentAtrValue = CDec(TechnicalIndicators.LastValid(dbbAtrVals))
 
                         Dim dbbClose = CDec(lastBar.Close)
@@ -1521,13 +1636,31 @@ Namespace TopStepTrader.Services.Trading
                         ' Raise events and call non-thread-safe helpers outside the lock.
                         If shouldDeclareClose Then
                             WriteDiagPostMortem("SL/TP", closePnl)
+                            _diagLogger?.WriteBracketEvent("POSITION_CLOSED",
+                                If(_currentTrendSide.HasValue, _currentTrendSide.Value.ToString(), "UNKNOWN"),
+                                _lastBarClose, _lastSlPrice, _lastTpPrice,
+                                $"Position closed (SL/TP/external) | P&L={If(closePnl >= 0, "+", "")}${closePnl:F2}")
                             SetTrailTimerInterval(False)
+                            SetBarCheckInterval(False)   ' FEAT-11: position closed — switch to 15s flat cadence
+                            ' FEAT-01: infer exit price from entry ± PnL
+                            Dim slTpExitPrice As Decimal = 0D
+                            If _totalDollarPerPoint > 0D Then
+                                Dim direction = If(_lastEntrySide = OrderSide.Buy, 1D, -1D)
+                                slTpExitPrice = _lastEntryPrice + direction * closePnl / _totalDollarPerPoint
+                            End If
+                            PersistTradeClose("SL/TP", closePnl, slTpExitPrice)
                             For i As Integer = 1 To closedCount
-                                RaiseEvent TradeClosed(Me, New TradeClosedEventArgs("SL/TP", closePnl))
+                                RaiseEvent TradeClosed(Me, New TradeClosedEventArgs("SL/TP", closePnl, slTpExitPrice))
                                 closePnl = 0D   ' P&L only available for the first (most-recently synced) close
                             Next
                             _sessionPnl += closePnl
                             _sessionTradeCount += 1
+                            _totalTradesThisSession += 1
+                            If closePnl < 0D Then
+                                _consecutiveLosses += 1
+                            Else
+                                _consecutiveLosses = 0
+                            End If
                             ResetTrailState()
                             _lastPositionClosedAt = DateTimeOffset.UtcNow  ' start re-entry cooldown
                         End If
@@ -1548,6 +1681,7 @@ Namespace TopStepTrader.Services.Trading
                         If orphan IsNot Nothing Then
                             _tradePhase = TradePhase.HardStop
                             SetTrailTimerInterval(True)
+                            SetBarCheckInterval(True)   ' FEAT-11: orphan position — revert to 30s poll
                             _openPositionId = orphan.PositionId
                             _positionOpenedAt = DateTimeOffset.UtcNow.AddSeconds(-61) ' skip propagation guard
                             If orphan.OpenRate > 0D Then
@@ -1715,24 +1849,40 @@ Namespace TopStepTrader.Services.Trading
             ' EmaRsiWeightedScore uses the confidence model (scale-in + neutral exit).
             ' All other strategies retain the single-trade-at-a-time guardrail.
 
-            If barIsStale Then
-                Log($"⏸  Market closed — last bar is {CInt(barAgeMins)} min old (limit: {CInt(barStaleThresholdMins)} min) — monitoring positions only. ({remStr})")
+            If barIsStale AndAlso Not _lastBarWasStale Then
+                Log($"⏸  Market closed — last bar {staleDesc} — monitoring positions only. ({remStr})")
             ElseIf _strategy.Condition = StrategyConditionType.EmaRsiWeightedScore Then
                 Await EvaluateConfidenceActionsAsync(rawUpPct, rawDownPct, side, CDec(lastBar.Close), isNewBar, ct)
             Else
                 If side.HasValue Then
                     ' BUG-13: MC same-direction signal should scale into an open position rather
                     ' than being blocked.  All other strategies retain the single-trade guardrail.
+                    Dim isSameDirection = _currentTrendSide.HasValue AndAlso side.Value = _currentTrendSide.Value
                     Dim isMcScaleIn = _strategy.Condition = StrategyConditionType.MultiConfluence AndAlso
                                       _positionOpen AndAlso
-                                      side.Value = _lastEntrySide AndAlso
+                                      isSameDirection AndAlso
                                       _scaleInTradeCount < MaxScaleInTrades
                     If _positionOpen AndAlso Not isMcScaleIn Then
-                        Log($"⛔ Signal ({side.Value}) blocked — position already open (positionId={If(_openPositionId.HasValue, _openPositionId.Value.ToString(), "pending")}). Waiting for close before next entry.")
+                        ' MC same-direction cap reached
+                        If _strategy.Condition = StrategyConditionType.MultiConfluence AndAlso isSameDirection Then
+                            Log($"⛔ Scale-in cap reached ({_scaleInTradeCount}/{MaxScaleInTrades}) — signal: {side.Value}")
+                        ElseIf _strategy.Condition = StrategyConditionType.MultiConfluence AndAlso Not isSameDirection AndAlso _currentTrendSide.HasValue Then
+                            Log($"⛔ Opposite-direction signal ({side.Value}) blocked — position open in {_currentTrendSide.Value} direction")
+                        Else
+                            Log($"⛔ Signal ({side.Value}) blocked — position already open (positionId={If(_openPositionId.HasValue, _openPositionId.Value.ToString(), "pending")}). Waiting for close before next entry.")
+                        End If
                         If _pendingDiagEntry IsNot Nothing Then
                             _pendingDiagEntry.EventType = "REJECT"
-                            _pendingDiagEntry.RejectionReason = $"Position already open (positionId={If(_openPositionId.HasValue, _openPositionId.Value.ToString(), "pending")})"
+                            _pendingDiagEntry.RejectionReason = $"Position open — {If(isSameDirection, "scale-in cap reached", "opposite-direction blocked")}"
                             ' FinalizeDiagEntry(side.Value, CDec(lastBar.Close))
+                            _diagLogger?.WriteEntry(_pendingDiagEntry)
+                            _pendingDiagEntry = Nothing
+                        End If
+                    ElseIf isMcScaleIn AndAlso _lastApiPnl < 0D Then
+                        Log($"📊 Scale-in suppressed — position not profitable (P&L=${_lastApiPnl:F2})")
+                        If _pendingDiagEntry IsNot Nothing Then
+                            _pendingDiagEntry.EventType = "REJECT"
+                            _pendingDiagEntry.RejectionReason = $"Scale-in suppressed — position not profitable (P&L=${_lastApiPnl:F2})"
                             _diagLogger?.WriteEntry(_pendingDiagEntry)
                             _pendingDiagEntry = Nothing
                         End If
@@ -1786,7 +1936,7 @@ Namespace TopStepTrader.Services.Trading
                         ' Calls Claude Haiku (~$0.01) for a macro/session filter before entry.
                         ' On API failure or missing key the result defaults to PROCEED so
                         ' a connectivity issue never silently blocks all trading.
-                        If _strategy.UsePreTradeAiCheck AndAlso _claudeService IsNot Nothing Then
+                        If (_strategy.UseAiPreTradeGate AndAlso _strategy.UsePreTradeAiCheck) AndAlso _claudeService IsNot Nothing Then
                             Dim favForAi = FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
                             Dim aiCtx As New PreTradeContext With {
                                 .ContractId = _strategy.ContractId,
@@ -1805,11 +1955,16 @@ Namespace TopStepTrader.Services.Trading
                                 .PersonaName = _strategy.PersonaName,
                                 .UtcNow = DateTimeOffset.UtcNow,
                                 .SessionPnlUsd = _sessionPnl,
-                                .SessionTradeCount = _sessionTradeCount
+                                .SessionTradeCount = _sessionTradeCount,
+                                .ConsecutiveLosses = _consecutiveLosses,
+                                .TotalTradesThisSession = _totalTradesThisSession,
+                                .EffectiveMinConfidence = _strategy.MinConfidencePct
                             }
                             Dim aiResult = Await _claudeService.PreTradeCheckAsync(aiCtx, ct)
+                            _lastAiVerdict = If(aiResult.Proceed, "PROCEED", "VETO")
+                            _lastAiReasoning = aiResult.Reasoning
                             If aiResult.Proceed Then
-                                Log($"🤖 AI pre-check: PROCEED — {aiResult.Reasoning}")
+                                Log($"↳ AI: PROCEED — ""{aiResult.Reasoning}""")
                                 _diagLogger?.WriteEntry(New DiagnosticLogEntry With {
                                     .EventType = "AI_PASS",
                                     .Action = If(side.Value = OrderSide.Buy, "BUY", "SELL"),
@@ -1818,7 +1973,7 @@ Namespace TopStepTrader.Services.Trading
                                     .Why = $"AI approved {If(side.Value = OrderSide.Buy, "BUY", "SELL")} entry — {aiResult.Reasoning}"
                                 })
                             Else
-                                Log($"🤖 AI pre-check: VETO — {aiResult.Reasoning}")
+                                Log($"↳ AI: VETO — ""{aiResult.Reasoning}""")
                                 _diagLogger?.WriteEntry(New DiagnosticLogEntry With {
                                     .EventType = "AI_VETO",
                                     .Action = If(side.Value = OrderSide.Buy, "BUY", "SELL"),
@@ -1836,10 +1991,13 @@ Namespace TopStepTrader.Services.Trading
                             End If
                         End If
 
+                        ' FEAT-01: capture signal context for setup snapshot
+                        _lastSignalBar = lastBar
+                        _lastSignalArgs = _latestConfidenceArgs
                         Await PlaceBracketOrdersAsync(side.Value, CDec(lastBar.Close), cloudSlArg)
                         If isMcScaleIn Then
                             _scaleInTradeCount += 1
-                            Log($"📈 MC SCALE-IN #{_scaleInTradeCount}/{MaxScaleInTrades} — added to {side.Value} position.")
+                            Log($"📈 MC SCALE-IN #{_scaleInTradeCount}/{MaxScaleInTrades} — {side.Value} signal added to {_currentTrendSide.Value} position.")
                         End If
                     End If
                 Else
@@ -1865,6 +2023,7 @@ Namespace TopStepTrader.Services.Trading
                     $"Add a PxContractId to FavouriteContracts.")
                 _tradePhase = TradePhase.Idle
                 SetTrailTimerInterval(False)
+                SetBarCheckInterval(False)   ' FEAT-11: order aborted — keep 15s flat cadence
                 Return
             End If
 
@@ -1928,6 +2087,7 @@ Namespace TopStepTrader.Services.Trading
             If placedOrder IsNot Nothing AndAlso placedOrder.Status = OrderStatus.Working Then
                 _tradePhase = TradePhase.HardStop
                 SetTrailTimerInterval(True)
+                SetBarCheckInterval(True)   ' FEAT-11: entry confirmed — revert to 30s poll while position is open
                 SubscribeMarketQuotes(fav.PxContractId)
                 _openPositionId = placedOrder.ExternalPositionId
                 _lastEntryPrice = priceUsed
@@ -1959,6 +2119,90 @@ Namespace TopStepTrader.Services.Trading
                     0,               ' Leverage = 0 signals futures (tile shows "Xct" format)
                     priceUsed))
                 _openTradeCount += 1
+
+                ' ── FEAT-01: persist open trade outcome + setup snapshot + lifespan ──
+                _tradeEntrySessionWindow = GetSessionWindow(DateTimeOffset.UtcNow)
+                If _outcomeRepo IsNot Nothing Then
+                    Try
+                        Dim outcome As New Core.Models.TradeOutcome With {
+                            .ContractId = fav.PxContractId,
+                            .Timeframe = _strategy.TimeframeMinutes,
+                            .SignalType = side.ToString(),
+                            .SignalConfidence = CSng(_pendingConfidencePct),
+                            .ModelVersion = _strategy.Name,
+                            .EntryTime = DateTimeOffset.UtcNow,
+                            .EntryPrice = priceUsed,
+                            .IsOpen = True
+                        }
+                        _openTradeOutcomeId = Await _outcomeRepo.SaveOutcomeAsync(outcome)
+                    Catch ex As Exception
+                        _logger.LogDebug(ex, "FEAT-01 SaveOutcomeAsync failed: {Msg}", ex.Message)
+                    End Try
+                End If
+                If _snapshotRepo IsNot Nothing AndAlso _openTradeOutcomeId.HasValue Then
+                    Try
+                        Dim snap As New TradeSetupSnapshotEntity With {
+                            .TradeOutcomeId = _openTradeOutcomeId.Value,
+                            .CapturedAt = DateTimeOffset.UtcNow,
+                            .StrategyName = _strategy.Name,
+                            .PersonaName = If(_strategy.PersonaName, String.Empty),
+                            .SlMultiple = CSng(_strategy.SlMultipleOfN),
+                            .TpMultiple = CSng(_strategy.TpMultipleOfN),
+                            .TimeframeMinutes = _strategy.TimeframeMinutes,
+                            .AtrValue = _currentAtrValue,
+                            .AdxValue = _lastAdxValue,
+                            .SessionWindow = _tradeEntrySessionWindow,
+                            .DayOfWeek = CInt(DateTimeOffset.UtcNow.DayOfWeek),
+                            .HourOfDay = DateTimeOffset.UtcNow.Hour
+                        }
+                        If _lastSignalArgs IsNot Nothing Then
+                            snap.UpPct = _lastSignalArgs.UpPct
+                            snap.DownPct = _lastSignalArgs.DownPct
+                            snap.Tenkan = _lastSignalArgs.Tenkan
+                            snap.Kijun = _lastSignalArgs.Kijun
+                            snap.Cloud1 = _lastSignalArgs.Cloud1
+                            snap.Cloud2 = _lastSignalArgs.Cloud2
+                            snap.Ema21 = _lastSignalArgs.Ema21
+                            snap.Ema50 = _lastSignalArgs.Ema50
+                            snap.MacdHist = _lastSignalArgs.MacdHist
+                            snap.MacdHistPrev = _lastSignalArgs.MacdHistPrev
+                            snap.StochRsiK = _lastSignalArgs.StochRsiK
+                            snap.PlusDI = _lastSignalArgs.PlusDI
+                            snap.MinusDI = _lastSignalArgs.MinusDI
+                            snap.LongCount = _lastSignalArgs.LongCount
+                            snap.ShortCount = _lastSignalArgs.ShortCount
+                            snap.TotalConditions = _lastSignalArgs.TotalConditions
+                            snap.Rsi14 = _lastSignalArgs.Rsi14
+                            snap.VidyaValue = _lastSignalArgs.VidyaValue
+                            snap.CmoValue = _lastSignalArgs.CmoValue
+                            snap.DeltaVol = _lastSignalArgs.DeltaVol
+                        End If
+                        If _lastSignalBar IsNot Nothing Then
+                            snap.SignalBarOpen = CDec(_lastSignalBar.Open)
+                            snap.SignalBarHigh = CDec(_lastSignalBar.High)
+                            snap.SignalBarLow = CDec(_lastSignalBar.Low)
+                            snap.SignalBarClose = CDec(_lastSignalBar.Close)
+                            snap.SignalBarVolume = _lastSignalBar.Volume
+                        End If
+                        Await _snapshotRepo.SaveAsync(snap)
+                    Catch ex As Exception
+                        _logger.LogDebug(ex, "FEAT-01 SaveAsync(snapshot) failed: {Msg}", ex.Message)
+                    End Try
+                End If
+                If _lifespanRepo IsNot Nothing AndAlso _openTradeOutcomeId.HasValue Then
+                    Try
+                        Dim lifespan As New TradeLifespanRecordEntity With {
+                            .TradeOutcomeId = _openTradeOutcomeId.Value,
+                            .EntrySessionWindow = _tradeEntrySessionWindow,
+                            .CreatedAt = DateTimeOffset.UtcNow,
+                            .UpdatedAt = DateTimeOffset.UtcNow
+                        }
+                        _openLifespanId = Await _lifespanRepo.SaveAsync(lifespan)
+                    Catch ex As Exception
+                        _logger.LogDebug(ex, "FEAT-01 SaveAsync(lifespan) failed: {Msg}", ex.Message)
+                    End Try
+                End If
+
             End If
 
             ' Resolve positionId immediately after placement.
@@ -1990,31 +2234,31 @@ Namespace TopStepTrader.Services.Trading
                     Dim bgAccountId = posEntryAccountId
                     Dim bgCts = _cts
                     Dim _bgTask = Task.Run(Async Function() As Task
-                                 Try
-                                     While Not bgCts.Token.IsCancellationRequested
-                                         Await Task.Delay(5000, bgCts.Token)
-                                         Dim bg = Await _orderService.GetLivePositionSnapshotAsync(
+                                               Try
+                                                   While Not bgCts.Token.IsCancellationRequested
+                                                       Await Task.Delay(5000, bgCts.Token)
+                                                       Dim bg = Await _orderService.GetLivePositionSnapshotAsync(
                                              bgAccountId, bgContractId, Nothing, bgCts.Token)
-                                         If bg IsNot Nothing AndAlso bg.PositionId <> 0 Then
-                                             SyncLock _stateLock
-                                                 If Not _openPositionId.HasValue Then
-                                                     _openPositionId = bg.PositionId
-                                                 End If
-                                             End SyncLock
-                                             Log($"🔗 {fav.Name} position ID resolved by background resolver: {bg.PositionId} — ATR trail active")
-                                             Return
-                                         End If
-                                         ' Stop if position is no longer open (SL/TP hit before we resolved)
-                                         SyncLock _stateLock
-                                             If Not _positionOpen Then Return
-                                         End SyncLock
-                                     End While
-                                 Catch ex As OperationCanceledException
-                                     ' Engine stopped — exit silently
-                                 Catch ex As Exception
-                                     Log($"⚠️  Background positionId resolver error: {ex.Message}")
-                                 End Try
-                             End Function)
+                                                       If bg IsNot Nothing AndAlso bg.PositionId <> 0 Then
+                                                           SyncLock _stateLock
+                                                               If Not _openPositionId.HasValue Then
+                                                                   _openPositionId = bg.PositionId
+                                                               End If
+                                                           End SyncLock
+                                                           Log($"🔗 {fav.Name} position ID resolved by background resolver: {bg.PositionId} — ATR trail active")
+                                                           Return
+                                                       End If
+                                                       ' Stop if position is no longer open (SL/TP hit before we resolved)
+                                                       SyncLock _stateLock
+                                                           If Not _positionOpen Then Return
+                                                       End SyncLock
+                                                   End While
+                                               Catch ex As OperationCanceledException
+                                                   ' Engine stopped — exit silently
+                                               Catch ex As Exception
+                                                   Log($"⚠️  Background positionId resolver error: {ex.Message}")
+                                               End Try
+                                           End Function)
                 End If
             End If
         End Function
@@ -2042,17 +2286,31 @@ Namespace TopStepTrader.Services.Trading
                     Log($"⚠️  Closing {closedCount} UI trade row(s) for {_strategy.ContractId} — all positions flattened")
                 End If
                 Dim closePnl = _lastApiPnl
+                ' FEAT-01: use last bar close as best available exit price on neutral flatten
+                Dim neutralExitPrice = If(_lastBarClose > 0D, _lastBarClose, _lastEntryPrice)
+                PersistTradeClose("Neutral", closePnl, neutralExitPrice)
                 For i As Integer = 1 To closedCount
-                    RaiseEvent TradeClosed(Me, New TradeClosedEventArgs("Neutral", closePnl))
+                    RaiseEvent TradeClosed(Me, New TradeClosedEventArgs("Neutral", closePnl, neutralExitPrice))
                     closePnl = 0D   ' P&L only known for the most-recently synced position
                 Next
             End If
 
             WriteDiagPostMortem("Neutral", _lastApiPnl)
+            _diagLogger?.WriteBracketEvent("POSITION_CLOSED",
+                If(_currentTrendSide.HasValue, _currentTrendSide.Value.ToString(), "UNKNOWN"),
+                _lastBarClose, _lastSlPrice, _lastTpPrice,
+                $"Position closed (Neutral) | P&L={If(_lastApiPnl >= 0, "+", "")}${_lastApiPnl:F2}")
             _sessionPnl += _lastApiPnl
             _sessionTradeCount += 1
+            _totalTradesThisSession += 1
+            If _lastApiPnl < 0D Then
+                _consecutiveLosses += 1
+            Else
+                _consecutiveLosses = 0
+            End If
             _tradePhase = TradePhase.Idle
             SetTrailTimerInterval(False)
+            SetBarCheckInterval(False)   ' FEAT-11: neutral close — switch to 15s flat cadence
             _openPositionId = Nothing
             _openTradeCount = 0
             _positionOpenedAt = DateTimeOffset.MinValue
@@ -2082,7 +2340,83 @@ Namespace TopStepTrader.Services.Trading
             RaiseEvent LogMessage(Me, message)
         End Sub
 
-        Private _positionLogTickCount As Integer = 0  ' counts TrailBracketAsync ticks; drives 5-min CSV snapshot
+        ''' <summary>
+        ''' FEAT-01: Persists the resolved outcome and finalised lifespan record when a trade closes.
+        ''' Fire-and-forget safe — errors are caught and logged without bubbling.
+        ''' </summary>
+        Private Sub PersistTradeClose(exitReason As String, pnl As Decimal, exitPrice As Decimal)
+            If Not _openTradeOutcomeId.HasValue Then Return
+            Dim outcomeId = _openTradeOutcomeId.Value
+            Dim lifespanId = _openLifespanId
+            Dim entryTime = _positionOpenedAt
+            Dim slCount = _slRatchetCount
+            Dim tpCount = _tpAdvanceCount
+            Dim freeRide = _freeRideActivatedAt
+            Dim mae = _runningMaeDollars
+            Dim mfe = _runningMfeDollars
+            Dim initialSl = _initialSlPrice
+            Dim entryPrice = _lastEntryPrice
+            Dim entrySess = _tradeEntrySessionWindow
+            Dim exitSess = GetSessionWindow(DateTimeOffset.UtcNow)
+            Dim durationMin = CSng((DateTimeOffset.UtcNow - entryTime).TotalMinutes)
+
+            Dim rMultiple As Single = 0F
+            If initialSl <> 0D AndAlso entryPrice <> 0D Then
+                Dim riskDollars = Math.Abs(entryPrice - initialSl) * _totalDollarPerPoint
+                If riskDollars > 0D Then rMultiple = CSng(pnl / riskDollars)
+            End If
+
+            Task.Run(Async Function() As Task
+                         Try
+                             If _outcomeRepo IsNot Nothing Then
+                                 Await _outcomeRepo.ResolveOutcomeAsync(
+                                     outcomeId,
+                                     DateTimeOffset.UtcNow,
+                                     exitPrice,
+                                     pnl,
+                                     pnl >= 0D,
+                                     exitReason)
+                             End If
+                         Catch ex As Exception
+                             _logger.LogDebug(ex, "FEAT-01 ResolveOutcomeAsync failed: {Msg}", ex.Message)
+                         End Try
+                         If _lifespanRepo IsNot Nothing AndAlso lifespanId.HasValue Then
+                             Try
+                                 Dim lifespan = Await _lifespanRepo.GetByTradeOutcomeIdAsync(outcomeId)
+                                 If lifespan IsNot Nothing Then
+                                     lifespan.MaxAdverseExcursionDollars = mae
+                                     lifespan.MaxFavorableExcursionDollars = mfe
+                                     lifespan.SlRatchetCount = slCount
+                                     lifespan.TpAdvanceCount = tpCount
+                                     lifespan.FreeRideActivated = freeRide.HasValue
+                                     lifespan.FreeRideActivatedAtMinutes = If(freeRide.HasValue,
+                                         CSng((freeRide.Value - entryTime).TotalMinutes), 0F)
+                                     lifespan.DurationMinutes = durationMin
+                                     lifespan.ExitSessionWindow = exitSess
+                                     lifespan.CrossedSessionBoundary = (entrySess <> exitSess)
+                                     lifespan.RMultiple = rMultiple
+                                     Await _lifespanRepo.UpdateAsync(lifespan)
+                                 End If
+                             Catch ex As Exception
+                                 _logger.LogDebug(ex, "FEAT-01 UpdateAsync(lifespan) failed: {Msg}", ex.Message)
+                             End Try
+                         End If
+                     End Function)
+        End Sub
+
+        ''' <summary>FEAT-01: Returns a session-window label for the given UTC time.</summary>
+        Private Shared Function GetSessionWindow(utc As DateTimeOffset) As String
+            Dim h = utc.Hour
+            If h >= 8 AndAlso h < 12 Then Return "London"
+            If h >= 12 AndAlso h < 13 Then Return "London-US Overlap"
+            If h >= 13 AndAlso h < 17 Then Return "US Session"
+            If h >= 17 AndAlso h < 21 Then Return "US Afternoon"
+            Return "Off Hours"
+        End Function
+
+        Private _positionLogTickCount As Integer = 0  ' counts ManagePositionAsync ticks; drives diag snapshot cadence
+        ' BUG-22: timestamp of the most recent 2-second bar used for P&L; DateTimeOffset.MinValue = not yet set.
+        Private _lastPnlBarTimestamp As DateTimeOffset = DateTimeOffset.MinValue
 
         Private Sub ResetTrailState()
             _lastSlPrice = 0D
@@ -2091,17 +2425,30 @@ Namespace TopStepTrader.Services.Trading
             _initialSlTicks = 0
             _tpAdvanceCount = 0
             _positionLogTickCount = 0
+            _lastPnlBarTimestamp = DateTimeOffset.MinValue
             _lastFinalAmount = 0D       ' reset so += accumulation starts fresh on next entry
             _totalDollarPerPoint = 0D   ' reset so += accumulation starts fresh on next entry
             _freeRollActivationPrice = 0D
             _initialTpTicks = 0
+            ' FEAT-01
+            _openTradeOutcomeId = Nothing
+            _openLifespanId = Nothing
+            _runningMaeDollars = 0D
+            _runningMfeDollars = 0D
+            _slRatchetCount = 0
+            _freeRideActivatedAt = Nothing
+            _tradeEntrySessionWindow = String.Empty
+            _barsInTrade = 0
+            _lastSignalArgs = Nothing
+            _lastSignalBar = Nothing
         End Sub
 
         ' ── 15-second bracket trail ───────────────────────────────────────────────
 
         ''' <summary>
-        ''' Timer callback for the 1-second position management loop.
+        ''' Timer callback for the 2-second position management loop.
         ''' Handles P&amp;L updates, Free Roll activation, and ATR trailing while a position is open.
+        ''' The 2-second period matches the 2-second bar-close cadence used by GetLatestPriceAsync.
         ''' Reentrancy guard prevents overlapping calls when the API is slow.
         ''' </summary>
         Private Sub PositionTimerCallback(state As Object)
@@ -2124,13 +2471,41 @@ Namespace TopStepTrader.Services.Trading
         End Sub
 
         ''' <summary>
-        ''' Switches the management timer between active (1 s) and idle (60 s) intervals.
-        ''' 1-second interval: P&amp;L updates, Free Roll activation check, and ATR trail while open.
+        ''' Switches the management timer between active (2 s) and idle (60 s) intervals.
+        ''' 2-second interval: P&amp;L updates, Free Roll activation check, and ATR trail while open.
+        ''' The 2-second period matches the 2-second bar-close cadence so P&amp;L advances once
+        ''' per bar close rather than on arbitrary quote ticks.
         ''' Call immediately after every position open/close transition.
         ''' </summary>
         Private Sub SetTrailTimerInterval(positionOpen As Boolean)
-            Dim period = If(positionOpen, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(60))
+            Dim period = If(positionOpen, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(60))
             _positionTimer?.Change(period, period)
+        End Sub
+
+        ''' <summary>
+        ''' FEAT-11: Adapts the bar-check timer cadence to position state.
+        '''
+        ''' Flat (no position open), MultiConfluence strategy:
+        '''   Period = 15 s — the engine fetches 15-second bars so indicator values
+        '''   (Cloud, Tenkan, Kijun, EMA, MACD, StochRSI…) advance on every 15-second bar
+        '''   close instead of the 5-minute bar close, reducing maximum staleness from
+        '''   ~4 m 30 s down to ~30 s (2 missed ticks at the 15-second boundary).
+        '''
+        ''' All other strategies / position open:
+        '''   Period = 30 s — unchanged default cadence. Strategy-timeframe bars are used
+        '''   for position management (confluence dissolution, reversal confirmation). The
+        '''   30-second cadence matches the existing position-monitoring REST budget.
+        '''
+        ''' Call at every position open/close transition, mirroring SetTrailTimerInterval.
+        ''' </summary>
+        Private Sub SetBarCheckInterval(positionOpen As Boolean)
+            ' Only MultiConfluence benefits from the 15-second flat cadence.
+            ' All other strategy types remain at the standard 30-second interval.
+            Dim isMc = (_strategy IsNot Nothing AndAlso
+                        _strategy.Condition = StrategyConditionType.MultiConfluence)
+            Dim flatSeconds = If(isMc, 15, 30)
+            Dim period = If(positionOpen, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(flatSeconds))
+            _timer?.Change(period, period)
         End Sub
 
         ''' <summary>
@@ -2201,7 +2576,9 @@ Namespace TopStepTrader.Services.Trading
         ''' <summary>
         ''' Runs every 1 second while a position is open.
         ''' Responsibilities: P&amp;L publish · Free Roll activation check · phase-specific trail.
-        ''' Uses only cached prices (no API call) to stay within the 100 req/min rate limit.
+        ''' Fetches the latest 2-second bar close from TopStepX on every tick to ensure P&amp;L
+        ''' advances at the 2-second bar-close cadence.  Falls back to the cached quote price
+        ''' when the bar fetch fails (network error, rate limit).
         ''' </summary>
         Private Async Function ManagePositionAsync(ct As CancellationToken) As Task
             If Not _openPositionId.HasValue Then Return
@@ -2210,13 +2587,31 @@ Namespace TopStepTrader.Services.Trading
             Dim isBuy = (_lastEntrySide = OrderSide.Buy)
             Dim tickSize = If(_strategy.TickSize > 0D, _strategy.TickSize, 0.01D)
 
-            ' Price: cached quote (sub-second) → fallback to last bar close. No API call.
+            ' BUG-22: Refresh _lastBarClose from the latest 2-second bar close so P&L
+            ' advances on 2-second bar closes rather than on sub-second quote ticks.
+            ' Falls back to the cached quote (sub-second) when the bar fetch returns 0,
+            ' then further falls back to the last known _lastBarClose.
+            Dim barClosePrice As Decimal = 0D
+            Dim barTs As DateTimeOffset = DateTimeOffset.MinValue
+            Try
+                barClosePrice = Await _ingestionService.GetLatestPriceAsync(_strategy.ContractId, ct)
+                If barClosePrice > 0D Then
+                    _lastBarClose = barClosePrice
+                    _lastPnlBarTimestamp = DateTimeOffset.UtcNow  ' approximate: bar close ≈ now
+                End If
+            Catch ex As OperationCanceledException
+                Throw
+            Catch ex As Exception
+                _logger.LogDebug(ex, "ManagePositionAsync: 2-s bar fetch failed for {Id}", _strategy.ContractId)
+            End Try
+
             Dim rawQuote = Volatile.Read(_lastQuotePrice)
-            Dim currentPrice As Decimal = If(rawQuote > 0D, CDec(rawQuote), _lastBarClose)
+            Dim currentPrice As Decimal = If(barClosePrice > 0D, barClosePrice,
+                                             If(rawQuote > 0D, CDec(rawQuote), _lastBarClose))
             If currentPrice <= 0D Then Return
 
-            ' Keep _lastBarClose current so 30s REST sync path uses the same price.
-            _lastBarClose = currentPrice
+            ' Keep _lastBarClose in sync regardless of which source was used.
+            If barClosePrice <= 0D Then _lastBarClose = currentPrice
 
             ' Compute and publish live P&L
             Dim livePnl = ComputeLivePnl(currentPrice)
@@ -2231,15 +2626,27 @@ Namespace TopStepTrader.Services.Trading
             End If
             _lastApiPnl = livePnl
 
+            ' FEAT-01: update running MAE/MFE
+            If livePnl < _runningMaeDollars Then _runningMaeDollars = livePnl
+            If livePnl > _runningMfeDollars Then _runningMfeDollars = livePnl
+
             RaiseEvent PositionSynced(Me, New PositionSyncedEventArgs(
                 _openPositionId.GetValueOrDefault(0L), livePnl, _positionOpenedAt,
                 If(_lastFinalAmount > 0D, _lastFinalAmount, 1D),
                 isBuy, Math.Max(1, _openTradeCount)))
 
-            ' Diag snapshot: first tick then every 60s (1s × 60 = 1-minute interval)
-            Dim priceSource = If(rawQuote > 0D, "quote", "bar")
+            ' BUG-22: diagnostics — log bar timestamp and age so staleness is observable.
+            ' First tick: always log. Then every 30 ticks (≈ 60 s at 2-second period).
+            Dim priceSource = If(barClosePrice > 0D, "2s-bar",
+                                 If(rawQuote > 0D, "quote", "cached-bar"))
             _positionLogTickCount += 1
-            If _positionLogTickCount = 1 OrElse _positionLogTickCount Mod 60 = 0 Then
+            Dim isDiagTick = (_positionLogTickCount = 1 OrElse _positionLogTickCount Mod 30 = 0)
+            If isDiagTick Then
+                Dim barAgeMs = If(_lastPnlBarTimestamp > DateTimeOffset.MinValue,
+                                  (DateTimeOffset.UtcNow - _lastPnlBarTimestamp).TotalMilliseconds,
+                                  Double.NaN)
+                Dim ageStr = If(Double.IsNaN(barAgeMs), "age=unknown", $"age={barAgeMs:F0} ms")
+                Log($"📈 P&L bar [{priceSource}]: close={currentPrice:F4}  pnl=${livePnl:F2}  {ageStr}")
                 Dim slTks = If(_initialSlTicks > 0, _initialSlTicks, Math.Max(1, _pxSettings.DefaultSlTicks))
                 _diagLogger?.WritePositionSnapshot(
                     _strategy.ContractId, If(isBuy, "LONG", "SHORT"),
@@ -2257,8 +2664,8 @@ Namespace TopStepTrader.Services.Trading
                                           currentPrice >= _freeRollActivationPrice,
                                           currentPrice <= _freeRollActivationPrice)
                         If activated Then
-                            Await ActivateFreeRollAsync(isBuy, ct)
-                            Return  ' trail on next 1s tick
+                            Await ActivateFreeRollAsync(currentPrice, isBuy, ct)
+                            Return  ' trail on next 2s tick
                         End If
                     End If
                     ' Tick-based trail (preserves Wide/Standard/Tight tier, SL + TP together)
@@ -2276,7 +2683,7 @@ Namespace TopStepTrader.Services.Trading
         ''' The ratchet guard ensures the new SL is strictly better than the current one
         ''' (handles edge case where price reverses immediately after triggering activation).
         ''' </summary>
-        Private Async Function ActivateFreeRollAsync(isBuy As Boolean, ct As CancellationToken) As Task
+        Private Async Function ActivateFreeRollAsync(currentPrice As Decimal, isBuy As Boolean, ct As CancellationToken) As Task
             Dim contract = FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
             Dim commBuffer = If(contract IsNot Nothing, contract.GetCommissionTickBuffer(), 2)
             Dim tickSize = If(_strategy.TickSize > 0D, _strategy.TickSize, 0.01D)
@@ -2296,8 +2703,12 @@ Namespace TopStepTrader.Services.Trading
                 _tradePhase = TradePhase.FreeRoll
                 RaiseEvent TurtleBracketChanged(Me, New TurtleBracketChangedEventArgs(
                     0, newSl, 0D, isAdvance:=False, isFreeRide:=True))
+                _diagLogger?.WriteBracketEvent("FREE_ROLL_ON", If(isBuy, "BUY", "SELL"),
+                    currentPrice, newSl, 0D,
+                    $"Free Roll activated — SL moved to BE+{commBuffer}t @ {newSl:F4} | TP cancelled | ATR trail engaged")
                 Log($"[{_strategy.ContractId}] 🎯 Free Roll activated — " &
                     $"SL moved to BE+{commBuffer}t @ {newSl:F4} | TP cancelled | ATR trail engaged")
+                _freeRideActivatedAt = DateTimeOffset.UtcNow   ' FEAT-01
             Else
                 Log($"⚠️  Free Roll activation failed for {_strategy.ContractId} — will retry next tick")
             End If
@@ -2337,8 +2748,14 @@ Namespace TopStepTrader.Services.Trading
             If ok Then
                 _lastSlPrice = newSl
                 _lastTpPrice = newTp
+                _slRatchetCount += 1   ' FEAT-01
                 RaiseEvent TurtleBracketChanged(Me, New TurtleBracketChangedEventArgs(
                     0, newSl, newTp, isAdvance:=True, isFreeRide:=isFreeRide))
+                If _diagLogger IsNot Nothing Then
+                    _diagLogger.WriteBracketEvent("BRACKET_TRAIL", If(isBuy, "BUY", "SELL"),
+                        currentPrice, newSl, newTp,
+                        $"SL trailed to {newSl:F4}  TP at {newTp:F4} (+{ticks}t)")
+                End If
             Else
                 Log($"⚠️  Trail API call failed — will retry next tick (1s)")
             End If
@@ -2383,6 +2800,7 @@ Namespace TopStepTrader.Services.Trading
             Dim ok = Await _orderService.EditPositionSlTpAsync(_openPositionId.Value, newSlCandidate, Nothing, cancel:=ct)
             If ok Then
                 _lastSlPrice = newSlCandidate
+                _slRatchetCount += 1   ' FEAT-01
                 RaiseEvent TurtleBracketChanged(Me, New TurtleBracketChangedEventArgs(
                     0, newSlCandidate, 0D, isAdvance:=True, isFreeRide:=isFreeRide))
             Else

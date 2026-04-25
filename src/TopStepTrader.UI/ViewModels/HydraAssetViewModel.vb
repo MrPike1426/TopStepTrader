@@ -358,6 +358,17 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        ''' <summary>
+        ''' Updates the Close price and timestamp in the indicator grid from a live price tick
+        ''' (e.g. the 15-second bar close).  Called independently of the full ConfidenceUpdated
+        ''' cycle so the grid refreshes between strategy-timeframe bar closes.
+        ''' </summary>
+        Public Sub UpdateLivePrice(price As Decimal)
+            If price <= 0D Then Return
+            GridClose = $"{price:F2}"
+            LastUpdated = DateTime.Now.ToString("HH:mm:ss")
+        End Sub
+
         ' ── Hydra indicator grid display properties ──────────────────────────────
 
         Private _gridClose As String = "—"
@@ -634,8 +645,31 @@ Namespace TopStepTrader.UI.ViewModels
         ''' <summary>
         ''' Called from the engine ConfidenceUpdated event on the UI dispatcher.
         ''' Updates all display properties atomically and refreshes market status.
+        ''' When <see cref="ConfidenceUpdatedEventArgs.IsDisplayOnly"/> is True only the
+        ''' indicator grid columns are refreshed — scores, SummaryLine, and tile state are
+        ''' intentionally left unchanged (this is a 15-second live-bar display tick).
         ''' </summary>
         Public Sub ApplyConfidence(e As ConfidenceUpdatedEventArgs)
+            ' ── Live 15-second display-only refresh ───────────────────────────────
+            If e.IsDisplayOnly Then
+                ' Only update the Close and Ichimoku/EMA/ADX grid columns so the UI shows
+                ' intra-bar indicator movement without touching scores or SummaryLine.
+                If e.LastClose > 0D Then
+                    GridClose = $"{e.LastClose:F2}"
+                    LastUpdated = DateTime.Now.ToString("HH:mm:ss")
+                    RecordPrice(e.LastClose, DateTime.Now)
+                End If
+                If e.Cloud1 > 0D Then GridCloud1 = $"{e.Cloud1:F2}"
+                If e.Cloud2 > 0D Then GridCloud2 = $"{e.Cloud2:F2}"
+                If e.Tenkan > 0D Then GridTenkan = $"{e.Tenkan:F2}"
+                If e.Kijun > 0D Then GridKijun = $"{e.Kijun:F2}"
+                If e.Ema21 > 0D Then GridEma21 = $"{e.Ema21:F2}"
+                If e.Ema50 > 0D Then GridEma50 = $"{e.Ema50:F2}"
+                GridAdx = $"{e.AdxValue:F1}"
+                GridDiPlus = $"{e.PlusDI:F1}"
+                GridDiMinus = $"{e.MinusDI:F1}"
+                Return
+            End If
             ' ── Market-closed / no-data transition ────────────────────────────────
             ' Fired once by the engine when bars = 0 or last bar becomes stale.
             ' Consult the time-based schedule first: if the market SHOULD be open per

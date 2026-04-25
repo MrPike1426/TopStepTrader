@@ -32,7 +32,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _pxHistoryClient As PXHistoryClient
         Private ReadOnly _catalog As TopStepXInstrumentCatalog
         Private ReadOnly _session As ITradingSessionContext
-        Private ReadOnly _claudeService As ClaudeReviewService
+        Private ReadOnly _claudeService As IClaudeReviewService
 
         Private _isBarsLoaded As Boolean = False
 
@@ -76,7 +76,7 @@ Namespace TopStepTrader.UI.ViewModels
                        pxHistoryClient As PXHistoryClient,
                        catalog As TopStepXInstrumentCatalog,
                        session As ITradingSessionContext,
-                       claudeService As ClaudeReviewService)
+                       claudeService As IClaudeReviewService)
             _orderService = orderService
             _accountService = accountService
             _pxHistoryClient = pxHistoryClient

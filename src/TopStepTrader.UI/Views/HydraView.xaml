@@ -922,8 +922,8 @@
                                         <DataGridTextColumn Header="Time"   Binding="{Binding LastUpdated}" Width="72"/>
                                         <!-- Close -->
                                         <DataGridTextColumn Header="Close"  Binding="{Binding GridClose}"   Width="76"/>
-                                        <!-- Cloud1 / Cloud2 (stacked) -->
-                                        <DataGridTemplateColumn Header="Cloud1&#x0A;Cloud 2" Width="80">
+                                        <!-- Ichi High / Ichi Low (stacked) -->
+                                        <DataGridTemplateColumn Header="Ichi High&#x0A;Ichi Low" Width="80">
                                             <DataGridTemplateColumn.CellTemplate>
                                                 <DataTemplate>
                                                     <StackPanel Margin="6,4" HorizontalAlignment="Center">

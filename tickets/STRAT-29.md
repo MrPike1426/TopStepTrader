@@ -1,68 +1,38 @@
-# STRAT-29 PumpNDump free-ride drops effective heat to zero — scale-in cap bypass after activation
+# STRAT-29 Implement Opening Range Breakout (ORB) strategy
 
 **Status:** Open  
 **Category:** Strategy  
-**Size:** S  
+**Priority:** P2  
+**Size:** L  
 **Source:** Code-Review  
-**Files:** `src\TopStepTrader.Services\Trading\PumpNDumpExecutionEngine.vb:462–493, 935–946`
+**Files:** `src/TopStepTrader.Core/Enums/StrategyConditionType.vb`, `src/TopStepTrader.Services/Backtest/Strategies/`, `src/TopStepTrader.Services/Trading/StrategyExecutionEngine.vb`, `src/TopStepTrader.Core/Trading/StrategyDefaults.vb`
 
 ## Problem
 
-`ApplyFreeRideAsync` moves all bracket SLs to `_averageEntry` (breakeven). After this runs,
-`CalculateCurrentHeat()` returns near-zero because heat is computed as the sum of
-`(entryPrice − currentSlPrice) × qty` across all brackets (lines 938–944), and all SLs are
-now at `_averageEntry ≈ entryPrice`.
+The current strategy lineup is entirely indicator-based (EMA, RSI, MACD, Ichimoku, etc.). None of the strategies use price structure or session context. Opening Range Breakout is one of the most consistently profitable documented intraday strategies — it is used by prop firms globally, has academic backing, and is specifically designed for the intraday-only constraint imposed by TopStepX's forced EOD close.
 
-On the next poll, the scale-in check fires (lines 474–493). The heat guard at line 595
-(`CalculateCurrentHeat() + newLotHeat > _maxRiskHeatTicks`) now sees near-zero accumulated
-heat, so any new scale-in lot passes the check regardless of how many contracts are already
-open or how extended the price is.
+## Strategy Logic
 
-The intended purpose of `_maxRiskHeatTicks` is to cap total portfolio heat-at-risk. Free-ride
-moves SLs to breakeven, not off the books — the open contracts still represent real exposure
-if price reverses sharply through entry. The heat guard should reflect the *behavioural* risk
-(how far price must move against us to close the position), not just the *dollar* distance of
-the current SL from entry.
+**Setup:** The first 15–30 minutes of the regular session establish the "opening range" — the high and low of bars from session open to a configurable cutoff time (default: first 30 minutes).
 
-Specifically: after free-ride, the remaining risk is that price reverses through the average
-entry back to wherever the trailing SL ends up. The scale-in logic should use
-`_stopLossTicks * newLotQty` as the incremental heat for any new scale-in lot, and compare
-that against a post-free-ride sub-limit rather than the full `_maxRiskHeatTicks`.
+**Entry:**
+- Long when price closes a full bar **above** the opening range high, confirmed by a volume bar ≥ 1.2× the 20-bar average volume
+- Short when price closes a full bar **below** the opening range low, confirmed by volume
 
-## Proposed Fix
+**Stop Loss:** Opposite extreme of the opening range (e.g. long stop = opening range low). Expressed in ticks and clamped via `TopStepXInstrumentCatalog.ClampStopTicksAsync`.
 
-After `_freeRideActive` becomes True, block further scale-ins entirely unless there is a
-configurable `AllowScaleInAfterFreeRide` flag (default `False`). This is the safest default —
-once the trade is at breakeven-or-better, the natural management mode is to trail the existing
-size to the exit, not to add more contracts.
+**Take Profit:** 1.5× the width of the opening range in the breakout direction (minimum 1:1.5 R:R).
 
-In `DoCheckAsync`, before the `ScaleInAsync` call (line 486):
+**No-trade filter:** Do not enter if the opening range width is > 2× the ATR(14) of the prior 20 bars (range too wide = risk too high). Do not enter after the session midpoint (instrument-specific cutoff, e.g. 1:00pm ET for Gold).
 
-```vb
-If _freeRideActive Then
-    Log($"⏸  Scale-in suppressed — free-ride is active (position at BE, no new heat)")
-    ' skip scale-in entirely
-Else
-    ' existing priceMovedEnough check + ScaleInAsync call
-End If
-```
-
-Alternatively, if the ability to scale in after free-ride is intentional, document that intent
-explicitly and add a log line that makes it obvious:
-```
-Log($"📈 Scale-in post-free-ride — heat guard bypassed (SLs at BE; new lot heat only)")
-```
-and compute heat as `newLotHeat` alone (not `CalculateCurrentHeat() + newLotHeat`).
-
-The decision between the two approaches is a strategy design choice; the current silent
-bypass is the defect regardless of which approach is chosen.
+**Best instruments:** MNQ, MES (index futures with strong NY open momentum), and MGC (Gold, strong 8:20–10:30am ET window).
 
 ## Acceptance Criteria
-
-- [ ] After `_freeRideActive = True`, `ScaleInAsync` is either blocked with a log message
-  OR the heat calculation explicitly accounts for only the new lot's heat with a log that
-  makes the intent clear.
-- [ ] `CalculateCurrentHeat()` is NOT used as the heat accumulator after free-ride (it
-  returns near-zero and defeats the cap).
-- [ ] Existing scale-in behaviour before free-ride activation is unchanged.
-- [ ] Build passes; all tests still pass.
+- [ ] `StrategyConditionType.OpeningRangeBreakout` enum value added (next sequential integer, do not reuse any)
+- [ ] `OrbSignalProvider` implementing `IStrategySignalProvider` with the logic above
+- [ ] Registered in `StrategySignalProviderFactory.Create`
+- [ ] Default parameters added to `StrategyDefaults`
+- [ ] Live engine (`StrategyExecutionEngine`) recognises the strategy and evaluates it on each bar
+- [ ] Backtest runs correctly for ORB including opening-range construction phase (bars before range is complete produce no signal)
+- [ ] At least 5 unit tests covering: range construction, long breakout signal, short breakout signal, no-trade filter (wide range), no-trade filter (late session)
+- [ ] Build passes; all tests still pass

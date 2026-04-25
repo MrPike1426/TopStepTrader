@@ -1,4 +1,4 @@
-Imports TopStepTrader.Core.Interfaces
+﻿Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 
 Namespace TopStepTrader.Services.Backtest.Strategies
@@ -89,16 +89,21 @@ Namespace TopStepTrader.Services.Backtest.Strategies
             Dim mcLagCloudBottom = If(mcLagSpanAOk AndAlso mcLagSpanBOk,
                                       SafeD(Math.Min(indicators.IchiSpanA(mcLagIdx), indicators.IchiSpanB(mcLagIdx))), Decimal.MinValue)
 
+            ' BUG-09: chop-rejection thresholds mirroring live MultiConfluenceStrategy
+            Const MinDiSpread As Single = 2.0F
+            Dim mcChikouMinGap = mcLastClose * 0.001D   ' 0.1% of close
+            Dim mcMacdMinMag = mcAtrVal * 0.05F         ' 5% of ATR(14)
+
             ' ── Long: all 8 conditions ────────────────────────────────────────────
             Dim lcl1 = (mcBullishCloud AndAlso mcLastClose > mcCloudTop)
             Dim lcl2 = (mcLastClose > SafeD(mcEma21))
             Dim lcl2b = (mcLastClose > SafeD(mcEma50))
             Dim lcl3 = (mcTenkan > mcKijun)
-            Dim lcl4 = (mcLagIdx >= 0 AndAlso mcLastClose > mcLagClose AndAlso mcLastClose > mcLagCloudTop)
+            Dim lcl4 = (mcLagIdx >= 0 AndAlso mcLastClose > mcLagClose + mcChikouMinGap AndAlso mcLastClose > mcLagCloudTop)
             Dim lcl5 = ((config.MinAdxThreshold <= 0.0F OrElse mcAdxVal >= config.MinAdxThreshold) AndAlso
                         Not Single.IsNaN(mcPlusDI) AndAlso Not Single.IsNaN(mcMinusDI) AndAlso
-                        mcPlusDI > mcMinusDI)
-            Dim lcl6 = (mcHistNow > 0 AndAlso mcHistNow > mcHistPrev)
+                        mcPlusDI - mcMinusDI >= MinDiSpread)
+            Dim lcl6 = (mcHistNow >= mcMacdMinMag AndAlso mcHistNow > mcHistPrev)
             Dim lcl7 = (mcStochK < 0.7F)
 
             ' ── Volume gate: current bar volume ≥ 1.2× 20-bar average ───────────
@@ -106,7 +111,9 @@ Namespace TopStepTrader.Services.Backtest.Strategies
             Dim mcVolMa = If(indicators.VolMa20 IsNot Nothing AndAlso Not Single.IsNaN(indicators.VolMa20(barIndex)),
                              CDec(indicators.VolMa20(barIndex)), 0D)
             Dim mcCurVol = indicators.AllBars(barIndex).Volume
-            Dim lcl8 = (mcVolMa = 0D OrElse mcCurVol >= mcVolMa * 1.2D)   ' 8. Volume gate (skipped when VolMa20 unavailable)
+            ' STRAT-21: fail-closed when volume data is missing (volMa = 0) — matches live behaviour.
+            ' Previously: fail-open (gate passed when VolMa20 unavailable), causing live-vs-backtest divergence.
+            Dim lcl8 = (mcVolMa > 0D AndAlso mcCurVol >= mcVolMa * 1.2D)   ' 8. Volume gate (fail-closed: no data = no trade)
             Dim scl8 = lcl8   ' same gate for shorts
 
             ' ── Short: all 9 conditions ───────────────────────────────────────────
@@ -114,11 +121,11 @@ Namespace TopStepTrader.Services.Backtest.Strategies
             Dim scl2 = (mcLastClose < SafeD(mcEma21))
             Dim scl2b = (mcLastClose < SafeD(mcEma50))
             Dim scl3 = (mcTenkan < mcKijun)
-            Dim scl4 = (mcLagIdx >= 0 AndAlso mcLastClose < mcLagClose AndAlso mcLastClose < mcLagCloudBottom)
+            Dim scl4 = (mcLagIdx >= 0 AndAlso mcLastClose < mcLagClose - mcChikouMinGap AndAlso mcLastClose < mcLagCloudBottom)
             Dim scl5 = ((config.MinAdxThreshold <= 0.0F OrElse mcAdxVal >= config.MinAdxThreshold) AndAlso
                         Not Single.IsNaN(mcPlusDI) AndAlso Not Single.IsNaN(mcMinusDI) AndAlso
-                        mcMinusDI > mcPlusDI)
-            Dim scl6 = (mcHistNow < 0 AndAlso mcHistNow < mcHistPrev)
+                        mcMinusDI - mcPlusDI >= MinDiSpread)
+            Dim scl6 = (mcHistNow <= -mcMacdMinMag AndAlso mcHistNow < mcHistPrev)
             Dim scl7 = (mcStochK > 0.3F AndAlso Not Single.IsNaN(mcStochKPrev) AndAlso mcStochK < mcStochKPrev) ' K not oversold AND falling
 
             ' ── Determine side and compute SL/TP deltas ──────────────────────────
@@ -128,14 +135,19 @@ Namespace TopStepTrader.Services.Backtest.Strategies
 
             If lcl1 AndAlso lcl2 AndAlso lcl2b AndAlso lcl3 AndAlso lcl4 AndAlso lcl5 AndAlso lcl6 AndAlso lcl7 AndAlso lcl8 Then
                 mcSide = "Buy"
-                ' SL = min(1.5×ATR, cloud bottom); TP = 2:1 R:R from actual SL distance
+                ' STRAT-20: Intentional tight-SL selection — picks the HIGHER of cloud-bottom or 1.5×ATR floor
+                ' (i.e. the SL closest to entry).  Cloud floor = ichimoku invalidation point; 1.5×ATR floor
+                ' = maximum acceptable risk distance.  Using the tighter of the two limits max loss per bar.
+                ' If you want the safer/wider stop, swap to: If(mcCloudBottom < mcAtrSlLevel, mcCloudBottom, mcAtrSlLevel)
                 Dim mcAtrSlLevel = mcLastClose - SafeD(mcAtrVal * 1.5F)
                 mcSlCand = If(mcCloudBottom > mcAtrSlLevel, mcCloudBottom, mcAtrSlLevel)
                 mcTpCand = mcLastClose + (mcLastClose - mcSlCand) * 2D
 
             ElseIf scl1 AndAlso scl2 AndAlso scl2b AndAlso scl3 AndAlso scl4 AndAlso scl5 AndAlso scl6 AndAlso scl7 AndAlso scl8 Then
                 mcSide = "Sell"
-                ' SL = min(1.5×ATR, cloud top); TP = 2:1 R:R from actual SL distance
+                ' STRAT-20: Intentional tight-SL selection — picks the LOWER of cloud-top or 1.5×ATR ceiling
+                ' (i.e. the SL closest to entry). See Buy-side comment above for rationale.
+                ' If you want the safer/wider stop, swap to: If(mcCloudTop > mcAtrSlLevel, mcCloudTop, mcAtrSlLevel)
                 Dim mcAtrSlLevel = mcLastClose + SafeD(mcAtrVal * 1.5F)
                 mcSlCand = If(mcCloudTop < mcAtrSlLevel, mcCloudTop, mcAtrSlLevel)
                 mcTpCand = mcLastClose - (mcSlCand - mcLastClose) * 2D
@@ -182,12 +194,22 @@ Namespace TopStepTrader.Services.Backtest.Strategies
             mcConfidence = CSng(Math.Max(0.0F, Math.Min(1.0F, mcConfidence)))
 
             ' StopDelta/TpDelta are relative to signal close; fill block re-anchors to nextBar.Open.
+            ' STRAT-26: clamp StopDelta to broker minimum so backtest SLs cannot be tighter than
+            ' what the exchange would accept live.  Set config.MinStopDollars from
+            ' FavouriteContract.PxMinStopDollars for the instrument under test.
+            Dim rawStopDelta = Math.Abs(mcLastClose - mcSlCand)
+            Dim clampedStopDelta = If(config.MinStopDollars > 0D AndAlso rawStopDelta < config.MinStopDollars,
+                                      config.MinStopDollars, rawStopDelta)
+            ' Scale TP proportionally when SL is widened so R:R is preserved
+            Dim clampedTpDelta = If(rawStopDelta > 0D AndAlso clampedStopDelta > rawStopDelta,
+                                    Math.Abs(mcTpCand - mcLastClose) * (clampedStopDelta / rawStopDelta),
+                                    Math.Abs(mcTpCand - mcLastClose))
             Return New SignalResult With {
                 .Side            = mcSide,
                 .Confidence      = mcConfidence,
                 .IsLong          = (mcSide = "Buy"),
-                .StopDelta       = Math.Abs(mcLastClose - mcSlCand),
-                .TpDelta         = Math.Abs(mcTpCand - mcLastClose),
+                .StopDelta       = clampedStopDelta,
+                .TpDelta         = clampedTpDelta,
                 .IsPartialSignal = mcIsPartial
             }
         End Function

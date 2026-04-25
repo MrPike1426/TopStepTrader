@@ -337,6 +337,7 @@ Namespace TopStepTrader.Services.Market
                                                 ByRef unit As Integer,
                                                 ByRef unitNumber As Integer)
             Select Case tf
+                Case BarTimeframe.FifteenSecond: unit = 1 : unitNumber = 15  ' unit=1 (Second)
                 Case BarTimeframe.OneMinute    : unit = 2 : unitNumber = 1
                 Case BarTimeframe.ThreeMinute  : unit = 2 : unitNumber = 3
                 Case BarTimeframe.FiveMinute   : unit = 2 : unitNumber = 5
@@ -387,6 +388,7 @@ Namespace TopStepTrader.Services.Market
         ''' <summary>Short display label for a timeframe, e.g. "5-min", "1-hour".</summary>
         Private Shared Function TimeframeLabel(tf As BarTimeframe) As String
             Select Case tf
+                Case BarTimeframe.FifteenSecond : Return "15-sec"
                 Case BarTimeframe.OneMinute    : Return "1-min"
                 Case BarTimeframe.ThreeMinute  : Return "3-min"
                 Case BarTimeframe.FiveMinute   : Return "5-min"

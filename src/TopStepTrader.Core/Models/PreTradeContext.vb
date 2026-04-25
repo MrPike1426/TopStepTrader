@@ -47,6 +47,19 @@ Namespace TopStepTrader.Core.Models
         ''' Used by the AI check to detect consecutive-loss streaks.
         ''' </summary>
         Public Property SessionTradeCount As Integer = 0
+
+        ' ── Phase 4–5 enrichment fields ────────────────────────────────────────
+
+        ''' <summary>Rolling win-rate (0.0–1.0) across recent trades this session. Nothing = insufficient data.</summary>
+        Public Property RollingWinRate As Decimal?
+        ''' <summary>Realised P&amp;L of the most recent closed trade in USD.</summary>
+        Public Property RecentPnL As Decimal?
+        ''' <summary>Number of consecutive losses immediately before this signal.</summary>
+        Public Property ConsecutiveLosses As Integer = 0
+        ''' <summary>Total completed trades this session (same value as SessionTradeCount — kept for clarity).</summary>
+        Public Property TotalTradesThisSession As Integer = 0
+        ''' <summary>Effective minimum confidence threshold after persona/circuit-breaker adjustments.</summary>
+        Public Property EffectiveMinConfidence As Integer
     End Class
 
 End Namespace

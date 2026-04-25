@@ -7,7 +7,6 @@ Imports TopStepTrader.Core.Events
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Trading
-Imports TopStepTrader.Services.AI
 Imports TopStepTrader.Services.Trading
 Imports TopStepTrader.UI.ViewModels.Base
 
@@ -26,7 +25,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _accountService As IAccountService
         Private ReadOnly _backtestService As IBacktestService
         Private ReadOnly _barCollectionService As IBarCollectionService
-        Private ReadOnly _claudeReviewService As ClaudeReviewService
+        Private ReadOnly _claudeReviewService As IClaudeReviewService
         Private ReadOnly _engine As ISniperExecutionEngine
         Private ReadOnly _session As ITradingSessionContext
 
@@ -555,7 +554,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public Sub New(accountService As IAccountService,
                        backtestService As IBacktestService,
                        barCollectionService As IBarCollectionService,
-                       claudeReviewService As ClaudeReviewService,
+                       claudeReviewService As IClaudeReviewService,
                        engine As ISniperExecutionEngine,
                        session As ITradingSessionContext)
             _accountService = accountService

@@ -33,6 +33,9 @@ Namespace TopStepTrader.Data
             services.AddScoped(Of SignalRepository)()
             services.AddScoped(Of OrderRepository)()
             services.AddScoped(Of TradeOutcomeRepository)()
+            services.AddScoped(Of ITradeSetupSnapshotRepository, TradeSetupSnapshotRepository)()
+            services.AddScoped(Of ITradeLifespanRepository, TradeLifespanRepository)()
+            services.AddScoped(Of IAdaptiveParametersRepository, AdaptiveParametersRepository)()
 
         End Sub
 
