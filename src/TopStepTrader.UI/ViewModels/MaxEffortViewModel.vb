@@ -23,7 +23,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private ReadOnly _backtestService As IBacktestService
         Private ReadOnly _barCollectionService As IBarCollectionService
-        Private ReadOnly _claudeReviewService As ClaudeReviewService
+        Private ReadOnly _claudeReviewService As IClaudeReviewService
         Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _personaService As IPersonaService
         Private ReadOnly _pinnedResults As ObservableCollection(Of MaxEffortRowVm)
@@ -122,7 +122,7 @@ Namespace TopStepTrader.UI.ViewModels
         ''' <param name="runVm">Tab 1 VM — ForceClose settings are read from here at run time.</param>
         Public Sub New(backtestService As IBacktestService,
                        barCollectionService As IBarCollectionService,
-                       claudeReviewService As ClaudeReviewService,
+                       claudeReviewService As IClaudeReviewService,
                        session As ITradingSessionContext,
                        personaService As IPersonaService,
                        pinnedResults As ObservableCollection(Of MaxEffortRowVm),
@@ -267,7 +267,7 @@ Namespace TopStepTrader.UI.ViewModels
                                         .ForceCloseEnabled = capForceClose,
                                         .ForceCloseAmount = capForceAmt,
                                         .SlippageTicks = 1,
-                                        .CommissionPerSideUsd = contract.PxCommissionPerSide
+                                        .CommissionPerSideUsd = contract.RoundTripFee / 2D
                                     }
 
                                     Dim result = Await _backtestService.RunBacktestAsync(config, cts.Token)
@@ -370,6 +370,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property Sharpe As String
         Public ReadOnly Property AvgPnL As String
         Public ReadOnly Property MaxDD As String
+        Public ReadOnly Property EndOfDayCount As String
 
         Public Sub New(personaName As String, contractName As String, strategyName As String,
                        timeframeLabel As String, result As BacktestResult)
@@ -385,6 +386,7 @@ Namespace TopStepTrader.UI.ViewModels
             Sharpe = If(result.SharpeRatio.HasValue, result.SharpeRatio.Value.ToString("F2"), "—")
             AvgPnL = result.AveragePnLPerTrade.ToString("C0")
             MaxDD = result.MaxDrawdown.ToString("C0")
+            EndOfDayCount = result.EndOfDayCloseCount.ToString()
         End Sub
 
         Public Sub New(personaName As String, contractName As String, strategyName As String,

@@ -133,6 +133,9 @@ Namespace TopStepTrader.Services.Backtest
             ' Sentinel is -1000 (not Integer.MinValue) to avoid Int32 overflow in the
             ' (i - lastForceCloseBarIndex) subtraction at the cooldown check below.
             Dim lastForceCloseBarIndex As Integer = -1000
+            ' Tracks the bar index of the most recent EndOfDay forced-close.
+            ' Used to suppress re-entry for 1 bar after a session-end close.
+            Dim lastEndOfDayBarIndex As Integer = -1000
             ' Tracks the bar index of the most recent DonchianBreakout mid-cross (NeutralExit).
             ' Suppresses re-entry for 3 bars after a mid-cross exit to prevent oscillation churn.
             Dim lastDonchianExitBarIndex As Integer = -1000
@@ -185,11 +188,47 @@ Namespace TopStepTrader.Services.Backtest
 
                 Dim bar = filteredBars(i)
 
-                ' â”€â”€ Fill pending entry from previous bar's signal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+                ' End-of-day forced close
+                ' TopStepX force-closes all futures positions at the end of each daily
+                ' session. When the date changes and a position is open, close all legs
+                ' at the prior bar's Close with SL-equivalent slippage.
+                If openLegs.Count > 0 AndAlso i > warmUp Then
+                    Dim prevBar = filteredBars(i - 1)
+                    If bar.Timestamp.Date <> prevBar.Timestamp.Date Then
+                        Dim eodExitPrice = prevBar.Close
+                        If config.SlippageTicks > 0 AndAlso config.TickSize > 0D Then
+                            Dim slipDelta = config.SlippageTicks * config.TickSize
+                            eodExitPrice += If(openLegs(0).Side = "Buy", -slipDelta, slipDelta)
+                        End If
+                        Dim eodPositionPnL = 0D
+                        For Each leg In openLegs
+                            leg.ExitTime = prevBar.Timestamp
+                            leg.ExitPrice = eodExitPrice
+                            leg.ExitReason = "EndOfDay"
+                            Dim pnl = BacktestMetrics.CalculatePnL(leg, config)
+                            leg.PnL = pnl
+                            eodPositionPnL += pnl
+                            trades.Add(leg)
+                        Next
+                        capital += eodPositionPnL
+                        If capital > peakCapital Then peakCapital = capital
+                        Dim eodDd = peakCapital - capital
+                        If eodDd > maxDrawdown Then maxDrawdown = eodDd
+                        openLegs.Clear()
+                        mcOpenSlPrice = 0D : mcOpenTpPrice = 0D
+                        qlStOpenSlPrice = 0D : qlStOpenTpPrice = 0D
+                        qlDonOpenMidExit = 0D : qlBbOpenMidExit = 0D
+                        dbbInner1SdExit = 0D
+                        dynStop = 0D : dynTp = 0D : dynStopDelta = 0D : dynTpDelta = 0D
+                        lastEndOfDayBarIndex = i
+                        pending = Nothing
+                    End If
+                End If
+
                 ' Entry fills at bar.Open Â± 1 tick adverse slippage (Items 2+3).
                 ' Pending entries generated during a ForceClose cooldown are dropped.
                 If pending IsNot Nothing Then
-                    If (i - lastForceCloseBarIndex) <= 3 Then
+                    If (i - lastForceCloseBarIndex) <= 3 OrElse (i - lastEndOfDayBarIndex) <= 1 Then
                         pending = Nothing   ' cooldown — discard stale signal
                     Else
                         Dim canFillLeg = (openLegs.Count = 0) OrElse
@@ -198,8 +237,10 @@ Namespace TopStepTrader.Services.Backtest
                                           openLegs(0).Side = pending.Side)
                         If canFillLeg Then
                             Dim isBuyFill  = (pending.Side = “Buy”)
+                            ' Base 1-tick adverse slippage + STRAT-25 spread cost (half-spread penalty at entry).
                             Dim fillSlip   = If(config.TickSize > 0D, config.TickSize, 0D)
-                            Dim fillPrice  = bar.Open + If(isBuyFill, fillSlip, -fillSlip)
+                            Dim spreadCost = If(config.TickSize > 0D, config.SpreadTicks * config.TickSize, 0D)
+                            Dim fillPrice  = bar.Open + If(isBuyFill, fillSlip + spreadCost, -(fillSlip + spreadCost))
                             ' STRAT-16: partial-conviction entries use half quantity
                             Dim fillQty = If(pending.IsPartialSignal,
                                             Math.Max(1, config.Quantity \ 2),
@@ -466,6 +507,10 @@ Namespace TopStepTrader.Services.Backtest
                 ' profit-cap exit (only when flat; open-position exits are unaffected).
                 If openLegs.Count = 0 AndAlso (i - lastForceCloseBarIndex) <= 3 Then Continue For
 
+                ' EndOfDay re-entry cooldown: suppress entry signals for 1 bar after a
+                ' session-end forced close.
+                If openLegs.Count = 0 AndAlso (i - lastEndOfDayBarIndex) <= 1 Then Continue For
+
                 ' DonchianBreakout de-bounce: suppress re-entry for 3 bars after a mid-cross
                 ' (NeutralExit) to prevent oscillation churn around the 10-bar mid-channel.
                 If openLegs.Count = 0 AndAlso
@@ -589,6 +634,7 @@ Namespace TopStepTrader.Services.Backtest
                 .WinRate = result.WinRate,
                 .SharpeRatio = result.SharpeRatio,
                 .AveragePnLPerTrade = result.AveragePnLPerTrade,
+                .ParametersJson = $"{{""roundTripFeeUsd"":{result.RoundTripFeeUsd:F2}}}",
                 .ModelVersion = "EMA/RSI-Rule-Based",
                 .CompletedAt = DateTimeOffset.UtcNow,
                 .Trades = result.Trades.Select(Function(t) New BacktestTradeEntity With {

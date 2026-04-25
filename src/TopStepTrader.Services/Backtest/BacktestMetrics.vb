@@ -304,6 +304,10 @@ Namespace TopStepTrader.Services.Backtest
                 .WinRate = If(totalPositions > 0, CSng(winningPositions) / totalPositions, 0F),
                 .AveragePnLPerTrade = If(totalPositions > 0, totalPnL / totalPositions, 0D),
                 .SharpeRatio = CalculateSharpeFromReturns(positionPnLs),
+                .EndOfDayCloseCount = trades.Where(Function(t) t.ExitReason = "EndOfDay") _
+                                            .Select(Function(t) t.PositionGroupId) _
+                                            .Distinct().Count(),
+                .RoundTripFeeUsd = config.CommissionPerSideUsd * 2D,
                 .Trades = trades
             }
         End Function

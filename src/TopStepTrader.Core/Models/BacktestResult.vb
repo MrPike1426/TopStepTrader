@@ -16,6 +16,8 @@ Namespace TopStepTrader.Core.Models
         Public Property SharpeRatio As Single?
         Public Property WinRate As Single
         Public Property AveragePnLPerTrade As Decimal
+        Public Property EndOfDayCloseCount As Integer
+        Public Property RoundTripFeeUsd As Decimal
         Public Property Trades As New List(Of BacktestTrade)
     End Class
 

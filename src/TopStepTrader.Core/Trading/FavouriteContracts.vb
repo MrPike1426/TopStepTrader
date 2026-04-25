@@ -23,7 +23,9 @@ Namespace TopStepTrader.Core.Trading
                 "CON.F.US.MCLE.K26", 0.01D, 1.0D, 100D, 0.3D, 15D) With {
                 .YahooSymbol = "CL=F",
                 .PxRootSymbol = "MCLE",
-                .CommissionTickBuffer = 2
+                .CommissionTickBuffer = 2,
+                .MultiConfluenceTimeframeMinutes = 5,
+                .RoundTripFee = 1.04D
             })
 
             ' GOLD.24-7 — MGC (Micro Gold)  [ProjectX symbolId: F.US.MGC; roll: even months G/J/M/Q/V/Z; Q26=Aug 2026 front-month]
@@ -32,7 +34,9 @@ Namespace TopStepTrader.Core.Trading
                 "CON.F.US.MGC.Q26", 0.1D, 1.0D, 10D, 0.2D, 20D) With {
                 .YahooSymbol = "GC=F",
                 .PxRootSymbol = "MGC",
-                .CommissionTickBuffer = 2
+                .CommissionTickBuffer = 2,
+                .MultiConfluenceTimeframeMinutes = 10,
+                .RoundTripFee = 1.24D
             })
 
             ' SPX500 — MES (Micro S&P 500)  [roll: quarterly H/M/U/Z; U26=Sep 2026 front-month]
@@ -42,7 +46,9 @@ Namespace TopStepTrader.Core.Trading
                 "CON.F.US.MES.U26", 0.25D, 1.25D, 5D, 0.3D, 20D) With {
                 .YahooSymbol = "ES=F",
                 .PxRootSymbol = "MES",
-                .CommissionTickBuffer = 1
+                .CommissionTickBuffer = 1,
+                .MultiConfluenceTimeframeMinutes = 5,
+                .RoundTripFee = 0.74D
             })
 
             ' EURUSD — M6E (Micro EUR/USD)  [ProjectX symbolId: F.US.M6E; roll: quarterly H/M/U/Z; U26=Sep 2026 front-month]
@@ -54,7 +60,9 @@ Namespace TopStepTrader.Core.Trading
                 "CON.F.US.M6E.U26", 0.0001D, 1.25D, 12500D, 0.1D, 12.5D) With {
                 .YahooSymbol = "EURUSD=X",
                 .PxRootSymbol = "M6E",
-                .CommissionTickBuffer = 1
+                .CommissionTickBuffer = 1,
+                .MultiConfluenceTimeframeMinutes = 10,
+                .RoundTripFee = 0.74D
             })
 
             ' Crypto — MBT (Micro Bitcoin): 0.1 BTC/contract, tick=5pts/$0.50
@@ -64,7 +72,9 @@ Namespace TopStepTrader.Core.Trading
                 "CON.F.US.MBT.U26", 5.0D, 0.5D, 0.1D, 0.5D, 30D) With {
                 .IsCrypto = True,
                 .YahooSymbol = "BTC-USD",
-                .PxRootSymbol = "MBT"
+                .PxRootSymbol = "MBT",
+                .MultiConfluenceTimeframeMinutes = 15,
+                .RoundTripFee = 2.34D
             })
 
             Return list
@@ -141,6 +151,17 @@ Namespace TopStepTrader.Core.Trading
         ''' Empty for eToro-only instruments that have no TopStepX equivalent.
         ''' </summary>
         Public Property PxRootSymbol As String = String.Empty
+
+        ''' <summary>
+        ''' Preferred bar timeframe in minutes for the Multi-Confluence strategy on this instrument.
+        ''' Governs the strategy-evaluation bar series only; indicator display updates on 15-second
+        ''' bar closes independently of this value.
+        ''' Defaults to 5 (5-minute bars). Override per instrument in GetDefaults():
+        '''   Oil/MES: 5 min — highly liquid intraday, 5-min bar noise acceptable.
+        '''   Gold/M6E: 10 min — slightly wider bars filter micro-chop on these instruments.
+        '''   BTC/MBT: 15 min — crypto volatility requires wider bars to avoid false signals.
+        ''' </summary>
+        Public Property MultiConfluenceTimeframeMinutes As Integer = 5
         Public Property PxTickSize As Decimal
         Public Property PxTickValue As Decimal
         Public Property PxPointValue As Decimal
@@ -212,6 +233,13 @@ Namespace TopStepTrader.Core.Trading
         ''' Default $4.50 — standard CME Globex micro futures rate on TopStepX.
         ''' </summary>
         Public Property PxCommissionPerSide As Decimal = 4.5D
+
+        ''' <summary>
+        ''' Total round-trip cost per contract on TopStepX (broker commission + exchange fee, entry + exit).
+        ''' Used by the backtest engine to model realistic per-trade friction.
+        ''' Default $0.80 — conservative mid-range estimate for contracts without a confirmed rate.
+        ''' </summary>
+        Public Property RoundTripFee As Decimal = 0.80D
 
         ''' <summary>
         ''' True when this is a leveraged eToro CFD (MaxLeverage ≥ 5).

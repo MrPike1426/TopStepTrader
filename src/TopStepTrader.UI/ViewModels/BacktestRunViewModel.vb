@@ -1105,8 +1105,8 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Function GetCommissionPerSide(contractId As String) As Decimal
             Dim fc = FavouriteContracts.TryGetBySymbol(contractId)
-            If fc IsNot Nothing Then Return fc.PxCommissionPerSide
-            Return 4.5D
+            If fc IsNot Nothing Then Return fc.RoundTripFee / 2D
+            Return 0.40D  ' fallback: $0.80 round-trip / 2
         End Function
 
         Private Sub ExecuteCancel(param As Object)
@@ -1256,6 +1256,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property Sharpe As String
         Public ReadOnly Property AvgPnLPerTrade As String
         Public ReadOnly Property MaxDrawdown As String
+        Public ReadOnly Property EndOfDayCount As String
         Public ReadOnly Property IsSuccess As Boolean
 
         Public Sub New(label As String, result As BacktestResult)
@@ -1268,6 +1269,7 @@ Namespace TopStepTrader.UI.ViewModels
             Sharpe = If(result.SharpeRatio.HasValue, result.SharpeRatio.Value.ToString("F2"), "—")
             AvgPnLPerTrade = result.AveragePnLPerTrade.ToString("C0")
             MaxDrawdown = result.MaxDrawdown.ToString("C0")
+            EndOfDayCount = result.EndOfDayCloseCount.ToString()
             IsSuccess = True
         End Sub
 
@@ -1281,6 +1283,7 @@ Namespace TopStepTrader.UI.ViewModels
             Sharpe = "—"
             AvgPnLPerTrade = "—"
             MaxDrawdown = "—"
+            EndOfDayCount = "—"
             IsSuccess = False
         End Sub
     End Class
