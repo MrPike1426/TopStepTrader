@@ -68,13 +68,13 @@ Namespace TopStepTrader.UI.ViewModels
         End Property
 
         ' ── Editable fields ───────────────────────────────────────────────────
-        Private _tradeAmount As Decimal
-        Public Property TradeAmount As Decimal
+        Private _positionSize As Integer
+        Public Property PositionSize As Integer
             Get
-                Return _tradeAmount
+                Return _positionSize
             End Get
-            Set(value As Decimal)
-                SetProperty(_tradeAmount, value)
+            Set(value As Integer)
+                SetProperty(_positionSize, value)
             End Set
         End Property
 
@@ -201,7 +201,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Sub LoadFromService()
             Dim p = _service.GetProfile(_name)
-            _tradeAmount            = p.TradeAmount
+            _positionSize           = p.PositionSize
             _leverage               = p.Leverage
             _maxScaleIns            = p.MaxScaleIns
             _slMultipleOfN          = p.SlMultipleOfN
@@ -212,7 +212,7 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Private Sub LoadFromProfile(p As PersonaProfile)
-            TradeAmount            = p.TradeAmount
+            PositionSize           = p.PositionSize
             Leverage               = p.Leverage
             MaxScaleIns            = p.MaxScaleIns
             SlMultipleOfN          = p.SlMultipleOfN
@@ -227,7 +227,7 @@ Namespace TopStepTrader.UI.ViewModels
             StatusMessage = String.Empty
             Dim profile As New PersonaProfile With {
                 .Name                  = _name,
-                .TradeAmount           = _tradeAmount,
+                .PositionSize          = _positionSize,
                 .Leverage              = _leverage,
                 .MaxScaleIns           = _maxScaleIns,
                 .SlMultipleOfN         = _slMultipleOfN,

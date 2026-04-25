@@ -19,8 +19,8 @@ Namespace TopStepTrader.Data.Entities
         <MaxLength(50)>
         Public Property Name As String = String.Empty
 
-        <Column(TypeName:="decimal(18,4)")>
-        Public Property TradeAmount As Decimal
+        ''' <summary>Number of contracts per initial trade entry (TopStepX position size).</summary>
+        Public Property PositionSize As Integer
 
         Public Property Leverage As Integer
 

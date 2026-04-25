@@ -93,7 +93,7 @@
                                                       CommandParameter="Lewis"/>
                                     </Border.InputBindings>
                                     <TextBlock Padding="10,5" FontSize="12" FontWeight="SemiBold"
-                                               ToolTip="Lewis — Risk Averse: $200 capital · ADX≥25 · 90% confidence · SL=1.5N / TP=3.0N">
+                                               ToolTip="Lewis — Risk Averse: 1 contract · ADX≥25 · 90% confidence · SL=1.5N / TP=3.0N">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="#90CAF9"/>
@@ -129,7 +129,7 @@
                                                       CommandParameter="Damian"/>
                                     </Border.InputBindings>
                                     <TextBlock Padding="10,5" FontSize="12" FontWeight="SemiBold"
-                                               ToolTip="Damian — Moderate: $500 capital · ADX≥20 · 80% confidence · SL=1.0N / TP=2.5N">
+                                               ToolTip="Damian — Moderate: 3 contracts · ADX≥20 · 80% confidence · SL=1.0N / TP=2.5N">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="#9AE6B4"/>
@@ -165,7 +165,7 @@
                                                       CommandParameter="Joe"/>
                                     </Border.InputBindings>
                                     <TextBlock Padding="10,5" FontSize="12" FontWeight="SemiBold"
-                                               ToolTip="Joe — Aggressive: $1000 capital · ADX≥15 · 70% confidence · SL=0.75N / TP=2.0N">
+                                               ToolTip="Joe — Aggressive: 5 contracts · ADX≥15 · 70% confidence · SL=0.75N / TP=2.0N">
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock">
                                                 <Setter Property="Foreground" Value="#FEB2B2"/>
@@ -183,7 +183,7 @@
                                 <TextBlock VerticalAlignment="Center" Margin="16,0,0,0" FontSize="14"
                                            FontFamily="Consolas" 
                                            Foreground="{StaticResource TextSecondaryBrush}"
-                                           Text="Sets Capital · ADX · Confidence (+ ATR multiples when ATR mode is on)"/>
+                                           Text="Sets position size · ADX · Confidence (+ ATR multiples when ATR mode is on)"/>
                             </StackPanel>
 
                             <!-- Row 2 ── Instrument selector + Min ADX ─────── -->
@@ -218,19 +218,15 @@
                                            Foreground="{StaticResource TextSecondaryBrush}"/>
                             </StackPanel>
 
-                            <!-- Row 4 ── Capital · Qty · Confidence ──── -->
+                            <!-- Row 4 ── Size · Confidence ──── -->
                             <TextBlock Grid.Row="4" Grid.Column="0"
-                                       Text="Capital / Qty / Conf:"
+                                       Text="Size / Conf:"
                                        VerticalAlignment="Center" Margin="0,0,16,0"
                                        Foreground="{StaticResource TextSecondaryBrush}"/>
                             <StackPanel Grid.Row="4" Grid.Column="1" Orientation="Horizontal">
-                                <TextBox Text="{Binding InitialCapital, UpdateSourceTrigger=PropertyChanged}"
-                                         Width="74" ToolTip="Capital in dollars (default $1000 × 1 qty)"/>
-                                <TextBlock Text="$" VerticalAlignment="Center" Margin="3,0,10,0"
-                                           Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
                                 <TextBox Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}"
-                                         Width="46" ToolTip="Contracts per signal"/>
-                                <TextBlock Text="qty" VerticalAlignment="Center" Margin="3,0,0,0"
+                                         Width="46" ToolTip="Number of contracts per signal (TopStepX position size). Lewis=1 · Damian=3 · Joe=5"/>
+                                <TextBlock Text="contracts" VerticalAlignment="Center" Margin="3,0,0,0"
                                            Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
                                 <Rectangle Width="1" Fill="{StaticResource TextSecondaryBrush}"
                                            Opacity="0.3" Margin="14,3,14,3"/>

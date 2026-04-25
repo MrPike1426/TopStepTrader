@@ -645,11 +645,11 @@ Namespace TopStepTrader.UI.ViewModels
             _selectedPersona = personaName.Split(" "c)(0)
             _personaExplicitlyChosen = True
             _configMaxScaleIns = profile.MaxScaleIns
-            InitialCapital  = profile.TradeAmount.ToString("F0")
+            Quantity        = profile.PositionSize.ToString()
             MinAdxThreshold = CInt(profile.AdxThreshold).ToString()
             MinConfidence   = profile.DefaultConfidencePct.ToString()
-            SlAtrMultiple = profile.SlMultipleOfN.ToString("F2")
-            TpAtrMultiple = profile.TpMultipleOfN.ToString("F2")
+            SlAtrMultiple   = profile.SlMultipleOfN.ToString("F2")
+            TpAtrMultiple   = profile.TpMultipleOfN.ToString("F2")
             OnPropertyChanged(NameOf(IsLewisSelected))
             OnPropertyChanged(NameOf(IsDamianSelected))
             OnPropertyChanged(NameOf(IsJoeSelected))

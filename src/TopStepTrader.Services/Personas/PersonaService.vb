@@ -114,7 +114,7 @@ Namespace TopStepTrader.Services.Personas
         Private Shared Function ToProfile(name As String, s As PersonaProfileSettings) As PersonaProfile
             Return New PersonaProfile With {
                 .Name                  = name,
-                .TradeAmount           = s.TradeAmount,
+                .PositionSize          = s.PositionSize,
                 .Leverage              = s.Leverage,
                 .MaxScaleIns           = s.MaxScaleIns,
                 .SlMultipleOfN         = s.SlMultipleOfN,
@@ -130,7 +130,7 @@ Namespace TopStepTrader.Services.Personas
         Private Shared Function EntityToProfile(e As PersonaSettingsEntity) As PersonaProfile
             Return New PersonaProfile With {
                 .Name                  = e.Name,
-                .TradeAmount           = e.TradeAmount,
+                .PositionSize          = e.PositionSize,
                 .Leverage              = e.Leverage,
                 .MaxScaleIns           = e.MaxScaleIns,
                 .SlMultipleOfN         = e.SlMultipleOfN,
@@ -143,7 +143,7 @@ Namespace TopStepTrader.Services.Personas
         End Function
 
         Private Shared Sub MapToEntity(profile As PersonaProfile, entity As PersonaSettingsEntity)
-            entity.TradeAmount           = profile.TradeAmount
+            entity.PositionSize           = profile.PositionSize
             entity.Leverage              = profile.Leverage
             entity.MaxScaleIns           = profile.MaxScaleIns
             entity.SlMultipleOfN         = profile.SlMultipleOfN
@@ -158,7 +158,7 @@ Namespace TopStepTrader.Services.Personas
         Private Shared Function CloneProfile(p As PersonaProfile) As PersonaProfile
             Return New PersonaProfile With {
                 .Name                  = p.Name,
-                .TradeAmount           = p.TradeAmount,
+                .PositionSize          = p.PositionSize,
                 .Leverage              = p.Leverage,
                 .MaxScaleIns           = p.MaxScaleIns,
                 .SlMultipleOfN         = p.SlMultipleOfN,

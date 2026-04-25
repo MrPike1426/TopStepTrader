@@ -18,9 +18,10 @@ Namespace TopStepTrader.Core.Trading
         ' ── Identity ──────────────────────────────────────────────────────────────
         Public ReadOnly Property Name As String
 
-        ' ── Capital & leverage ────────────────────────────────────────────────────
-        ''' <summary>Cash amount per initial trade in USD.</summary>
-        Public ReadOnly Property TradeAmount As Decimal
+        ' ── Position sizing ───────────────────────────────────────────────────────
+        ''' <summary>Number of contracts per initial trade entry on TopStepX.
+        ''' Lewis = 1 (conservative), Damian = 3 (moderate), Joe = 5 (aggressive).</summary>
+        Public ReadOnly Property PositionSize As Integer
 
         ''' <summary>
         ''' Preferred leverage multiplier.
@@ -72,7 +73,7 @@ Namespace TopStepTrader.Core.Trading
         Public ReadOnly Property DefaultConfidencePct As Integer
 
         Private Sub New(name As String,
-                        tradeAmount As Decimal,
+                        positionSize As Integer,
                         leverage As Integer,
                         maxScaleIns As Integer,
                         slMultipleOfN As Decimal,
@@ -81,7 +82,7 @@ Namespace TopStepTrader.Core.Trading
                         adxThreshold As Single,
                         defaultConfidencePct As Integer)
             Me.Name = name
-            Me.TradeAmount = tradeAmount
+            Me.PositionSize = positionSize
             Me.Leverage = leverage
             Me.MaxScaleIns = maxScaleIns
             Me.SlMultipleOfN = slMultipleOfN
@@ -101,7 +102,7 @@ Namespace TopStepTrader.Core.Trading
         ''' </summary>
         Public Shared ReadOnly Lewis As New RiskProfile(
             name:="Lewis (Averse)",
-            tradeAmount:=200D,
+            positionSize:=1,
             leverage:=5,
             maxScaleIns:=1,
             slMultipleOfN:=1.5D,
@@ -118,7 +119,7 @@ Namespace TopStepTrader.Core.Trading
         ''' </summary>
         Public Shared ReadOnly Damian As New RiskProfile(
             name:="Damian (Moderate)",
-            tradeAmount:=500D,
+            positionSize:=3,
             leverage:=5,
             maxScaleIns:=2,
             slMultipleOfN:=1.0D,
@@ -137,7 +138,7 @@ Namespace TopStepTrader.Core.Trading
         ''' </summary>
         Public Shared ReadOnly Joe As New RiskProfile(
             name:="Joe (Aggressive)",
-            tradeAmount:=1000D,
+            positionSize:=5,
             leverage:=10,
             maxScaleIns:=3,
             slMultipleOfN:=0.75D,

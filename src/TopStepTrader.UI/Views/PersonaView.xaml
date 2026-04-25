@@ -75,16 +75,16 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <!-- Capital -->
+                                    <!-- Position size -->
                                     <TextBlock Grid.Row="0" Grid.Column="0"
-                                               Text="Capital per trade ($)"
+                                               Text="Position size (contracts)"
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                FontSize="12" VerticalAlignment="Center"/>
                                     <TextBox Grid.Row="0" Grid.Column="1"
-                                             Text="{Binding TradeAmount, UpdateSourceTrigger=PropertyChanged, StringFormat=F0}"
+                                             Text="{Binding PositionSize, UpdateSourceTrigger=PropertyChanged}"
                                              Height="26" VerticalContentAlignment="Center"
                                              HorizontalContentAlignment="Right"
-                                             ToolTip="Cash amount committed per initial trade (USD)."/>
+                                             ToolTip="Number of contracts per initial trade entry on TopStepX (e.g. 'BUY +1 MARKET'). Lewis=1 · Damian=3 · Joe=5."/>
 
                                     <!-- Leverage -->
                                     <TextBlock Grid.Row="2" Grid.Column="0"

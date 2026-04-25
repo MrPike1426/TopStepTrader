@@ -5,7 +5,9 @@ Namespace TopStepTrader.Core.Settings
     ''' These are the factory defaults returned by "Reset to Defaults" on the Persona page.
     ''' </summary>
     Public Class PersonaProfileSettings
-        Public Property TradeAmount As Decimal = 500D
+        ''' <summary>Number of contracts per initial trade entry. TopStepX sizes:
+        ''' Lewis = 1 (conservative), Damian = 3 (moderate), Joe = 5 (aggressive).</summary>
+        Public Property PositionSize As Integer = 1
         Public Property Leverage As Integer = 10
         Public Property MaxScaleIns As Integer = 2
         Public Property SlMultipleOfN As Decimal = 1.0D

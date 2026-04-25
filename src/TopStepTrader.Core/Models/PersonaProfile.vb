@@ -10,8 +10,9 @@ Namespace TopStepTrader.Core.Models
 
         Public Property Name As String = String.Empty
 
-        ''' <summary>Cash amount per initial trade in USD.</summary>
-        Public Property TradeAmount As Decimal
+        ''' <summary>Number of contracts (position size) per initial trade entry.
+        ''' TopStepX sizes: Lewis = 1 (conservative), Damian = 3 (moderate), Joe = 5 (aggressive).</summary>
+        Public Property PositionSize As Integer
 
         ''' <summary>Preferred leverage multiplier (capped by instrument MaxLeverage).</summary>
         Public Property Leverage As Integer

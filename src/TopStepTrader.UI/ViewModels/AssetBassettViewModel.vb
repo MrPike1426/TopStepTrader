@@ -506,7 +506,7 @@ Namespace TopStepTrader.UI.ViewModels
             Dim profile = _personaService.GetProfile(profileName)
 
             _selectedProfileName = profileName
-            CapitalAtRisk = profile.TradeAmount
+            CapitalAtRisk = CDec(profile.PositionSize)
             Leverage = profile.Leverage
             AdxThreshold = profile.AdxThreshold
             MaxScaleIns = profile.MaxScaleIns
