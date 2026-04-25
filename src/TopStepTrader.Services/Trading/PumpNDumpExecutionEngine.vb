@@ -4,8 +4,10 @@ Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Events
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
+Imports TopStepTrader.Core.Models.Diagnostics
 Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.ML.Features
+Imports TopStepTrader.Services.Diagnostics
 Imports TopStepTrader.Services.Market
 
 Namespace TopStepTrader.Services.Trading
@@ -30,6 +32,7 @@ Namespace TopStepTrader.Services.Trading
         Private ReadOnly _ingestionService As IBarIngestionService
         Private ReadOnly _orderService As IOrderService
         Private ReadOnly _logger As ILogger(Of PumpNDumpExecutionEngine)
+        Private ReadOnly _diagLogger As DiagnosticLogger
 
         ' ── Configuration (set by Start()) ──────────────────────────────────────
         Private _contractId As String
@@ -89,10 +92,12 @@ Namespace TopStepTrader.Services.Trading
 
         Public Sub New(ingestionService As IBarIngestionService,
                        orderService As IOrderService,
-                       logger As ILogger(Of PumpNDumpExecutionEngine))
+                       logger As ILogger(Of PumpNDumpExecutionEngine),
+                       diagLogger As DiagnosticLogger)
             _ingestionService = ingestionService
             _orderService = orderService
             _logger = logger
+            _diagLogger = diagLogger
         End Sub
 
         ' ── Properties ───────────────────────────────────────────────────────────
@@ -195,6 +200,17 @@ Namespace TopStepTrader.Services.Trading
 
             AddHandler _orderService.OrderFilled, AddressOf OnOrderFilled
 
+            _diagLogger.StartSession(_contractId, "Pump-n-Dump")
+            _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                .EventType = "ENGINE_START",
+                .Symbol    = _contractId,
+                .Action    = "START",
+                .Why       = $"TP={_takeProfitTicks}t SL={_stopLossTicks}t FreeRide=${_freeRidePnlThreshold:F0} " &
+                             $"ScaleIn={_scaleInTicks}t MaxHeat={_maxRiskHeatTicks}t MaxQty={_targetTotalSize} " &
+                             $"Fade<{_momentumFadeAtrFraction:F2}xATR Tighten={_tightenTicksPerBar}t " &
+                             $"Expires={_expiresAt:HH:mm}UTC tick={_tickSize} val={_tickValue}"
+            })
+
             Log($"🚀 Pump-n-Dump started — {_contractId} | 3-Bar Price Action | 1-min bars")
             If Not String.Equals(_effectiveContractId, _contractId, StringComparison.OrdinalIgnoreCase) Then
                 Log($"   → PX contract: {_effectiveContractId} | tick size={_tickSize} value=${_tickValue}/tick")
@@ -238,6 +254,7 @@ Namespace TopStepTrader.Services.Trading
             End If
 
             Log($"■ Pump-n-Dump stopped — {reason}")
+            _diagLogger.CloseSession()
             RaiseEvent ExecutionStopped(Me, reason)
         End Function
 
@@ -444,6 +461,16 @@ Namespace TopStepTrader.Services.Trading
                         _currentQty -= b.Qty
                     Next
                     Log($"✓ Bracket(s) closed ({primaryExitReason}) | P&L ≈ ${totalClosedPnl:N0}")
+                    _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                        .EventType = "CLOSED",
+                        .Symbol    = _contractId,
+                        .Action    = If(_tradeSide = OrderSide.Buy, "BUY", "SELL"),
+                        .Why       = $"exit={primaryExitReason} pnl=${totalClosedPnl:N0} avgEntry={_averageEntry:F4} lastClose={_lastClose:F4}",
+                        .Outcome   = New DiagOutcome With {
+                            .Status = primaryExitReason,
+                            .PlUsd  = totalClosedPnl
+                        }
+                    })
                     RaiseEvent TradeClosed(Me, New TradeClosedEventArgs(primaryExitReason, totalClosedPnl))
 
                     If _currentQty <= 0 Then
@@ -460,6 +487,16 @@ Namespace TopStepTrader.Services.Trading
                         RaisePositionChanged()
                     End If
                 End If
+
+                ' ── Position snapshot ────────────────────────────────────────────
+                Dim snapSlPrice = If(_brackets.Count > 0, _brackets(0).CurrentSlPrice, 0D)
+                Dim snapTpPrice = If(_brackets.Count > 0, _brackets(0).CurrentTpPrice, 0D)
+                _diagLogger.WritePositionSnapshot(
+                    _contractId,
+                    If(_tradeSide = OrderSide.Buy, "BUY", "SELL"),
+                    _averageEntry, _lastClose, "bar_close",
+                    UnrealisedPnl, snapSlPrice, snapTpPrice,
+                    Nothing, _stopLossTicks, _takeProfitTicks)
 
                 ' ── Free-ride: trigger once, then trail every poll ────────────────
                 If Not _freeRideActive Then
@@ -515,6 +552,13 @@ Namespace TopStepTrader.Services.Trading
             Const ReEntryCooldownSecs As Integer = 30
             If (DateTimeOffset.UtcNow - _lastPositionClosedAt).TotalSeconds < ReEntryCooldownSecs Then
                 Log($"⏸  Re-entry cooldown ({ReEntryCooldownSecs}s) — skipping entry signal")
+                _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                    .EventType       = "REJECT",
+                    .Symbol          = _contractId,
+                    .Action          = "NONE",
+                    .RejectionReason = $"re-entry cooldown ({ReEntryCooldownSecs}s)",
+                    .MetricsAtEntry  = New DiagMetricsAtEntry With {.PriceEntry = _lastClose}
+                })
                 Return
             End If
             Dim completedBars = bars.TakeLast(3).ToList()
@@ -528,6 +572,13 @@ Namespace TopStepTrader.Services.Trading
                 Dim b2 = completedBars(2)
                 Log($"🟢 PUMP SIGNAL: 3 consecutive green bars")
                 Log($"   {b0.Open:F2}→{b0.Close:F2}  {b1.Open:F2}→{b1.Close:F2}  {b2.Open:F2}→{b2.Close:F2}")
+                _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                    .EventType      = "SIGNAL",
+                    .Symbol         = _contractId,
+                    .Action         = "BUY",
+                    .Why            = $"3 green bars {b0.Open:F4}→{b0.Close:F4} {b1.Open:F4}→{b1.Close:F4} {b2.Open:F4}→{b2.Close:F4}",
+                    .MetricsAtEntry = New DiagMetricsAtEntry With {.PriceEntry = _lastClose, .Atr10 = CDec(currentAtr)}
+                })
                 _tradeSide = OrderSide.Buy
                 Await PlaceInitialEntryAsync(OrderSide.Buy, _lastClose, ct)
             ElseIf allRed Then
@@ -536,6 +587,13 @@ Namespace TopStepTrader.Services.Trading
                 Dim b2 = completedBars(2)
                 Log($"🔴 DUMP SIGNAL: 3 consecutive red bars")
                 Log($"   {b0.Open:F2}→{b0.Close:F2}  {b1.Open:F2}→{b1.Close:F2}  {b2.Open:F2}→{b2.Close:F2}")
+                _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                    .EventType      = "SIGNAL",
+                    .Symbol         = _contractId,
+                    .Action         = "SELL",
+                    .Why            = $"3 red bars {b0.Open:F4}→{b0.Close:F4} {b1.Open:F4}→{b1.Close:F4} {b2.Open:F4}→{b2.Close:F4}",
+                    .MetricsAtEntry = New DiagMetricsAtEntry With {.PriceEntry = _lastClose, .Atr10 = CDec(currentAtr)}
+                })
                 _tradeSide = OrderSide.Sell
                 Await PlaceInitialEntryAsync(OrderSide.Sell, _lastClose, ct)
             Else
@@ -588,6 +646,14 @@ Namespace TopStepTrader.Services.Trading
             ' BUG-19: correct average entry from broker-confirmed fill price
             Await CorrectEntryFromFillAsync(ct)
 
+            _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                .EventType      = "ENTRY",
+                .Symbol         = _contractId,
+                .Action         = If(side = OrderSide.Buy, "BUY", "SELL"),
+                .Why            = $"initial entry qty=1 estPrice={entryPrice:F4} avgEntry={_averageEntry:F4}",
+                .MetricsAtEntry = New DiagMetricsAtEntry With {.PriceEntry = entryPrice}
+            })
+
             RaiseEvent TradeOpened(Me, New TradeOpenedEventArgs(side, _contractId, 100,
                                                                 DateTimeOffset.UtcNow,
                                                                 entryOrder.ExternalOrderId))
@@ -606,6 +672,13 @@ Namespace TopStepTrader.Services.Trading
             Dim newLotHeat = (newLotDist / _tickSize)
             If (CalculateCurrentHeat() + newLotHeat) > _maxRiskHeatTicks Then
                 Log($"🛑 Scale-in blocked by Risk Heat: {CalculateCurrentHeat():F0} + {newLotHeat:F0} > {_maxRiskHeatTicks}")
+                _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                    .EventType       = "REJECT",
+                    .Symbol          = _contractId,
+                    .Action          = If(_tradeSide = OrderSide.Buy, "BUY", "SELL"),
+                    .RejectionReason = $"heat cap: current={CalculateCurrentHeat():F0} + new={newLotHeat:F0} > max={_maxRiskHeatTicks}",
+                    .MetricsAtEntry  = New DiagMetricsAtEntry With {.PriceEntry = currentPrice}
+                })
                 _lastEntryPrice = currentPrice
                 Return
             End If
@@ -646,6 +719,13 @@ Namespace TopStepTrader.Services.Trading
             Await CorrectEntryFromFillAsync(ct)
 
             Log($"✅ Scale-in @ {currentPrice:F2} | New AvgEntry={_averageEntry:F2} | Qty={_currentQty}/{_targetTotalSize}")
+            _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                .EventType      = "SCALE_IN",
+                .Symbol         = _contractId,
+                .Action         = If(_tradeSide = OrderSide.Buy, "BUY", "SELL"),
+                .Why            = $"qty={_currentQty}/{_targetTotalSize} avgEntry={_averageEntry:F4} heat={CalculateCurrentHeat():F0}t",
+                .MetricsAtEntry = New DiagMetricsAtEntry With {.PriceEntry = currentPrice}
+            })
             RaisePositionChanged()
             Await PlaceBracketAsync(_tradeSide, currentPrice, 1, ct)
         End Function
@@ -734,6 +814,16 @@ Namespace TopStepTrader.Services.Trading
             End If
 
             _brackets.Add(pair)
+            _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                .EventType = "BRACKET_PLACED",
+                .Symbol    = _contractId,
+                .Action    = If(side = OrderSide.Buy, "BUY", "SELL"),
+                .Why       = $"qty={qty} tp={pair.CurrentTpPrice:F4}(+{_takeProfitTicks}t) sl={pair.CurrentSlPrice:F4}(-{_stopLossTicks}t)",
+                .Settings  = New DiagSettings With {
+                    .TpPrice = pair.CurrentTpPrice,
+                    .SlPrice = pair.CurrentSlPrice
+                }
+            })
         End Function
 
         Private Async Function ApplyFreeRideAsync(ct As CancellationToken) As Task
@@ -803,6 +893,13 @@ Namespace TopStepTrader.Services.Trading
 
             _freeRideActive = True
             Log($"🔒 Free-ride active — all SLs at breakeven {bePrice:F2}")
+            _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                .EventType      = "FREE_RIDE",
+                .Symbol         = _contractId,
+                .Action         = If(_tradeSide = OrderSide.Buy, "BUY", "SELL"),
+                .Why            = $"avgEntry={_averageEntry:F4} bePrice={bePrice:F4} pnl=${UnrealisedPnl:F2}",
+                .MetricsAtEntry = New DiagMetricsAtEntry With {.PriceEntry = _lastClose}
+            })
             RaisePositionChanged()
         End Function
 
@@ -864,9 +961,17 @@ Namespace TopStepTrader.Services.Trading
                             anyUnprotected = True
                         Else
                             Log($"🔒 Trail SL {b.CurrentSlPrice:F2} → {candidateSl:F2}")
+                            Dim oldSl = b.CurrentSlPrice
                             b.SlOrderId = placed.ExternalOrderId
                             b.CurrentSlPrice = candidateSl
                             anyMoved = True
+                            _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                                .EventType = "TRAIL_SL",
+                                .Symbol    = _contractId,
+                                .Action    = If(_tradeSide = OrderSide.Buy, "BUY", "SELL"),
+                                .Why       = $"sl {oldSl:F4} → {candidateSl:F4} price={currentPrice:F4} dist={_stopLossTicks}t",
+                                .Settings  = New DiagSettings With {.SlPrice = candidateSl}
+                            })
                         End If
                     Catch ex As Exception
                         Log($"⚠️  Trail SL replacement failed: {ex.Message}")
@@ -949,9 +1054,17 @@ Namespace TopStepTrader.Services.Trading
                     }
                     Try
                         Dim placed = Await _orderService.PlaceOrderAsync(newTp)
+                        Dim oldTp = b.CurrentTpPrice
                         Log($"📉 TP tightened: {b.CurrentTpPrice:F2} → {newTpPrice:F2} (-{_tightenTicksPerBar}t)")
                         b.TpOrderId = placed.ExternalOrderId
                         b.CurrentTpPrice = newTpPrice
+                        _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                            .EventType = "TP_TIGHTEN",
+                            .Symbol    = _contractId,
+                            .Action    = If(_tradeSide = OrderSide.Buy, "BUY", "SELL"),
+                            .Why       = $"tp {oldTp:F4} → {newTpPrice:F4} (-{_tightenTicksPerBar}t) price={currentPrice:F4}",
+                            .Settings  = New DiagSettings With {.TpPrice = newTpPrice, .SlPrice = b.CurrentSlPrice}
+                        })
                     Catch ex As Exception
                         Log($"⚠️  TP replacement failed: {ex.Message}")
                     End Try
@@ -1051,6 +1164,16 @@ Namespace TopStepTrader.Services.Trading
             End If
 
             Log($"✓ Position closed (Emergency) — {_currentQty} contracts | P&L ≈ ${estimatedPnl:N0}")
+            _diagLogger.WriteEntry(New DiagnosticLogEntry With {
+                .EventType = "EMERGENCY_CLOSE",
+                .Symbol    = _contractId,
+                .Action    = If(_tradeSide = OrderSide.Buy, "BUY", "SELL"),
+                .Why       = $"qty={_currentQty} avgEntry={_averageEntry:F4} lastClose={_lastClose:F4} estPnl=${estimatedPnl:N0}",
+                .Outcome   = New DiagOutcome With {
+                    .Status = "EMERGENCY_CLOSE",
+                    .PlUsd  = estimatedPnl
+                }
+            })
             RaiseEvent TradeClosed(Me, New TradeClosedEventArgs("Emergency Close", estimatedPnl))
 
             _currentQty = 0
