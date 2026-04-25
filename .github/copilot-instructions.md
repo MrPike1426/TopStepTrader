@@ -10,7 +10,11 @@ Short version:
 1. **Read `tickets/<ID>.md`** before touching any code.
 2. **Fix the code** exactly as the ticket specifies.
 3. **Build** — confirm clean (`dotnet build --no-restore -v q && dotnet test --no-build -v q`).
-4. **Close the ticket** — move `tickets/<ID>.md` → `tickets/archive/<ID>.md`, append a row to `Closed_Tickets.md`, remove the row from `Open_TICKETS.md`.
+4. **Close the ticket** — four steps, all required:
+   - Move `tickets/<ID>.md` → `tickets/archive/<ID>.md`
+   - Append a row to `Closed_Tickets.md` at the **repo root** (this is the only Closed_Tickets.md)
+   - Remove the row from `Open_TICKETS.md` at the **repo root** (this is the only Open_TICKETS.md)
+   - Verify the row no longer appears in `Open_TICKETS.md` after the edit
 5. **Commit, push, and pull** — stage everything, commit with `git add -A && git commit -m "<ticket-id>: <short description>"`, push with `git push origin HEAD`, then `git pull`. Never mark a ticket done without completing this step.
 
 Never reference `REFACTOR_TRACKER.md`

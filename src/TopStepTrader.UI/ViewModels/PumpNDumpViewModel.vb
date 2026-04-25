@@ -154,6 +154,26 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Private _tradingStartHourUtc As String = "6"
+        Public Property TradingStartHourUtc As String
+            Get
+                Return _tradingStartHourUtc
+            End Get
+            Set(value As String)
+                SetProperty(_tradingStartHourUtc, value)
+            End Set
+        End Property
+
+        Private _tradingEndHourUtc As String = "21"
+        Public Property TradingEndHourUtc As String
+            Get
+                Return _tradingEndHourUtc
+            End Get
+            Set(value As String)
+                SetProperty(_tradingEndHourUtc, value)
+            End Set
+        End Property
+
         ' ══════════════════════════════════════════════════════════════════════
         ' ENGINE STATE
         ' ══════════════════════════════════════════════════════════════════════
@@ -358,6 +378,8 @@ Namespace TopStepTrader.UI.ViewModels
             Dim tp, sl, scaleIn, heat, maxSize, tighten As Integer
             Dim freeRideThreshold As Decimal = 50D
             Dim fadeFraction As Double = 0.5
+            Dim tradingStart As Integer = 6
+            Dim tradingEnd As Integer = 21
             Dim dur As Double = 2.0
 
             Dim parsed As Boolean
@@ -370,6 +392,8 @@ Namespace TopStepTrader.UI.ViewModels
             parsed = Double.TryParse(_momentumFadeAtrFraction, fadeFraction)
             parsed = Integer.TryParse(_tightenTicksPerBar, tighten)
             parsed = Double.TryParse(_durationHours, dur)
+            Integer.TryParse(_tradingStartHourUtc, tradingStart)
+            Integer.TryParse(_tradingEndHourUtc, tradingEnd)
 
             If tp <= 0 Then tp = 40
             If sl <= 0 Then sl = 15
@@ -407,7 +431,8 @@ Namespace TopStepTrader.UI.ViewModels
                           fadeFraction, tighten, dur,
                           GetTickSize(_contractId),
                           GetTickValue(_contractId),
-                          If(_selectedAccount IsNot Nothing, _selectedAccount.Broker, BrokerType.eToro))
+                          If(_selectedAccount IsNot Nothing, _selectedAccount.Broker, BrokerType.eToro),
+                          tradingStart, tradingEnd)
         End Sub
 
         Private Async Sub ExecuteStop()

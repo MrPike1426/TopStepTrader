@@ -48,6 +48,8 @@ Namespace TopStepTrader.Services.Trading
         Private _tickSize As Decimal
         Private _tickValue As Decimal
         Private _expiresAt As DateTimeOffset
+        Private _tradingStartHour As Integer = 6
+        Private _tradingEndHour As Integer = 21
 
         ' ── Position state ───────────────────────────────────────────────────────
         Private _currentQty As Integer = 0
@@ -151,7 +153,9 @@ Namespace TopStepTrader.Services.Trading
                          durationHours As Double,
                          tickSize As Decimal,
                          tickValue As Decimal,
-                         brokerType As BrokerType) Implements IPumpNDumpExecutionEngine.Start
+                         brokerType As BrokerType,
+                         Optional tradingStartHourUtc As Integer = 6,
+                         Optional tradingEndHourUtc As Integer = 21) Implements IPumpNDumpExecutionEngine.Start
             If _running Then Return
 
             _contractId = contractId
@@ -169,8 +173,10 @@ Namespace TopStepTrader.Services.Trading
             _tickSize = If(tickSize > 0, tickSize, 0.25D)
             _tickValue = If(tickValue > 0, tickValue, 1.25D)
             _expiresAt = DateTimeOffset.UtcNow.AddHours(If(durationHours > 0, durationHours, 2.0))
+            _tradingStartHour = tradingStartHourUtc
+            _tradingEndHour = tradingEndHourUtc
 
-            ' ── Broker resolution: use PX contract ID and tick specs for TopStepX ──
+            ' ── Broker resolution
             _brokerType = brokerType
             Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
             If brokerType = BrokerType.TopStepX AndAlso fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId) Then
@@ -549,6 +555,21 @@ Namespace TopStepTrader.Services.Trading
             ' ── FLAT: look for 3-bar entry signal ────────────────────────────────
             ' Yahoo Finance historical endpoint returns only closed bars — no forming bar is included.
             ' Use the 3 most recent bars directly.
+
+            ' ── Stale-bar guard ──────────────────────────────────────────────────
+            Dim barAgeMins = (DateTimeOffset.UtcNow - lastBar.Timestamp).TotalMinutes
+            If barAgeMins > 5.0 Then
+                Log($"⏸  Stale bar ({barAgeMins:F0} min old) — entry suppressed")
+                Return
+            End If
+
+            ' ── Trading hours guard ──────────────────────────────────────────────
+            Dim utcHour = DateTimeOffset.UtcNow.Hour
+            If _tradingEndHour > 0 AndAlso (utcHour < _tradingStartHour OrElse utcHour >= _tradingEndHour) Then
+                Log($"⏸  Outside trading hours (UTC {utcHour:00}:xx, window={_tradingStartHour:00}–{_tradingEndHour:00}h) — entry suppressed")
+                Return
+            End If
+
             Const ReEntryCooldownSecs As Integer = 30
             If (DateTimeOffset.UtcNow - _lastPositionClosedAt).TotalSeconds < ReEntryCooldownSecs Then
                 Log($"⏸  Re-entry cooldown ({ReEntryCooldownSecs}s) — skipping entry signal")

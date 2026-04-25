@@ -35,7 +35,9 @@ Namespace TopStepTrader.Services.Trading
                    durationHours As Double,
                    tickSize As Decimal,
                    tickValue As Decimal,
-                   brokerType As BrokerType)
+                   brokerType As BrokerType,
+                   Optional tradingStartHourUtc As Integer = 6,
+                   Optional tradingEndHourUtc As Integer = 21)
 
         Function StopAsync(Optional reason As String = "Stopped by user") As Task
 
