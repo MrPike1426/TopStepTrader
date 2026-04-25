@@ -569,6 +569,23 @@ Namespace TopStepTrader.Services.Trading
             Await _ingestionService.IngestAsync(_strategy.ContractId, timeframe, fetchCount, ct)
             bars = Await _ingestionService.GetBarsForMLAsync(_strategy.ContractId, timeframe, fetchCount, ct)
 
+            ' ── Partial-bar guard ────────────────────────────────────────────────────
+            ' Drop the last bar when its timestamp falls inside the still-open period.
+            ' E.g. on a 15-min TF, a bar timestamped 14:07 UTC is forming until 14:15.
+            ' Indicator arrays must only contain closed bars to prevent repaint.
+            Dim periodTicksGuard As Long = TimeSpan.FromMinutes(_strategy.TimeframeMinutes).Ticks
+            Dim currentPeriodStart As DateTimeOffset = New DateTimeOffset(
+                DateTimeOffset.UtcNow.Ticks - (DateTimeOffset.UtcNow.Ticks Mod periodTicksGuard),
+                DateTimeOffset.UtcNow.Offset)
+            If bars IsNot Nothing AndAlso bars.Count > 0 Then
+                Dim lastBarPeriodStart As DateTimeOffset = New DateTimeOffset(
+                    bars.Last().Timestamp.Ticks - (bars.Last().Timestamp.Ticks Mod periodTicksGuard),
+                    bars.Last().Timestamp.Offset)
+                If lastBarPeriodStart >= currentPeriodStart Then
+                    bars = bars.Take(bars.Count - 1).ToList()
+                End If
+            End If
+
             If bars Is Nothing OrElse bars.Count < minBars Then
                 Dim barCount = If(bars Is Nothing, 0, bars.Count)
                 If barCount = 0 Then
