@@ -257,6 +257,8 @@ Namespace TopStepTrader.UI.ViewModels
             If capForceAmt <= 0 Then capForceAmt = 50D
             Dim capValidateSplit = ValidateSplitEnabled
 
+            MaxEffortProgressText = $"Starting Maximum Effort run... ForceClose: {If(capForceClose, $"ON (${capForceAmt:F0}/day)", "OFF")} | ValidateSplit: {If(capValidateSplit, "ON", "OFF")}"
+
             _cancelSource = New CancellationTokenSource()
             Dim cts = _cancelSource
 
@@ -375,6 +377,7 @@ Namespace TopStepTrader.UI.ViewModels
                     Dim feeList = String.Join(", ", contracts.Select(Function(c) $"{c.Name}=${c.RoundTripFee:F2}"))
                     sb.AppendLine($"Date range: {dayCount} days ({capStart:yyyy-MM-dd} to {capEnd:yyyy-MM-dd}). Commission = contract round-trip fee ({feeList}) + 1-tick slippage per entry.")
                     sb.AppendLine($"ATR-based stops: Lewis SL=1.5×/TP=3.0×N  Damian SL=1.0×/TP=2.0×N  Joe SL=0.75×/TP=2.0×N  (N = ATR14 × point value).")
+                    sb.AppendLine($"ForceClose: {If(capForceClose, $"ON (daily loss cap = ${capForceAmt:F0})", "OFF")}.")
                     If capValidateSplit Then
                         sb.AppendLine("OUT-OF-SAMPLE VALIDATION: 60/40 train/test split applied. Results sorted by out-of-sample Test P&L.")
                         sb.AppendLine("Degradation = (TrainPnL − TestPnL) / |TrainPnL| × 100. >50% = possible overfit; negative TestPnL = strategy reverses out-of-sample.")
