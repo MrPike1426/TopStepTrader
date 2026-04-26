@@ -218,6 +218,104 @@
         </ScrollViewer>
 
         <!-- ══════════════════════════════════════════════════════════
+             BODY: Active-position panel (visible when a trade is open)
+             ══════════════════════════════════════════════════════════ -->
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>   <!-- active positions panel -->
+                <RowDefinition Height="*"/>      <!-- slot tile grid -->
+            </Grid.RowDefinitions>
+
+            <!-- Active position panel -->
+            <Border Grid.Row="0" Margin="12,4,12,0"
+                    Background="#1A1A2E" CornerRadius="6"
+                    BorderBrush="#E53935" BorderThickness="0,0,0,2">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasActiveSlots}" Value="True">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel Margin="10,8,10,8">
+                    <TextBlock Text="⚡  Active Positions"
+                               FontSize="11" FontWeight="SemiBold"
+                               Foreground="#E53935" Margin="0,0,0,6"/>
+                    <ItemsControl ItemsSource="{Binding ActivePositionSlots}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,2" Padding="8,6" CornerRadius="4"
+                                        Background="{StaticResource SurfaceBrush}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>   <!-- symbol -->
+                                            <ColumnDefinition Width="12"/>
+                                            <ColumnDefinition Width="*"/>      <!-- bracket prices -->
+                                            <ColumnDefinition Width="Auto"/>   <!-- free ride badge -->
+                                            <ColumnDefinition Width="8"/>
+                                            <ColumnDefinition Width="Auto"/>   <!-- nudge -->
+                                            <ColumnDefinition Width="4"/>
+                                            <ColumnDefinition Width="Auto"/>   <!-- close -->
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Symbol -->
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding Symbol}"
+                                                   FontSize="13" FontWeight="Bold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   VerticalAlignment="Center"/>
+
+                                        <!-- SL/TP display -->
+                                        <TextBlock Grid.Column="2"
+                                                   Text="{Binding BracketPriceDisplay}"
+                                                   FontSize="12" FontFamily="Consolas"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   VerticalAlignment="Center"/>
+
+                                        <!-- Free Ride badge -->
+                                        <Border Grid.Column="3" CornerRadius="3" Padding="5,2"
+                                                Background="#1B5E20" VerticalAlignment="Center">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsFreeRide}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <TextBlock Text="Free Ride" FontSize="10"
+                                                       Foreground="#A5D6A7" FontWeight="SemiBold"/>
+                                        </Border>
+
+                                        <!-- Nudge button -->
+                                        <Button Grid.Column="5"
+                                                Content="⟳ Nudge"
+                                                Command="{Binding NudgeBracketCommand}"
+                                                Style="{StaticResource ProfileButtonStyle}"
+                                                FontSize="11" Height="24" Padding="8,2"
+                                                ToolTip="Tighten SL by 10% toward entry"/>
+
+                                        <!-- Close button -->
+                                        <Button Grid.Column="7"
+                                                Content="✕ Close"
+                                                Command="{Binding CloseCommand}"
+                                                Style="{StaticResource DangerButtonStyle}"
+                                                FontSize="11" Height="24" Padding="8,2"
+                                                ToolTip="Flatten this position now"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+        <!-- ══════════════════════════════════════════════════════════
              BODY: Slot tile grid
              ══════════════════════════════════════════════════════════ -->
         <ScrollViewer Grid.Row="1" Margin="12,4,12,12" VerticalScrollBarVisibility="Auto">
@@ -320,6 +418,8 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
+
+        </Grid><!-- end inner Grid (active-position panel + tile grid) -->
 
     </Grid>
 </UserControl>

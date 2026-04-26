@@ -15,6 +15,7 @@ Namespace TopStepTrader.UI.Views
             InitializeComponent()
             _vm = viewModel
             DataContext = _vm
+            _vm.LoadDataAsync()
         End Sub
 
     End Class

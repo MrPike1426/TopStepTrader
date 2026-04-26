@@ -64,6 +64,72 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── Bracket price display (set by ProTraderViewModel on TurtleBracketChanged) ─
+        Private _bracketPriceDisplay As String = String.Empty
+        Public Property BracketPriceDisplay As String
+            Get
+                Return _bracketPriceDisplay
+            End Get
+            Private Set(value As String)
+                If SetProperty(_bracketPriceDisplay, value) Then
+                    NotifyPropertyChanged(NameOf(HasBracketPrices))
+                End If
+            End Set
+        End Property
+
+        Public ReadOnly Property HasBracketPrices As Boolean
+            Get
+                Return Not String.IsNullOrEmpty(_bracketPriceDisplay)
+            End Get
+        End Property
+
+        Private _isFreeRide As Boolean
+        Public Property IsFreeRide As Boolean
+            Get
+                Return _isFreeRide
+            End Get
+            Private Set(value As Boolean)
+                SetProperty(_isFreeRide, value)
+            End Set
+        End Property
+
+        Private _currentSlPrice As Decimal = 0D
+        Private _currentTpPrice As Decimal = 0D
+
+        Public ReadOnly Property CurrentSlPrice As Decimal
+            Get
+                Return _currentSlPrice
+            End Get
+        End Property
+
+        Public ReadOnly Property CurrentTpPrice As Decimal
+            Get
+                Return _currentTpPrice
+            End Get
+        End Property
+
+        ' ── Per-slot bracket management commands (wired by ProTraderViewModel on Start) ─
+        Public Property CloseCommand As System.Windows.Input.ICommand
+        Public Property NudgeBracketCommand As System.Windows.Input.ICommand
+
+        Public Sub ApplySl(slPrice As Decimal, tpPrice As Decimal, isAdvance As Boolean, isFreeRide As Boolean)
+            IsFreeRide = isFreeRide
+            If slPrice > 0D Then _currentSlPrice = slPrice
+            If tpPrice > 0D Then _currentTpPrice = tpPrice
+            If slPrice > 0D Then
+                BracketPriceDisplay = If(tpPrice > 0D,
+                    $"SL: {slPrice:F2}  TP: {tpPrice:F2}",
+                    $"SL: {slPrice:F2}")
+            End If
+        End Sub
+
+        Public Sub ClearSlStatus()
+            IsFreeRide = False
+            _currentSlPrice = 0D
+            _currentTpPrice = 0D
+            BracketPriceDisplay = String.Empty
+        End Sub
+
         ' ── Constructor ─────────────────────────────────────────────────────
         Public Sub New(contractId As String, symbol As String,
                        strategyType As StrategyConditionType,
