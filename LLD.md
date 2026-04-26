@@ -629,6 +629,24 @@ For each bracket:
 
 **Structure-fail exit:** If price breaks below EMA21 by more than `_ema21BreakTicks × tickSize` (configurable), `FlattenContractAsync()` is called and the engine stops.
 
+**Client-side safety monitor (`StartSafetyMonitor`):**
+
+Runs in a background `Task` from the moment the first fill is confirmed. Acts as a backstop in case broker-side brackets are silently rejected (see `UAT-BUG-008`).
+
+```
+Poll every 3 seconds via GetLivePositionSnapshotAsync():
+  slDollars = _stopLossTicks × tickSize × tickValue × _currentQty
+  tpDollars = _takeProfitTicks × tickSize × tickValue × _currentQty
+
+  If snapshot.UnrealizedPnlUsd ≤ -|slDollars|  → StopAsync("🛡 Safety monitor: SL dollar limit hit")
+  If snapshot.UnrealizedPnlUsd ≥  tpDollars    → StopAsync("🛡 Safety monitor: TP dollar limit hit")
+
+Guard: Interlocked _safetyFiring flag prevents re-entrant double-fire.
+Lifecycle: started after OpenInitialPositionAsync fill confirmed;
+           cancelled in StopAsync() and EmergencyCloseAsync() (_currentQty → 0).
+Normal path: bracket fills first → _currentQty = 0 → monitor exits cleanly on next poll.
+```
+
 ### 6.6 CryptoStrategyExecutionEngine (CryptoJoe)
 
 **Purpose:** Two CME crypto micro-futures engines (MBT — Micro Bitcoin, GMET — Micro Ether). Runs one independent instance per asset in CryptoJoeViewModel.

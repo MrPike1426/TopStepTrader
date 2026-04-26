@@ -553,7 +553,6 @@ Namespace TopStepTrader.Services.Trading
             End If
 
             ' ── FLAT: look for 3-bar entry signal ────────────────────────────────
-            ' Yahoo Finance historical endpoint returns only closed bars — no forming bar is included.
             ' Use the 3 most recent bars directly.
 
             ' ── Stale-bar guard ──────────────────────────────────────────────────

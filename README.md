@@ -234,6 +234,23 @@ Entry triggers when EMA8 > EMA21 > EMA50 (long) or EMA8 < EMA21 < EMA50 (short).
 - Win/Loss counters reset when "Start Sniper" is clicked.
 - Log entries accumulate for the session; no auto-clear.
 
+#### Safety Monitor (Client-Side P&L Backstop)
+
+The Sniper places TP and SL as **broker-side bracket orders**. On ProjectX (TopStepX) there is a documented case (`UAT-BUG-008`) where bracket orders can be silently rejected.
+
+To guard against an unprotected position, the engine runs a **client-side safety monitor loop** in parallel with the main timer from the moment the first fill is confirmed:
+
+| Behaviour | Detail |
+|---|---|
+| Poll interval | Every 3 seconds via `GetLivePositionSnapshotAsync` |
+| SL trigger | Unrealised P&L ≤ −(`stopLossTicks × tickSize × tickValue × qty`) |
+| TP trigger | Unrealised P&L ≥ `takeProfitTicks × tickSize × tickValue × qty` |
+| Action | Calls `StopAsync` with a descriptive reason; logs `🛡 Safety monitor:…` |
+| Guard | Re-entrancy flag prevents double-firing |
+| Lifecycle | Starts after first fill; stops when the position goes flat or the engine stops |
+
+The monitor is **additive only** — it does not replace the broker bracket. In the normal case the bracket fires first and the monitor sees `_currentQty = 0` on its next poll and exits cleanly. It only takes action if the bracket was silently dropped.
+
 ---
 
 ### 4. Pump-n-Dump 💥

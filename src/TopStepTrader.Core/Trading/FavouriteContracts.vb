@@ -21,7 +21,6 @@ Namespace TopStepTrader.Core.Trading
             ' PxMinStopDollars=$15: 15 ticks × $1.00 — prevents sub-15-tick stops on oil
             list.Add(New FavouriteContract("OIL", "Oil", 17, 0.01D, 0.01D, 1D, 0.5D, 10, _
                 "CON.F.US.MCLE.K26", 0.01D, 1.0D, 100D, 0.3D, 15D) With {
-                .YahooSymbol = "CL=F",
                 .PxRootSymbol = "MCLE",
                 .CommissionTickBuffer = 2,
                 .MultiConfluenceTimeframeMinutes = 5,
@@ -32,7 +31,6 @@ Namespace TopStepTrader.Core.Trading
             ' PxMinStopDollars=$20: 20 ticks × $1.00 = 2 pts — gold moves ~$5-15/min; 2pt floor is prudent
             list.Add(New FavouriteContract("GOLD.24-7", "Gold", 18, 0.01D, 0.01D, 1D, 0.3D, 20, _
                 "CON.F.US.MGC.Q26", 0.1D, 1.0D, 10D, 0.2D, 20D) With {
-                .YahooSymbol = "GC=F",
                 .PxRootSymbol = "MGC",
                 .CommissionTickBuffer = 2,
                 .MultiConfluenceTimeframeMinutes = 10,
@@ -41,10 +39,8 @@ Namespace TopStepTrader.Core.Trading
 
             ' SPX500 — MES (Micro S&P 500)  [roll: quarterly H/M/U/Z; U26=Sep 2026 front-month]
             ' PxMinStopDollars=$20: 16 ticks × $1.25 = 4 S&P points minimum
-            ' YahooSymbol: ES=F = E-mini S&P 500 futures (CME, trades ~23h/day, reliable 5m data).
             list.Add(New FavouriteContract("SPX500", "S&P 500", 27, 0.01D, 0.01D, 1D, 0.5D, 20, _
                 "CON.F.US.MES.U26", 0.25D, 1.25D, 5D, 0.3D, 20D) With {
-                .YahooSymbol = "ES=F",
                 .PxRootSymbol = "MES",
                 .CommissionTickBuffer = 1,
                 .MultiConfluenceTimeframeMinutes = 5,
@@ -58,7 +54,6 @@ Namespace TopStepTrader.Core.Trading
             ' NOTE: eToro InstrumentId=1 is a placeholder — verify against live eToro API if needed.
             list.Add(New FavouriteContract("EURUSD", "EUR/USD", 1, 0.00001D, 0.01D, 1D, 0.05D, 30, _
                 "CON.F.US.M6E.U26", 0.0001D, 1.25D, 12500D, 0.1D, 12.5D) With {
-                .YahooSymbol = "EURUSD=X",
                 .PxRootSymbol = "M6E",
                 .CommissionTickBuffer = 1,
                 .MultiConfluenceTimeframeMinutes = 10,
@@ -71,7 +66,6 @@ Namespace TopStepTrader.Core.Trading
             list.Add(New FavouriteContract("BTC", "Bitcoin", 100000, 1.0D, 1.0D, 1D, 1.0D, 2, _
                 "CON.F.US.MBT.U26", 5.0D, 0.5D, 0.1D, 0.5D, 30D) With {
                 .IsCrypto = True,
-                .YahooSymbol = "BTC-USD",
                 .PxRootSymbol = "MBT",
                 .MultiConfluenceTimeframeMinutes = 15,
                 .RoundTripFee = 2.34D
@@ -137,10 +131,6 @@ Namespace TopStepTrader.Core.Trading
         Public Property MinNotionalUsd As Decimal = 1000D
         ''' <summary>True for crypto instruments (BTC, ETH, XRP, SOL, BNB).</summary>
         Public Property IsCrypto As Boolean = False
-
-        ' ── Yahoo Finance fields ─────────────────────────────────────────────────────
-        ''' <summary>Yahoo Finance ticker symbol used for historical backtest bar downloads, e.g. "^GSPC", "GC=F", "BTC-USD".</summary>
-        Public Property YahooSymbol As String = String.Empty
 
         ' ── TopStepX / ProjectX fields ───────────────────────────────────────────────
         ''' <summary>ProjectX contract ID string, e.g. "CON.F.US.MGC.J26". Empty = not available on TopStepX.</summary>

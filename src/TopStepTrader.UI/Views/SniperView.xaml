@@ -25,329 +25,458 @@
                  ══════════════════════════════════════════════════════ -->
             <TabItem Header="🎯  Live Sniper">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="24,20,24,8">
+                    <StackPanel Margin="20,16,20,8">
 
                         <TextBlock Text="🎯  Sniper Trading"
                                    Style="{StaticResource PageTitleStyle}"/>
 
-                        <!-- ── Strategy Description ── -->
-                        <Border Background="{StaticResource SurfaceBrush}"
-                                CornerRadius="6" Padding="14,10" Margin="0,8,0,0"
-                                BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,2">
-                            <StackPanel>
+                        <!-- ── How It Works (collapsible) ── -->
+                        <Expander IsExpanded="False" Margin="0,10,0,0"
+                                  Foreground="{StaticResource TextPrimaryBrush}">
+                            <Expander.Header>
                                 <TextBlock Text="HOW IT WORKS"
                                            Style="{StaticResource SectionHeadingStyle}"
-                                           Margin="0,0,0,6"/>
-                                <TextBlock TextWrapping="Wrap" FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           LineHeight="18">
-                                    <Run Foreground="White" FontWeight="SemiBold">Entry — </Run>
-                                    <Run>EMA8 crosses EMA21 on 1-minute bars, confirmed by price sitting on the correct side of a trending EMA50. Detects momentum spikes and deep trend moves (dumps and rips) as they develop.</Run>
-                                </TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           LineHeight="18">
-                                    <Run Foreground="White" FontWeight="SemiBold">Pyramiding — </Run>
-                                    <Run>Scales into up to 10 contracts in tiers (core → momentum → extension) as price continues in direction. Each scale-in requires EMA8 still aligned and price to have moved at least 0.4× ATR from the last entry.</Run>
-                                </TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           LineHeight="18">
-                                    <Run Foreground="White" FontWeight="SemiBold">Free Ride — </Run>
-                                    <Run>Once 3 or more contracts are open and all are in profit, the stop loss is moved to average entry (breakeven). The position runs with zero downside risk from that point.</Run>
-                                </TextBlock>
-                                <TextBlock TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           LineHeight="18">
-                                    <Run Foreground="White" FontWeight="SemiBold">Exit — </Run>
-                                    <Run>TP and SL brackets placed at each entry. Optional structure-fail exit: if price closes back through EMA21 by more than the configured tick buffer after the minimum bar count, all positions are flattened immediately.</Run>
-                                </TextBlock>
-                            </StackPanel>
-                        </Border>
+                                           VerticalAlignment="Center"/>
+                            </Expander.Header>
+                            <Border Background="{StaticResource SurfaceBrush}"
+                                    CornerRadius="0,0,6,6" Padding="14,10,14,12"
+                                    BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,2">
+                                <UniformGrid Columns="2" Margin="0,4,0,0">
+                                    <!-- Entry -->
+                                    <Border Margin="0,0,8,8" Padding="12,10"
+                                            Background="{StaticResource CardBrush}" CornerRadius="5">
+                                        <StackPanel>
+                                            <TextBlock Text="① ENTRY" FontSize="12" FontWeight="Bold"
+                                                       Foreground="{StaticResource AccentBrush}" Margin="0,0,0,5"/>
+                                            <TextBlock TextWrapping="Wrap" FontSize="13"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" LineHeight="19">
+                                                EMA8 crosses EMA21 on the 1-minute chart, confirmed by price sitting on the correct side of a trending EMA50. Catches momentum spikes, rips and dumps as they develop.
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Border>
+                                    <!-- Pyramiding -->
+                                    <Border Margin="0,0,0,8" Padding="12,10"
+                                            Background="{StaticResource CardBrush}" CornerRadius="5">
+                                        <StackPanel>
+                                            <TextBlock Text="② PYRAMIDING" FontSize="12" FontWeight="Bold"
+                                                       Foreground="{StaticResource AccentBrush}" Margin="0,0,0,5"/>
+                                            <TextBlock TextWrapping="Wrap" FontSize="13"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" LineHeight="19">
+                                                Scales into up to the configured maximum in three tiers — Core → Momentum → Extension — each time price moves at least k×ATR in the trade direction and EMA8 stays aligned.
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Border>
+                                    <!-- Free Ride -->
+                                    <Border Margin="0,0,8,0" Padding="12,10"
+                                            Background="{StaticResource CardBrush}" CornerRadius="5">
+                                        <StackPanel>
+                                            <TextBlock Text="③ FREE RIDE" FontSize="12" FontWeight="Bold"
+                                                       Foreground="{StaticResource AccentBrush}" Margin="0,0,0,5"/>
+                                            <TextBlock TextWrapping="Wrap" FontSize="13"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" LineHeight="19">
+                                                Once 3+ contracts are open and all in profit, the stop is moved to average entry (breakeven). The position then runs with zero downside risk.
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Border>
+                                    <!-- Exit -->
+                                    <Border Padding="12,10"
+                                            Background="{StaticResource CardBrush}" CornerRadius="5">
+                                        <StackPanel>
+                                            <TextBlock Text="④ EXIT" FontSize="12" FontWeight="Bold"
+                                                       Foreground="{StaticResource AccentBrush}" Margin="0,0,0,5"/>
+                                            <TextBlock TextWrapping="Wrap" FontSize="13"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" LineHeight="19">
+                                                TP and SL brackets are placed at each entry. Optional structure-fail exit flattens everything if price closes back through EMA21 by more than the configured buffer after the minimum bar count.
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Border>
+                                </UniformGrid>
+                            </Border>
+                        </Expander>
 
-                        <!-- ── Panel 1: Account / Contract / Parameters ── -->
+                        <!-- ── Configuration ── -->
                         <Border Background="{StaticResource SurfaceBrush}"
-                                CornerRadius="6" Padding="20,14" Margin="0,12,0,0">
+                                CornerRadius="6" Padding="16,14" Margin="0,10,0,0">
                             <StackPanel>
 
-                                <!-- Row 1: Account | Contract -->
+                                <!-- Section: Account & Contract -->
+                                <TextBlock Text="ACCOUNT &amp; CONTRACT"
+                                           Style="{StaticResource SectionHeadingStyle}"
+                                           Margin="0,0,0,8"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>   <!-- "Account:" -->
-                                        <ColumnDefinition Width="180"/>    <!-- Account ComboBox -->
-                                        <ColumnDefinition Width="16"/>
-                                        <ColumnDefinition Width="220"/>    <!-- ContractSelectorControl -->
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="180"/>
+                                        <ColumnDefinition Width="20"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="220"/>
                                     </Grid.ColumnDefinitions>
 
-                                    <TextBlock Grid.Column="0"
-                                               Text="Account:"
-                                               VerticalAlignment="Center"
+                                    <TextBlock Grid.Column="0" Text="Account"
+                                               VerticalAlignment="Center" FontSize="13"
                                                Foreground="{StaticResource TextSecondaryBrush}"
-                                               Margin="0,0,8,0"/>
-
+                                               Margin="0,0,10,0"/>
                                     <ComboBox Grid.Column="1"
                                               ItemsSource="{Binding Accounts}"
                                               SelectedItem="{Binding SelectedAccount}"
                                               FontSize="26"
                                               Style="{StaticResource UnclippedComboBoxStyle}"
                                               ItemContainerStyle="{StaticResource DarkComboBoxItemStyle}"
-                                              IsEnabled="{Binding IsNotRunning}"
-                                              ToolTip="Select the account to trade with">
+                                              IsEnabled="{Binding IsNotRunning}">
+                                        <ComboBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="The funded account to trade on. Cannot be changed while the Sniper is running."/></ToolTip>
+                                        </ComboBox.ToolTip>
                                         <ComboBox.ItemTemplate>
                                             <DataTemplate>
-                                                <TextBlock Text="{Binding Name}"
-                                                           Foreground="White"
-                                                           VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding Name}" Foreground="White" VerticalAlignment="Center"/>
                                             </DataTemplate>
                                         </ComboBox.ItemTemplate>
                                     </ComboBox>
 
+                                    <TextBlock Grid.Column="3" Text="Contract"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               Margin="0,0,10,0"/>
                                     <controls:ContractSelectorControl
-                                               Grid.Column="3"
+                                               Grid.Column="4"
                                                IsEnabled="{Binding IsNotRunning}"
                                                ContractId="{Binding ContractId, Mode=TwoWay,
                                                            UpdateSourceTrigger=PropertyChanged}"/>
                                 </Grid>
 
-                                <Border Height="8"/>
+                                <Separator Margin="0,12,0,10" Background="{StaticResource BorderBrush}"/>
 
-                                <!-- Row 2: TP / SL / ScaleIn / Duration -->
+                                <!-- Section: Risk & Brackets -->
+                                <TextBlock Text="RISK &amp; BRACKETS"
+                                           Style="{StaticResource SectionHeadingStyle}"
+                                           Margin="0,0,0,8"/>
+
+                                <!-- 4-column parameter grid -->
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="16"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="16"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="50"/>
-                                        <ColumnDefinition Width="16"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="50"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
                                     </Grid.ColumnDefinitions>
-
-                                    <TextBlock Grid.Column="0" Text="TP $ / SL $:"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               Margin="0,0,8,0"/>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <TextBox Text="{Binding TpDollarBracket, UpdateSourceTrigger=PropertyChanged}"
-                                                 Width="44" IsEnabled="{Binding IsNotRunning}"
-                                                 ToolTip="Initial take-profit in dollars (e.g. 20)"/>
-                                        <TextBlock Text="/" VerticalAlignment="Center" Margin="5,0,5,0"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                                        <TextBox Text="{Binding SlDollarBracket, UpdateSourceTrigger=PropertyChanged}"
-                                                 Width="44" IsEnabled="{Binding IsNotRunning}"
-                                                 ToolTip="Initial stop-loss in dollars (e.g. 10)"/>
-                                    </StackPanel>
-
-                                    <TextBlock Grid.Column="3" Text="Scale factor (k):"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               Margin="0,0,8,0"/>
-                                    <TextBox Grid.Column="4"
-                                             Text="{Binding ScaleInTriggerTicks, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="44" IsEnabled="{Binding IsNotRunning}"
-                                             ToolTip="Scale distance multiplier 'k' (e.g., 0.4 * ATR). Replaces fixed tick distance."/>
-
-                                    <TextBlock Grid.Column="6" Text="Duration (hrs):"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               Margin="0,0,8,0"/>
-                                    <TextBox Grid.Column="7"
-                                             Text="{Binding DurationHours, UpdateSourceTrigger=PropertyChanged}"
-                                             IsEnabled="{Binding IsNotRunning}"
-                                             ToolTip="How long to run the sniper session (default 2)"/>
-
-                                    <TextBlock Grid.Column="9" Text="Max Heat (Ticks):"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               Margin="0,0,8,0"/>
-                                    <TextBox Grid.Column="10" 
-                                             Text="{Binding MaxRiskHeatTicks, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="44" IsEnabled="{Binding IsNotRunning}"
-                                             ToolTip="Maximum total tick risk (sum of stop distances). Default 30."/>
-                                </Grid>
-
-                                <Grid Margin="0,8,0,0">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="8"/>
+                                        <RowDefinition Height="6"/>
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="16"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="16"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
 
-                                    <!-- Row 0: Core Parameters -->
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Total Size:"
-                                               VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
-                                    <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding TargetTotalSize, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="44" IsEnabled="{Binding IsNotRunning}" ToolTip="Target maximum contracts (e.g. 10)"/>
+                                    <!-- Row 0 labels -->
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Take Profit ($)"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="1"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Stop Loss ($)"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="6" Text="Max Heat (ticks)"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="9" Text="Duration (hrs)"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Core %:"
-                                               VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
-                                    <TextBox Grid.Row="0" Grid.Column="4" Text="{Binding CoreSizeFraction, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="44" IsEnabled="{Binding IsNotRunning}" ToolTip="Fraction of size allocated to first few adds (e.g. 0.55)"/>
-
-                                    <TextBlock Grid.Row="0" Grid.Column="6" Text="Core Adds:"
-                                               VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
-                                    <TextBox Grid.Row="0" Grid.Column="7" Text="{Binding CoreAddsCount, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="44" IsEnabled="{Binding IsNotRunning}" ToolTip="Number of entries to split the core size across (e.g. 2)"/>
-
-                                    <!-- Row 1: Tier Sizes -->
-                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Mom Add:"
-                                               VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
-                                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding MomentumTierSize, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="44" IsEnabled="{Binding IsNotRunning}" ToolTip="Contracts to add per Momentum tier triggering (e.g. 1)"/>
-
-                                    <TextBlock Grid.Row="2" Grid.Column="3" Text="Ext Add:"
-                                               VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
-                                    <TextBox Grid.Row="2" Grid.Column="4" Text="{Binding ExtensionTierSize, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="44" IsEnabled="{Binding IsNotRunning}" ToolTip="Contracts to add per Extension tier triggering (if allowed)"/>
-
-                                    <CheckBox Grid.Row="2" Grid.Column="6" Grid.ColumnSpan="2" Content="Allow Ext." IsChecked="{Binding ExtensionAllowed}"
-                                              VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}"
-                                              IsEnabled="{Binding IsNotRunning}" ToolTip="Allow single-contract adds in extended trend (Tier C)"/>
+                                    <!-- Row 2 values -->
+                                    <TextBox Grid.Row="2" Grid.Column="0"
+                                             Text="{Binding TpDollarBracket, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="Dollar profit target placed as a bracket order at each entry. Example: 20 means the order targets $20 profit per contract from entry price."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
+                                    <TextBox Grid.Row="2" Grid.Column="3"
+                                             Text="{Binding SlDollarBracket, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="Dollar stop-loss placed as a bracket order at each entry. Example: 10 means the stop is $10 below (long) or above (short) the entry price per contract."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
+                                    <TextBox Grid.Row="2" Grid.Column="6"
+                                             Text="{Binding MaxRiskHeatTicks, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="Safety cap on total open risk. Measured as the sum of stop distances across all open contracts in ticks. No new entries are taken once this limit is reached. Default: 30."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
+                                    <TextBox Grid.Row="2" Grid.Column="9"
+                                             Text="{Binding DurationHours, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="How many hours to keep the Sniper running from the moment you press Start. After this time no new signals are taken but open positions continue to be managed. Default: 2."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
                                 </Grid>
 
-                                <Border Height="8"/>
+                                <Separator Margin="0,12,0,10" Background="{StaticResource BorderBrush}"/>
 
-                                <!-- Structure Fail Exit -->
+                                <!-- Section: Pyramid Sizing -->
+                                <TextBlock Text="PYRAMID SIZING"
+                                           Style="{StaticResource SectionHeadingStyle}"
+                                           Margin="0,0,0,8"/>
+
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="16"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="16"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
                                     </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="6"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="6"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="6"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
 
-                                    <CheckBox Grid.Column="0" Content="Struct. Fail Exit"
-                                              IsChecked="{Binding EnableStructureFailExit}"
-                                              VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}"
-                                              IsEnabled="{Binding IsNotRunning}" ToolTip="Enable exit on structure failure (EMA21 break)"/>
+                                    <!-- Row labels -->
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Max Contracts"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Core Fraction"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="6" Text="Core Entries"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="9" Text="Scale Factor (k)"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
 
-                                    <TextBlock Grid.Column="2" Text="EMA21 Break (t):"
-                                               VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
-                                    <TextBox Grid.Column="3" Text="{Binding Ema21BreakTicks, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="44" IsEnabled="{Binding IsNotRunning}" ToolTip="Ticks beyond EMA21 to trigger exit"/>
+                                    <!-- Row values -->
+                                    <TextBox Grid.Row="2" Grid.Column="0"
+                                             Text="{Binding TargetTotalSize, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="The maximum number of contracts the Sniper will hold at any one time across all pyramid tiers. Example: 10 means the position can grow from 1 up to 10 contracts."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
+                                    <TextBox Grid.Row="2" Grid.Column="3"
+                                             Text="{Binding CoreSizeFraction, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="The proportion of the total position size reserved for the initial Core tier entries. Example: 0.55 means 55% of contracts are placed in the first few adds, with the remainder available for Momentum and Extension tiers."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
+                                    <TextBox Grid.Row="2" Grid.Column="6"
+                                             Text="{Binding CoreAddsCount, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="How many scale-in steps to spread the Core allocation across. Example: 2 means the core contracts are split equally over the first 2 add-ins."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
+                                    <TextBox Grid.Row="2" Grid.Column="9"
+                                             Text="{Binding ScaleInTriggerTicks, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="Distance multiplier for triggering each pyramid add. Price must move k × ATR from the last entry before the next scale-in is allowed. Example: 0.4 means 40% of the current ATR."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
 
-                                    <TextBlock Grid.Column="5" Text="Min Bars:"
-                                               VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
-                                    <TextBox Grid.Column="6" Text="{Binding MinBarsBeforeExit, UpdateSourceTrigger=PropertyChanged}"
-                                             Width="44" IsEnabled="{Binding IsNotRunning}" ToolTip="Minimum bars in trade before structure check applies"/>
+                                    <!-- Momentum / Extension labels -->
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Momentum Add"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="3" Text="Extension Add"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="6" Text="Allow Extension"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                                    <!-- Momentum / Extension values -->
+                                    <TextBox Grid.Row="6" Grid.Column="0"
+                                             Text="{Binding MomentumTierSize, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="Number of contracts added each time the Momentum tier triggers. Momentum adds happen after the Core is filled, while the move is accelerating. Example: 1 adds one contract per momentum signal."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
+                                    <TextBox Grid.Row="6" Grid.Column="3"
+                                             Text="{Binding ExtensionTierSize, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="Number of contracts added per Extension tier trigger. Extension adds are the final, most aggressive scale-ins during an extended trend. Only used when Allow Extension is enabled."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
+                                    <CheckBox Grid.Row="6" Grid.Column="6"
+                                              IsChecked="{Binding ExtensionAllowed}"
+                                              VerticalAlignment="Center"
+                                              IsEnabled="{Binding IsNotRunning}"
+                                              Foreground="{StaticResource TextSecondaryBrush}">
+                                        <CheckBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="When checked, the Sniper will add Extension tier contracts once the Momentum tier is exhausted and the trend continues. Disable this for more conservative sizing."/></ToolTip>
+                                        </CheckBox.ToolTip>
+                                    </CheckBox>
                                 </Grid>
 
-                                <Border Height="8"/>
+                                <Separator Margin="0,12,0,10" Background="{StaticResource BorderBrush}"/>
 
-                                <!-- Strategy description -->
-                                <TextBlock Text="Strategy: Tiered Pyramid · Core size front-loaded · Momentum adds · Heat cap"
-                                           FontFamily="Consolas" FontSize="10"
-                                           Foreground="{StaticResource AccentBrush}"
-                                           TextWrapping="Wrap"/>
+                                <!-- Section: Structure-Fail Exit -->
+                                <TextBlock Text="STRUCTURE-FAIL EXIT"
+                                           Style="{StaticResource SectionHeadingStyle}"
+                                           Margin="0,0,0,8"/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="6"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="EMA21 Break (ticks)"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Min Bars Held"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="6" Text="Enable"
+                                               VerticalAlignment="Center" FontSize="13"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               Margin="0,0,8,0"/>
+
+                                    <TextBox Grid.Row="2" Grid.Column="0"
+                                             Text="{Binding Ema21BreakTicks, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="How far price must close beyond the EMA21 line (in ticks) to count as a structure break and trigger an immediate flat exit. A small buffer (e.g. 2) avoids premature exits on wicks."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
+                                    <TextBox Grid.Row="2" Grid.Column="3"
+                                             Text="{Binding MinBarsBeforeExit, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotRunning}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="The structure-fail check is suppressed for this many bars after entry. Prevents getting shaken out by normal initial volatility before the trade has had time to develop."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
+                                    <CheckBox Grid.Row="2" Grid.Column="6"
+                                              IsChecked="{Binding EnableStructureFailExit}"
+                                              VerticalAlignment="Center"
+                                              IsEnabled="{Binding IsNotRunning}"
+                                              Foreground="{StaticResource TextSecondaryBrush}">
+                                        <CheckBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="When enabled, all open positions are flattened immediately if price closes through EMA21 by more than the configured tick buffer after the minimum bar count. Useful for cutting losses on failed breakouts quickly."/></ToolTip>
+                                        </CheckBox.ToolTip>
+                                    </CheckBox>
+                                </Grid>
+
                             </StackPanel>
                         </Border>
 
-                        <!-- ── Panel 2: Position Status + Performance ── -->
+                        <!-- ── Live Status ── -->
                         <Border Background="{StaticResource SurfaceBrush}"
-                                CornerRadius="6" Padding="20,12" Margin="0,8,0,0">
+                                CornerRadius="6" Padding="16,12" Margin="0,10,0,0">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock Grid.Column="0" Text="POSITION"
-                                           Style="{StaticResource SectionHeadingStyle}"
-                                           VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <!-- Position -->
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="POSITION" FontSize="11" FontWeight="Bold"
+                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,3"/>
+                                    <TextBlock Text="{Binding PositionDisplay}"
+                                               FontFamily="Consolas" FontSize="15"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
 
-                                <TextBlock Grid.Column="2"
-                                           Text="{Binding PositionDisplay}"
-                                           FontFamily="Consolas" FontSize="13"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           VerticalAlignment="Center"/>
+                                <!-- Avg Entry -->
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="AVG ENTRY" FontSize="11" FontWeight="Bold"
+                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,3"/>
+                                    <TextBlock Text="{Binding AverageEntryDisplay}"
+                                               FontFamily="Consolas" FontSize="15"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
 
-                                <TextBlock Grid.Column="4"
-                                           Margin="20,0,8,0"
-                                           Text="Avg Entry:"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center"/>
+                                <!-- Risk Heat -->
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="RISK HEAT" FontSize="11" FontWeight="Bold"
+                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,3"/>
+                                    <TextBlock Text="{Binding HeatDisplay}"
+                                               FontFamily="Consolas" FontSize="15"
+                                               Foreground="{StaticResource AccentBrush}"/>
+                                </StackPanel>
 
-                                <TextBlock Grid.Column="5"
-                                           Text="{Binding AverageEntryDisplay}"
-                                           FontFamily="Consolas" FontSize="13"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           VerticalAlignment="Center"/>
+                                <!-- Win / Loss -->
+                                <StackPanel Grid.Column="3">
+                                    <TextBlock Text="WIN / LOSS" FontSize="11" FontWeight="Bold"
+                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,3"/>
+                                    <TextBlock Text="{Binding WinLossDisplay}"
+                                               FontFamily="Consolas" FontSize="15"
+                                               Foreground="{StaticResource TextPrimaryBrush}"/>
+                                </StackPanel>
 
-                                <TextBlock Grid.Column="6"
-                                           Margin="20,0,8,0"
-                                           Text="Risk Heat:"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center"/>
-
-                                <TextBlock Grid.Column="7"
-                                           Text="{Binding HeatDisplay}"
-                                           FontFamily="Consolas" FontSize="13"
-                                           Foreground="{StaticResource AccentBrush}"
-                                           VerticalAlignment="Center"/>
-
-                                <TextBlock Grid.Column="8"
-                                           Margin="28,0,8,0"
-                                           Text="W/L:"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center"/>
-
-                                <TextBlock Grid.Column="9"
-                                           Text="{Binding WinLossDisplay}"
-                                           FontFamily="Consolas" FontSize="13"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           VerticalAlignment="Center"/>
-
-                                <TextBlock Grid.Column="10"
-                                           Margin="20,0,8,0"
-                                           Text="Session P&amp;L:"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           VerticalAlignment="Center"/>
-
-                                <TextBlock Grid.Column="11"
-                                           Text="{Binding TotalPnlDisplay}"
-                                           FontFamily="Consolas" FontSize="13"
-                                           Foreground="{Binding TotalPnlBrush}"
-                                           VerticalAlignment="Center"/>
+                                <!-- Session P&L -->
+                                <StackPanel Grid.Column="4">
+                                    <TextBlock Text="SESSION P&amp;L" FontSize="11" FontWeight="Bold"
+                                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,3"/>
+                                    <TextBlock Text="{Binding TotalPnlDisplay}"
+                                               FontFamily="Consolas" FontSize="15"
+                                               Foreground="{Binding TotalPnlBrush}"/>
+                                </StackPanel>
                             </Grid>
                         </Border>
 
-                        <!-- ── Panel 3: Signal Log ── -->
+                        <!-- ── Signal Log ── -->
                         <Border Background="{StaticResource SurfaceBrush}"
-                                CornerRadius="6" Padding="20,14" Margin="0,8,0,0">
+                                CornerRadius="6" Padding="16,12" Margin="0,10,0,8">
                             <StackPanel>
                                 <TextBlock Text="SIGNAL LOG"
                                            Style="{StaticResource SectionHeadingStyle}"
                                            Margin="0,0,0,8"/>
                                 <ListBox x:Name="LogList"
                                          ItemsSource="{Binding LogEntries}"
-                                         Height="220"
+                                         Height="210"
                                          Background="{StaticResource CardBrush}"
                                          BorderThickness="0"
                                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
@@ -355,14 +484,13 @@
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding}"
-                                                       FontFamily="Consolas" FontSize="11"
+                                                       FontFamily="Consolas" FontSize="13"
                                                        Foreground="{StaticResource TextPrimaryBrush}"/>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                 </ListBox>
                             </StackPanel>
                         </Border>
-
 
                     </StackPanel>
                 </ScrollViewer>
@@ -373,87 +501,116 @@
                  ══════════════════════════════════════════════════════ -->
             <TabItem Header="📊  Sniper Backtest">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="24,20,24,8">
+                    <StackPanel Margin="20,16,20,8">
 
                         <TextBlock Text="📊  Sniper Backtest"
                                    Style="{StaticResource PageTitleStyle}"/>
 
-                        <!-- ── Panel 1: Backtest Setup ── -->
+                        <!-- ── Setup ── -->
                         <Border Background="{StaticResource SurfaceBrush}"
-                                CornerRadius="6" Padding="20,14" Margin="0,12,0,0">
+                                CornerRadius="6" Padding="16,14" Margin="0,10,0,0">
                             <StackPanel>
 
                                 <TextBlock Text="SETUP" Style="{StaticResource SectionHeadingStyle}" Margin="0,0,0,10"/>
 
-                                <!-- Contract | From | To -->
+                                <!-- Row: Contract + date range -->
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="220"/>    <!-- Contract -->
-                                        <ColumnDefinition Width="16"/>
-                                        <ColumnDefinition Width="Auto"/>   <!-- "From:" -->
-                                        <ColumnDefinition Width="120"/>    <!-- From date -->
-                                        <ColumnDefinition Width="16"/>
-                                        <ColumnDefinition Width="Auto"/>   <!-- "To:" -->
-                                        <ColumnDefinition Width="120"/>    <!-- To date -->
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="220"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="130"/>
                                     </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="6"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Contract"
+                                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="4" Text="From"
+                                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="7" Text="To"
+                                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
 
                                     <controls:ContractSelectorControl
-                                               Grid.Column="0"
+                                               Grid.Row="2" Grid.Column="1"
                                                IsEnabled="{Binding IsNotBacktesting}"
                                                ContractId="{Binding BacktestContractId, Mode=TwoWay,
                                                            UpdateSourceTrigger=PropertyChanged}"/>
-
-                                    <TextBlock Grid.Column="2" Text="From:"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               Margin="0,0,8,0"/>
-                                    <DatePicker Grid.Column="3"
+                                    <DatePicker Grid.Row="2" Grid.Column="4"
                                                 SelectedDate="{Binding BacktestStartDate}"
                                                 IsEnabled="{Binding IsNotBacktesting}"
                                                 Background="{StaticResource CardBrush}"
                                                 Foreground="{StaticResource TextPrimaryBrush}"
-                                                BorderBrush="{StaticResource BorderBrush}"/>
-
-                                    <TextBlock Grid.Column="5" Text="To:"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               Margin="0,0,8,0"/>
-                                    <DatePicker Grid.Column="6"
+                                                BorderBrush="{StaticResource BorderBrush}">
+                                        <DatePicker.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="Start date of the historical period to test. The Sniper will replay every 1-minute bar from this date forward."/></ToolTip>
+                                        </DatePicker.ToolTip>
+                                    </DatePicker>
+                                    <DatePicker Grid.Row="2" Grid.Column="7"
                                                 SelectedDate="{Binding BacktestEndDate}"
                                                 IsEnabled="{Binding IsNotBacktesting}"
                                                 Background="{StaticResource CardBrush}"
                                                 Foreground="{StaticResource TextPrimaryBrush}"
-                                                BorderBrush="{StaticResource BorderBrush}"/>
+                                                BorderBrush="{StaticResource BorderBrush}">
+                                        <DatePicker.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="End date of the historical period. The backtest stops after the last bar on this date."/></ToolTip>
+                                        </DatePicker.ToolTip>
+                                    </DatePicker>
                                 </Grid>
 
-                                <Border Height="8"/>
+                                <Separator Margin="0,12,0,10" Background="{StaticResource BorderBrush}"/>
 
-                                <!-- TP / SL for backtest -->
+                                <!-- TP / SL row -->
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto"/>
-                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="24"/>
+                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="70"/>
+                                        <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="6"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Column="0" Text="TP $ / SL $:"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               Margin="0,0,8,0"/>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <TextBox Text="{Binding BtTpDollarBracket, UpdateSourceTrigger=PropertyChanged}"
-                                                 Width="44" IsEnabled="{Binding IsNotBacktesting}"
-                                                 ToolTip="Initial take-profit in dollars (e.g. 20)"/>
-                                        <TextBlock Text="/" VerticalAlignment="Center" Margin="5,0,5,0"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"/>
-                                        <TextBox Text="{Binding BtSlDollarBracket, UpdateSourceTrigger=PropertyChanged}"
-                                                 Width="44" IsEnabled="{Binding IsNotBacktesting}"
-                                                 ToolTip="Initial stop-loss in dollars (e.g. 10)"/>
-                                    </StackPanel>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Take Profit ($)"
+                                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Stop Loss ($)"
+                                               FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                                    <TextBox Grid.Row="2" Grid.Column="0"
+                                             Text="{Binding BtTpDollarBracket, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotBacktesting}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="Dollar profit target per contract for the backtest. Uses the same bracket logic as the live Sniper."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
+                                    <TextBox Grid.Row="2" Grid.Column="3"
+                                             Text="{Binding BtSlDollarBracket, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsNotBacktesting}">
+                                        <TextBox.ToolTip>
+                                            <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
+                                                Text="Dollar stop-loss per contract for the backtest. Set the same value you plan to use live to get realistic results."/></ToolTip>
+                                        </TextBox.ToolTip>
+                                    </TextBox>
                                 </Grid>
 
-                                <Border Height="10"/>
+                                <Separator Margin="0,12,0,10" Background="{StaticResource BorderBrush}"/>
 
-                                <!-- Run button and progress -->
+                                <!-- Run -->
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -465,7 +622,7 @@
                                             Content="▶  Run Backtest"
                                             Command="{Binding RunBacktestCommand}"
                                             Style="{StaticResource PrimaryButtonStyle}"
-                                            Width="140"/>
+                                            Width="150"/>
 
                                     <ProgressBar Grid.Column="2"
                                                  Value="{Binding BacktestProgress}"
@@ -481,89 +638,96 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- ── Panel 2: Results Summary ── -->
+                        <!-- ── Results Summary ── -->
                         <Border Background="{StaticResource SurfaceBrush}"
-                                CornerRadius="6" Padding="20,14" Margin="0,8,0,0"
+                                CornerRadius="6" Padding="16,14" Margin="0,10,0,0"
                                 Visibility="{Binding HasBacktestResults,
                                              Converter={StaticResource BoolToVisibilityConverter}}">
                             <StackPanel>
-                                <TextBlock Text="RESULTS" Style="{StaticResource SectionHeadingStyle}" Margin="0,0,0,10"/>
+                                <TextBlock Text="RESULTS" Style="{StaticResource SectionHeadingStyle}" Margin="0,0,0,12"/>
 
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-
+                                <UniformGrid Columns="5">
                                     <!-- Trades -->
-                                    <StackPanel Grid.Column="0" HorizontalAlignment="Center">
-                                        <TextBlock Text="{Binding BtTotalTrades}"
-                                                   FontSize="22" FontWeight="Bold"
-                                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                                   HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Trades"
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                                   HorizontalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Border Margin="0,0,6,0" Padding="0,10"
+                                            Background="{StaticResource CardBrush}" CornerRadius="5">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding BtTotalTrades}"
+                                                       FontSize="24" FontWeight="Bold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="Trades"
+                                                       FontSize="13"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
 
-                                    <!-- Win % -->
-                                    <StackPanel Grid.Column="1" HorizontalAlignment="Center">
-                                        <TextBlock Text="{Binding BtWinRateDisplay}"
-                                                   FontSize="22" FontWeight="Bold"
-                                                   Foreground="{StaticResource AccentBrush}"
-                                                   HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Win Rate"
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                                   HorizontalAlignment="Center"/>
-                                    </StackPanel>
+                                    <!-- Win Rate -->
+                                    <Border Margin="0,0,6,0" Padding="0,10"
+                                            Background="{StaticResource CardBrush}" CornerRadius="5">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding BtWinRateDisplay}"
+                                                       FontSize="24" FontWeight="Bold"
+                                                       Foreground="{StaticResource AccentBrush}"
+                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="Win Rate"
+                                                       FontSize="13"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
 
                                     <!-- Net P&L -->
-                                    <StackPanel Grid.Column="2" HorizontalAlignment="Center">
-                                        <TextBlock Text="{Binding BtNetPnlDisplay}"
-                                                   FontSize="22" FontWeight="Bold"
-                                                   Foreground="{Binding BtPnlBrush}"
-                                                   HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Net P&amp;L"
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                                   HorizontalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Border Margin="0,0,6,0" Padding="0,10"
+                                            Background="{StaticResource CardBrush}" CornerRadius="5">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding BtNetPnlDisplay}"
+                                                       FontSize="24" FontWeight="Bold"
+                                                       Foreground="{Binding BtPnlBrush}"
+                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="Net P&amp;L"
+                                                       FontSize="13"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
 
                                     <!-- Max Drawdown -->
-                                    <StackPanel Grid.Column="3" HorizontalAlignment="Center">
-                                        <TextBlock Text="{Binding BtMaxDrawdownDisplay}"
-                                                   FontSize="22" FontWeight="Bold"
-                                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                                   HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Max DD"
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                                   HorizontalAlignment="Center"/>
-                                    </StackPanel>
+                                    <Border Margin="0,0,6,0" Padding="0,10"
+                                            Background="{StaticResource CardBrush}" CornerRadius="5">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding BtMaxDrawdownDisplay}"
+                                                       FontSize="24" FontWeight="Bold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="Max Drawdown"
+                                                       FontSize="13"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
 
-                                    <!-- Avg P&L per trade -->
-                                    <StackPanel Grid.Column="4" HorizontalAlignment="Center">
-                                        <TextBlock Text="{Binding BtAvgPnlDisplay}"
-                                                   FontSize="22" FontWeight="Bold"
-                                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                                   HorizontalAlignment="Center"/>
-                                        <TextBlock Text="Avg/Trade"
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                                   HorizontalAlignment="Center"/>
-                                    </StackPanel>
-                                </Grid>
+                                    <!-- Avg / Trade -->
+                                    <Border Padding="0,10"
+                                            Background="{StaticResource CardBrush}" CornerRadius="5">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding BtAvgPnlDisplay}"
+                                                       FontSize="24" FontWeight="Bold"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       HorizontalAlignment="Center"/>
+                                            <TextBlock Text="Avg / Trade"
+                                                       FontSize="13"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </UniformGrid>
                             </StackPanel>
                         </Border>
 
-                        <!-- ── Panel 3: Trade List ── -->
+                        <!-- ── Trade List ── -->
                         <Border Background="{StaticResource SurfaceBrush}"
-                                CornerRadius="6" Padding="20,14" Margin="0,8,0,12"
+                                CornerRadius="6" Padding="16,14" Margin="0,10,0,12"
                                 Visibility="{Binding HasBacktestResults,
                                              Converter={StaticResource BoolToVisibilityConverter}}">
                             <StackPanel>

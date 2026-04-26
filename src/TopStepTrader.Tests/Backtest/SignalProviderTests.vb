@@ -560,7 +560,7 @@ Namespace TopStepTrader.Tests.Backtest
                         "High-volume bar should score 10 pts more than low-volume bar")
         End Sub
 
-        ''' <summary>Zero-volume bar (Yahoo futures omission) must produce the same score as if the volume signal were absent.</summary>
+        ''' <summary>Zero-volume bar must produce the same score as if the volume signal were absent.</summary>
         <Fact>
         Public Sub EmaRsi_ZeroVolume_NoPenalty()
             Dim provider As New EmaRsiSignalProvider()

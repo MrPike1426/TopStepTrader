@@ -146,14 +146,7 @@ Namespace TopStepTrader.Tests.Trading
                      .ReturnsAsync(CType(Nothing, Order))
 
             Dim mockLogger = New Mock(Of ILogger(Of CryptoStrategyExecutionEngine))()
-
-            ' BarIngestionService is a concrete class; GetUninitializedObject bypasses its
-            ' constructor so no real DB/network calls occur.  PlaceBracketOrdersAsync returns
-            ' before touching _ingestionService when the SELL guard fires.
-            Dim barIngestion = CType(
-                System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(
-                    GetType(BarIngestionService)),
-                BarIngestionService)
+            Dim barIngestion = New Mock(Of IBarIngestionService)().Object
 
             Dim engine = New CryptoStrategyExecutionEngine(
                 barIngestion, mockOrder.Object, mockLogger.Object)
@@ -197,11 +190,7 @@ Namespace TopStepTrader.Tests.Trading
                      .ReturnsAsync(CType(Nothing, Order))
 
             Dim mockLogger = New Mock(Of ILogger(Of CryptoStrategyExecutionEngine))()
-
-            Dim barIngestion = CType(
-                System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(
-                    GetType(BarIngestionService)),
-                BarIngestionService)
+            Dim barIngestion = New Mock(Of IBarIngestionService)().Object
 
             Dim engine = New CryptoStrategyExecutionEngine(
                 barIngestion, mockOrder.Object, mockLogger.Object)

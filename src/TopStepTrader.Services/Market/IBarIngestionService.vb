@@ -6,10 +6,9 @@ Namespace TopStepTrader.Services.Market
 
     ''' <summary>
     ''' Abstraction over bar ingestion sources.
-    ''' Yahoo Finance implementation (<see cref="BarIngestionService"/>) is used for backtest
-    ''' and Quant Lab.  TopStepX implementation (<see cref="TopStepXBarIngestionService"/>)
-    ''' is used for all live trading views (Hydra, Asset Bassett, Sniper, CryptoJoe,
-    ''' Test Trade, PumpNDump).
+    ''' <see cref="TopStepXBarIngestionService"/> is the sole implementation, used for all
+    ''' views: live trading (Hydra, Asset Bassett, Sniper, CryptoJoe, Test Trade, PumpNDump)
+    ''' and historical backtest/QuantLab bar fetches.
     ''' </summary>
     Public Interface IBarIngestionService
 

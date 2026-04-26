@@ -1,5 +1,6 @@
 Imports System.Collections.ObjectModel
 Imports System.Linq
+Imports System.IO
 Imports System.Text
 Imports System.Threading
 Imports System.Windows
@@ -219,6 +220,10 @@ Namespace TopStepTrader.UI.ViewModels
             MaxEffortProgress = 0
             MaxEffortProgressText = "Starting Maximum Effort run..."
 
+            Dim docsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+            File.WriteAllText(Path.Combine(docsFolder, "BackTestMaxEffort.csv"), "")
+            File.WriteAllText(Path.Combine(docsFolder, "BackTestAnalysis.md"), "")
+
             Dim contracts = FavouriteContracts.GetDefaults()
 
             Dim strategies = New (String, StrategyConditionType)() {
@@ -361,6 +366,29 @@ Namespace TopStepTrader.UI.ViewModels
                     If cts.IsCancellationRequested Then Exit For
                 Next
 
+                Dim csvPath = Path.Combine(docsFolder, "BackTestMaxEffort.csv")
+                Dim csvSb As New StringBuilder()
+                csvSb.AppendLine("Persona,Contract,Strategy,Timeframe,Trades,WinRate,TotalPnL,AvgPnL,Sharpe,Calmar,MaxDD,EndOfDay,Commission,TestPnL,Degradation%")
+                For Each r In rawResults.OrderByDescending(Function(x) x.CalmarRaw)
+                    csvSb.AppendLine(String.Join(",", New String() {
+                        $"""{r.Persona}""",
+                        $"""{r.Contract}""",
+                        $"""{r.Strategy}""",
+                        $"""{r.Timeframe}""",
+                        r.Trades,
+                        $"""{r.WinRate}""",
+                        r.TotalPnLRaw.ToString("F2"),
+                        $"""{r.AvgPnL}""",
+                        $"""{r.Sharpe}""",
+                        $"""{r.Calmar}""",
+                        $"""{r.MaxDD}""",
+                        r.EndOfDayCount,
+                        $"""{r.CommissionPaid}""",
+                        $"""{r.TestPnL}""",
+                        $"""{r.DegradationPct}"""}))
+                Next
+                Await File.WriteAllTextAsync(csvPath, csvSb.ToString())
+
                 Dim top20 = If(capValidateSplit,
                                rawResults.OrderByDescending(Function(r) r.TestPnLRaw).Take(20).ToList(),
                                rawResults.OrderByDescending(Function(r) r.CalmarRaw).Take(20).ToList())
@@ -404,6 +432,9 @@ Namespace TopStepTrader.UI.ViewModels
                     End If
 
                     Dim analysis = Await _claudeReviewService.AnalyseBacktestResultsAsync(sb.ToString(), cts.Token)
+                    Await File.WriteAllTextAsync(
+                        Path.Combine(docsFolder, "BackTestAnalysis.md"),
+                        analysis)
                     Dispatch(Sub()
                         MaxEffortAiAnalysis = analysis
                         MaxEffortAiIsLoading = False

@@ -21,7 +21,7 @@ Namespace TopStepTrader.Tests.Backtest
 
         Private Shared Function MakeSut() As BarCollectionService
             ' Dependencies are Nothing — safe because the tested paths return before
-            ' either _yahooClient or _barRepository is accessed.
+            ' either _pxHistoryClient or _barRepository is accessed.
             Return New BarCollectionService(
                 Nothing,
                 Nothing,

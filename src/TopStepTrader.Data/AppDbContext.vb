@@ -272,41 +272,6 @@ Namespace TopStepTrader.Data
                 If mustClose3 Then conn.Close()
             End Try
 
-            ' ── One-time data migration: purge Yahoo Finance bars (PurgeYahooBars_v1) ────
-            ' Yahoo Finance has been replaced by the ProjectX API as the bar source.
-            ' All cached bars are invalid — they use US-session-only data, wrong timestamps,
-            ' and potentially incorrect OHLC values. Purge once on first upgrade.
-            ' The Migrations table acts as a persistent flag so the DELETE only runs once.
-            Dim mustClose4 = (conn.State <> ConnectionState.Open)
-            If mustClose4 Then conn.Open()
-            Try
-                Using cmd = conn.CreateCommand()
-                    cmd.CommandText = "CREATE TABLE IF NOT EXISTS ""Migrations"" (
-                        ""Name"" TEXT NOT NULL PRIMARY KEY,
-                        ""AppliedAt"" TEXT NOT NULL DEFAULT '')"
-                    cmd.ExecuteNonQuery()
-                End Using
-
-                Dim alreadyApplied As Boolean
-                Using cmd = conn.CreateCommand()
-                    cmd.CommandText = "SELECT COUNT(1) FROM ""Migrations"" WHERE ""Name"" = 'PurgeYahooBars_v1'"
-                    alreadyApplied = (CInt(cmd.ExecuteScalar()) > 0)
-                End Using
-
-                If Not alreadyApplied Then
-                    Using cmd = conn.CreateCommand()
-                        cmd.CommandText = "DELETE FROM ""Bars"""
-                        cmd.ExecuteNonQuery()
-                    End Using
-                    Using cmd = conn.CreateCommand()
-                        cmd.CommandText = "INSERT INTO ""Migrations"" (""Name"", ""AppliedAt"") VALUES ('PurgeYahooBars_v1', datetime('now'))"
-                        cmd.ExecuteNonQuery()
-                    End Using
-                End If
-            Finally
-                If mustClose4 Then conn.Close()
-            End Try
-
             ' ── FEAT-01: extend TradeOutcomes + new tables ───────────────────────
             ' Idempotent ALTER TABLE columns; "duplicate column name" is swallowed.
             Dim mustClose5 = (conn.State <> ConnectionState.Open)

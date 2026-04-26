@@ -25,7 +25,7 @@ Namespace TopStepTrader.Services.Trading
         Implements ISniperExecutionEngine
 
         ' ── Dependencies ────────────────────────────────────────────────────────
-        Private ReadOnly _ingestionService As BarIngestionService
+        Private ReadOnly _ingestionService As IBarIngestionService
         Private ReadOnly _orderService As IOrderService
         Private ReadOnly _logger As ILogger(Of SniperExecutionEngine)
 
@@ -85,6 +85,16 @@ Namespace TopStepTrader.Services.Trading
         Private _freeRideActive As Boolean = False
         Private _lastClose As Decimal = 0D              ' most recent bar close (for emergency P&L estimate)
 
+        ' ── Safety monitor ───────────────────────────────────────────────────────
+        ''' <summary>
+        ''' Separate CTS for the client-side P&amp;L safety monitor loop so it can be
+        ''' cancelled independently of the main engine CTS (which is already cancelled
+        ''' during StopAsync before the cleanup path runs).
+        ''' </summary>
+        Private _safetyMonitorCts As CancellationTokenSource
+        ''' <summary>Guard flag: prevents re-entrant forced-flat if the monitor fires twice.</summary>
+        Private _safetyFiring As Integer = 0
+
 
         ' ── Engine state ─────────────────────────────────────────────────────────
         Private _running As Boolean = False
@@ -106,7 +116,7 @@ Namespace TopStepTrader.Services.Trading
         ''' <summary>Raised whenever position state changes (qty, avgEntry, freeRide).</summary>
         Public Event PositionChanged As EventHandler(Of SniperPositionEventArgs) Implements ISniperExecutionEngine.PositionChanged
 
-        Public Sub New(ingestionService As BarIngestionService,
+        Public Sub New(ingestionService As IBarIngestionService,
                        orderService As IOrderService,
                        logger As ILogger(Of SniperExecutionEngine))
             _ingestionService = ingestionService
@@ -198,6 +208,7 @@ Namespace TopStepTrader.Services.Trading
             _running = True
             _cts = New CancellationTokenSource()
             Interlocked.Exchange(_callbackRunning, 0)
+            Interlocked.Exchange(_safetyFiring, 0)
 
             AddHandler _orderService.OrderFilled, AddressOf OnOrderFilled
 
@@ -219,6 +230,7 @@ Namespace TopStepTrader.Services.Trading
             RemoveHandler _orderService.OrderFilled, AddressOf OnOrderFilled
 
             _cts?.Cancel()
+            _safetyMonitorCts?.Cancel()
             _timer?.Change(Timeout.Infinite, 0)
 
             Log($"■ Sniper stopping — {reason}, flattening positions...")
@@ -542,9 +554,8 @@ Namespace TopStepTrader.Services.Trading
 
                 ' ── Free-ride SL check ───────────────────────────────────────────
                 If _currentQty > 0 Then ' Manage stops for all positions
-                    ' For TopStepX the Yahoo bar close can be 4+ minutes stale — too stale
-                    ' for meaningful trailing-stop management. Derive the live mark price from
-                    ' the broker's own UnrealizedPnlUsd so the SL tracks the real market.
+                    ' Derive the live mark price from the broker's own UnrealizedPnlUsd
+                    ' so the SL tracks the real market rather than a potentially stale bar close.
                     Dim priceForSl = lastClose
                     If IsTopStepX AndAlso _tickSize > 0 AndAlso _tickValue > 0 Then
                         Dim liveSnap = Await _orderService.GetLivePositionSnapshotAsync(
@@ -750,6 +761,9 @@ Namespace TopStepTrader.Services.Trading
 
             ' Record bracket for heat/SL tracking (TopStepX path: no additional orders placed)
             Await PlaceBracketAsync(side, _averageEntry, qty, actualFill, 0, ct)
+
+            ' Start the client-side safety monitor now that a real position is confirmed.
+            StartSafetyMonitor()
         End Function
 
         Private Async Function ScaleInAsync(currentPrice As Decimal, ct As CancellationToken) As Task
@@ -1187,8 +1201,67 @@ Namespace TopStepTrader.Services.Trading
             _freeRideActive = False
             _addIndex = 0
             _barsInTrade = 0
+            _safetyMonitorCts?.Cancel()   ' position is flat — stop the safety monitor
             RaisePositionChanged()
         End Function
+
+        ''' <summary>
+        ''' Starts the client-side P&amp;L safety monitor in a background Task.
+        ''' Polls the live position snapshot every 3 seconds and force-flattens
+        ''' if the broker's reported unrealised loss exceeds the configured SL dollar
+        ''' amount, or unrealised profit exceeds the configured TP dollar amount.
+        ''' This acts as a backstop against silent broker-side bracket failures.
+        ''' </summary>
+        Private Sub StartSafetyMonitor()
+            _safetyMonitorCts?.Cancel()
+            _safetyMonitorCts = New CancellationTokenSource()
+            Dim ct = _safetyMonitorCts.Token
+            Log("🛡 Safety monitor active — polling every 3s (backstop for bracket failures)")
+            Task.Run(Async Function()
+                         Try
+                             While Not ct.IsCancellationRequested AndAlso _running AndAlso _currentQty > 0
+                                 Await Task.Delay(3000, ct)
+                                 If ct.IsCancellationRequested OrElse Not _running OrElse _currentQty = 0 Then Exit While
+
+                                 Try
+                                     Dim snap = Await _orderService.GetLivePositionSnapshotAsync(
+                                                    _accountId, _contractId, Nothing, ct)
+                                     If snap Is Nothing OrElse snap.PositionId = 0 Then Continue While
+
+                                     Dim unrealised = snap.UnrealizedPnlUsd
+
+                                     ' Dollar thresholds: ticks × tickSize (price) × tickValue ($/tick) × qty
+                                     Dim slDollars = CDec(_stopLossTicks) * _tickSize * _tickValue * _currentQty
+                                     Dim tpDollars = CDec(_takeProfitTicks) * _tickSize * _tickValue * _currentQty
+
+                                     Dim triggerReason As String = Nothing
+                                     If unrealised <= -Math.Abs(slDollars) Then
+                                         triggerReason = $"🛡 Safety monitor: SL dollar limit hit (P&L={unrealised:+$0.00;-$0.00}, limit=-${Math.Abs(slDollars):F2}) — bracket may have failed"
+                                     ElseIf tpDollars > 0 AndAlso unrealised >= tpDollars Then
+                                         triggerReason = $"🛡 Safety monitor: TP dollar limit hit (P&L={unrealised:+$0.00;-$0.00}, target=${tpDollars:F2}) — bracket may have failed"
+                                     End If
+
+                                     If triggerReason IsNot Nothing Then
+                                         ' Guard against re-entrant firing
+                                         If Interlocked.CompareExchange(_safetyFiring, 1, 0) = 0 Then
+                                             Log(triggerReason)
+                                             _safetyMonitorCts.Cancel()
+                                             Await StopAsync(triggerReason)
+                                         End If
+                                         Exit While
+                                     End If
+                                 Catch apiEx As Exception When Not ct.IsCancellationRequested
+                                     ' Non-fatal: a single snapshot failure should not stop the monitor
+                                     Log($"⚠️  Safety monitor: snapshot error (will retry) — {apiEx.Message}")
+                                 End Try
+                             End While
+                         Catch ex As OperationCanceledException
+                             ' Normal cancellation — exit silently
+                         Catch ex As Exception
+                             Log($"⚠️  Safety monitor exited unexpectedly: {ex.Message}")
+                         End Try
+                     End Function)
+        End Sub
 
         Private Async Function CheckStructureFailAsync(currentPrice As Decimal,
                                                          ema21 As Double,
