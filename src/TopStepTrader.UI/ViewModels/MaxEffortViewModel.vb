@@ -371,7 +371,8 @@ Namespace TopStepTrader.UI.ViewModels
 
                     Dim sb As New StringBuilder()
                     sb.AppendLine($"Backtest results — {rawResults.Count} combinations across {contracts.Count} instruments, 9 strategies, 8 timeframes, 3 personas (Lewis/Damian/Joe).")
-                    sb.AppendLine($"Date range: 60 days (TopStepX API limit). Commission = contract round-trip fee (OIL=$1.04, Gold=$1.24, MES=$0.74, M6E=$0.74, MBT=$2.34) + 1-tick slippage per entry.")
+                    Dim dayCount = (capEnd - capStart).Days
+                    sb.AppendLine($"Date range: {dayCount} days ({capStart:yyyy-MM-dd} to {capEnd:yyyy-MM-dd}). Commission = contract round-trip fee (OIL=$1.04, Gold=$1.24, MES=$0.74, M6E=$0.74, MBT=$2.34) + 1-tick slippage per entry.")
                     sb.AppendLine($"ATR-based stops: Lewis SL=1.5×/TP=3.0×N  Damian SL=1.0×/TP=2.0×N  Joe SL=0.75×/TP=2.0×N  (N = ATR14 × point value).")
                     If capValidateSplit Then
                         sb.AppendLine("OUT-OF-SAMPLE VALIDATION: 60/40 train/test split applied. Results sorted by Test P&L.")
