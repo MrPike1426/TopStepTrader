@@ -41,7 +41,7 @@ dotnet build --no-restore -v q
 dotnet test --no-build -v q
 ```
 
-**Expected output:** `476 passed, 0 failed` (as of 2026-04-25). If the count changes after adding new tests, update this number.
+**Expected output:** `500 passed, 0 failed` (as of 2026-04-26). If the count changes after adding new tests, update this number.
 
 **Rules:**
 - Never leave the project in a broken build state.
@@ -244,7 +244,7 @@ Seven projects in `src/`:
 | Project | Role |
 |---|---|
 | `TopStepTrader.Core` | Domain models, interfaces, enums, settings, pure trading logic (TickMath, FavouriteContracts) |
-| `TopStepTrader.API` | HTTP/SignalR clients for TopStepX/ProjectX and Yahoo Finance; ProjectX token manager |
+| `TopStepTrader.API` | HTTP/SignalR clients for TopStepX/ProjectX; ProjectX token manager |
 | `TopStepTrader.Data` | EF Core + SQLite (`TopStepTrader.db`); repositories |
 | `TopStepTrader.ML` | ML model loading and technical indicators |
 | `TopStepTrader.Services` | Business logic — trading engines, market data, backtest, background workers |
@@ -287,7 +287,7 @@ Dependency flow: UI → Services → (Core, Data, API, ML)
 - **Min-stop enforcement** — `TopStepXInstrumentCatalog.ClampStopTicksAsync()` enforces API-provided minimums (15-min TTL cache, falls back to `FavouriteContracts` local defaults)
 - **Synthetic OCO** — `FlattenContractAsync()` cancels resting SL bracket orders (type=4) before closing the position to prevent double-trigger
 - **Bracket tick sign convention** — long SL ticks are negative, short SL ticks are positive (ProjectX convention)
-- **Stale bar guard** — `StrategyExecutionEngine` declares a bar stale when `barAgeMins > TimeframeMinutes × 3` (e.g. 15 min for 5-min bars). The 3× multiplier accounts for the bar timestamp being the *start* of the period, Yahoo's 1–5 min API propagation lag, and the 30-second engine poll jitter — a stale threshold of 1× or 2× would produce false market-closed events during normal active trading. On the fresh→stale transition (market close) it fires exactly one `ConfidenceUpdated` event with `IsMarketClosed = True` and suppresses all entry signals. Position monitoring (broker sync + trail) continues. The `IsMarketClosed` flag causes Hydra/AssetBassett tiles to show `"⏸ Closed"`. The guard resets (`_lastBarWasStale = False`) on engine `Start()`.
+- **Stale bar guard** — `StrategyExecutionEngine` declares a bar stale when `barAgeMins > TimeframeMinutes × 3` (e.g. 15 min for 5-min bars). The 3× multiplier accounts for the bar timestamp being the *start* of the period, TopStepX's 1–5 min API propagation lag, and the 30-second engine poll jitter — a stale threshold of 1× or 2× would produce false market-closed events during normal active trading. On the fresh→stale transition (market close) it fires exactly one `ConfidenceUpdated` event with `IsMarketClosed = True` and suppresses all entry signals. Position monitoring (broker sync + trail) continues. The `IsMarketClosed` flag causes Hydra/AssetBassett tiles to show `"⏸ Closed"`. The guard resets (`_lastBarWasStale = False`) on engine `Start()`.
 - **Partial-bar guard** — after `GetBarsForMLAsync`, the engine drops the last bar when its timestamp falls within the still-open strategy-TF period (i.e., `UtcNow - barTimestamp < TimeframeMinutes`). This prevents repaint on all nine Multi-Confluence indicators caused by an incomplete forming bar being fed into the evaluator.
 - **Market regime filter** — when both `StrategyDefinition.TrendingStrategyOverride` and `RangingStrategyOverride` are set, `RegimeClassifier.Classify(atr, adx, adxThreshold)` runs before the strategy `Select Case` and injects the appropriate `activeCondition` (trending → `TrendingStrategyOverride`; ranging → `RangingStrategyOverride`). Regime overrides are configurable via ComboBoxes on Hydra and AssetBassett views.
 - **AI pre-trade gate** — when `StrategyDefinition.UseAiPreTradeGate = True`, the engine calls `IClaudeReviewService.PreTradeCheckAsync` before placing an order. Result is logged as `↳ AI: PROCEED` or `↳ AI: VETO`. Engine tracks `_consecutiveLosses` and `_totalTradesThisSession` and includes them in `PreTradeContext`.
@@ -381,11 +381,11 @@ The `Leverage` field is carried in `PersonaProfile` and `StrategyDefinition` but
 ## Backtest Architecture
 
 ### Bar Collection (`BarCollectionService.vb`)
-Downloads historical bars from Yahoo Finance and caches them in SQLite. Key behaviours:
+Downloads historical bars from TopStepX (`PXHistoryClient`) and caches them in SQLite. Key behaviours:
 
 - **Cache hit**: returns immediately if ≥ 50 bars exist, span ≥ 80% of requested range, **and latest bar is less than 24 hours old**. The staleness check ensures weekly runs accumulate fresh bars over time (new bars appended via `INSERT OR IGNORE`).
-- **Yahoo Finance symbol translation**: `BarCollectionService` translates contract symbol keys (e.g. `"GOLD.24-7"`) to Yahoo tickers (e.g. `"GC=F"`) before calling the API, using `FavouriteContracts.TryGetBySymbol(contractId)?.YahooSymbol`. Storage keys remain stable instrument IDs (do not roll quarterly). Falls back to the raw contractId so direct Yahoo codes also work.
-- **Yahoo Finance limits** (enforced in `BacktestViewModel.GetYahooMaxDays`):
+- **Symbol translation**: `BarCollectionService` uses the stable contract ID (e.g. `"MES"`) as the SQLite storage key; the raw PX contract ID is passed directly to `PXHistoryClient.RetrieveBarsAsync`.
+- **Lookback limits** (enforced in `BacktestRunViewModel.GetMaxLookbackDays`):
   - 1-min → 7 days
   - 5-min, 10-min, 15-min, 30-min → 60 days
   - 1-hr, 2-hr, 4-hr → 730 days
