@@ -1086,7 +1086,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Case BarTimeframe.OneMinute : Return 7
                 Case BarTimeframe.FiveMinute, BarTimeframe.TenMinute,
                      BarTimeframe.FifteenMinute, BarTimeframe.ThirtyMinute : Return 60
-                Case Else : Return 90
+                Case Else : Return 730
             End Select
         End Function
 

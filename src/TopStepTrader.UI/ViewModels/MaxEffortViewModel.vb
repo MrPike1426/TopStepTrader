@@ -337,8 +337,8 @@ Namespace TopStepTrader.UI.ViewModels
                                     Dispatch(Sub()
                                         Dim insertAt = MaxEffortResults.Count
                                         For j = 0 To MaxEffortResults.Count - 1
-                                            Dim cmpKey = If(capValidateSplit, MaxEffortResults(j).TestPnLRaw, MaxEffortResults(j).TotalPnLRaw)
-                                            Dim rowKey  = If(capValidateSplit, row.TestPnLRaw, row.TotalPnLRaw)
+                                            Dim cmpKey = If(capValidateSplit, MaxEffortResults(j).TestPnLRaw, MaxEffortResults(j).CalmarRaw)
+                                            Dim rowKey  = If(capValidateSplit, row.TestPnLRaw, row.CalmarRaw)
                                             If cmpKey < rowKey Then
                                                 insertAt = j
                                                 Exit For
@@ -361,7 +361,7 @@ Namespace TopStepTrader.UI.ViewModels
 
                 Dim top20 = If(capValidateSplit,
                                rawResults.OrderByDescending(Function(r) r.TestPnLRaw).Take(20).ToList(),
-                               rawResults.OrderByDescending(Function(r) r.TotalPnLRaw).Take(20).ToList())
+                               rawResults.OrderByDescending(Function(r) r.CalmarRaw).Take(20).ToList())
                 If top20.Count > 0 AndAlso Not cts.IsCancellationRequested Then
                     Dispatch(Sub()
                         MaxEffortProgress = 100
@@ -372,11 +372,14 @@ Namespace TopStepTrader.UI.ViewModels
                     Dim sb As New StringBuilder()
                     sb.AppendLine($"Backtest results — {rawResults.Count} combinations across {contracts.Count} instruments, 9 strategies, 8 timeframes, 3 personas (Lewis/Damian/Joe).")
                     Dim dayCount = (capEnd - capStart).Days
-                    sb.AppendLine($"Date range: {dayCount} days ({capStart:yyyy-MM-dd} to {capEnd:yyyy-MM-dd}). Commission = contract round-trip fee (OIL=$1.04, Gold=$1.24, MES=$0.74, M6E=$0.74, MBT=$2.34) + 1-tick slippage per entry.")
+                    Dim feeList = String.Join(", ", contracts.Select(Function(c) $"{c.Name}=${c.RoundTripFee:F2}"))
+                    sb.AppendLine($"Date range: {dayCount} days ({capStart:yyyy-MM-dd} to {capEnd:yyyy-MM-dd}). Commission = contract round-trip fee ({feeList}) + 1-tick slippage per entry.")
                     sb.AppendLine($"ATR-based stops: Lewis SL=1.5×/TP=3.0×N  Damian SL=1.0×/TP=2.0×N  Joe SL=0.75×/TP=2.0×N  (N = ATR14 × point value).")
                     If capValidateSplit Then
-                        sb.AppendLine("OUT-OF-SAMPLE VALIDATION: 60/40 train/test split applied. Results sorted by Test P&L.")
+                        sb.AppendLine("OUT-OF-SAMPLE VALIDATION: 60/40 train/test split applied. Results sorted by out-of-sample Test P&L.")
                         sb.AppendLine("Degradation = (TrainPnL − TestPnL) / |TrainPnL| × 100. >50% = possible overfit; negative TestPnL = strategy reverses out-of-sample.")
+                    Else
+                        sb.AppendLine("Ranking: Calmar ratio (TotalP&L / MaxDrawdown) — normalises for instrument point-value and volatility so MES and Gold are directly comparable.")
                     End If
                     sb.AppendLine()
                     If capValidateSplit Then
@@ -388,12 +391,12 @@ Namespace TopStepTrader.UI.ViewModels
                             sb.AppendLine($"{rank,4} | {r.Persona,-7} | {r.Contract,-12} | {r.Strategy,-17} | {r.Timeframe,8} | {r.Trades,6} | {r.WinRate,5} | {r.TotalPnL,9} | {r.TestPnL,8} | {r.DegradationPct,12}")
                         Next
                     Else
-                        sb.AppendLine("TOP 20 BY TOTAL P&L:")
-                        sb.AppendLine("Rank | Persona | Contract | Strategy | Timeframe | Trades | Win% | P&L | Sharpe | Avg P&L")
-                        sb.AppendLine("-----|---------|----------|----------|-----------|--------|------|-----|--------|--------")
+                        sb.AppendLine("TOP 20 BY CALMAR RATIO (P&L / MaxDrawdown — cross-instrument fair ranking):")
+                        sb.AppendLine("Rank | Persona | Contract | Strategy | Timeframe | Trades | Win% | P&L | MaxDD | Calmar | Sharpe | Avg P&L")
+                        sb.AppendLine("-----|---------|----------|----------|-----------|--------|------|-----|-------|--------|--------|--------")
                         For rank = 1 To top20.Count
                             Dim r = top20(rank - 1)
-                            sb.AppendLine($"{rank,4} | {r.Persona,-7} | {r.Contract,-12} | {r.Strategy,-17} | {r.Timeframe,8} | {r.Trades,6} | {r.WinRate,5} | {r.TotalPnL,8} | {r.Sharpe,6} | {r.AvgPnL}")
+                            sb.AppendLine($"{rank,4} | {r.Persona,-7} | {r.Contract,-12} | {r.Strategy,-17} | {r.Timeframe,8} | {r.Trades,6} | {r.WinRate,5} | {r.TotalPnL,8} | {r.MaxDD,7} | {r.Calmar,6} | {r.Sharpe,6} | {r.AvgPnL}")
                         Next
                     End If
 
@@ -473,6 +476,8 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property Sharpe As String
         Public ReadOnly Property AvgPnL As String
         Public ReadOnly Property MaxDD As String
+        Public ReadOnly Property CalmarRaw As Decimal
+        Public ReadOnly Property Calmar As String
         Public ReadOnly Property EndOfDayCount As String
         Public ReadOnly Property CommissionPaid As String
         ' Out-of-sample split columns (FEAT-13) — "—" when no split active
@@ -527,6 +532,9 @@ Namespace TopStepTrader.UI.ViewModels
             Sharpe = If(result.SharpeRatio.HasValue, result.SharpeRatio.Value.ToString("F2"), "—")
             AvgPnL = result.AveragePnLPerTrade.ToString("C0")
             MaxDD = result.MaxDrawdown.ToString("C0")
+            Dim rawCalmar = If(result.MaxDrawdown > 0D, result.TotalPnL / result.MaxDrawdown, result.TotalPnL)
+            CalmarRaw = rawCalmar
+            Calmar = rawCalmar.ToString("F2")
             EndOfDayCount = result.EndOfDayCloseCount.ToString()
             CommissionPaid = result.CommissionPaid.ToString("C0")
             ContractIdRaw = contractIdRaw
@@ -554,6 +562,7 @@ Namespace TopStepTrader.UI.ViewModels
                     _oosBackground = "Transparent"
                 End If
             Else
+                TestPnLRaw = Decimal.MinValue  ' sentinel: sorts below all real OOS results when ValidateSplit is ON
                 TestPnL = "—"
                 TestPnLColor = "TextSecondaryBrush"
                 DegradationPct = "—"
@@ -576,6 +585,9 @@ Namespace TopStepTrader.UI.ViewModels
             Me.Sharpe = sharpe.ToString("F2")
             AvgPnL = avgPnL.ToString("C0")
             MaxDD = maxDD.ToString("C0")
+            Dim rawCalmar2 = If(maxDD > 0D, totalPnLRaw / maxDD, totalPnLRaw)
+            CalmarRaw = rawCalmar2
+            Calmar = rawCalmar2.ToString("F2")
             CommissionPaid = "—"
             TestPnL = "—"
             TestPnLColor = "TextSecondaryBrush"
