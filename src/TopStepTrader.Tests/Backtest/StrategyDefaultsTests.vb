@@ -88,14 +88,15 @@ Namespace TopStepTrader.Tests.Backtest
             ' TICKET-006 design decision: combined multi-indicator strategies only.
             ' EMA/RSI Combined + Multi-Confluence Engine + BB Squeeze Scalper + LULT Divergence
             ' + VIDYA Cross + Naked Trader + Double Bubble Butt + Opening Range Breakout
-            ' + Pump-n-Dump = 9 entries.
-            Assert.Equal(9, StrategyDefaults.Defaults.Count)
+            ' + Pump-n-Dump + VWAP Mean Reversion = 10 entries.
+            Assert.Equal(10, StrategyDefaults.Defaults.Count)
             Assert.True(StrategyDefaults.Defaults.ContainsKey("EMA/RSI Combined"))
             Assert.True(StrategyDefaults.Defaults.ContainsKey("Multi-Confluence Engine"))
             Assert.True(StrategyDefaults.Defaults.ContainsKey("BB Squeeze Scalper"))
             Assert.True(StrategyDefaults.Defaults.ContainsKey("Double Bubble Butt"))
             Assert.True(StrategyDefaults.Defaults.ContainsKey("Opening Range Breakout"))
             Assert.True(StrategyDefaults.Defaults.ContainsKey("Pump-n-Dump"))
+            Assert.True(StrategyDefaults.Defaults.ContainsKey("VWAP Mean Reversion"))
         End Sub
 
         <Fact>

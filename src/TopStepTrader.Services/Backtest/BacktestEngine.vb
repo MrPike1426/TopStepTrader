@@ -896,12 +896,60 @@ Namespace TopStepTrader.Services.Backtest
                 bbsAtr10 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 10)
             End If
 
-            ' -- Warm-up periods (bars to skip before signalling)
+            ' -- Opening Range Breakout: ATR(14), VolMa20
+            Dim orbVolMa20 As Single() = Nothing
+            Dim orbAtr14 As Single() = Nothing
+            If config.StrategyCondition = StrategyConditionType.OpeningRangeBreakout Then
+                Dim allVols = filteredBars.Select(Function(b) CDec(b.Volume)).ToList()
+                orbVolMa20 = TechnicalIndicators.SMA(allVols, 20)
+                orbAtr14 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 14)
+            End If
+
+            ' -- VWAP Mean Reversion: session-anchored VWAP, rolling stddev bands (1.5 SD and 2.0 SD), ATR(14)
+            Dim vmrVwap As Single() = Nothing
+            Dim vmrUpper2Sd As Single() = Nothing
+            Dim vmrLower2Sd As Single() = Nothing
+            Dim vmrUpper15Sd As Single() = Nothing
+            Dim vmrLower15Sd As Single() = Nothing
+            Dim vmrAtr14 As Single() = Nothing
+            If config.StrategyCondition = StrategyConditionType.VwapMeanReversion Then
+                Dim allVols = filteredBars.Select(Function(b) b.Volume).ToList()
+                vmrVwap = TechnicalIndicators.VWAP(allHighs, allLows, allCloses, allVols)
+                vmrAtr14 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 14)
+                ' Rolling 20-bar standard deviation of (close − VWAP) to set band widths
+                Const VmrPeriod As Integer = 20
+                Dim n = allCloses.Count
+                vmrUpper2Sd  = New Single(n - 1) {}
+                vmrLower2Sd  = New Single(n - 1) {}
+                vmrUpper15Sd = New Single(n - 1) {}
+                vmrLower15Sd = New Single(n - 1) {}
+                For i = 0 To n - 1
+                    vmrUpper2Sd(i)  = Single.NaN
+                    vmrLower2Sd(i)  = Single.NaN
+                    vmrUpper15Sd(i) = Single.NaN
+                    vmrLower15Sd(i) = Single.NaN
+                Next
+                For i = VmrPeriod - 1 To n - 1
+                    If Single.IsNaN(vmrVwap(i)) Then Continue For
+                    Dim vwapD = CDbl(vmrVwap(i))
+                    Dim variance As Double = 0
+                    For j = i - VmrPeriod + 1 To i
+                        Dim diff = CDbl(allCloses(j)) - vwapD
+                        variance += diff * diff
+                    Next
+                    Dim sd = Math.Sqrt(variance / VmrPeriod)
+                    vmrUpper2Sd(i)  = CSng(vwapD + 2.0 * sd)
+                    vmrLower2Sd(i)  = CSng(vwapD - 2.0 * sd)
+                    vmrUpper15Sd(i) = CSng(vwapD + 1.5 * sd)
+                    vmrLower15Sd(i) = CSng(vwapD - 1.5 * sd)
+                Next
+            End If
             Select Case config.StrategyCondition
                 Case StrategyConditionType.MultiConfluence : warmUp = 80
                 Case StrategyConditionType.ConnorsRsi2 : warmUp = 205
                 Case StrategyConditionType.DoubleBubbleButt : warmUp = 25
                 Case StrategyConditionType.LultDivergence : warmUp = 100
+                Case StrategyConditionType.VwapMeanReversion : warmUp = 20
                 Case Else : warmUp = 55
             End Select
 
@@ -986,6 +1034,16 @@ Namespace TopStepTrader.Services.Backtest
                     indicators.Rsi = If(emaRsiPeriod = 14, rsi14Series, TechnicalIndicators.RSI(allCloses, emaRsiPeriod))
                     indicators.Adx = adx14Series
                     indicators.Atr = universalAtr14
+                Case StrategyConditionType.OpeningRangeBreakout
+                    indicators.Atr    = orbAtr14
+                    indicators.VolMa20 = orbVolMa20
+                Case StrategyConditionType.VwapMeanReversion
+                    indicators.Vwap    = vmrVwap
+                    indicators.BbUpper  = vmrUpper2Sd
+                    indicators.BbLower  = vmrLower2Sd
+                    indicators.BbMiddle = vmrUpper15Sd
+                    indicators.BbWidth  = vmrLower15Sd
+                    indicators.Atr     = vmrAtr14
                 Case Else
                     indicators.Rsi = rsi14Series
                     indicators.Adx = adx14Series

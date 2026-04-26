@@ -136,6 +136,18 @@ Namespace TopStepTrader.Core.Enums
         ''' SL/TP are ATR-based (SlAtrMultiple / TpAtrMultiple on BacktestConfiguration).
         ''' </summary>
         PumpNDump = 19
+
+        ''' <summary>
+        ''' VWAP Mean Reversion: institutional midday strategy (10am–2pm ET window).
+        ''' Session-anchored VWAP ± 1.5 and 2.0 standard deviations define the reversion zones.
+        ''' Long  when close ≤ VWAP − 1.5 SD (oversold vs institutional average cost).
+        ''' Short when close ≥ VWAP + 1.5 SD (overbought vs institutional average cost).
+        ''' Exit at VWAP (mean reversion target); SL beyond the 2.0 SD band.
+        ''' No-trade filter: outside 10am–2pm ET (momentum hours suppressed).
+        ''' Best instruments: MES, MNQ (midday chop with high institutional participation).
+        ''' Academic win rate: 60–65%; small average winner — tight stops required.
+        ''' </summary>
+        VwapMeanReversion = 20
     End Enum
 
 End Namespace

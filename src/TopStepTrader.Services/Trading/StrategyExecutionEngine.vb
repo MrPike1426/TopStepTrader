@@ -1576,6 +1576,59 @@ Namespace TopStepTrader.Services.Trading
                             End If
                         End If
 
+                    Case StrategyConditionType.VwapMeanReversion
+                        ' ── VWAP Mean Reversion ──────────────────────────────────────────────
+                        ' Institutional midday strategy (10am–2pm ET).
+                        ' Session-anchored VWAP ± rolling 20-bar stddev bands.
+                        ' Long  when close ≤ VWAP − 1.5 SD; Short when close ≥ VWAP + 1.5 SD.
+                        ' Exit at VWAP (mean reversion target); SL beyond the 2.0 SD band.
+                        Const VmrWindowStartUtcHour As Integer = 15   ' 10:00 ET = 15:00 UTC
+                        Const VmrWindowEndUtcHour As Integer = 19     ' 14:00 ET = 19:00 UTC
+                        Dim vmrHour = lastBar.Timestamp.ToUniversalTime().Hour
+                        If vmrHour < VmrWindowStartUtcHour OrElse vmrHour >= VmrWindowEndUtcHour Then
+                            Log($"Bar checked — VWAP MR: outside 10am–2pm ET window | {remStr}")
+                        ElseIf bars.Count < 20 Then
+                            Log($"Bar checked — VWAP MR: insufficient bars ({bars.Count}/20) | {remStr}")
+                        Else
+                            ' Session-anchored VWAP
+                            Dim vmrDate = lastBar.Timestamp.Date
+                            Dim cumPV As Double = 0
+                            Dim cumVol As Double = 0
+                            For Each b In bars.Where(Function(x) x.Timestamp.Date = vmrDate)
+                                Dim tp = (CDbl(b.High) + CDbl(b.Low) + CDbl(b.Close)) / 3.0
+                                cumPV += tp * CDbl(b.Volume)
+                                cumVol += CDbl(b.Volume)
+                            Next
+                            Dim vwapVal As Decimal = If(cumVol > 0, CDec(cumPV / cumVol), CDec(lastBar.Close))
+
+                            ' Rolling 20-bar standard deviation of (close − VWAP)
+                            Dim recent = bars.Skip(Math.Max(0, bars.Count - 20)).ToList()
+                            Dim variance As Double = 0
+                            For Each b In recent
+                                Dim diff = CDbl(b.Close) - CDbl(vwapVal)
+                                variance += diff * diff
+                            Next
+                            Dim sd = CDec(Math.Sqrt(variance / recent.Count))
+
+                            Dim vmrLo15 = vwapVal - 1.5D * sd
+                            Dim vmrHi15 = vwapVal + 1.5D * sd
+                            Dim vmrLo2  = vwapVal - 2.0D * sd
+                            Dim vmrHi2  = vwapVal + 2.0D * sd
+                            Dim vmrClose = CDec(lastBar.Close)
+
+                            _currentAtrValue = CDec(TechnicalIndicators.LastValid(TechnicalIndicators.ATR(highs, lows, closes, 14)))
+
+                            If vmrClose <= vmrLo15 Then
+                                Log($"✅ VWAP MR LONG! Close={vmrClose:F4} ≤ VWAP−1.5SD={vmrLo15:F4} | VWAP={vwapVal:F4} SD={sd:F4} | ATR={_currentAtrValue:F4} | {remStr}")
+                                side = OrderSide.Buy
+                            ElseIf vmrClose >= vmrHi15 Then
+                                Log($"✅ VWAP MR SHORT! Close={vmrClose:F4} ≥ VWAP+1.5SD={vmrHi15:F4} | VWAP={vwapVal:F4} SD={sd:F4} | ATR={_currentAtrValue:F4} | {remStr}")
+                                side = OrderSide.Sell
+                            Else
+                                Log($"Bar checked — VWAP MR: inside bands | Close={vmrClose:F4} bands=[{vmrLo15:F4}–{vmrHi15:F4}] VWAP={vwapVal:F4} | {remStr}")
+                            End If
+                        End If
+
                     Case Else
                         Log($"Condition '{activeCondition}' not yet implemented")
 

@@ -32,6 +32,8 @@ Namespace TopStepTrader.Services.Backtest
                 Case StrategyConditionType.OpeningRangeBreakout : Return New OrbSignalProvider()
                 ' TEST-10
                 Case StrategyConditionType.PumpNDump : Return New PumpNDumpSignalProvider()
+                ' STRAT-31
+                Case StrategyConditionType.VwapMeanReversion : Return New VwapMeanReversionSignalProvider()
                 Case Else
                     Throw New NotImplementedException(
                         $"No signal provider implemented for strategy '{condition}'.")
