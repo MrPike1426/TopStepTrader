@@ -77,6 +77,7 @@ Namespace TopStepTrader.Services.Backtest
             Dim freeRideActive As Boolean = False
             Dim avgEntry As Decimal = 0D
             Dim lastEndOfDayBarIndex As Integer = -1000
+            Dim barsInTrade As Integer = 0
 
             ' Pending next-bar fill
             Dim pendingSide As String = Nothing
@@ -102,6 +103,7 @@ Namespace TopStepTrader.Services.Backtest
                         lastEntryPrice = 0D : positionSide = Nothing
                         tpPrice = 0D : freeRideActive = False : avgEntry = 0D
                         addIndex = 0
+                        barsInTrade = 0
                         lastEndOfDayBarIndex = i
                         pendingSide = Nothing
                         Continue For
@@ -153,13 +155,16 @@ Namespace TopStepTrader.Services.Backtest
                                 openLegs.Add(leg)
                                 lastEntryPrice = fillPrice
 
-                                ' Anchor TP to average entry after each fill (ATR mode)
+                                ' Anchor TP to average entry after each fill (ATR mode or tick mode)
                                 If config.UseAtrMode AndAlso indicators.Atr IsNot Nothing Then
                                     Dim atrVal = indicators.Atr(i)
                                     If Not Single.IsNaN(atrVal) AndAlso atrVal > 0.0F Then
                                         Dim tpDist = CDec(atrVal) * config.TpAtrMultiple
                                         tpPrice = If(isBuy, avgEntry + tpDist, avgEntry - tpDist)
                                     End If
+                                ElseIf config.TakeProfitTicks > 0 AndAlso config.TickSize > 0D Then
+                                    Dim tpDist = config.TakeProfitTicks * config.TickSize
+                                    tpPrice = If(isBuy, avgEntry + tpDist, avgEntry - tpDist)
                                 End If
 
                                 ' Initialise per-bracket SL at avgEntry ± stopLossTicks×tickSize
@@ -257,6 +262,8 @@ Namespace TopStepTrader.Services.Backtest
                         Next
                     End If
 
+                    barsInTrade += 1
+
                     ' ── Exit check: per-bracket SL, then TP ──────────────────────
                     Dim exitReason As String = Nothing
                     Dim exitPrice As Decimal = bar.Close
@@ -291,6 +298,23 @@ Namespace TopStepTrader.Services.Backtest
                         End If
                     End If
 
+                    ' ── FEAT-22: Structure-Fail Exit ──────────────────────────────────────────
+                    If exitReason Is Nothing AndAlso config.EnableStructureFailExit AndAlso
+                       indicators.Ema21 IsNot Nothing Then
+                        Dim ema21Val = indicators.Ema21(i)
+                        If Not Single.IsNaN(ema21Val) AndAlso barsInTrade >= config.MinBarsBeforeExit Then
+                            Dim ema21Price = CDec(ema21Val)
+                            Dim sfThreshold = CDec(config.Ema21BreakTicks) * config.TickSize
+                            If isBuyPos AndAlso bar.Close < (ema21Price - sfThreshold) Then
+                                exitReason = "StructureFail"
+                                exitPrice = bar.Close
+                            ElseIf Not isBuyPos AndAlso bar.Close > (ema21Price + sfThreshold) Then
+                                exitReason = "StructureFail"
+                                exitPrice = bar.Close
+                            End If
+                        End If
+                    End If
+
                     If exitReason IsNot Nothing Then
                         ' Stamp MaxContractsHeld and FEAT-21 trailing fields on all legs before closing
                         Dim maxContracts = openLegs.Sum(Function(l) l.Quantity)
@@ -303,6 +327,7 @@ Namespace TopStepTrader.Services.Backtest
                         lastEntryPrice = 0D : positionSide = Nothing
                         tpPrice = 0D : freeRideActive = False : avgEntry = 0D
                         addIndex = 0
+                        barsInTrade = 0
                         Continue For
                     End If
 

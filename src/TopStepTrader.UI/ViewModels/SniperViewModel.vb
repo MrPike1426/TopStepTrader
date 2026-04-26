@@ -375,23 +375,23 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _btTpAtrMultiple As String = "3.0"
-        Public Property BtTpAtrMultiple As String
+        Private _btTpTicks As String = "20"
+        Public Property BtTpTicks As String
             Get
-                Return _btTpAtrMultiple
+                Return _btTpTicks
             End Get
             Set(value As String)
-                SetProperty(_btTpAtrMultiple, value)
+                SetProperty(_btTpTicks, value)
             End Set
         End Property
 
-        Private _btSlAtrMultiple As String = "1.5"
-        Public Property BtSlAtrMultiple As String
+        Private _btSlTicks As String = "10"
+        Public Property BtSlTicks As String
             Get
-                Return _btSlAtrMultiple
+                Return _btSlTicks
             End Get
             Set(value As String)
-                SetProperty(_btSlAtrMultiple, value)
+                SetProperty(_btSlTicks, value)
             End Set
         End Property
 
@@ -779,9 +779,9 @@ Namespace TopStepTrader.UI.ViewModels
                 AddLog("⚠ Select a contract for the backtest first")
                 Return
             End If
-            Dim slMult, tpMult As Decimal
-            If Not Decimal.TryParse(_btSlAtrMultiple, slMult) OrElse slMult <= 0D Then slMult = 1.0D
-            If Not Decimal.TryParse(_btTpAtrMultiple, tpMult) OrElse tpMult <= 0D Then tpMult = 2.5D
+            Dim slTicks, tpTicks As Integer
+            If Not Integer.TryParse(_btSlTicks, slTicks) OrElse slTicks <= 0 Then slTicks = 10
+            If Not Integer.TryParse(_btTpTicks, tpTicks) OrElse tpTicks <= 0 Then tpTicks = 20
 
             ' Parse pyramid fields from existing ViewModel bindings (FEAT-20)
             Dim btHeat, btTargetSize, btCoreAdds, btMomSize, btExtSize As Integer
@@ -801,18 +801,23 @@ Namespace TopStepTrader.UI.ViewModels
             If btExtSize <= 0 Then btExtSize = 1
             If btVolAtrFactor <= 0 Then btVolAtrFactor = 0.5
 
+            ' Parse structure-fail fields (FEAT-22)
+            Dim btEmaBreak, btMinBars As Integer
+            Integer.TryParse(_ema21BreakTicks, btEmaBreak)
+            Integer.TryParse(_minBarsBeforeExit, btMinBars)
+            If btEmaBreak <= 0 Then btEmaBreak = 5
+            If btMinBars <= 0 Then btMinBars = 5
+
             Dim config As New BacktestConfiguration With {
-                .RunName = $"Sniper {DateTime.Now:yyyyMMdd-HHmm} 
-—
- {_backtestContractId}",
+                .RunName = $"Sniper {DateTime.Now:yyyyMMdd-HHmm} — {_backtestContractId}",
                 .ContractId = _backtestContractId,
                 .Timeframe = 1,
                 .StartDate = _backtestStartDate,
                 .EndDate = _backtestEndDate,
                 .InitialCapital = 50000D,
-                .UseAtrMode = True,
-                .SlAtrMultiple = slMult,
-                .TpAtrMultiple = tpMult,
+                .UseAtrMode = False,
+                .StopLossTicks = slTicks,
+                .TakeProfitTicks = tpTicks,
                 .MinSignalConfidence = 0.8F,
                 .Quantity = 1,
                 .TickSize = GetTickSize(_backtestContractId),
@@ -825,7 +830,10 @@ Namespace TopStepTrader.UI.ViewModels
                 .MomentumTierSize = btMomSize,
                 .ExtensionTierSize = btExtSize,
                 .ExtensionAllowed = _extensionAllowed,
-                .MaxRiskHeatTicks = btHeat
+                .MaxRiskHeatTicks = btHeat,
+                .EnableStructureFailExit = _enableStructureFailExit,
+                .Ema21BreakTicks = btEmaBreak,
+                .MinBarsBeforeExit = btMinBars
             }
             _cancelSource = New CancellationTokenSource()
             IsBacktesting = True

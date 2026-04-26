@@ -585,25 +585,25 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="TP × ATR"
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Take Profit (ticks)"
                                                FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="SL × ATR"
+                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Stop Loss (ticks)"
                                                FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
 
                                     <TextBox Grid.Row="2" Grid.Column="0"
-                                             Text="{Binding BtTpAtrMultiple, UpdateSourceTrigger=PropertyChanged}"
+                                             Text="{Binding BtTpTicks, UpdateSourceTrigger=PropertyChanged}"
                                              IsEnabled="{Binding IsNotBacktesting}">
                                         <TextBox.ToolTip>
                                             <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
-                                                Text="Take-profit as a multiple of ATR(14) at entry for the backtest."/></ToolTip>
+                                                Text="Take-profit distance in ticks from average entry for the backtest. Example: 20 ticks on MES = $25 per contract."/></ToolTip>
                                         </TextBox.ToolTip>
                                     </TextBox>
                                     <TextBox Grid.Row="2" Grid.Column="3"
-                                             Text="{Binding BtSlAtrMultiple, UpdateSourceTrigger=PropertyChanged}"
+                                             Text="{Binding BtSlTicks, UpdateSourceTrigger=PropertyChanged}"
                                              IsEnabled="{Binding IsNotBacktesting}">
                                         <TextBox.ToolTip>
                                             <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
-                                                Text="Stop-loss as a multiple of ATR(14) at entry for the backtest."/></ToolTip>
+                                                Text="Stop-loss distance in ticks from average entry for the backtest. Example: 10 ticks on MES = $12.50 per contract."/></ToolTip>
                                         </TextBox.ToolTip>
                                     </TextBox>
                                 </Grid>

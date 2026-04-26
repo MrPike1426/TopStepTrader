@@ -71,6 +71,8 @@ Namespace TopStepTrader.Tests.Backtest
             Dim ema50 = Enumerable.Repeat(CSng(95), barCount).ToArray()
             ' Simulate crossover: bar before cross has ema8 <= ema21
             If crossIdx > 0 Then ema8(crossIdx - 1) = CSng(99)
+            ' Make ema50 rising at the crossover bar so ema50Rising = True
+            If crossIdx > 0 Then ema50(crossIdx - 1) = CSng(94.9)
             Dim atrArr = Enumerable.Repeat(atr, barCount).ToArray()
             Return New StrategyIndicators With {
                 .Ema8  = ema8,
@@ -357,6 +359,210 @@ Namespace TopStepTrader.Tests.Backtest
                 Assert.True(t.FinalSlAtExit.Value >= initialSl,
                     $"SL moved against the trade: final {t.FinalSlAtExit.Value} < initial {initialSl}")
             Next
+        End Sub
+
+        ' ══════════════════════════════════════════════════════════════════════
+        ' FEAT-22: Structure-Fail Exit + Tick-based SL/TP
+        ' ══════════════════════════════════════════════════════════════════════
+
+        ''' <summary>
+        ''' Build a StrategyIndicators where EMA21 stays at <paramref name="ema21"/>.
+        ''' EMA8 crosses above EMA21 at <paramref name="crossIdx"/> (long signal).
+        ''' After <paramref name="ema21DropBar"/> the EMA21 value plummets to simulate a
+        ''' price/EMA21 structure break (EMA21 is held low but price stays at original
+        ''' bar.Close so bar.Close > EMA21 + threshold is satisfied for shorts, or we
+        ''' simulate a long where price drops below EMA21-threshold).
+        ''' For FEAT-22 tests we control EMA21 and let bar price drop below it.
+        ''' </summary>
+        Private Shared Function MakeIndicatorsWithStructureFail(barCount As Integer,
+                                                                  crossIdx As Integer,
+                                                                  ema21Normal As Single,
+                                                                  ema21DropBar As Integer,
+                                                                  ema21DropValue As Single) As StrategyIndicators
+            Dim ema8  = Enumerable.Repeat(CSng(ema21Normal + 5), barCount).ToArray()
+            Dim ema21 = Enumerable.Repeat(ema21Normal, barCount).ToArray()
+            Dim ema50 = Enumerable.Repeat(CSng(ema21Normal - 5), barCount).ToArray()
+            ' Crossover bar: ema8 was below ema21 just before crossIdx
+            If crossIdx > 0 Then ema8(crossIdx - 1) = ema21Normal - 1
+            ' Make ema50 rising at the crossover bar so ema50Rising = True
+            If crossIdx > 0 Then ema50(crossIdx - 1) = CSng(ema21Normal - 5.1)
+            ' EMA21 drops after ema21DropBar to simulate trend failure
+            For j = ema21DropBar To barCount - 1
+                ema21(j) = ema21DropValue
+            Next
+            Dim atr = Enumerable.Repeat(1.0F, barCount).ToArray()
+            Return New StrategyIndicators With {
+                .Ema8  = ema8,
+                .Ema21 = ema21,
+                .Ema50 = ema50,
+                .Atr   = atr
+            }
+        End Function
+
+        <Fact>
+        Public Sub StructureFail_FiresAfterMinBars_Long()
+            ' Long position entered at bar 3.
+            ' MinBarsBeforeExit=3, Ema21BreakTicks=2, TickSize=0.25 => threshold = 0.50
+            ' Price drops below (EMA21 - 0.50) on bar 9 (after 5+ bars held) → "StructureFail"
+            Const N = 20
+            Const ema21Val As Single = 100.0F
+            Const ema21Drop As Single = 99.0F   ' EMA21 drops to 99 at bar 8
+            Dim base = New DateTimeOffset(2024, 1, 2, 9, 0, 0, TimeSpan.Zero)
+
+            ' Bars: price stays above EMA21 until bar 9, then drops to 98 (< 99 - 0.50 = 98.5)
+            Dim bars = Enumerable.Range(0, N).Select(
+                Function(i)
+                    Dim close = If(i >= 9, 98.0D, 102.0D)
+                    Return New MarketBar With {
+                        .Timestamp = base.AddMinutes(i),
+                        .Open  = close,
+                        .High  = close + 0.5D,
+                        .Low   = close - 0.5D,
+                        .Close = close
+                    }
+                End Function).ToList()
+
+            ' EMA21 drops to 99 starting at bar 8, price at bar 9 = 98
+            ' 98 < 99 - 0.50 (threshold) = 98.5 → StructureFail fires
+            Dim indicators = MakeIndicatorsWithStructureFail(N, crossIdx:=3,
+                                                              ema21Normal:=ema21Val,
+                                                              ema21DropBar:=8,
+                                                              ema21DropValue:=ema21Drop)
+
+            Dim config As New BacktestConfiguration With {
+                .ContractId            = "TEST",
+                .StrategyCondition     = StrategyConditionType.TripleEmaCascade,
+                .TickSize              = 0.25D,
+                .PointValue            = 5D,
+                .UseAtrMode            = False,
+                .StopLossTicks         = 40,     ' wide so SL does not fire first
+                .TakeProfitTicks       = 80,     ' wide so TP does not fire first
+                .TargetTotalSize       = 1,
+                .CoreSizeFraction      = 1.0,
+                .CoreAddsCount         = 1,
+                .MomentumTierSize      = 1,
+                .ExtensionTierSize     = 1,
+                .ExtensionAllowed      = False,
+                .MaxRiskHeatTicks      = 9999,
+                .VolatilityAtrFactor   = 0.5,
+                .EnableStructureFailExit = True,
+                .Ema21BreakTicks       = 2,
+                .MinBarsBeforeExit     = 3
+            }
+
+            Dim trades = SniperBacktestEngine.RunPyramidReplay(config, bars, indicators, warmUp:=2)
+
+            Assert.NotEmpty(trades)
+            Assert.True(trades.Any(Function(t) t.ExitReason = "StructureFail"),
+                "Expected at least one trade to exit with reason 'StructureFail'")
+        End Sub
+
+        <Fact>
+        Public Sub StructureFail_SuppressedBeforeMinBars()
+            ' Same setup but MinBarsBeforeExit=20 — condition cannot fire within 20 bars held.
+            ' Position enters at bar 3; data ends at bar 19 → must exit as "EndOfData", NOT "StructureFail".
+            Const N = 20
+            Const ema21Val As Single = 100.0F
+            Const ema21Drop As Single = 99.0F
+            Dim base = New DateTimeOffset(2024, 1, 2, 9, 0, 0, TimeSpan.Zero)
+
+            Dim bars = Enumerable.Range(0, N).Select(
+                Function(i)
+                    Dim close = If(i >= 9, 98.0D, 102.0D)
+                    Return New MarketBar With {
+                        .Timestamp = base.AddMinutes(i),
+                        .Open  = close,
+                        .High  = close + 0.5D,
+                        .Low   = close - 0.5D,
+                        .Close = close
+                    }
+                End Function).ToList()
+
+            Dim indicators = MakeIndicatorsWithStructureFail(N, crossIdx:=3,
+                                                              ema21Normal:=ema21Val,
+                                                              ema21DropBar:=8,
+                                                              ema21DropValue:=ema21Drop)
+
+            Dim config As New BacktestConfiguration With {
+                .ContractId            = "TEST",
+                .StrategyCondition     = StrategyConditionType.TripleEmaCascade,
+                .TickSize              = 0.25D,
+                .PointValue            = 5D,
+                .UseAtrMode            = False,
+                .StopLossTicks         = 40,
+                .TakeProfitTicks       = 80,
+                .TargetTotalSize       = 1,
+                .CoreSizeFraction      = 1.0,
+                .CoreAddsCount         = 1,
+                .MomentumTierSize      = 1,
+                .ExtensionTierSize     = 1,
+                .ExtensionAllowed      = False,
+                .MaxRiskHeatTicks      = 9999,
+                .VolatilityAtrFactor   = 0.5,
+                .EnableStructureFailExit = True,
+                .Ema21BreakTicks       = 2,
+                .MinBarsBeforeExit     = 20   ' bars held can never reach 20 in N=20 bar set
+            }
+
+            Dim trades = SniperBacktestEngine.RunPyramidReplay(config, bars, indicators, warmUp:=2)
+
+            Assert.NotEmpty(trades)
+            Assert.DoesNotContain(trades, Function(t) t.ExitReason = "StructureFail")
+        End Sub
+
+        <Fact>
+        Public Sub TickBasedSlTp_CorrectPnL_TakeProfit()
+            ' TickSize=0.25, PointValue=5, TakeProfitTicks=20, Qty=1 (initial add = 1 contract).
+            ' TP distance = 20 × 0.25 = 5.0 price pts.  P&L = 5.0 / 1.0 × 5.0 × 1 = $25.
+            ' (CalculatePnL uses priceMove / TickSize × TickValue × Qty; TickValue = TickSize × PointValue/point
+            '  Actually: P&L = (exitPrice - entryPrice) × PointValue × Qty)
+            ' PointValue = $5/pt, TP = 5 pts → expected P&L = $25.
+            Const N = 20
+            Const entryClose As Decimal = 100D
+            Dim base = New DateTimeOffset(2024, 1, 2, 9, 0, 0, TimeSpan.Zero)
+
+            ' Bars: price rises steadily. TP = 5 pts above entry → ~105.
+            ' Bar i has close = 100 + i*0.5. At i=11 close=105.5 > TP=105 (approx).
+            Dim bars = Enumerable.Range(0, N).Select(
+                Function(i)
+                    Dim close = entryClose + i * 0.5D
+                    Return New MarketBar With {
+                        .Timestamp = base.AddMinutes(i),
+                        .Open  = close,
+                        .High  = close + 1D,
+                        .Low   = close - 0.25D,
+                        .Close = close
+                    }
+                End Function).ToList()
+
+            Dim indicators = MakeIndicators(N, crossIdx:=3, atr:=1.0F)
+
+            Dim config As New BacktestConfiguration With {
+                .ContractId          = "TEST",
+                .StrategyCondition   = StrategyConditionType.TripleEmaCascade,
+                .TickSize            = 0.25D,
+                .PointValue          = 5D,
+                .UseAtrMode          = False,
+                .StopLossTicks       = 40,    ' wide SL so TP fires first
+                .TakeProfitTicks     = 20,    ' 20 × 0.25 = 5 pts → $25
+                .TargetTotalSize     = 1,
+                .CoreSizeFraction    = 1.0,
+                .CoreAddsCount       = 1,
+                .MomentumTierSize    = 1,
+                .ExtensionTierSize   = 1,
+                .ExtensionAllowed    = False,
+                .MaxRiskHeatTicks    = 9999,
+                .VolatilityAtrFactor = 0.5
+            }
+
+            Dim trades = SniperBacktestEngine.RunPyramidReplay(config, bars, indicators, warmUp:=2)
+
+            Dim tpTrade = trades.FirstOrDefault(Function(t) t.ExitReason = "TakeProfit")
+            Assert.NotNull(tpTrade)
+            ' P&L should be approximately $25 (20 ticks × $0.25/tick × $5/pt × 1 contract = $25)
+            Assert.True(tpTrade.PnL.HasValue)
+            Assert.True(Math.Abs(tpTrade.PnL.Value - 25D) < 2D,
+                $"Expected P&L ≈ $25 for 20-tick TP on MES-like contract, got {tpTrade.PnL.Value:F2}")
         End Sub
 
     End Class

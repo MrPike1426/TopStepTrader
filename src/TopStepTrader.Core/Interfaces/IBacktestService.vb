@@ -249,6 +249,35 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Public Property StopLossTicks As Integer = 10
 
+        ''' <summary>
+        ''' Initial take-profit distance in ticks from average entry.
+        ''' Used by <c>SniperBacktestEngine</c> when <see cref="UseAtrMode"/> is False.
+        ''' 0 (default) disables tick-based TP — falls back to ATR mode if active.
+        ''' </summary>
+        Public Property TakeProfitTicks As Integer = 0
+
+        ' ── Sniper Structure-Fail Exit fields (FEAT-22) ──────────────────────────────
+
+        ''' <summary>
+        ''' When True, the Sniper backtest exits early when price breaks EMA21 by more
+        ''' than <see cref="Ema21BreakTicks"/> ticks after holding at least
+        ''' <see cref="MinBarsBeforeExit"/> bars.  Mirrors live <c>SniperExecutionEngine</c>.
+        ''' Default False.
+        ''' </summary>
+        Public Property EnableStructureFailExit As Boolean = False
+
+        ''' <summary>
+        ''' Number of ticks price must close beyond EMA21 to trigger a structure-fail exit.
+        ''' Only used when <see cref="EnableStructureFailExit"/> is True.  Default 5.
+        ''' </summary>
+        Public Property Ema21BreakTicks As Integer = 5
+
+        ''' <summary>
+        ''' Minimum number of bars a position must be held before a structure-fail exit
+        ''' can trigger.  Prevents premature exits on the entry bar.  Default 5.
+        ''' </summary>
+        Public Property MinBarsBeforeExit As Integer = 5
+
     End Class
 
 End Namespace
