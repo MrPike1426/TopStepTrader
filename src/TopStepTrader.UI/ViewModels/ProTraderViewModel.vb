@@ -1,55 +1,35 @@
 Imports System.Collections.ObjectModel
+Imports System.IO
+Imports System.Text.Json
+Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.UI.ViewModels.Base
 
 Namespace TopStepTrader.UI.ViewModels
 
-    ''' <summary>
-    ''' ViewModel for the Pro-Trader view.
-    ''' Skeleton — persona selection, ATR tier selection (Tight/Standard/Wide/Ultra),
-    ''' account picker, confidence %, trade amount, and Start/Stop commands.
-    ''' Content will be expanded in future tickets.
-    ''' </summary>
     Public Class ProTraderViewModel
         Inherits TradingViewModelBase
 
-        ' ── Persona ───────────────────────────────────────────────────────────────
-        Private _selectedProfile As String = "Damian"
+        Private ReadOnly _slotStore As ProTraderSlotStore
+        Private ReadOnly _slotsPath As String =
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                         "TopStepTrader", "protrader_slots.json")
 
-        Public ReadOnly Property IsLewisSelected As Boolean
+        ' ── Slots ─────────────────────────────────────────────────────────────
+        Public ReadOnly Property Slots As New ObservableCollection(Of ProTraderSlotVm)()
+
+        ' ── ATR Override (FEAT-18) ────────────────────────────────────────────
+        Private _atrOverrideEnabled As Boolean = False
+        Public Property AtrOverrideEnabled As Boolean
             Get
-                Return _selectedProfile = "Lewis"
+                Return _atrOverrideEnabled
             End Get
+            Set(value As Boolean)
+                SetProperty(_atrOverrideEnabled, value)
+            End Set
         End Property
 
-        Public ReadOnly Property IsDamianSelected As Boolean
-            Get
-                Return _selectedProfile = "Damian"
-            End Get
-        End Property
-
-        Public ReadOnly Property IsJoeSelected As Boolean
-            Get
-                Return _selectedProfile = "Joe"
-            End Get
-        End Property
-
-        Public ReadOnly Property SelectProfileCommand As RelayCommand
-            Get
-                Return New RelayCommand(
-                    Sub(param)
-                        Dim name = TryCast(param, String)
-                        If String.IsNullOrEmpty(name) Then Return
-                        _selectedProfile = name
-                        NotifyPropertyChanged(NameOf(IsLewisSelected))
-                        NotifyPropertyChanged(NameOf(IsDamianSelected))
-                        NotifyPropertyChanged(NameOf(IsJoeSelected))
-                        ApplyPersonaDefaults(name)
-                    End Sub)
-            End Get
-        End Property
-
-        ' ── ATR Tier ──────────────────────────────────────────────────────────────
+        ' ── ATR Tier ──────────────────────────────────────────────────────────
         Private _selectedAtrTier As String = "Standard"
 
         Public ReadOnly Property IsAtrTightSelected As Boolean
@@ -92,7 +72,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
-        ' ── SL / TP multiples (display only for now) ──────────────────────────────
+        ' ── SL / TP multiples (global ATR override values) ───────────────────
         Private _slMultipleOfN As Decimal = 1.5D
         Public Property SlMultipleOfN As Decimal
             Get
@@ -113,7 +93,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        ' ── Confidence % ──────────────────────────────────────────────────────────
+        ' ── Confidence % ──────────────────────────────────────────────────────
         Private _minConfidencePct As Integer = 80
         Public Property MinConfidencePct As Integer
             Get
@@ -124,7 +104,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        ' ── Trade amount ──────────────────────────────────────────────────────────
+        ' ── Trade amount ──────────────────────────────────────────────────────
         Private _tradeAmount As Decimal = 500D
         Public Property TradeAmount As Decimal
             Get
@@ -135,7 +115,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        ' ── Running state ─────────────────────────────────────────────────────────
+        ' ── Running state ─────────────────────────────────────────────────────
         Private _isRunning As Boolean = False
 
         Public ReadOnly Property IsNotRunning As Boolean
@@ -166,25 +146,78 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
-        ' ── IsFormReady ───────────────────────────────────────────────────────────
+        ' ── IsFormReady ───────────────────────────────────────────────────────
         Public Overrides ReadOnly Property IsFormReady As Boolean
             Get
                 Return SelectedAccount IsNot Nothing
             End Get
         End Property
 
-        ' ── Helpers ───────────────────────────────────────────────────────────────
-        Private Sub ApplyPersonaDefaults(name As String)
-            Select Case name
-                Case "Lewis"
-                    MinConfidencePct = 90
-                Case "Damian"
-                    MinConfidencePct = 80
-                Case "Joe"
-                    MinConfidencePct = 70
-            End Select
+        ' ── Constructor ───────────────────────────────────────────────────────
+        Public Sub New(slotStore As ProTraderSlotStore)
+            _slotStore = slotStore
+            slotStore.Register(AddressOf AddSlot)
+
+            InitDefaultSlots()
+            LoadSlots()
         End Sub
 
+        ' ── Slot management ───────────────────────────────────────────────────
+        Public Sub AddSlot(slot As ProTraderSlotVm)
+            If Slots.Any(Function(s) s.Label = slot.Label) Then Return
+            slot.SetSaveCallback(AddressOf SaveSlots)
+            Slots.Add(slot)
+            SaveSlots()
+        End Sub
+
+        ' ── Persistence ───────────────────────────────────────────────────────
+        Private Sub InitDefaultSlots()
+            Dim save = New Action(AddressOf SaveSlots)
+            Dim defaults = New ProTraderSlotVm() {
+                New ProTraderSlotVm("GOLD.24-7", "Gold",   StrategyConditionType.MultiConfluence,      BarTimeframe.OneHour,       "Damian", 1.0D, 2.5D, save),
+                New ProTraderSlotVm("OIL",       "Oil",    StrategyConditionType.MultiConfluence,      BarTimeframe.FiveMinute,    "Damian", 1.0D, 2.5D, save),
+                New ProTraderSlotVm("SPX500",    "MES",    StrategyConditionType.EmaRsiWeightedScore,  BarTimeframe.FifteenMinute, "Joe",    0.75D, 1.5D, save),
+                New ProTraderSlotVm("GOLD.24-7", "Gold",   StrategyConditionType.OpeningRangeBreakout, BarTimeframe.FifteenMinute, "Damian", 1.0D, 2.5D, save),
+                New ProTraderSlotVm("MNQ",       "MNQ",    StrategyConditionType.OpeningRangeBreakout, BarTimeframe.FifteenMinute, "Joe",    0.75D, 1.5D, save),
+                New ProTraderSlotVm("SPX500",    "MES",    StrategyConditionType.VwapMeanReversion,    BarTimeframe.FiveMinute,    "Lewis",  1.5D, 3.0D, save)
+            }
+            For Each slot In defaults
+                Slots.Add(slot)
+            Next
+        End Sub
+
+        Private Sub LoadSlots()
+            Try
+                If Not File.Exists(_slotsPath) Then Return
+                Dim json = File.ReadAllText(_slotsPath)
+                Dim states = JsonSerializer.Deserialize(Of List(Of SlotState))(json)
+                If states Is Nothing Then Return
+                For Each state In states
+                    Dim match = Slots.FirstOrDefault(Function(s) s.Label = state.Label)
+                    If match IsNot Nothing Then
+                        ' Suppress save during load by setting the backing field directly via reflection is messy;
+                        ' instead just set the property — SaveSlots will be called but file is already current
+                        match.IsEnabled = state.IsEnabled
+                    End If
+                Next
+            Catch
+            End Try
+        End Sub
+
+        Friend Sub SaveSlots()
+            Try
+                Dim dir = Path.GetDirectoryName(_slotsPath)
+                If Not Directory.Exists(dir) Then Directory.CreateDirectory(dir)
+                Dim states = Slots.Select(Function(s) New SlotState With {
+                    .Label = s.Label, .IsEnabled = s.IsEnabled
+                }).ToList()
+                Dim json = JsonSerializer.Serialize(states, New JsonSerializerOptions With {.WriteIndented = True})
+                File.WriteAllText(_slotsPath, json)
+            Catch
+            End Try
+        End Sub
+
+        ' ── Helpers ───────────────────────────────────────────────────────────
         Private Sub ApplyAtrTier(tier As String)
             Select Case tier
                 Case "Tight"
@@ -201,6 +234,12 @@ Namespace TopStepTrader.UI.ViewModels
                     TpMultipleOfN = 10.0D
             End Select
         End Sub
+
+        ' ── Inner DTO for JSON persistence ───────────────────────────────────
+        Private Class SlotState
+            Public Property Label As String
+            Public Property IsEnabled As Boolean
+        End Class
 
     End Class
 

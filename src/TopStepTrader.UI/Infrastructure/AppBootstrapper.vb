@@ -51,6 +51,9 @@ Namespace TopStepTrader.UI.Infrastructure
                         ' ── WPF-specific: use IServiceScopeFactory in ViewModelLocator
                         '    so that Scoped EF Core services are resolved in a proper scope.
 
+                        ' Singleton store that wires MaxEffort pin → Pro-Trader slot grid
+                        services.AddSingleton(Of ProTraderSlotStore)()
+
                         ' ViewModelLocator — Singleton (creates per-view scopes internally)
                         services.AddSingleton(Of ViewModelLocator)()
 

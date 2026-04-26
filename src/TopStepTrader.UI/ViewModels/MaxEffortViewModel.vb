@@ -15,7 +15,7 @@ Namespace TopStepTrader.UI.ViewModels
 
     ''' <summary>
     ''' ViewModel for Tab 2 — Maximum Effort!
-    ''' Runs 840 backtest combinations (3 personas × 5 instruments × 7 strategies × 8 timeframes)
+    ''' Runs 1,080 backtest combinations (3 personas × 5 instruments × 9 strategies × 8 timeframes)
     ''' and requests Claude Haiku analysis of the top 20 results.
     ''' Extracted from BacktestViewModel as part of ARCH-02b.
     ''' </summary>
@@ -29,6 +29,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _personaService As IPersonaService
         Private ReadOnly _pinnedResults As ObservableCollection(Of MaxEffortRowVm)
         Private ReadOnly _runVm As BacktestRunViewModel
+        Private ReadOnly _slotStore As ProTraderSlotStore
 
         Private _cancelSource As CancellationTokenSource
 
@@ -76,7 +77,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
-        Private _progressText As String = "Click Maximum Effort! to run all 840 combinations (3 personas × 5 instruments × 7 strategies × 8 timeframes)."
+        Private _progressText As String = "Click Maximum Effort! to run all 1,080 combinations (3 personas × 5 instruments × 9 strategies × 8 timeframes)."
         Public Property MaxEffortProgressText As String
             Get
                 Return _progressText
@@ -159,13 +160,15 @@ Namespace TopStepTrader.UI.ViewModels
 
         ''' <param name="pinnedResults">Shared reference to the shell's PinnedResults collection — the Pin button appends here.</param>
         ''' <param name="runVm">Tab 1 VM — ForceClose settings are read from here at run time.</param>
+        ''' <param name="slotStore">Optional — when set, pinning a row also adds a slot to Pro-Trader.</param>
         Public Sub New(backtestService As IBacktestService,
                        barCollectionService As IBarCollectionService,
                        claudeReviewService As IClaudeReviewService,
                        session As ITradingSessionContext,
                        personaService As IPersonaService,
                        pinnedResults As ObservableCollection(Of MaxEffortRowVm),
-                       runVm As BacktestRunViewModel)
+                       runVm As BacktestRunViewModel,
+                       Optional slotStore As ProTraderSlotStore = Nothing)
 
             _backtestService = backtestService
             _barCollectionService = barCollectionService
@@ -174,6 +177,7 @@ Namespace TopStepTrader.UI.ViewModels
             _personaService = personaService
             _pinnedResults = pinnedResults
             _runVm = runVm
+            _slotStore = slotStore
 
             MaximumEffortCommand = New RelayCommand(AddressOf ExecuteMaximumEffort, Function() Not _isRunning)
             MaximumEffortCancelCommand = New RelayCommand(Sub() _cancelSource?.Cancel(), Function() _isRunning)
@@ -183,6 +187,13 @@ Namespace TopStepTrader.UI.ViewModels
                     Dim row = TryCast(param, MaxEffortRowVm)
                     If row IsNot Nothing AndAlso Not _pinnedResults.Contains(row) Then
                         _pinnedResults.Add(row)
+                        If _slotStore IsNot Nothing AndAlso row.ContractIdRaw <> "" Then
+                            Dim slot = New ProTraderSlotVm(
+                                row.ContractIdRaw, row.Contract,
+                                row.StrategyTypeRaw, row.TimeframeRaw,
+                                row.Persona, row.SlAtrMultiple, row.TpAtrMultiple)
+                            _slotStore.AddSlot(slot)
+                        End If
                     End If
                 End Sub,
                 Function(param) param IsNot Nothing)
@@ -217,7 +228,9 @@ Namespace TopStepTrader.UI.ViewModels
                 ("VIDYA Cross",        StrategyConditionType.VidyaCross),
                 ("Naked Trader",       StrategyConditionType.NakedTrader),
                 ("LULT Divergence",    StrategyConditionType.LultDivergence),
-                ("Double Bubble Butt", StrategyConditionType.DoubleBubbleButt)
+                ("Double Bubble Butt", StrategyConditionType.DoubleBubbleButt),
+                ("ORB",                StrategyConditionType.OpeningRangeBreakout),
+                ("VWAP Mean Reversion", StrategyConditionType.VwapMeanReversion)
             }
 
             Dim timeframes = New (BarTimeframe, String)() {
@@ -254,6 +267,8 @@ Namespace TopStepTrader.UI.ViewModels
 
                 For Each persona In personas
                     Dim personaShort = persona.Name.Split(" "c)(0)
+                    Dim pSlMul = persona.SlMultipleOfN
+                    Dim pTpMul = persona.TpMultipleOfN
                     For Each contract In contracts
                         For Each strat In strategies
                             For Each tf In timeframes
@@ -315,7 +330,8 @@ Namespace TopStepTrader.UI.ViewModels
                                     }
 
                                     Dim result = Await _backtestService.RunBacktestAsync(config, cts.Token)
-                                    Dim row = New MaxEffortRowVm(pShort, contractName, stratName, tfLabel, result)
+                                    Dim row = New MaxEffortRowVm(pShort, contractName, stratName, tfLabel, result,
+                                                                 contractId, stratCondition, tfEnum, pSlMul, pTpMul)
 
                                     rawResults.Add(row)
                                     Dispatch(Sub()
@@ -354,7 +370,7 @@ Namespace TopStepTrader.UI.ViewModels
                     End Sub)
 
                     Dim sb As New StringBuilder()
-                    sb.AppendLine($"Backtest results — {rawResults.Count} combinations across {contracts.Count} instruments, 7 strategies, 8 timeframes, 3 personas (Lewis/Damian/Joe).")
+                    sb.AppendLine($"Backtest results — {rawResults.Count} combinations across {contracts.Count} instruments, 9 strategies, 8 timeframes, 3 personas (Lewis/Damian/Joe).")
                     sb.AppendLine($"Date range: 60 days (TopStepX API limit). Commission = contract round-trip fee (OIL=$1.04, Gold=$1.24, MES=$0.74, M6E=$0.74, MBT=$2.34) + 1-tick slippage per entry.")
                     sb.AppendLine($"ATR-based stops: Lewis SL=1.5×/TP=3.0×N  Damian SL=1.0×/TP=2.0×N  Joe SL=0.75×/TP=2.0×N  (N = ATR14 × point value).")
                     If capValidateSplit Then
@@ -463,6 +479,12 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property TestPnLRaw As Decimal
         Public ReadOnly Property TestPnLColor As String
         Public ReadOnly Property DegradationPct As String
+        ' Raw typed fields for Pro-Trader slot construction (FEAT-16)
+        Public ReadOnly Property ContractIdRaw As String
+        Public ReadOnly Property StrategyTypeRaw As StrategyConditionType
+        Public ReadOnly Property TimeframeRaw As BarTimeframe
+        Public ReadOnly Property SlAtrMultiple As Decimal
+        Public ReadOnly Property TpAtrMultiple As Decimal
 
         Private _oosBackground As String = "Transparent"
         Private _isRecommended As Boolean
@@ -486,7 +508,12 @@ Namespace TopStepTrader.UI.ViewModels
         End Property
 
         Public Sub New(personaName As String, contractName As String, strategyName As String,
-                       timeframeLabel As String, result As BacktestResult)
+                       timeframeLabel As String, result As BacktestResult,
+                       Optional contractIdRaw As String = "",
+                       Optional strategyTypeRaw As StrategyConditionType = StrategyConditionType.EmaRsiWeightedScore,
+                       Optional timeframeRaw As BarTimeframe = BarTimeframe.OneHour,
+                       Optional slAtrMultiple As Decimal = 0D,
+                       Optional tpAtrMultiple As Decimal = 0D)
             Persona = personaName
             Contract = contractName
             Strategy = strategyName
@@ -501,6 +528,11 @@ Namespace TopStepTrader.UI.ViewModels
             MaxDD = result.MaxDrawdown.ToString("C0")
             EndOfDayCount = result.EndOfDayCloseCount.ToString()
             CommissionPaid = result.CommissionPaid.ToString("C0")
+            ContractIdRaw = contractIdRaw
+            StrategyTypeRaw = strategyTypeRaw
+            TimeframeRaw = timeframeRaw
+            Me.SlAtrMultiple = slAtrMultiple
+            Me.TpAtrMultiple = tpAtrMultiple
             If result.OutOfSampleResult IsNot Nothing Then
                 Dim oos = result.OutOfSampleResult
                 TestPnLRaw = oos.TotalPnL

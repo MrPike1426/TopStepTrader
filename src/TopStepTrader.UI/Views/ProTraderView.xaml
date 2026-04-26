@@ -9,7 +9,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>   <!-- header panels -->
-            <RowDefinition Height="*"/>      <!-- reserved for future content -->
+            <RowDefinition Height="*"/>      <!-- tile grid -->
         </Grid.RowDefinitions>
 
         <!-- ══════════════════════════════════════════════════════════
@@ -22,19 +22,13 @@
                 <TextBlock Text="⚡  Pro-Trader"
                            Style="{StaticResource PageTitleStyle}"/>
 
-                <!-- ── Panel 1: Account / Persona / Controls ── -->
+                <!-- ── Panel 1: Account / Controls ── -->
                 <Border Background="{StaticResource SurfaceBrush}"
                         CornerRadius="6" Padding="12,8" Margin="0,8,0,0">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>  <!-- Account: label -->
                             <ColumnDefinition Width="160"/>   <!-- Account ComboBox -->
-                            <ColumnDefinition Width="12"/>
-                            <ColumnDefinition Width="Auto"/>  <!-- Lewis -->
-                            <ColumnDefinition Width="4"/>
-                            <ColumnDefinition Width="Auto"/>  <!-- Damian -->
-                            <ColumnDefinition Width="4"/>
-                            <ColumnDefinition Width="Auto"/>  <!-- Joe -->
                             <ColumnDefinition Width="12"/>
                             <ColumnDefinition Width="Auto"/>  <!-- Conf%: label -->
                             <ColumnDefinition Width="52"/>    <!-- Conf% box -->
@@ -66,205 +60,34 @@
                             </ComboBox.ItemTemplate>
                         </ComboBox>
 
-                        <!-- Lewis pill -->
-                        <Button Grid.Column="3" Command="{Binding SelectProfileCommand}" CommandParameter="Lewis">
-                            <Button.ToolTip>
-                                <ToolTip>
-                                    <StackPanel Width="240">
-                                        <TextBlock Text="🛡  Lewis — Risk Averse"
-                                                   FontWeight="Bold" FontSize="13" Foreground="#4CAF50"
-                                                   Margin="0,0,0,6"/>
-                                        <TextBlock Text="Patient entries. Only trades the strongest, most confirmed trends."
-                                                   FontStyle="Italic" TextWrapping="Wrap" Opacity="0.8"
-                                                   Margin="0,0,0,8"/>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition/><RowDefinition/><RowDefinition/>
-                                                <RowDefinition/><RowDefinition/><RowDefinition/>
-                                                <RowDefinition/><RowDefinition/>
-                                            </Grid.RowDefinitions>
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Capital per trade"   Opacity="0.7"/>
-                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="$200 × 5× = $1,000 notional" FontWeight="SemiBold"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Stop loss (N-multiple)"  Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="1.5× N  (lev CFD: 2.5× N)" FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Take profit (N-multiple)" Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="3.0× N" FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="ATR trail step"           Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="0.5× N per advance"       FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="ADX trend gate"           Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="≥ 25 (strong trends only)" FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Min signal confidence"    Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="5" Grid.Column="1" Text="75 %" FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Max scale-ins"            Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="6" Grid.Column="1" Text="1  (2 positions total)"   FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="7" Grid.Column="0" Text="Risk:reward"              Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="7" Grid.Column="1" Text="1 : 2"                    FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                        </Grid>
-                                    </StackPanel>
-                                </ToolTip>
-                            </Button.ToolTip>
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource ProfileButtonStyle}">
-                                    <Setter Property="BorderBrush" Value="#4CAF50"/>
-                                    <Setter Property="Padding"     Value="10,4"/>
-                                    <Setter Property="FontSize"    Value="12"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsLewisSelected}" Value="True">
-                                            <Setter Property="Background"      Value="#228B22"/>
-                                            <Setter Property="BorderThickness" Value="2"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <TextBlock Text="🛡  Lewis" Foreground="{StaticResource TextPrimaryBrush}"/>
-                        </Button>
-
-                        <!-- Damian pill -->
-                        <Button Grid.Column="5" Command="{Binding SelectProfileCommand}" CommandParameter="Damian">
-                            <Button.ToolTip>
-                                <ToolTip>
-                                    <StackPanel Width="240">
-                                        <TextBlock Text="⚖  Damian — Moderate"
-                                                   FontWeight="Bold" FontSize="13" Foreground="#90A4AE"
-                                                   Margin="0,0,0,6"/>
-                                        <TextBlock Text="Balanced risk. Standard 1:2 risk-reward. Application default profile."
-                                                   FontStyle="Italic" TextWrapping="Wrap" Opacity="0.8"
-                                                   Margin="0,0,0,8"/>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition/><RowDefinition/><RowDefinition/>
-                                                <RowDefinition/><RowDefinition/><RowDefinition/>
-                                                <RowDefinition/><RowDefinition/>
-                                            </Grid.RowDefinitions>
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Capital per trade"   Opacity="0.7"/>
-                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="$500 × 10× = $5,000 notional" FontWeight="SemiBold"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Stop loss (N-multiple)"  Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="1.0× N  (lev CFD: 2.0× N)" FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Take profit (N-multiple)" Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="2.0× N" FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="ATR trail step"           Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="0.5× N per advance"       FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="ADX trend gate"           Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="≥ 20"                    FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Min signal confidence"    Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="5" Grid.Column="1" Text="65 %" FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Max scale-ins"            Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="6" Grid.Column="1" Text="2  (3 positions total)"   FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="7" Grid.Column="0" Text="Risk:reward"              Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="7" Grid.Column="1" Text="1 : 2"                    FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                        </Grid>
-                                    </StackPanel>
-                                </ToolTip>
-                            </Button.ToolTip>
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource ProfileButtonStyle}">
-                                    <Setter Property="BorderBrush" Value="#90A4AE"/>
-                                    <Setter Property="Padding"     Value="10,4"/>
-                                    <Setter Property="FontSize"    Value="12"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsDamianSelected}" Value="True">
-                                            <Setter Property="Background"      Value="#228B22"/>
-                                            <Setter Property="BorderThickness" Value="2"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <TextBlock Text="⚖  Damian" Foreground="{StaticResource TextPrimaryBrush}"/>
-                        </Button>
-
-                        <!-- Joe pill -->
-                        <Button Grid.Column="7" Command="{Binding SelectProfileCommand}" CommandParameter="Joe">
-                            <Button.ToolTip>
-                                <ToolTip>
-                                    <StackPanel Width="240">
-                                        <TextBlock Text="🔥  Joe — Aggressive"
-                                                   FontWeight="Bold" FontSize="13" Foreground="#EF5350"
-                                                   Margin="0,0,0,6"/>
-                                        <TextBlock Text="High frequency. Tight brackets capture shorter moves with more bracket advances."
-                                                   FontStyle="Italic" TextWrapping="Wrap" Opacity="0.8"
-                                                   Margin="0,0,0,8"/>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition/><RowDefinition/><RowDefinition/>
-                                                <RowDefinition/><RowDefinition/><RowDefinition/>
-                                                <RowDefinition/><RowDefinition/>
-                                            </Grid.RowDefinitions>
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Capital per trade"   Opacity="0.7"/>
-                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="$1,000 × 10× = $10,000 notional" FontWeight="SemiBold"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Stop loss (N-multiple)"  Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="1.5× N  (lev CFD: 3.0× N)" FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Take profit (N-multiple)" Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="2" Grid.Column="1" Text="2.0× N" FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="ATR trail step"           Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="1" Text="0.5× N per advance"       FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="ADX trend gate"           Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="4" Grid.Column="1" Text="≥ 15 (wider entry window)" FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Min signal confidence"    Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="5" Grid.Column="1" Text="55 %" FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Max scale-ins"            Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="6" Grid.Column="1" Text="3  (4 positions total)"   FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="7" Grid.Column="0" Text="Risk:reward"              Opacity="0.7" Margin="0,3,0,0"/>
-                                            <TextBlock Grid.Row="7" Grid.Column="1" Text="1 : 1.3"                  FontWeight="SemiBold" Margin="0,3,0,0"/>
-                                        </Grid>
-                                    </StackPanel>
-                                </ToolTip>
-                            </Button.ToolTip>
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource ProfileButtonStyle}">
-                                    <Setter Property="BorderBrush" Value="#EF5350"/>
-                                    <Setter Property="Padding"     Value="10,4"/>
-                                    <Setter Property="FontSize"    Value="12"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsJoeSelected}" Value="True">
-                                            <Setter Property="Background"      Value="#228B22"/>
-                                            <Setter Property="BorderThickness" Value="2"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <TextBlock Text="🔥  Joe" Foreground="{StaticResource TextPrimaryBrush}"/>
-                        </Button>
-
                         <!-- Confidence % -->
-                        <TextBlock Grid.Column="9" Text="Conf%:"
+                        <TextBlock Grid.Column="3" Text="Conf%:"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    VerticalAlignment="Center" Margin="0,0,6,0"
                                    ToolTip="Minimum weighted score 0–100 required to fire a signal"/>
-                        <TextBox Grid.Column="10"
+                        <TextBox Grid.Column="4"
                                  Text="{Binding MinConfidencePct, UpdateSourceTrigger=PropertyChanged}"
                                  VerticalAlignment="Center" Height="26"
-                                 ToolTip="Set by the active risk profile (Lewis=90, Damian=80, Joe=70). Override here if needed"/>
+                                 ToolTip="Override global confidence threshold"/>
 
                         <!-- $Amt -->
-                        <TextBlock Grid.Column="12" Text="$Amt:"
+                        <TextBlock Grid.Column="6" Text="$Amt:"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <TextBox Grid.Column="13"
+                        <TextBox Grid.Column="7"
                                  Text="{Binding TradeAmount, UpdateSourceTrigger=PropertyChanged}"
                                  VerticalAlignment="Center" Height="26"
                                  ToolTip="Dollar amount per trade"/>
 
                         <!-- Start / Stop -->
-                        <Button Grid.Column="15"
+                        <Button Grid.Column="9"
                                 Content="▶  Start"
                                 Command="{Binding StartCommand}"
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 Width="90" Height="28"
                                 IsEnabled="{Binding IsNotRunning}"
                                 ToolTip="Start Pro-Trader session"/>
-                        <Button Grid.Column="17"
+                        <Button Grid.Column="11"
                                 Content="■  Stop"
                                 Command="{Binding StopCommand}"
                                 Style="{StaticResource DangerButtonStyle}"
@@ -273,101 +96,121 @@
                     </Grid>
                 </Border>
 
-                <!-- ── ATR Risk Tier ── -->
+                <!-- ── Panel 2: ATR Risk Tier (with Override toggle, FEAT-18) ── -->
                 <Border Background="{StaticResource SurfaceBrush}"
                         CornerRadius="6" Padding="12,6" Margin="0,4,0,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="ATR Tier:"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    VerticalAlignment="Center" Margin="0,0,10,0"
-                                   ToolTip="Controls SL/TP bracket width as ATR multiples."/>
+                                   ToolTip="Global bracket override. When on, all slot engines use these multiples instead of their per-slot defaults."/>
 
-                        <!-- Tight tier -->
-                        <Button Command="{Binding SelectAtrTierCommand}" CommandParameter="Tight"
-                                Margin="0,0,4,0"
-                                ToolTip="Tight: SL=0.75×ATR, TP=1.5×ATR. Narrowest brackets — more signals, tighter stops.">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource ProfileButtonStyle}">
-                                    <Setter Property="MinWidth" Value="70"/>
-                                    <Setter Property="FontSize" Value="12"/>
+                        <!-- Override toggle (FEAT-18) -->
+                        <CheckBox Content="Override ATR" IsChecked="{Binding AtrOverrideEnabled}"
+                                  VerticalAlignment="Center" Margin="0,0,12,0"
+                                  Foreground="{StaticResource TextPrimaryBrush}"
+                                  ToolTip="Enable to apply a global ATR tier to all slots, overriding per-slot multiples."/>
+
+                        <!-- Tier buttons + multiples — dimmed when Override is off -->
+                        <StackPanel Orientation="Horizontal">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Opacity" Value="0.45"/>
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAtrTightSelected}" Value="True">
-                                            <Setter Property="Background" Value="#8B4513"/>
-                                            <Setter Property="BorderThickness" Value="2"/>
+                                        <DataTrigger Binding="{Binding AtrOverrideEnabled}" Value="True">
+                                            <Setter Property="Opacity" Value="1.0"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
-                            </Button.Style>
-                            <TextBlock Text="📏  Tight" Foreground="{StaticResource TextPrimaryBrush}"/>
-                        </Button>
+                            </StackPanel.Style>
 
-                        <!-- Standard tier -->
-                        <Button Command="{Binding SelectAtrTierCommand}" CommandParameter="Standard"
-                                Margin="0,0,4,0"
-                                ToolTip="Standard: SL=1.5×ATR, TP=3.0×ATR. Balanced brackets.">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource ProfileButtonStyle}">
-                                    <Setter Property="MinWidth" Value="70"/>
-                                    <Setter Property="FontSize" Value="12"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAtrStandardSelected}" Value="True">
-                                            <Setter Property="Background" Value="#228B22"/>
-                                            <Setter Property="BorderThickness" Value="2"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <TextBlock Text="📐  Standard" Foreground="{StaticResource TextPrimaryBrush}"/>
-                        </Button>
+                            <!-- Tight tier -->
+                            <Button Command="{Binding SelectAtrTierCommand}" CommandParameter="Tight"
+                                    Margin="0,0,4,0"
+                                    ToolTip="Tight: SL=0.75×ATR, TP=1.5×ATR. Narrowest brackets — more signals, tighter stops.">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ProfileButtonStyle}">
+                                        <Setter Property="MinWidth" Value="70"/>
+                                        <Setter Property="FontSize" Value="12"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAtrTightSelected}" Value="True">
+                                                <Setter Property="Background" Value="#8B4513"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="📏  Tight" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            </Button>
 
-                        <!-- Wide tier -->
-                        <Button Command="{Binding SelectAtrTierCommand}" CommandParameter="Wide"
-                                Margin="0,0,4,0"
-                                ToolTip="Wide: SL=2.5×ATR, TP=5.0×ATR. Widest brackets — fewer whipsaws, patient exits.">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource ProfileButtonStyle}">
-                                    <Setter Property="MinWidth" Value="70"/>
-                                    <Setter Property="FontSize" Value="12"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAtrWideSelected}" Value="True">
-                                            <Setter Property="Background" Value="#1A237E"/>
-                                            <Setter Property="BorderThickness" Value="2"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <TextBlock Text="🔭  Wide" Foreground="{StaticResource TextPrimaryBrush}"/>
-                        </Button>
+                            <!-- Standard tier -->
+                            <Button Command="{Binding SelectAtrTierCommand}" CommandParameter="Standard"
+                                    Margin="0,0,4,0"
+                                    ToolTip="Standard: SL=1.5×ATR, TP=3.0×ATR. Balanced brackets.">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ProfileButtonStyle}">
+                                        <Setter Property="MinWidth" Value="70"/>
+                                        <Setter Property="FontSize" Value="12"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAtrStandardSelected}" Value="True">
+                                                <Setter Property="Background" Value="#228B22"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="📐  Standard" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            </Button>
 
-                        <!-- Ultra tier -->
-                        <Button Command="{Binding SelectAtrTierCommand}" CommandParameter="Ultra"
-                                Margin="0,0,4,0"
-                                ToolTip="Ultra: SL=5×ATR, TP=10×ATR. Maximum room — rides large macro moves, very few signals.">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource ProfileButtonStyle}">
-                                    <Setter Property="MinWidth" Value="70"/>
-                                    <Setter Property="FontSize" Value="12"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsAtrUltraSelected}" Value="True">
-                                            <Setter Property="Background" Value="#4A0072"/>
-                                            <Setter Property="BorderThickness" Value="2"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <TextBlock Text="🚀  Ultra" Foreground="{StaticResource TextPrimaryBrush}"/>
-                        </Button>
+                            <!-- Wide tier -->
+                            <Button Command="{Binding SelectAtrTierCommand}" CommandParameter="Wide"
+                                    Margin="0,0,4,0"
+                                    ToolTip="Wide: SL=2.5×ATR, TP=5.0×ATR. Widest brackets — fewer whipsaws, patient exits.">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ProfileButtonStyle}">
+                                        <Setter Property="MinWidth" Value="70"/>
+                                        <Setter Property="FontSize" Value="12"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAtrWideSelected}" Value="True">
+                                                <Setter Property="Background" Value="#1A237E"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="🔭  Wide" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            </Button>
 
-                        <!-- Current multiples display -->
-                        <TextBlock Margin="16,0,0,0" VerticalAlignment="Center"
-                                   Foreground="{StaticResource TextSecondaryBrush}" FontSize="16"
-                                   FontFamily="Consolas">
-                            <Run Text="SL "/>
-                            <Run Text="{Binding SlMultipleOfN, StringFormat='{}{0:F2}×'}" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
-                            <Run Text="  TP "/>
-                            <Run Text="{Binding TpMultipleOfN, StringFormat='{}{0:F2}×'}" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
-                            <Run Text="  ATR"/>
-                        </TextBlock>
+                            <!-- Ultra tier -->
+                            <Button Command="{Binding SelectAtrTierCommand}" CommandParameter="Ultra"
+                                    Margin="0,0,4,0"
+                                    ToolTip="Ultra: SL=5×ATR, TP=10×ATR. Maximum room — rides large macro moves, very few signals.">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ProfileButtonStyle}">
+                                        <Setter Property="MinWidth" Value="70"/>
+                                        <Setter Property="FontSize" Value="12"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAtrUltraSelected}" Value="True">
+                                                <Setter Property="Background" Value="#4A0072"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="🚀  Ultra" Foreground="{StaticResource TextPrimaryBrush}"/>
+                            </Button>
+
+                            <!-- Current multiples display -->
+                            <TextBlock Margin="16,0,0,0" VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="16"
+                                       FontFamily="Consolas">
+                                <Run Text="SL "/>
+                                <Run Text="{Binding SlMultipleOfN, StringFormat='{}{0:F2}×'}" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                                <Run Text="  TP "/>
+                                <Run Text="{Binding TpMultipleOfN, StringFormat='{}{0:F2}×'}" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+                                <Run Text="  ATR"/>
+                            </TextBlock>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
@@ -375,17 +218,108 @@
         </ScrollViewer>
 
         <!-- ══════════════════════════════════════════════════════════
-             BODY: Reserved for future Pro-Trader content
+             BODY: Slot tile grid
              ══════════════════════════════════════════════════════════ -->
-        <Border Grid.Row="1" Margin="16,8,16,16"
-                Background="{StaticResource SurfaceBrush}"
-                CornerRadius="6">
-            <TextBlock Text="Pro-Trader content coming soon…"
-                       Foreground="{StaticResource TextSecondaryBrush}"
-                       FontSize="13" FontStyle="Italic"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"/>
-        </Border>
+        <ScrollViewer Grid.Row="1" Margin="12,4,12,12" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Slots}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <!-- Tile: ~204px wide, left-border accent when enabled -->
+                        <Border Width="204" Margin="4" CornerRadius="6"
+                                Background="{StaticResource SurfaceBrush}"
+                                BorderBrush="{Binding PersonaAccentBrush}"
+                                ClipToBounds="True">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Opacity" Value="0.45"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsEnabled}" Value="True">
+                                            <Setter Property="Opacity" Value="1.0"/>
+                                            <Setter Property="BorderThickness" Value="3,0,0,0"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+
+                            <StackPanel Margin="10,8,10,10">
+                                <!-- Row 1: Symbol + enable toggle -->
+                                <DockPanel LastChildFill="True">
+                                    <CheckBox DockPanel.Dock="Right"
+                                              IsChecked="{Binding IsEnabled}"
+                                              VerticalAlignment="Center"
+                                              ToolTip="Enable this slot"/>
+                                    <TextBlock Text="{Binding Symbol}"
+                                               FontSize="15" FontWeight="Bold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               VerticalAlignment="Center"/>
+                                </DockPanel>
+
+                                <!-- Row 2: Strategy · Timeframe -->
+                                <TextBlock Text="{Binding StrategyTimeframeLabel}"
+                                           Margin="0,3,0,0" FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+
+                                <!-- Row 3: Persona badge -->
+                                <Border Margin="0,5,0,0" CornerRadius="3" Padding="6,2"
+                                        HorizontalAlignment="Left"
+                                        Background="{Binding PersonaAccentBrush}">
+                                    <TextBlock Text="{Binding PersonaName}"
+                                               FontSize="10" FontWeight="SemiBold"
+                                               Foreground="White"/>
+                                </Border>
+
+                                <!-- Row 4: Confidence bar (hidden when Stopped) -->
+                                <ProgressBar Value="{Binding ConfidencePct}" Maximum="100"
+                                             Height="4" Margin="0,6,0,0">
+                                    <ProgressBar.Style>
+                                        <Style TargetType="ProgressBar">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding StatusText}" Value="Stopped">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ProgressBar.Style>
+                                </ProgressBar>
+
+                                <!-- Row 5: Status badge -->
+                                <Border Margin="0,5,0,0" CornerRadius="3" Padding="6,2"
+                                        HorizontalAlignment="Left">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#2A2A2A"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding StatusText}" Value="Monitoring">
+                                                    <Setter Property="Background" Value="#0D47A1"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding StatusText}" Value="Signal">
+                                                    <Setter Property="Background" Value="#1B5E20"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding StatusText}" Value="Trading">
+                                                    <Setter Property="Background" Value="#B71C1C"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding StatusText}" Value="Paused">
+                                                    <Setter Property="Background" Value="#4A148C"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding StatusText}"
+                                               FontSize="10" Foreground="White"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
 
     </Grid>
 </UserControl>

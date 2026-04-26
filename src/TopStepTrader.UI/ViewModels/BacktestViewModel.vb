@@ -31,7 +31,8 @@ Namespace TopStepTrader.UI.ViewModels
                        barCollectionService As IBarCollectionService,
                        claudeReviewService As IClaudeReviewService,
                        session As ITradingSessionContext,
-                       personaService As IPersonaService)
+                       personaService As IPersonaService,
+                       slotStore As ProTraderSlotStore)
 
             ' Create sub-VMs in dependency order:
             '   PinnedVm first (owns PinnedResults collection)
@@ -41,7 +42,7 @@ Namespace TopStepTrader.UI.ViewModels
             PinnedVm       = New PinnedResultsViewModel()
             RunVm          = New BacktestRunViewModel(backtestService, barCollectionService, session, personaService)
             MaxEffortVm    = New MaxEffortViewModel(backtestService, barCollectionService, claudeReviewService,
-                                                    session, personaService, PinnedVm.PinnedResults, RunVm)
+                                                    session, personaService, PinnedVm.PinnedResults, RunVm, slotStore)
             PreviousRunsVm = New PreviousRunsViewModel(backtestService)
         End Sub
 
