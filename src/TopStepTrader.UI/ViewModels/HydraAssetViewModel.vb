@@ -953,7 +953,7 @@ Namespace TopStepTrader.UI.ViewModels
         ''' If the tile was pre-populated at view load, the count is reset first so
         ''' the engine's attach counts as 1, not 2.
         ''' </summary>
-        Public Sub OpenTrade(side As Core.Enums.OrderSide, entryPrice As Decimal, amount As Decimal, leverage As Integer)
+        Public Sub OpenTrade(side As Core.Enums.OrderSide, entryPrice As Decimal, amount As Decimal)
             If _wasPrePopulated Then
                 _positionCount = 0
                 _wasPrePopulated = False
@@ -961,13 +961,7 @@ Namespace TopStepTrader.UI.ViewModels
             _positionCount += 1
             Dim sideLabel = If(side = Core.Enums.OrderSide.Buy, "LONG", "SHORT")
             Dim countSuffix = If(_positionCount > 1, $" (×{_positionCount})", "")
-            ' leverage = 0 signals a futures (TopStepX) position — show contract count.
-            ' leverage > 0 is eToro CFD style — show dollar amount × leverage multiplier.
-            ' Math.Ceiling avoids CInt banker's rounding (CInt(0.5) → 0); Math.Max guarantees
-            ' at least "1ct" when a position is known to be open.
-            Dim sizeStr = If(leverage = 0,
-                $"{Math.Max(1, CInt(Math.Ceiling(amount)))}x",
-                $"${amount:F0}×{leverage}")
+            Dim sizeStr = $"{Math.Max(1, CInt(Math.Ceiling(amount)))}x"
             TradeStatusLine = $"{sideLabel}{countSuffix}  {sizeStr}  P&L: —"
             NotifyPropertyChanged(NameOf(HasOpenPosition))
         End Sub

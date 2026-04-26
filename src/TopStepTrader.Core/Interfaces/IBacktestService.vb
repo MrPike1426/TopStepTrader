@@ -149,22 +149,6 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Public Property SpreadTicks As Integer = 0
 
-        ' ── Dollar-based fixed SL/TP bracket ─────────────────────────────────────
-
-        ''' <summary>
-        ''' Dollar amount for the initial stop-loss bracket.
-        ''' Used by the config-based CheckExit / GetExitPrice overloads when
-        ''' <see cref="UseAtrMode"/> is False.  0 = no stop (open-ended).
-        ''' </summary>
-        Public Property SlDollarBracket As Decimal = 0D
-
-        ''' <summary>
-        ''' Dollar amount for the initial take-profit bracket.
-        ''' Used by the config-based CheckExit / GetExitPrice overloads when
-        ''' <see cref="UseAtrMode"/> is False.  0 = no target (open-ended).
-        ''' </summary>
-        Public Property TpDollarBracket As Decimal = 0D
-
         ' ── MultiConfluence volume gate ──────────────────────────────────────────
 
         ''' <summary>
@@ -225,6 +209,35 @@ Namespace TopStepTrader.Core.Interfaces
         ''' Both subsets must contain at least 50 bars, otherwise the split is skipped.
         ''' </summary>
         Public Property TrainTestSplit As Double = 0.0
+
+        ' ── Sniper Pyramid fields (FEAT-20) ──────────────────────────────────────────
+
+        ''' <summary>Maximum total contracts to build up to across all pyramid tiers.</summary>
+        Public Property TargetTotalSize As Integer = 1
+
+        ''' <summary>Fraction of TargetTotalSize allocated to Tier A (Core) entries.</summary>
+        Public Property CoreSizeFraction As Double = 0.6
+
+        ''' <summary>Number of Core-tier scale-in adds (including the initial entry).</summary>
+        Public Property CoreAddsCount As Integer = 2
+
+        ''' <summary>ATR multiplier that price must move beyond _lastEntryPrice before a scale-in is allowed.</summary>
+        Public Property VolatilityAtrFactor As Double = 0.5
+
+        ''' <summary>Tier B: contracts added on the momentum add (addIndex = CoreAddsCount).</summary>
+        Public Property MomentumTierSize As Integer = 1
+
+        ''' <summary>Tier C: contracts added on extension adds (addIndex > CoreAddsCount).</summary>
+        Public Property ExtensionTierSize As Integer = 1
+
+        ''' <summary>When True, Tier C extension adds are permitted.</summary>
+        Public Property ExtensionAllowed As Boolean = False
+
+        ''' <summary>
+        ''' Maximum cumulative heat in ticks (tick-risk × qty per bracket) across all open legs.
+        ''' A scale-in that would exceed this cap is skipped.
+        ''' </summary>
+        Public Property MaxRiskHeatTicks As Integer = 100
 
     End Class
 

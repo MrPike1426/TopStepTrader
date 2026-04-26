@@ -37,9 +37,6 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>eToro take-profit trigger price level (absolute price, not ticks).</summary>
         Public Property TakeProfitRate As Decimal?
 
-        ''' <summary>Leverage multiplier for eToro order (default 1 = no leverage).</summary>
-        Public Property Leverage As Integer = 1
-
         ''' <summary>
         ''' When True, eToro's native Trailing Stop Loss is enabled on the position.
         ''' The broker automatically moves StopLossRate whenever price improves, keeping

@@ -262,7 +262,7 @@ Namespace TopStepTrader.UI.ViewModels
             AddHandler engine.TradeOpened,
                 Sub(s As Object, e As TradeOpenedEventArgs)
                     Dispatch(Sub()
-                                 assetVm.OpenTrade(e.Side, e.EntryPrice, e.Amount, e.Leverage)
+                                 assetVm.OpenTrade(e.Side, e.EntryPrice, e.Amount)
                                  LogLine($"[{assetVm.Symbol}] 🟢 Trade opened — {e.Side} @ {e.EntryPrice:F4} | {CInt(e.Amount)}ct")
                              End Sub)
                 End Sub
@@ -603,13 +603,7 @@ Namespace TopStepTrader.UI.ViewModels
                     .DurationHours = _currentStrategy.DurationHours,
                     .ContractId = assetVm.ContractId,
                     .AccountId = SelectedAccount.Id,
-                    .CapitalAtRisk = _capitalAtRisk,
                     .Quantity = 1,
-                    .TpDollarBracket = _TpDollarBracket,
-                    .SlDollarBracket = _SlDollarBracket,
-                    .Leverage = _leverage,
-                    .ScaleInAmount = _currentStrategy.ScaleInAmount,
-                    .ScaleInLeverage = _currentStrategy.ScaleInLeverage,
                     .MinConfidencePct = _minConfidencePct
                 }
                 _engines(i).Start(sd)

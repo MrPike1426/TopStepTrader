@@ -236,9 +236,7 @@ Namespace TopStepTrader.Services.Diagnostics
                         .Why       = statusNote,
                         .Settings  = New DiagSettings With {
                             .SlPrice = stopLoss,
-                            .TpPrice = takeProfit,
-                            .SlDollarBracket = 0D,
-                            .TpDollarBracket = 0D
+                            .TpPrice = takeProfit
                         },
                         .MetricsAtEntry = New DiagMetricsAtEntry With {
                             .PriceEntry = price

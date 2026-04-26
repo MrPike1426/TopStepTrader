@@ -8,10 +8,8 @@ Namespace TopStepTrader.Core.Settings
         ''' <summary>Number of contracts per initial trade entry. TopStepX sizes:
         ''' Lewis = 1 (conservative), Damian = 3 (moderate), Joe = 5 (aggressive).</summary>
         Public Property PositionSize As Integer = 1
-        Public Property Leverage As Integer = 10
         Public Property MaxScaleIns As Integer = 2
         Public Property SlMultipleOfN As Decimal = 1.0D
-        Public Property LeveragedSlMultipleOfN As Decimal = 2.0D
         Public Property TpMultipleOfN As Decimal = 2.0D
         Public Property AdxThreshold As Single = 20.0F
         Public Property DefaultConfidencePct As Integer = 80

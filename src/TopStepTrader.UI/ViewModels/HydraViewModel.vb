@@ -784,8 +784,8 @@ Namespace TopStepTrader.UI.ViewModels
             AddHandler engine.TradeOpened,
                 Sub(s As Object, e As TradeOpenedEventArgs)
                     Dispatch(Sub()
-                                 assetVm.OpenTrade(e.Side, e.EntryPrice, e.Amount, e.Leverage)
-                                 LogLine($"[{assetVm.Symbol}] 🟢 Trade opened — {e.Side} @ {e.EntryPrice:F4} | amt={e.Amount} lev={e.Leverage}")
+                                 assetVm.OpenTrade(e.Side, e.EntryPrice, e.Amount)
+                                 LogLine($"[{assetVm.Symbol}] 🟢 Trade opened — {e.Side} @ {e.EntryPrice:F4} | amt={e.Amount}")
                              End Sub)
                 End Sub
 
@@ -863,9 +863,9 @@ Namespace TopStepTrader.UI.ViewModels
                         Dim capturedSnap = snapshot
                         Dispatch(Sub()
                                      LogLine($"[{capturedVm.Symbol}] 📡 Pre-pop: {side} amt={capturedSnap.Amount} units={capturedSnap.Units} " &
-                                             $"entry={capturedSnap.OpenRate:F4} lev={capturedSnap.Leverage} pnl={capturedSnap.UnrealizedPnlUsd:F2} " &
+                                             $"entry={capturedSnap.OpenRate:F4} pnl={capturedSnap.UnrealizedPnlUsd:F2} " &
                                              $"posCount={capturedSnap.PositionCount} posId={capturedSnap.PositionId}")
-                                     capturedVm.OpenTrade(side, capturedSnap.OpenRate, capturedSnap.Amount, capturedSnap.Leverage)
+                                     capturedVm.OpenTrade(side, capturedSnap.OpenRate, capturedSnap.Amount)
                                      ' Mark as pre-populated so the engine's startup TradeOpened resets
                                      ' count to 1 instead of stacking on top (which would show ×2).
                                      ' Do NOT display the one-shot snapshot P&L here — it is stale by
@@ -927,7 +927,6 @@ Namespace TopStepTrader.UI.ViewModels
 
             _selectedProfileName = profileName
             CapitalAtRisk = CDec(profile.PositionSize)
-            Leverage = profile.Leverage
             AdxThreshold = profile.AdxThreshold
             MaxScaleIns = profile.MaxScaleIns
             MinConfidencePct = profile.DefaultConfidencePct
@@ -1018,17 +1017,11 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 5,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
                 .SlMultipleOfN = _slMultipleOfN,
                 .TpMultipleOfN = _tpMultipleOfN,
-                .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = _maxScaleIns,
-                .ScaleInAmount = _capitalAtRisk,
-                .ScaleInLeverage = _leverage,
                 .MinConfidencePct = _minConfidencePct,
                 .PersonaName = _selectedProfileName
             }
@@ -1075,15 +1068,9 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 5,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = _maxScaleIns,
-                .ScaleInAmount = _capitalAtRisk,
-                .ScaleInLeverage = _leverage,
                 .MinConfidencePct = _minConfidencePct,
                 .SlMultipleOfN = _slMultipleOfN,
                 .TpMultipleOfN = _tpMultipleOfN,
@@ -1140,15 +1127,9 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 5,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = 0,
-                .ScaleInAmount = 0D,
-                .ScaleInLeverage = 1,
                 .MinConfidencePct = _minConfidencePct,
                 .PersonaName = _selectedProfileName
             }
@@ -1197,15 +1178,9 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 1,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = 0,       ' strategy override — fast scalp, quick exit
-                .ScaleInAmount = 0D,
-                .ScaleInLeverage = 1,
                 .MinConfidencePct = _minConfidencePct,
                 .PersonaName = _selectedProfileName
             }
@@ -1254,15 +1229,9 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 5,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = _maxScaleIns,
-                .ScaleInAmount = _capitalAtRisk,
-                .ScaleInLeverage = _leverage,
                 .MinConfidencePct = _minConfidencePct,
                 .PersonaName = _selectedProfileName
             }
@@ -1311,15 +1280,9 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 5,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = _maxScaleIns,
-                .ScaleInAmount = _capitalAtRisk,
-                .ScaleInLeverage = _leverage,
                 .MinConfidencePct = _minConfidencePct,
                 .PersonaName = _selectedProfileName
             }
@@ -1373,15 +1336,9 @@ Namespace TopStepTrader.UI.ViewModels
                 .DurationHours = 8760,
                 .TradingStartHourUtc = 7,
                 .TradingEndHourUtc = 20,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
                 .AdxThreshold = _adxThreshold,
                 .MaxScaleIns = _maxScaleIns,
-                .ScaleInAmount = _capitalAtRisk,
-                .ScaleInLeverage = _leverage,
                 .MinConfidencePct = _minConfidencePct,
                 .PersonaName = _selectedProfileName
             }
@@ -1465,15 +1422,9 @@ Namespace TopStepTrader.UI.ViewModels
                     .DurationHours = _currentStrategy.DurationHours,
                     .ContractId = assetVm.ContractId,
                     .AccountId = SelectedAccount.Id,
-                    .CapitalAtRisk = _capitalAtRisk,
                     .Quantity = 1,
-                    .TpDollarBracket = _currentStrategy.TpDollarBracket,
-                    .SlDollarBracket = _currentStrategy.SlDollarBracket,
-                    .Leverage = _currentStrategy.Leverage,
                     .AdxThreshold = _currentStrategy.AdxThreshold,
                     .MaxScaleIns = _currentStrategy.MaxScaleIns,
-                    .ScaleInAmount = _currentStrategy.ScaleInAmount,
-                    .ScaleInLeverage = _currentStrategy.ScaleInLeverage,
                     .MinConfidencePct = _minConfidencePct,
                     .SlMultipleOfN = _slMultipleOfN,
                     .TpMultipleOfN = _tpMultipleOfN,

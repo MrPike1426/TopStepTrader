@@ -1332,7 +1332,6 @@ Namespace TopStepTrader.UI.ViewModels
                 .Side = side,
                 .OrderType = OrderType.Market,
                 .Amount = amountVal,
-                .Leverage = If(_testTradeLeverage > 0, _testTradeLeverage, 1),
                 .StopLossRate = slRate,
                 .TakeProfitRate = tpRate,
                 .Status = OrderStatus.Pending,

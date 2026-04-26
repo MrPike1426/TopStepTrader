@@ -137,7 +137,6 @@ Namespace TopStepTrader.Services.Trading
         Private ReadOnly _lastTpExternalId As Long? = Nothing
         Private _pendingConfidencePct As Integer = 0
         Private _lastFinalAmount As Decimal = 0D   ' contract count (TopStepX) or cash amount submitted to broker
-        Private _lastLeverage As Integer = 1        ' leverage applied to that order
         ' Running sum of DollarPerPoint across ALL open positions (initial + scale-ins).
         ' DollarPerPoint (TopStepX) = tickValue / tickSize per contract.
         ' The bracket is rescaled after each scale-in so SL/TP advancement reflects
@@ -396,7 +395,6 @@ Namespace TopStepTrader.Services.Trading
                                  End If
                                  _currentTrendSide = If(snapshot.IsBuy, OrderSide.Buy, OrderSide.Sell)
                                  _lastFinalAmount = snapshot.Amount
-                                 _lastLeverage = snapshot.Leverage
                                  _openTradeCount = snapshot.PositionCount
                                  ' Infer how many scale-ins have already been placed so the cap
                                  ' is enforced correctly when the engine restarts with positions open.
@@ -423,7 +421,7 @@ Namespace TopStepTrader.Services.Trading
                                  ' SL/TP protection once ATR is available on the first bar-check tick.
                                  RaiseEvent TradeOpened(Me, New TradeOpenedEventArgs(startupSide, strategy.ContractId, 100,
                                          snapshot.OpenedAtUtc, Nothing, snapshot.PositionId,
-                                         snapshot.OpenedAtUtc, snapshot.Amount, snapshot.Leverage, snapshot.OpenRate))
+                                         snapshot.OpenedAtUtc, snapshot.Amount, snapshot.OpenRate))
                                  Dim pnlStr = If(snapshot.UnrealizedPnlUsd <> 0D,
                                      $" P&L=${snapshot.UnrealizedPnlUsd:F2}", String.Empty)
                                  Dim capStr = If(_scaleInTradeCount >= MaxScaleInTrades,
@@ -1715,7 +1713,6 @@ Namespace TopStepTrader.Services.Trading
                             ' live broker state so the tile always reflects the real position
                             ' (handles scale-ins, partial closes, and manual adjustments).
                             _lastFinalAmount = snapshot.Amount
-                            _lastLeverage = snapshot.Leverage
 
                             ' Self-heal _totalDollarPerPoint if the startup Task.Run raced
                             ' against the first timer tick and lost (i.e. it was still 0).
@@ -1833,7 +1830,6 @@ Namespace TopStepTrader.Services.Trading
                             End If
                             _currentTrendSide = If(orphan.IsBuy, OrderSide.Buy, OrderSide.Sell)
                             _lastFinalAmount = orphan.Amount
-                            _lastLeverage = orphan.Leverage
                             _openTradeCount = Math.Max(1, orphan.PositionCount)
                             _scaleInTradeCount = Math.Min(MaxScaleInTrades,
                                                           Math.Max(0, orphan.PositionCount - 1))
@@ -1848,7 +1844,7 @@ Namespace TopStepTrader.Services.Trading
                             RaiseEvent TradeOpened(Me, New TradeOpenedEventArgs(
                                 orphanSide, _strategy.ContractId, 100,
                                 orphan.OpenedAtUtc, Nothing, orphan.PositionId,
-                                orphan.OpenedAtUtc, orphan.Amount, orphan.Leverage, orphan.OpenRate))
+                                orphan.OpenedAtUtc, orphan.Amount, orphan.OpenRate))
                             Dim orphanCapStr = If(_scaleInTradeCount >= MaxScaleInTrades,
                                 $"scale-in cap REACHED ({_scaleInTradeCount}/{MaxScaleInTrades})",
                                 $"scale-in {_scaleInTradeCount}/{MaxScaleInTrades} used")
@@ -1895,7 +1891,7 @@ Namespace TopStepTrader.Services.Trading
                 Dim slThreshold As Decimal =
                     If(_currentAtrValue > 0D AndAlso _totalDollarPerPoint > 0D,
                        -Math.Abs(_strategy.SlMultipleOfN * _currentAtrValue * _totalDollarPerPoint),
-                       -Math.Abs(_strategy.SlDollarBracket))
+                       0D)
                 Dim estimatedPnl As Decimal
                 If _lastApiPnl <> 0D Then
                     estimatedPnl = _lastApiPnl
@@ -1922,8 +1918,8 @@ Namespace TopStepTrader.Services.Trading
                         slDollarsDeferred = Math.Round(_strategy.SlMultipleOfN * _currentAtrValue * dppDeferred, 2)
                         tpDollarsDeferred = Math.Round(_strategy.TpMultipleOfN * _currentAtrValue * dppDeferred, 2)
                     Else
-                        slDollarsDeferred = _strategy.SlDollarBracket
-                        tpDollarsDeferred = _strategy.TpDollarBracket
+                        slDollarsDeferred = 0D
+                        tpDollarsDeferred = 0D
                     End If
                     ' Seed _lastSlPrice and _lastTpPrice from ATR so the trail ratchet has a
                     ' starting point, then IMMEDIATELY push both levels to the broker.
@@ -2250,7 +2246,6 @@ Namespace TopStepTrader.Services.Trading
                 _positionOpenedAt = DateTimeOffset.UtcNow
                 _lastApiPnl = 0D
                 _lastFinalAmount += CDec(contracts)  ' += accumulates scale-ins; ResetTrailState zeros on close
-                _lastLeverage = 0   ' 0 = futures (tile shows "Xct" contract count)
 
                 RaiseEvent TradeOpened(Me, New TradeOpenedEventArgs(
                     side, fav.PxContractId, _pendingConfidencePct,
@@ -2258,8 +2253,7 @@ Namespace TopStepTrader.Services.Trading
                     placedOrder.ExternalOrderId,
                     placedOrder.ExternalPositionId,
                     DateTimeOffset.UtcNow,
-                    CDec(contracts), ' Contract count for futures position
-                    0,               ' Leverage = 0 signals futures (tile shows "Xct" format)
+                    CDec(contracts),
                     priceUsed))
                 _openTradeCount += 1
 

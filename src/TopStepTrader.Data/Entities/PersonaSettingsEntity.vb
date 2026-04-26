@@ -22,15 +22,10 @@ Namespace TopStepTrader.Data.Entities
         ''' <summary>Number of contracts per initial trade entry (TopStepX position size).</summary>
         Public Property PositionSize As Integer
 
-        Public Property Leverage As Integer
-
         Public Property MaxScaleIns As Integer
 
         <Column(TypeName:="decimal(18,4)")>
         Public Property SlMultipleOfN As Decimal
-
-        <Column(TypeName:="decimal(18,4)")>
-        Public Property LeveragedSlMultipleOfN As Decimal
 
         <Column(TypeName:="decimal(18,4)")>
         Public Property TpMultipleOfN As Decimal

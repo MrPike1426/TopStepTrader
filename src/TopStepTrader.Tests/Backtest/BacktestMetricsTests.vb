@@ -95,77 +95,67 @@ Namespace TopStepTrader.Tests.Backtest
 
         <Fact>
         Public Sub CheckExit_BuyHitsStopLoss_ReturnsStopLoss()
-            ' SL=10 ticks → stopDelta = 10 × 0.25 = 2.5 pts
-            ' Buy at 5000 → SL triggers when bar.Low ≤ 4997.5
+            ' SL=10 ticks → stopDelta=2.5 pts; Buy at 5000 → SL triggers when bar.Low ≤ 4997.5
             Dim trade = MakeTrade("Buy", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5001D, low:=4997.5D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim result = BacktestMetrics.CheckExit(trade, bar, config)
-
-            Assert.Equal("StopLoss", result)
+            Assert.Equal("StopLoss", BacktestMetrics.CheckExit(trade, bar, sl, tp))
         End Sub
 
         <Fact>
         Public Sub CheckExit_BuyHitsTakeProfit_ReturnsTakeProfit()
-            ' TP=20 ticks → tpDelta = 20 × 0.25 = 5 pts
-            ' Buy at 5000 → TP triggers when bar.High ≥ 5005
+            ' TP=20 ticks → tpDelta=5 pts; Buy at 5000 → TP triggers when bar.High ≥ 5005
             Dim trade = MakeTrade("Buy", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5005D, low:=4999D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim result = BacktestMetrics.CheckExit(trade, bar, config)
-
-            Assert.Equal("TakeProfit", result)
+            Assert.Equal("TakeProfit", BacktestMetrics.CheckExit(trade, bar, sl, tp))
         End Sub
 
         <Fact>
         Public Sub CheckExit_BuyNeitherLevelHit_ReturnsNothing()
-            ' Bar stays comfortably inside SL/TP range — no exit
+            ' Bar stays inside SL/TP range — no exit
             Dim trade = MakeTrade("Buy", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5002D, low:=4999D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim result = BacktestMetrics.CheckExit(trade, bar, config)
-
-            Assert.Null(result)
+            Assert.Null(BacktestMetrics.CheckExit(trade, bar, sl, tp))
         End Sub
 
         <Fact>
         Public Sub CheckExit_SellHitsStopLoss_ReturnsStopLoss()
-            ' SL=10 ticks → stopDelta = 2.5 pts
-            ' Sell at 5000 → SL triggers when bar.High ≥ 5002.5
+            ' SL=10 ticks → stopDelta=2.5 pts; Sell at 5000 → SL triggers when bar.High ≥ 5002.5
             Dim trade = MakeTrade("Sell", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5002.5D, low:=4999D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim result = BacktestMetrics.CheckExit(trade, bar, config)
-
-            Assert.Equal("StopLoss", result)
+            Assert.Equal("StopLoss", BacktestMetrics.CheckExit(trade, bar, sl, tp))
         End Sub
 
         <Fact>
         Public Sub CheckExit_SellHitsTakeProfit_ReturnsTakeProfit()
-            ' TP=20 ticks → tpDelta = 5 pts
-            ' Sell at 5000 → TP triggers when bar.Low ≤ 4995
+            ' TP=20 ticks → tpDelta=5 pts; Sell at 5000 → TP triggers when bar.Low ≤ 4995
             Dim trade = MakeTrade("Sell", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5001D, low:=4995D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim result = BacktestMetrics.CheckExit(trade, bar, config)
-
-            Assert.Equal("TakeProfit", result)
+            Assert.Equal("TakeProfit", BacktestMetrics.CheckExit(trade, bar, sl, tp))
         End Sub
 
         <Fact>
         Public Sub CheckExit_SellNeitherLevelHit_ReturnsNothing()
             Dim trade = MakeTrade("Sell", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5001D, low:=4999D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim result = BacktestMetrics.CheckExit(trade, bar, config)
-
-            Assert.Null(result)
+            Assert.Null(BacktestMetrics.CheckExit(trade, bar, sl, tp))
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════
@@ -340,11 +330,10 @@ Namespace TopStepTrader.Tests.Backtest
             ' SL=10 ticks → stopDelta=2.5 pts; Buy entry 5000 → SL fill = 4997.5
             Dim trade = MakeTrade("Buy", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5001D, low:=4997D, close:=4998D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim result = BacktestMetrics.GetExitPrice(trade, bar, "StopLoss", config)
-
-            Assert.Equal(4997.5D, result)
+            Assert.Equal(4997.5D, BacktestMetrics.GetExitPrice(trade, bar, "StopLoss", sl, tp))
         End Sub
 
         <Fact>
@@ -352,11 +341,10 @@ Namespace TopStepTrader.Tests.Backtest
             ' TP=20 ticks → tpDelta=5 pts; Buy entry 5000 → TP fill = 5005
             Dim trade = MakeTrade("Buy", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5006D, low:=4999D, close:=5004D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim result = BacktestMetrics.GetExitPrice(trade, bar, "TakeProfit", config)
-
-            Assert.Equal(5005D, result)
+            Assert.Equal(5005D, BacktestMetrics.GetExitPrice(trade, bar, "TakeProfit", sl, tp))
         End Sub
 
         <Fact>
@@ -364,11 +352,10 @@ Namespace TopStepTrader.Tests.Backtest
             ' SL=10 ticks → stopDelta=2.5 pts; Sell entry 5000 → SL fill = 5002.5 (loss)
             Dim trade = MakeTrade("Sell", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5003D, low:=4999D, close:=5001D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim result = BacktestMetrics.GetExitPrice(trade, bar, "StopLoss", config)
-
-            Assert.Equal(5002.5D, result)
+            Assert.Equal(5002.5D, BacktestMetrics.GetExitPrice(trade, bar, "StopLoss", sl, tp))
         End Sub
 
         <Fact>
@@ -376,11 +363,10 @@ Namespace TopStepTrader.Tests.Backtest
             ' TP=20 ticks → tpDelta=5 pts; Sell entry 5000 → TP fill = 4995 (profit)
             Dim trade = MakeTrade("Sell", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5001D, low:=4994D, close:=4996D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim result = BacktestMetrics.GetExitPrice(trade, bar, "TakeProfit", config)
-
-            Assert.Equal(4995D, result)
+            Assert.Equal(4995D, BacktestMetrics.GetExitPrice(trade, bar, "TakeProfit", sl, tp))
         End Sub
 
         <Fact>
@@ -388,52 +374,48 @@ Namespace TopStepTrader.Tests.Backtest
             ' EndOfData exits at bar.Close — no fixed level was hit
             Dim trade = MakeTrade("Buy", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5001D, low:=4999D, close:=5000.5D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim result = BacktestMetrics.GetExitPrice(trade, bar, "EndOfData", config)
-
-            Assert.Equal(5000.5D, result)
+            Assert.Equal(5000.5D, BacktestMetrics.GetExitPrice(trade, bar, "EndOfData", sl, tp))
         End Sub
 
         <Fact>
         Public Sub GetExitPrice_BuyStopLoss_IsAlwaysBelowEntry()
-            ' Core invariant: a Buy StopLoss fill must be below entry (always a loss)
             Dim trade = MakeTrade("Buy", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5001D, low:=4997D, close:=4999D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim exitPrice = BacktestMetrics.GetExitPrice(trade, bar, "StopLoss", config)
-
+            Dim exitPrice = BacktestMetrics.GetExitPrice(trade, bar, "StopLoss", sl, tp)
             Assert.True(exitPrice < trade.EntryPrice,
                         $"Buy StopLoss exit ({exitPrice}) must be below entry ({trade.EntryPrice})")
         End Sub
 
         <Fact>
         Public Sub GetExitPrice_SellStopLoss_IsAlwaysAboveEntry()
-            ' Core invariant: a Sell StopLoss fill must be above entry (always a loss)
             Dim trade = MakeTrade("Sell", entryPrice:=5000D)
             Dim bar = MakeBar(high:=5003D, low:=4999D, close:=5001D)
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim exitPrice = BacktestMetrics.GetExitPrice(trade, bar, "StopLoss", config)
-
+            Dim exitPrice = BacktestMetrics.GetExitPrice(trade, bar, "StopLoss", sl, tp)
             Assert.True(exitPrice > trade.EntryPrice,
                         $"Sell StopLoss exit ({exitPrice}) must be above entry ({trade.EntryPrice})")
         End Sub
 
         <Fact>
         Public Sub GetExitPrice_SellStopLoss_ProducesNegativePnL()
-            ' UAT-BUG-006 core regression: Sell StopLoss must produce a LOSS, never a profit.
-            ' Before the fix: exit used bar.Close; if bar.High hit SL but bar.Close was below
-            ' entry, CalculatePnL returned a positive number for a "StopLoss" trade.
+            ' UAT-BUG-006 regression: Sell StopLoss must produce a LOSS, never a profit.
+            ' Before the fix: bar.High triggered SL but bar.Close was below entry, producing phantom profit.
             Dim trade = MakeTrade("Sell", entryPrice:=5000D)
-            ' Bar that wicks above SL level but closes below entry (the original failure scenario)
-            Dim bar = MakeBar(high:=5003D, low:=4990D, close:=4995D)   ' close < entry = "profitable" for Sell
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim bar = MakeBar(high:=5003D, low:=4990D, close:=4995D)
+            Dim sl As Decimal, tp As Decimal
+            CalcLevels(trade, 10D, 20D, sl, tp)
 
-            Dim exitPrice = BacktestMetrics.GetExitPrice(trade, bar, "StopLoss", config)
+            Dim exitPrice = BacktestMetrics.GetExitPrice(trade, bar, "StopLoss", sl, tp)
             trade.ExitPrice = exitPrice
-            Dim pnl = BacktestMetrics.CalculatePnL(trade, config)
+            Dim pnl = BacktestMetrics.CalculatePnL(trade, MakeConfig())
 
             Assert.True(pnl < 0D, $"StopLoss P&L must be negative; got {pnl}")
         End Sub
@@ -557,18 +539,9 @@ Namespace TopStepTrader.Tests.Backtest
             }
         End Function
 
-        ''' <summary>Build a minimal BacktestConfiguration for metric tests.
-        ''' <paramref name="slTicks"/> and <paramref name="tpTicks"/> are in MES ticks (0.25 pts each).
-        ''' BacktestMetrics uses dollar amounts: dollars = ticks × TickSize(0.25) × PointValue(5) × Quantity(1).
-        ''' </summary>
-        Private Shared Function MakeConfig(Optional slTicks As Decimal = 10D,
-                                            Optional tpTicks As Decimal = 20D) As BacktestConfiguration
-            ' Convert tick counts to dollar amounts for the dollar-based BacktestMetrics convention.
-            ' MES defaults: TickSize=0.25, PointValue=5, Quantity=1
-            ' → slDollars = slTicks × 0.25 × 5 = slTicks × 1.25
+        ''' <summary>Build a minimal BacktestConfiguration for metric tests (MES defaults).</summary>
+        Private Shared Function MakeConfig() As BacktestConfiguration
             Return New BacktestConfiguration With {
-                .SlDollarBracket = slTicks * 0.25D * 5D,
-                .TpDollarBracket = tpTicks * 0.25D * 5D,
                 .RunName = "Unit Test",
                 .ContractId = "CON.F.US.MES.H26",
                 .StartDate = Date.Today.AddDays(-7),
@@ -577,6 +550,23 @@ Namespace TopStepTrader.Tests.Backtest
                 .MinSignalConfidence = 0.65F
             }
         End Function
+
+        ''' <summary>
+        ''' Convert tick counts to absolute SL/TP price levels for CheckExit/GetExitPrice tests.
+        ''' MES convention: TickSize=0.25 pts/tick.  Buy SL below entry; Sell SL above entry.
+        ''' </summary>
+        Private Shared Sub CalcLevels(trade As BacktestTrade, slTicks As Decimal, tpTicks As Decimal,
+                                       ByRef slPrice As Decimal, ByRef tpPrice As Decimal)
+            Dim slDelta = slTicks * 0.25D
+            Dim tpDelta = tpTicks * 0.25D
+            If trade.Side = "Buy" Then
+                slPrice = trade.EntryPrice - slDelta
+                tpPrice = trade.EntryPrice + tpDelta
+            Else
+                slPrice = trade.EntryPrice + slDelta
+                tpPrice = trade.EntryPrice - tpDelta
+            End If
+        End Sub
 
         ' ══════════════════════════════════════════════════════════════════
         ' BUG-27: Commission erosion — symmetry, consistency, and CommissionPaid tracking

@@ -22,8 +22,6 @@ Namespace TopStepTrader.Core.Models
         ''' Used by the engine to calculate P&amp;L: (currentPrice − OpenRate) × Units × direction.
         ''' </summary>
         Public Property Units As Decimal
-        ''' <summary>Leverage of the representative (first) position.</summary>
-        Public Property Leverage As Integer
         ''' <summary>Number of open positions aggregated into this snapshot.</summary>
         Public Property PositionCount As Integer
     End Class

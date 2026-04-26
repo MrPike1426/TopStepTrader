@@ -115,10 +115,8 @@ Namespace TopStepTrader.Services.Personas
             Return New PersonaProfile With {
                 .Name                  = name,
                 .PositionSize          = s.PositionSize,
-                .Leverage              = s.Leverage,
                 .MaxScaleIns           = s.MaxScaleIns,
                 .SlMultipleOfN         = s.SlMultipleOfN,
-                .LeveragedSlMultipleOfN = s.LeveragedSlMultipleOfN,
                 .TpMultipleOfN         = s.TpMultipleOfN,
                 .AdxThreshold          = s.AdxThreshold,
                 .DefaultConfidencePct  = s.DefaultConfidencePct,
@@ -131,10 +129,8 @@ Namespace TopStepTrader.Services.Personas
             Return New PersonaProfile With {
                 .Name                  = e.Name,
                 .PositionSize          = e.PositionSize,
-                .Leverage              = e.Leverage,
                 .MaxScaleIns           = e.MaxScaleIns,
                 .SlMultipleOfN         = e.SlMultipleOfN,
-                .LeveragedSlMultipleOfN = e.LeveragedSlMultipleOfN,
                 .TpMultipleOfN         = e.TpMultipleOfN,
                 .AdxThreshold          = e.AdxThreshold,
                 .DefaultConfidencePct  = e.DefaultConfidencePct,
@@ -143,11 +139,9 @@ Namespace TopStepTrader.Services.Personas
         End Function
 
         Private Shared Sub MapToEntity(profile As PersonaProfile, entity As PersonaSettingsEntity)
-            entity.PositionSize           = profile.PositionSize
-            entity.Leverage              = profile.Leverage
+            entity.PositionSize          = profile.PositionSize
             entity.MaxScaleIns           = profile.MaxScaleIns
             entity.SlMultipleOfN         = profile.SlMultipleOfN
-            entity.LeveragedSlMultipleOfN = profile.LeveragedSlMultipleOfN
             entity.TpMultipleOfN         = profile.TpMultipleOfN
             entity.AdxThreshold          = profile.AdxThreshold
             entity.DefaultConfidencePct  = profile.DefaultConfidencePct
@@ -159,10 +153,8 @@ Namespace TopStepTrader.Services.Personas
             Return New PersonaProfile With {
                 .Name                  = p.Name,
                 .PositionSize          = p.PositionSize,
-                .Leverage              = p.Leverage,
                 .MaxScaleIns           = p.MaxScaleIns,
                 .SlMultipleOfN         = p.SlMultipleOfN,
-                .LeveragedSlMultipleOfN = p.LeveragedSlMultipleOfN,
                 .TpMultipleOfN         = p.TpMultipleOfN,
                 .AdxThreshold          = p.AdxThreshold,
                 .DefaultConfidencePct  = p.DefaultConfidencePct,

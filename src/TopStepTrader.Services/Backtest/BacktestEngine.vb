@@ -120,6 +120,21 @@ Namespace TopStepTrader.Services.Backtest
             Dim warmUp As Integer = 0
             Dim indicators = BuildIndicators(config, filteredBars, warmUp)
 
+            ' Validate critical configuration before replay begins.
+            If config.PointValue <= 0D Then
+                Throw New InvalidOperationException(
+                    $"BacktestConfiguration.PointValue must be > 0 for contract '{config.ContractId}'. " &
+                    $"Got {config.PointValue}. Set the correct point value (e.g. MES=$5, MGC=$10, MCL=$100).")
+            End If
+
+            ' ── Sniper (TripleEmaCascade): isolated pyramid simulation (FEAT-20) ──────
+            ' The generic single-contract loop below is NOT used for this strategy.
+            If config.StrategyCondition = StrategyConditionType.TripleEmaCascade Then
+                Dim pyramidTrades = SniperBacktestEngine.RunPyramidReplay(
+                    config, filteredBars, indicators, warmUp)
+                Return BacktestMetrics.BuildResult(config, pyramidTrades, config.InitialCapital, 0D)
+            End If
+
             ' State: open SuperTrend SL/TP prices (price-level exit, like MultiConfluence)
             Dim qlStOpenSlPrice As Decimal = 0D
             Dim qlStOpenTpPrice As Decimal = 0D
@@ -135,13 +150,6 @@ Namespace TopStepTrader.Services.Backtest
 
             ' Resolve provider once before the replay loop.
             Dim provider = StrategySignalProviderFactory.Create(config.StrategyCondition)
-
-            ' Validate critical configuration before replay begins.
-            If config.PointValue <= 0D Then
-                Throw New InvalidOperationException(
-                    $"BacktestConfiguration.PointValue must be > 0 for contract '{config.ContractId}'. " &
-                    $"Got {config.PointValue}. Set the correct point value (e.g. MES=$5, MGC=$10, MCL=$100).")
-            End If
 
             Dim trades As New List(Of BacktestTrade)()
             Dim capital = config.InitialCapital

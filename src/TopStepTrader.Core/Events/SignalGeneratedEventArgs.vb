@@ -70,10 +70,8 @@ Namespace TopStepTrader.Core.Events
         Public ReadOnly Property EtoroPositionId As Long?
         ''' <summary>UTC timestamp recorded when the position was opened by the engine.</summary>
         Public ReadOnly Property OpenedAtUtc As DateTimeOffset
-        ''' <summary>Cash amount invested (after min-notional clamp).</summary>
+        ''' <summary>Contract count (for futures display).</summary>
         Public ReadOnly Property Amount As Decimal
-        ''' <summary>Leverage applied to the order.</summary>
-        Public ReadOnly Property Leverage As Integer
         ''' <summary>Entry price used for order computation (last bar close at signal time).</summary>
         Public ReadOnly Property EntryPrice As Decimal
         Public Sub New(side As Core.Enums.OrderSide, contractId As String, confidencePct As Integer,
@@ -81,7 +79,6 @@ Namespace TopStepTrader.Core.Events
                        Optional etoroPositionId As Long? = Nothing,
                        Optional openedAtUtc As DateTimeOffset = Nothing,
                        Optional amount As Decimal = 0D,
-                       Optional leverage As Integer = 1,
                        Optional entryPrice As Decimal = 0D)
             Me.Side = side
             Me.ContractId = contractId
@@ -91,10 +88,6 @@ Namespace TopStepTrader.Core.Events
             Me.EtoroPositionId = etoroPositionId
             Me.OpenedAtUtc = If(openedAtUtc = DateTimeOffset.MinValue, entryTime, openedAtUtc)
             Me.Amount = amount
-            ' Leverage = 0 signals a futures position (tile shows "Xct" contract count).
-            ' Leverage > 0 signals a leveraged CFD (tile shows "$X×Y").
-            ' Only clamp negative values; 0 is a valid sentinel for futures.
-            Me.Leverage = If(leverage >= 0, leverage, 1)
             Me.EntryPrice = entryPrice
         End Sub
     End Class

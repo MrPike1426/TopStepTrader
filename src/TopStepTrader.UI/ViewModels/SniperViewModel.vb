@@ -779,13 +779,32 @@ Namespace TopStepTrader.UI.ViewModels
                 AddLog("⚠ Select a contract for the backtest first")
                 Return
             End If
-
             Dim slMult, tpMult As Decimal
             If Not Decimal.TryParse(_btSlDollarBracket, slMult) OrElse slMult <= 0D Then slMult = 1.0D
             If Not Decimal.TryParse(_btTpDollarBracket, tpMult) OrElse tpMult <= 0D Then tpMult = 2.5D
 
+            ' Parse pyramid fields from existing ViewModel bindings (FEAT-20)
+            Dim btHeat, btTargetSize, btCoreAdds, btMomSize, btExtSize As Integer
+            Dim btCoreFrac, btVolAtrFactor As Double
+            Integer.TryParse(_maxRiskHeatTicks, btHeat)
+            Integer.TryParse(_targetTotalSize, btTargetSize)
+            Double.TryParse(_coreSizeFraction, btCoreFrac)
+            Integer.TryParse(_coreAddsCount, btCoreAdds)
+            Integer.TryParse(_momentumTierSize, btMomSize)
+            Integer.TryParse(_extensionTierSize, btExtSize)
+            Double.TryParse(_scaleInTriggerTicks, btVolAtrFactor)
+            If btHeat <= 0 Then btHeat = 30
+            If btTargetSize <= 0 Then btTargetSize = 1
+            If btCoreFrac <= 0 Then btCoreFrac = 0.6
+            If btCoreAdds <= 0 Then btCoreAdds = 2
+            If btMomSize <= 0 Then btMomSize = 1
+            If btExtSize <= 0 Then btExtSize = 1
+            If btVolAtrFactor <= 0 Then btVolAtrFactor = 0.5
+
             Dim config As New BacktestConfiguration With {
-                .RunName = $"Sniper {DateTime.Now:yyyyMMdd-HHmm} — {_backtestContractId}",
+                .RunName = $"Sniper {DateTime.Now:yyyyMMdd-HHmm} 
+—
+ {_backtestContractId}",
                 .ContractId = _backtestContractId,
                 .Timeframe = 1,
                 .StartDate = _backtestStartDate,
@@ -798,9 +817,16 @@ Namespace TopStepTrader.UI.ViewModels
                 .Quantity = 1,
                 .TickSize = GetTickSize(_backtestContractId),
                 .PointValue = GetPointValue(_backtestContractId),
-                .StrategyCondition = StrategyConditionType.TripleEmaCascade
+                .StrategyCondition = StrategyConditionType.TripleEmaCascade,
+                .TargetTotalSize = btTargetSize,
+                .CoreSizeFraction = btCoreFrac,
+                .CoreAddsCount = btCoreAdds,
+                .VolatilityAtrFactor = btVolAtrFactor,
+                .MomentumTierSize = btMomSize,
+                .ExtensionTierSize = btExtSize,
+                .ExtensionAllowed = _extensionAllowed,
+                .MaxRiskHeatTicks = btHeat
             }
-
             _cancelSource = New CancellationTokenSource()
             IsBacktesting = True
             BacktestProgress = 0

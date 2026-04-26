@@ -14,17 +14,11 @@ Namespace TopStepTrader.Core.Models
         ''' TopStepX sizes: Lewis = 1 (conservative), Damian = 3 (moderate), Joe = 5 (aggressive).</summary>
         Public Property PositionSize As Integer
 
-        ''' <summary>Preferred leverage multiplier (capped by instrument MaxLeverage).</summary>
-        Public Property Leverage As Integer
-
         ''' <summary>Maximum additional positions after the initial entry.</summary>
         Public Property MaxScaleIns As Integer
 
-        ''' <summary>Initial SL as a multiple of N (ATR × DollarPerPoint), non-leveraged orders.</summary>
+        ''' <summary>Initial SL as a multiple of N (ATR × DollarPerPoint).</summary>
         Public Property SlMultipleOfN As Decimal
-
-        ''' <summary>Wider SL multiple for leveraged CFDs (eToro spread buffer). 0 = disabled.</summary>
-        Public Property LeveragedSlMultipleOfN As Decimal
 
         ''' <summary>Initial TP as a multiple of N.</summary>
         Public Property TpMultipleOfN As Decimal

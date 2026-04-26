@@ -16,10 +16,10 @@ Namespace TopStepTrader.Core.Trading
         ''' All registered strategies and their default parameters.
         ''' Key lookup is case-insensitive.
         ''' </summary>
-        ' Capital (USD cash) and Quantity per entry. ATR-based SL/TP replaces dollar amounts.
+        ' Capital (USD cash) and Quantity per entry. All strategies use ATR-based SL/TP.
         Public Shared ReadOnly Defaults As IReadOnlyDictionary(Of String, StrategyParameterSet) =
             New Dictionary(Of String, StrategyParameterSet)(StringComparer.OrdinalIgnoreCase) From {
-                {"EMA/RSI Combined",       New StrategyParameterSet("1000", "1", "20", "15")},
+                {"EMA/RSI Combined",       New StrategyParameterSet("1000", "1")},
                 {"Multi-Confluence Engine", New StrategyParameterSet("1000", "1")},
                 {"BB Squeeze Scalper",     New StrategyParameterSet("1000", "1")},
                 {"LULT Divergence",        New StrategyParameterSet("1000", "1")},
@@ -44,26 +44,15 @@ Namespace TopStepTrader.Core.Trading
 
     End Class
 
-    ''' <summary>
-    ''' Immutable set of capital/quantity defaults for a strategy.
-    ''' Values are stored as strings to match the ViewModel's text-bound input fields.
-    ''' SL and TP are ATR-based (set via SlAtrMultiple/TpAtrMultiple on BacktestConfiguration).
-    ''' SlDollarBracket and TpDollarBracket are optional dollar-based overrides.
-    ''' </summary>
+    ''' <summary>Capital/quantity defaults for a strategy. All strategies use ATR-based SL/TP.</summary>
     Public NotInheritable Class StrategyParameterSet
 
         Public ReadOnly Property Capital As String
         Public ReadOnly Property Qty As String
-        Public ReadOnly Property TpDollarBracket As String
-        Public ReadOnly Property SlDollarBracket As String
 
-        Public Sub New(capital As String, qty As String,
-                       Optional TpDollarBracket As String = Nothing,
-                       Optional SlDollarBracket As String = Nothing)
+        Public Sub New(capital As String, qty As String)
             Me.Capital = capital
             Me.Qty = qty
-            Me.TpDollarBracket = TpDollarBracket
-            Me.SlDollarBracket = SlDollarBracket
         End Sub
 
     End Class

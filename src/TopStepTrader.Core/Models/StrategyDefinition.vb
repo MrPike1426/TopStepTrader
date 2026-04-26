@@ -12,7 +12,6 @@ Namespace TopStepTrader.Core.Models
         Public Property Name As String = "Custom Strategy"
         Public Property ContractId As String = String.Empty
         Public Property AccountId As Long
-        Public Property CapitalAtRisk As Decimal = 500D
         Public Property Quantity As Integer = 1
 
         ' ── Time parameters ───────────────────────────────────────────────
@@ -45,38 +44,11 @@ Namespace TopStepTrader.Core.Models
 
         ' ── Exit strategy — Turtle Bracket (all execution paths) ─────────────────
         ''' <summary>
-        ''' Initial stop-loss in dollars (e.g. 10 = $10 hard stop for Bracket 0).
-        ''' Turtle bracket SL only ever advances in the favourable direction; never retreats.
-        ''' Engine converts to an absolute price: Entry ± (SlDollarBracket / DollarPerPoint).
-        ''' </summary>
-        Public Property SlDollarBracket As Decimal = 10D
-
-        ''' <summary>
-        ''' Initial take-profit target in dollars (e.g. 20 = $20 triggers first bracket advance).
-        ''' Once hit, SL steps to the TP level and a new TP is set at TP + 0.5×N (ATR in $).
-        ''' Engine converts to an absolute price: Entry ± (TpDollarBracket / DollarPerPoint).
-        ''' Used as ATR-unavailable fallback only when <see cref="TpMultipleOfN"/> is active.
-        ''' </summary>
-        Public Property TpDollarBracket As Decimal = 20D
-
-        ''' <summary>
         ''' Initial stop-loss as a multiple of N (ATR in dollar terms).
         ''' SL dollars = SlMultipleOfN × ATR × DollarPerPoint.
-        ''' When ATR &gt; 0 this overrides <see cref="SlDollarBracket"/>; falls back to that
-        ''' fixed amount when ATR is unavailable (e.g. indicator warm-up period).
         ''' Profile defaults — Lewis (Averse): 1.5  Damian (Moderate): 1.0  Joe (Aggressive): 0.75
         ''' </summary>
         Public Property SlMultipleOfN As Decimal = 1.0D
-
-        ''' <summary>
-        ''' Wider stop-loss multiple applied automatically when the instrument is a leveraged
-        ''' CFD.  Not used for TopStepX exchange-margined futures.
-        ''' The execution engine scales position size down by SlMultipleOfN ÷ LeveragedSlMultipleOfN
-        ''' so the dollar risk at the SL equals the non-leveraged equivalent.
-        ''' 0 = feature disabled (fall back to SlMultipleOfN for all orders).
-        ''' Profile defaults — Lewis (Averse): 2.5  Damian (Moderate): 2.0  Joe (Aggressive): 1.5
-        ''' </summary>
-        Public Property LeveragedSlMultipleOfN As Decimal = 0D
 
         ''' <summary>
         ''' Initial take-profit as a multiple of N (ATR in dollar terms).
@@ -94,24 +66,14 @@ Namespace TopStepTrader.Core.Models
         Public Property TickValue As Decimal = 1D
 
         ' ── TopStepX futures ──────────────────────────────────────────────
-        ''' <summary>
-        ''' TopStepX only: number of contracts per order (default 1 during testing).
-        ''' Ignored for eToro (which uses <see cref="CapitalAtRisk"/> instead).
-        ''' </summary>
+        ''' <summary>TopStepX only: number of contracts per order (default 1 during testing).</summary>
         Public Property Contracts As Integer = 1
 
-        ''' <summary>
-        ''' TopStepX only: initial stop-loss distance in ticks from the entry fill price.
+        ''' <summary>TopStepX only: initial stop-loss distance in ticks from the entry fill price.
         ''' When set, the engine attaches a stopLossBracket to the entry order and uses this
         ''' value as the SL seed for any trailing logic.
-        ''' When Nothing, the engine derives ticks from <see cref="SlDollarBracket"/> / TickValue.
         ''' </summary>
         Public Property InitialStopTicks As Integer?
-
-        ''' <summary>Leverage multiplier sent to eToro (default 1 = no leverage).
-        ''' Affects both the effective position size and the minimum cash required:
-        ''' minCash = MinNotionalUsd / Leverage.</summary>
-        Public Property Leverage As Integer = 1
 
         ' ── Signal filtering ──────────────────────────────────────────────
         ''' <summary>
@@ -164,17 +126,6 @@ Namespace TopStepTrader.Core.Models
         ''' Position management continues regardless — only new entries are suppressed.
         ''' </summary>
         Public Property MaxDailyLossUsd As Decimal = 0D
-
-        ''' <summary>
-        ''' Cash amount per scale-in trade (EmaRsiWeightedScore only). Default $200.
-        ''' Set from the Scale-In panel in the UI before the engine starts.
-        ''' </summary>
-        Public Property ScaleInAmount As Decimal = 200D
-        ''' <summary>
-        ''' Leverage multiplier applied to each scale-in trade (default 5).
-        ''' Set from the Scale-In panel in the UI before the engine starts.
-        ''' </summary>
-        Public Property ScaleInLeverage As Integer = 5
 
         ' ── Runtime state (set when engine starts) ────────────────────────
         Public Property ExpiresAt As DateTimeOffset
@@ -256,9 +207,8 @@ Namespace TopStepTrader.Core.Models
                     directions = "Short only"
                 End If
 
-                Dim tp = If(TpMultipleOfN > 0D, $"TP:{TpMultipleOfN:F2}N", If(TpDollarBracket > 0, $"TP:${TpDollarBracket:F0}", "No TP"))
-                Dim slBase = If(SlMultipleOfN > 0D, $"SL:{SlMultipleOfN:F2}N", If(SlDollarBracket > 0, $"SL:${SlDollarBracket:F0}", "No SL"))
-                Dim sl = If(LeveragedSlMultipleOfN > 0D, $"{slBase} ({LeveragedSlMultipleOfN:F2}N lev)", slBase)
+                Dim tp = If(TpMultipleOfN > 0D, $"TP:{TpMultipleOfN:F2}N", "No TP")
+                Dim sl = If(SlMultipleOfN > 0D, $"SL:{SlMultipleOfN:F2}N", "No SL")
 
                 Return $"{indicator} | {TimeframeMinutes}-min | {DurationHours}hrs | {directions} | {tp} {sl}"
             End Get

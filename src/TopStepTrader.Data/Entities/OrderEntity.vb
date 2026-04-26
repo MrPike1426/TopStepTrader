@@ -33,9 +33,6 @@ Namespace TopStepTrader.Data.Entities
         <Column(TypeName:="decimal(18,6)")>
         Public Property Amount As Decimal?
 
-        ''' <summary>Leverage multiplier applied to this order (1 = no leverage).</summary>
-        Public Property Leverage As Integer = 1
-
         <Column(TypeName:="decimal(18,6)")>
         Public Property LimitPrice As Decimal?
 

@@ -124,11 +124,6 @@ Namespace TopStepTrader.Services.Backtest
         ''' Determine whether the current bar triggers a stop-loss or take-profit exit.
         ''' Returns "StopLoss", "TakeProfit", or Nothing if neither level is hit.
         '''
-        ''' Dollar-based Turtle bracket convention:
-        '''   dollarPerPoint = config.PointValue × config.Quantity
-        '''   slDelta = config.SlDollarBracket / dollarPerPoint   (price units to SL)
-        '''   tpDelta = config.TpDollarBracket / dollarPerPoint   (price units to TP)
-        '''
         ''' Buy  SL: bar.Low  ≤ entryPrice − slDelta
         ''' Buy  TP: bar.High ≥ entryPrice + tpDelta
         ''' Sell SL: bar.High ≥ entryPrice + slDelta
@@ -156,24 +151,6 @@ Namespace TopStepTrader.Services.Backtest
             Return Nothing
         End Function
 
-        ''' <summary>
-        ''' Config-based overload — derives fixed SL/TP price levels from dollar amounts in
-        ''' <paramref name="config"/> then delegates to the price-level overload.
-        ''' Formula:  dollarPerPoint = PointValue × Quantity
-        '''           slDelta = SlDollarBracket / dollarPerPoint
-        '''           tpDelta = TpDollarBracket / dollarPerPoint
-        ''' </summary>
-        Friend Function CheckExit(trade As BacktestTrade,
-                                   bar As MarketBar,
-                                   config As BacktestConfiguration) As String
-            Dim dollarPerPoint = config.PointValue * config.Quantity
-            Dim slDelta = If(dollarPerPoint > 0D, config.SlDollarBracket / dollarPerPoint, 0D)
-            Dim tpDelta = If(dollarPerPoint > 0D, config.TpDollarBracket / dollarPerPoint, 0D)
-            Dim isBuy = trade.Side = "Buy"
-            Dim currentStop = If(isBuy, trade.EntryPrice - slDelta, trade.EntryPrice + slDelta)
-            Dim currentTp = If(isBuy, trade.EntryPrice + tpDelta, trade.EntryPrice - tpDelta)
-            Return CheckExit(trade, bar, currentStop, currentTp)
-        End Function
 
 ''' <summary>
         ''' Returns the exact fill price for a closed trade based on its exit reason.
@@ -211,22 +188,6 @@ Namespace TopStepTrader.Services.Backtest
             End If
         End Function
 
-        ''' <summary>
-        ''' Config-based overload — derives SL/TP price levels from dollar amounts in
-        ''' <paramref name="config"/> then delegates to the price-level overload.
-        ''' </summary>
-        Friend Function GetExitPrice(trade As BacktestTrade,
-                                      bar As MarketBar,
-                                      exitReason As String,
-                                      config As BacktestConfiguration) As Decimal
-            Dim dollarPerPoint = config.PointValue * config.Quantity
-            Dim slDelta = If(dollarPerPoint > 0D, config.SlDollarBracket / dollarPerPoint, 0D)
-            Dim tpDelta = If(dollarPerPoint > 0D, config.TpDollarBracket / dollarPerPoint, 0D)
-            Dim isBuy = trade.Side = "Buy"
-            Dim currentStop = If(isBuy, trade.EntryPrice - slDelta, trade.EntryPrice + slDelta)
-            Dim currentTp = If(isBuy, trade.EntryPrice + tpDelta, trade.EntryPrice - tpDelta)
-            Return GetExitPrice(trade, bar, exitReason, currentStop, currentTp)
-        End Function
 
 
 ''' <summary>

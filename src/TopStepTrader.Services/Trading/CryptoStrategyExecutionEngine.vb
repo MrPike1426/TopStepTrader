@@ -67,7 +67,6 @@ Namespace TopStepTrader.Services.Trading
         Private _lastTpExternalId As Long? = Nothing
         Private _pendingConfidencePct As Integer = 0
         Private _lastFinalAmount As Decimal = 0D
-        Private _lastLeverage As Integer = 1
         Private _positionOpenedAt As DateTimeOffset = DateTimeOffset.MinValue
         Private _lastPositionClosedAt As DateTimeOffset = DateTimeOffset.MinValue
         Private Const ReEntryCooldownSeconds As Integer = 60
@@ -174,12 +173,11 @@ Namespace TopStepTrader.Services.Trading
                                  End If
                                  _currentTrendSide = If(snapshot.IsBuy, OrderSide.Buy, OrderSide.Sell)
                                  _lastFinalAmount = snapshot.Amount
-                                 _lastLeverage = snapshot.Leverage
                                  _openTradeCount = snapshot.PositionCount
                                  Dim startupSide = If(snapshot.IsBuy, OrderSide.Buy, OrderSide.Sell)
                                  RaiseEvent TradeOpened(Me, New TradeOpenedEventArgs(startupSide, strategy.ContractId, 100,
                                          snapshot.OpenedAtUtc, Nothing, snapshot.PositionId,
-                                         snapshot.OpenedAtUtc, snapshot.Amount, snapshot.Leverage, snapshot.OpenRate))
+                                         snapshot.OpenedAtUtc, snapshot.Amount, snapshot.OpenRate))
                                  Log($"⚠️  Existing {snapshot.PositionCount} position(s) detected on startup (positionId={snapshot.PositionId}, entry={snapshot.OpenRate:F4}, units={snapshot.Units:F3}) — monitoring without placing new entry. Stepped trail active from ≥2% profit.")
                              Else
                                  Log($"✓ No existing positions for {strategy.ContractId} — ready to trade.")
@@ -720,12 +718,9 @@ Namespace TopStepTrader.Services.Trading
 
             Dim priceUsed = lastClose
 
-            Dim leverage = If(_strategy.Leverage > 0, _strategy.Leverage, 1)
             Dim minNotional = If(fav IsNot Nothing, fav.MinNotionalUsd, 1000D)
-            Dim minCash = minNotional / leverage
-            Dim userAmount = _strategy.CapitalAtRisk
-            Dim finalAmount = Math.Max(userAmount, minCash)
-            Dim clamped = (finalAmount > userAmount)
+            Dim finalAmount = minNotional
+            Dim clamped = False
 
             ' ── DollarPerPoint for TopStepX futures = tickValue / tickSize × contracts ──
             Dim tickSzCj = If(_strategy.TickSize > 0D, _strategy.TickSize, If(fav IsNot Nothing, fav.PxTickSize, 0.01D))
@@ -739,9 +734,7 @@ Namespace TopStepTrader.Services.Trading
             Dim slPriceVal As Decimal? = Math.Round(priceUsed * 0.95, 4)
             Dim tpPriceVal As Decimal? = Nothing  ' No TP
 
-            Log($"📋 ORDER | instrId={instrId} side={side} leverage={leverage}x | " &
-                $"user=${userAmount:F2} minCash=${minCash:F2} final=${finalAmount:F2}" &
-                If(clamped, " (clamped to min ✓)", String.Empty))
+            Log($"📋 ORDER | instrId={instrId} side={side} | final=${finalAmount:F2}")
             Log($"📋 Simplified SL | priceUsed={priceUsed:F4} SL=5% below → {slPriceVal.Value:F4}")
 
             Dim entryOrder As New Order With {
@@ -751,7 +744,6 @@ Namespace TopStepTrader.Services.Trading
                 .Side = side,
                 .OrderType = OrderType.Market,
                 .Amount = finalAmount,
-                .Leverage = leverage,
                 .StopLossRate = slPriceVal,
                 .TakeProfitRate = tpPriceVal,
                 .IsTslEnabled = False,
@@ -768,8 +760,7 @@ Namespace TopStepTrader.Services.Trading
                     Return
                 End If
                 Log($"✅ Entry {side} placed — instrId={instrId} amount=${finalAmount:F2} " &
-                    $"SL={If(slPriceVal.HasValue, slPriceVal.Value.ToString("F4"), "none")} " &
-                    $"TP={If(tpPriceVal.HasValue, tpPriceVal.Value.ToString("F4"), "none")}")
+                    $"SL={If(slPriceVal.HasValue, slPriceVal.Value.ToString("F4"), "none")}")
             Catch ex As Exception
                 Log($"⚠️  Entry order failed: {ex.Message}")
                 _positionOpen = False
@@ -786,7 +777,6 @@ Namespace TopStepTrader.Services.Trading
             _lastTpPrice = If(tpPriceVal.HasValue, tpPriceVal.Value, 0D)
             _lastSlPrice = If(slPriceVal.HasValue, slPriceVal.Value, 0D)
             _lastFinalAmount = finalAmount
-            _lastLeverage = leverage
             _openPositionId = entryOrder.ExternalPositionId
             _positionOpenedAt = DateTimeOffset.UtcNow
             _openTradeCount += 1
@@ -798,7 +788,6 @@ Namespace TopStepTrader.Services.Trading
                                                                 entryOrder.ExternalPositionId,
                                                                 _positionOpenedAt,
                                                                 finalAmount,
-                                                                leverage,
                                                                 priceUsed))
             Log($"Position open — positionId={_openPositionId}. Monitoring for SL/TP hit every 15 s.")
         End Function
@@ -947,8 +936,7 @@ Namespace TopStepTrader.Services.Trading
                 Return
             End If
             Log($"📈 SCALE-IN {_scaleInTradeCount}/{MaxScaleInTrades} — Adding {extremeSide} position | " &
-                $"Confidence: UP={rawUpPct}% DOWN={rawDownPct}% | " &
-                $"Amount=${_strategy.ScaleInAmount:F0} Leverage={_strategy.ScaleInLeverage}x")
+                $"Confidence: UP={rawUpPct}% DOWN={rawDownPct}%")
             Await PlaceScaleInOrderAsync(extremeSide, lastClose, _scaleInTradeCount)
         End Function
 
@@ -981,12 +969,9 @@ Namespace TopStepTrader.Services.Trading
             Dim tpPriceVal As Decimal? = Nothing
 
             Dim minNotional = If(fav IsNot Nothing, fav.MinNotionalUsd, 1000D)
-            Dim minCash = minNotional / _strategy.ScaleInLeverage
-            Dim finalAmount = Math.Max(_strategy.ScaleInAmount, minCash)
-            Dim clamped = (finalAmount > _strategy.ScaleInAmount)
+            Dim finalAmount = minNotional
 
-            Log($"📋 SCALE-IN ORDER {scaleIndex}/{MaxScaleInTrades} | instrId={instrId} side={side} leverage={_strategy.ScaleInLeverage}x | " &
-                $"amount=${_strategy.ScaleInAmount:F0} final=${finalAmount:F2}" & If(clamped, " (clamped to min ✓)", String.Empty))
+            Log($"📋 SCALE-IN ORDER {scaleIndex}/{MaxScaleInTrades} | instrId={instrId} side={side} | amount=${finalAmount:F2}")
             Dim slTpSourceSi = If(_currentAtrValue > 0D, $"ATR={_currentAtrValue:F4} (1.5× / 3.0×)", "pct-based")
             Log($"📋 priceUsed={priceUsed:F4} | {slTpSourceSi} | " &
                 $"SL={If(slPriceVal.HasValue, slPriceVal.Value.ToString("F4"), "none")} | " &
@@ -999,7 +984,6 @@ Namespace TopStepTrader.Services.Trading
                 .Side = side,
                 .OrderType = OrderType.Market,
                 .Amount = finalAmount,
-                .Leverage = _strategy.ScaleInLeverage,
                 .StopLossRate = slPriceVal,
                 .TakeProfitRate = tpPriceVal,
                 .IsTslEnabled = False,   ' Turtle bracket engine owns all SL movement — no continuous broker trail
@@ -1015,8 +999,7 @@ Namespace TopStepTrader.Services.Trading
                     Return
                 End If
                 Log($"✅ Scale-in {scaleIndex}/{MaxScaleInTrades} {side} placed — instrId={instrId} amount=${finalAmount:F2} " &
-                    $"SL={If(slPriceVal.HasValue, slPriceVal.Value.ToString("F4"), "none")} " &
-                    $"TP={If(tpPriceVal.HasValue, tpPriceVal.Value.ToString("F4"), "none")} TSL=on")
+                    $"SL={If(slPriceVal.HasValue, slPriceVal.Value.ToString("F4"), "none")}")
             Catch ex As Exception
                 Log($"⚠️  Scale-in {scaleIndex}/{MaxScaleInTrades} order failed: {ex.Message}")
                 Return
@@ -1042,7 +1025,6 @@ Namespace TopStepTrader.Services.Trading
                 entryOrder.ExternalPositionId,
                 DateTimeOffset.UtcNow,
                 finalAmount,
-                _strategy.ScaleInLeverage,
                 priceUsed))
             _openTradeCount += 1
         End Function
