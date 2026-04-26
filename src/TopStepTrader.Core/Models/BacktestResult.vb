@@ -47,6 +47,12 @@ Namespace TopStepTrader.Core.Models
         Public Property AverageEntryAtFill As Decimal? = Nothing
         ''' <summary>Maximum contracts held in the position this leg belongs to.</summary>
         Public Property MaxContractsHeld As Integer? = Nothing
+        ''' <summary>FEAT-21: True when the free-ride (breakeven) SL was activated for this position.</summary>
+        Public Property FreeRideActivated As Boolean = False
+        ''' <summary>FEAT-21: The SL price in effect when this leg was closed.</summary>
+        Public Property FinalSlAtExit As Decimal? = Nothing
+        ''' <summary>FEAT-21: Number of ticks the trailing stop captured (entry SL ticks ? final SL ticks).</summary>
+        Public Property TrailingTicksCaptured As Decimal? = Nothing
     End Class
 
 End Namespace

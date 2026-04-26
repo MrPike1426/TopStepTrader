@@ -211,6 +211,154 @@ Namespace TopStepTrader.Tests.Backtest
             Next
         End Sub
 
+        ' ══════════════════════════════════════════════════════════════════════
+        ' FEAT-21: Free-ride activation, core trail, add-on BE floor, monotonicity
+        ' ══════════════════════════════════════════════════════════════════════
+
+        ''' <summary>
+        ''' Build a config with StopLossTicks set, suitable for FEAT-21 tests.
+        ''' </summary>
+        Private Shared Function MakeSniperConfig(targetSize As Integer,
+                                                  coreAdds As Integer,
+                                                  stopLossTicks As Integer,
+                                                  maxHeat As Integer) As BacktestConfiguration
+            Return New BacktestConfiguration With {
+                .ContractId        = "TEST",
+                .StrategyCondition = StrategyConditionType.TripleEmaCascade,
+                .TickSize          = 0.25D,
+                .PointValue        = 5D,
+                .UseAtrMode        = True,
+                .SlAtrMultiple     = 2.0D,
+                .TpAtrMultiple     = 10.0D,   ' very wide TP so SL is what fires
+                .TargetTotalSize   = targetSize,
+                .CoreSizeFraction  = 1.0,
+                .CoreAddsCount     = coreAdds,
+                .MomentumTierSize  = 1,
+                .ExtensionTierSize = 1,
+                .ExtensionAllowed  = False,
+                .MaxRiskHeatTicks  = maxHeat,
+                .VolatilityAtrFactor = 0.5,
+                .StopLossTicks     = stopLossTicks
+            }
+        End Function
+
+        <Fact>
+        Public Sub FreeRide_ActivatedWhen3BracketsAllInProfit()
+            ' 3 core adds of 1 contract each (targetSize=3, coreFrac=1.0, coreAdds=3).
+            ' Price rises steadily so all three fills happen and all are in profit.
+            ' Free-ride should be activated and stamped on all legs.
+            Const N = 30
+            Dim base = New DateTimeOffset(2024, 1, 2, 9, 0, 0, TimeSpan.Zero)
+            Dim bars = Enumerable.Range(0, N).Select(
+                Function(i) New MarketBar With {
+                    .Timestamp = base.AddMinutes(i),
+                    .Open  = 100D + i,
+                    .High  = 100D + i + 1D,
+                    .Low   = 100D + i - 0.5D,
+                    .Close = 100D + i
+                }).ToList()
+            Dim indicators = MakeIndicators(N, crossIdx:=3, atr:=1.0F)
+            Dim config = MakeSniperConfig(targetSize:=3, coreAdds:=3, stopLossTicks:=4, maxHeat:=9999)
+
+            Dim trades = SniperBacktestEngine.RunPyramidReplay(config, bars, indicators, warmUp:=2)
+
+            Assert.True(trades.Count > 0)
+            ' Once all 3 brackets are filled and in profit, FreeRideActivated should be True on exits
+            Dim fullGroups = trades.GroupBy(Function(t) t.PositionGroupId).
+                                    Where(Function(g) g.Count() = 3).ToList()
+            If fullGroups.Any() Then
+                Dim grp = fullGroups.First()
+                Assert.True(grp.All(Function(t) t.FreeRideActivated),
+                    "All legs should have FreeRideActivated=True once 3 brackets are in profit")
+            End If
+        End Sub
+
+        <Fact>
+        Public Sub CoreTrail_SlAdvancesWithPrice_Long()
+            ' Single core bracket. Price rises far enough that the trail should advance.
+            ' TrailingTicksCaptured on the leg should be > 0.
+            Const N = 20
+            Dim base = New DateTimeOffset(2024, 1, 2, 9, 0, 0, TimeSpan.Zero)
+            Dim bars = Enumerable.Range(0, N).Select(
+                Function(i) New MarketBar With {
+                    .Timestamp = base.AddMinutes(i),
+                    .Open  = 100D + i,
+                    .High  = 100D + i + 0.5D,
+                    .Low   = 100D + i - 0.25D,
+                    .Close = 100D + i
+                }).ToList()
+            Dim indicators = MakeIndicators(N, crossIdx:=3, atr:=1.0F)
+            ' 1 contract, 1 core add, stopLossTicks=4, wide TP so we reach end-of-data
+            Dim config = MakeSniperConfig(targetSize:=1, coreAdds:=1, stopLossTicks:=4, maxHeat:=9999)
+
+            Dim trades = SniperBacktestEngine.RunPyramidReplay(config, bars, indicators, warmUp:=2)
+
+            Assert.True(trades.Count > 0)
+            Dim leg = trades.First()
+            Assert.True(leg.FinalSlAtExit.HasValue, "FinalSlAtExit should be stamped")
+            Assert.True(leg.TrailingTicksCaptured.HasValue, "TrailingTicksCaptured should be stamped")
+            Assert.True(leg.TrailingTicksCaptured.Value > 0D,
+                "Core trail should have advanced SL — TrailingTicksCaptured should be > 0")
+        End Sub
+
+        <Fact>
+        Public Sub AddOnBreakevenFloor_SlNotBelowBreakeven_AfterProfitThreshold()
+            ' Two-leg pyramid: addIndex 0 = core, addIndex 1 = add-on.
+            ' After 5 ticks of profit the add-on SL must floor at entryPrice + 1 tick.
+            ' FinalSlAtExit for the add-on leg should be >= its entry price.
+            Const N = 30
+            Dim base = New DateTimeOffset(2024, 1, 2, 9, 0, 0, TimeSpan.Zero)
+            Dim bars = Enumerable.Range(0, N).Select(
+                Function(i) New MarketBar With {
+                    .Timestamp = base.AddMinutes(i),
+                    .Open  = 100D + i,
+                    .High  = 100D + i + 0.5D,
+                    .Low   = 100D + i - 0.25D,
+                    .Close = 100D + i
+                }).ToList()
+            Dim indicators = MakeIndicators(N, crossIdx:=3, atr:=1.0F)
+            ' targetSize=2, coreAdds=1 → addIndex 0 is core, addIndex 1 is momentum (add-on)
+            Dim config = MakeSniperConfig(targetSize:=2, coreAdds:=1, stopLossTicks:=4, maxHeat:=9999)
+            config.MomentumTierSize = 1
+
+            Dim trades = SniperBacktestEngine.RunPyramidReplay(config, bars, indicators, warmUp:=2)
+
+            Dim addOnLeg = trades.FirstOrDefault(Function(t) t.PyramidAddIndex.GetValueOrDefault(0) >= 1)
+            If addOnLeg IsNot Nothing AndAlso addOnLeg.FinalSlAtExit.HasValue Then
+                ' SL must not be below the add-on entry price after 5-tick profit
+                Assert.True(addOnLeg.FinalSlAtExit.Value >= addOnLeg.EntryPrice,
+                    $"Add-on SL ({addOnLeg.FinalSlAtExit.Value}) should be >= entry ({addOnLeg.EntryPrice}) after breakeven floor applies")
+            End If
+        End Sub
+
+        <Fact>
+        Public Sub Monotonicity_SlNeverMovesAgainstTrade_Long()
+            ' SL should only ever move upward for a long position.
+            ' We simulate by inspecting FinalSlAtExit vs initial SL (InitialSlPrice would be
+            ' avgEntry - stopLossTicks×tickSize). Final SL must be >= initial SL for longs.
+            Const N = 20
+            Dim base = New DateTimeOffset(2024, 1, 2, 9, 0, 0, TimeSpan.Zero)
+            Dim bars = Enumerable.Range(0, N).Select(
+                Function(i) New MarketBar With {
+                    .Timestamp = base.AddMinutes(i),
+                    .Open  = 100D + i,
+                    .High  = 100D + i + 0.5D,
+                    .Low   = 100D + i - 0.25D,
+                    .Close = 100D + i
+                }).ToList()
+            Dim indicators = MakeIndicators(N, crossIdx:=3, atr:=1.0F)
+            Dim config = MakeSniperConfig(targetSize:=1, coreAdds:=1, stopLossTicks:=4, maxHeat:=9999)
+
+            Dim trades = SniperBacktestEngine.RunPyramidReplay(config, bars, indicators, warmUp:=2)
+
+            For Each t In trades.Where(Function(tr) tr.FinalSlAtExit.HasValue AndAlso tr.Side = "Buy")
+                ' Initial SL = entry - 4 ticks. Final SL must be >= initial SL (monotonic up only)
+                Dim initialSl = t.EntryPrice - config.StopLossTicks * config.TickSize
+                Assert.True(t.FinalSlAtExit.Value >= initialSl,
+                    $"SL moved against the trade: final {t.FinalSlAtExit.Value} < initial {initialSl}")
+            Next
+        End Sub
+
     End Class
 
 End Namespace

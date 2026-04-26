@@ -333,13 +333,7 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 5,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
-                .ScaleInAmount = 200D,
-                .ScaleInLeverage = 5,
                 .MinConfidencePct = _minConfidencePct
             }
 
@@ -376,13 +370,7 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 15,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
-                .ScaleInAmount = 200D,
-                .ScaleInLeverage = 5,
                 .MinConfidencePct = _minConfidencePct
             }
 
@@ -422,13 +410,7 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 5,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
-                .ScaleInAmount = 0D,
-                .ScaleInLeverage = 1,
                 .MinConfidencePct = _minConfidencePct
             }
 
@@ -467,13 +449,7 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 1,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
-                .ScaleInAmount = 0D,
-                .ScaleInLeverage = 1,
                 .MinConfidencePct = _minConfidencePct
             }
 
@@ -511,13 +487,7 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 5,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
-                .ScaleInAmount = 200D,
-                .ScaleInLeverage = 5,
                 .MinConfidencePct = _minConfidencePct
             }
 
@@ -556,13 +526,7 @@ Namespace TopStepTrader.UI.ViewModels
                 .GoShortWhenAboveBands = True,
                 .TimeframeMinutes = 5,
                 .DurationHours = 8760,
-                .CapitalAtRisk = _capitalAtRisk,
                 .Quantity = 1,
-                .TpDollarBracket = _TpDollarBracket,
-                .SlDollarBracket = _SlDollarBracket,
-                .Leverage = _leverage,
-                .ScaleInAmount = 200D,
-                .ScaleInLeverage = 5,
                 .MinConfidencePct = _minConfidencePct
             }
 

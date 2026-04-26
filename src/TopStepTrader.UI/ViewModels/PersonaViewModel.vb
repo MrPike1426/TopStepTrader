@@ -202,10 +202,8 @@ Namespace TopStepTrader.UI.ViewModels
         Private Sub LoadFromService()
             Dim p = _service.GetProfile(_name)
             _positionSize           = p.PositionSize
-            _leverage               = p.Leverage
             _maxScaleIns            = p.MaxScaleIns
             _slMultipleOfN          = p.SlMultipleOfN
-            _leveragedSlMultipleOfN = p.LeveragedSlMultipleOfN
             _tpMultipleOfN          = p.TpMultipleOfN
             _adxThreshold           = p.AdxThreshold
             _defaultConfidencePct   = p.DefaultConfidencePct
@@ -213,10 +211,8 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Sub LoadFromProfile(p As PersonaProfile)
             PositionSize           = p.PositionSize
-            Leverage               = p.Leverage
             MaxScaleIns            = p.MaxScaleIns
             SlMultipleOfN          = p.SlMultipleOfN
-            LeveragedSlMultipleOfN = p.LeveragedSlMultipleOfN
             TpMultipleOfN          = p.TpMultipleOfN
             AdxThreshold           = p.AdxThreshold
             DefaultConfidencePct   = p.DefaultConfidencePct
@@ -228,10 +224,8 @@ Namespace TopStepTrader.UI.ViewModels
             Dim profile As New PersonaProfile With {
                 .Name                  = _name,
                 .PositionSize          = _positionSize,
-                .Leverage              = _leverage,
                 .MaxScaleIns           = _maxScaleIns,
                 .SlMultipleOfN         = _slMultipleOfN,
-                .LeveragedSlMultipleOfN = _leveragedSlMultipleOfN,
                 .TpMultipleOfN         = _tpMultipleOfN,
                 .AdxThreshold          = _adxThreshold,
                 .DefaultConfidencePct  = _defaultConfidencePct

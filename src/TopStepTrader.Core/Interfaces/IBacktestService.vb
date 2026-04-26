@@ -239,6 +239,16 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Public Property MaxRiskHeatTicks As Integer = 100
 
+        ' ── Sniper trailing stop fields (FEAT-21) ────────────────────────────────────
+
+        ''' <summary>
+        ''' Initial stop-loss distance in ticks from entry.
+        ''' Used by the per-bracket trailing stop in <c>SniperBacktestEngine</c>.
+        ''' Mirrors <c>SniperExecutionEngine._stopLossTicks</c>.
+        ''' Default 10 (typical MES/MNQ value).
+        ''' </summary>
+        Public Property StopLossTicks As Integer = 10
+
     End Class
 
 End Namespace

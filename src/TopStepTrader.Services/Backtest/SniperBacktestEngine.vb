@@ -67,13 +67,15 @@ Namespace TopStepTrader.Services.Backtest
 
             ' Position state
             Dim openLegs As New List(Of BacktestTrade)()
-            Dim fillPrices As New List(Of Decimal)()    ' tracks all fill prices for average-entry calc
+            Dim brackets As New List(Of BracketState)()    ' per-bracket SL tracking (FEAT-21)
+            Dim fillPrices As New List(Of Decimal)()       ' tracks all fill prices for average-entry calc
             Dim addIndex As Integer = 0
             Dim posGroupId As Integer = 0
             Dim lastEntryPrice As Decimal = 0D
-            Dim positionSide As String = Nothing        ' "Buy" or "Sell"
-            Dim slPrice As Decimal = 0D
+            Dim positionSide As String = Nothing           ' "Buy" or "Sell"
             Dim tpPrice As Decimal = 0D
+            Dim freeRideActive As Boolean = False
+            Dim avgEntry As Decimal = 0D
             Dim lastEndOfDayBarIndex As Integer = -1000
 
             ' Pending next-bar fill
@@ -94,10 +96,11 @@ Namespace TopStepTrader.Services.Backtest
                             Dim slipD = config.SlippageTicks * config.TickSize
                             eodPrice += If(openLegs(0).Side = "Buy", -slipD, slipD)
                         End If
+                        StampTrailingFields(openLegs, brackets, freeRideActive, eodPrice, config)
                         CloseAllLegs(openLegs, fillPrices, trades, prevBar.Timestamp, eodPrice, "EndOfDay", config)
-                        openLegs.Clear() : fillPrices.Clear()
+                        openLegs.Clear() : brackets.Clear() : fillPrices.Clear()
                         lastEntryPrice = 0D : positionSide = Nothing
-                        slPrice = 0D : tpPrice = 0D
+                        tpPrice = 0D : freeRideActive = False : avgEntry = 0D
                         addIndex = 0
                         lastEndOfDayBarIndex = i
                         pendingSide = Nothing
@@ -123,18 +126,19 @@ Namespace TopStepTrader.Services.Backtest
                             config.ExtensionAllowed)
 
                         If fillQty > 0 Then
-                            ' Heat-cap check for scale-ins
+                            ' Heat-cap check for scale-ins — use first open bracket's SL as reference
                             Dim canFill = True
+                            Dim slForHeat = If(brackets.Count > 0, brackets(0).CurrentSlPrice, 0D)
                             If pendingIsScaleIn AndAlso openLegs.Count > 0 Then
                                 Dim heatAfter = CalculateHeatAfterAdd(
-                                    openLegs, fillQty, fillPrice, slPrice, config.TickSize, pendingSide)
+                                    openLegs, fillQty, fillPrice, slForHeat, config.TickSize, pendingSide)
                                 If heatAfter > config.MaxRiskHeatTicks Then canFill = False
                             End If
 
                             If canFill Then
                                 fillPrices.Add(fillPrice * fillQty)   ' weighted sum for avg
                                 Dim totalQtyNow = openLegs.Sum(Function(l) l.Quantity) + fillQty
-                                Dim avgEntry = fillPrices.Sum() / totalQtyNow
+                                avgEntry = fillPrices.Sum() / totalQtyNow
 
                                 Dim leg As New BacktestTrade With {
                                     .PositionGroupId    = pendingGroupId,
@@ -149,16 +153,36 @@ Namespace TopStepTrader.Services.Backtest
                                 openLegs.Add(leg)
                                 lastEntryPrice = fillPrice
 
-                                ' Anchor SL/TP to average entry after each fill (ATR mode)
+                                ' Anchor TP to average entry after each fill (ATR mode)
                                 If config.UseAtrMode AndAlso indicators.Atr IsNot Nothing Then
                                     Dim atrVal = indicators.Atr(i)
                                     If Not Single.IsNaN(atrVal) AndAlso atrVal > 0.0F Then
-                                        Dim stopDist = CDec(atrVal) * config.SlAtrMultiple
-                                        Dim tpDist   = CDec(atrVal) * config.TpAtrMultiple
-                                        slPrice = If(isBuy, avgEntry - stopDist, avgEntry + stopDist)
-                                        tpPrice = If(isBuy, avgEntry + tpDist,  avgEntry - tpDist)
+                                        Dim tpDist = CDec(atrVal) * config.TpAtrMultiple
+                                        tpPrice = If(isBuy, avgEntry + tpDist, avgEntry - tpDist)
                                     End If
                                 End If
+
+                                ' Initialise per-bracket SL at avgEntry ± stopLossTicks×tickSize
+                                Dim tick = config.TickSize
+                                Dim initialSl As Decimal
+                                If config.StopLossTicks > 0 AndAlso tick > 0D Then
+                                    Dim slDist = config.StopLossTicks * tick
+                                    initialSl = If(isBuy, avgEntry - slDist, avgEntry + slDist)
+                                ElseIf config.UseAtrMode AndAlso indicators.Atr IsNot Nothing Then
+                                    Dim atrVal = indicators.Atr(i)
+                                    Dim slDist = If(Single.IsNaN(atrVal) OrElse atrVal <= 0F,
+                                                    0D, CDec(atrVal) * config.SlAtrMultiple)
+                                    initialSl = If(isBuy, avgEntry - slDist, avgEntry + slDist)
+                                Else
+                                    initialSl = 0D
+                                End If
+
+                                brackets.Add(New BracketState With {
+                                    .AddIndex      = pendingAddIndex,
+                                    .EntryPrice    = fillPrice,
+                                    .InitialSlPrice = initialSl,
+                                    .CurrentSlPrice = initialSl
+                                })
 
                                 addIndex = pendingAddIndex + 1
                             End If
@@ -169,30 +193,115 @@ Namespace TopStepTrader.Services.Backtest
 
                 ' ── Check exit for open position ─────────────────────────────────
                 If openLegs.Count > 0 Then
+                    Dim isBuyPos = (openLegs(0).Side = "Buy")
+
+                    ' ── FEAT-21: Free-ride SL check ───────────────────────────────
+                    If Not freeRideActive AndAlso brackets.Count >= 3 Then
+                        Dim allProfit = brackets.All(Function(b)
+                                                         Return If(isBuyPos,
+                                                             bar.Close > b.EntryPrice,
+                                                             bar.Close < b.EntryPrice)
+                                                     End Function)
+                        If allProfit Then
+                            freeRideActive = True
+                            ' Floor every bracket's SL at avgEntry (breakeven)
+                            For Each b In brackets
+                                If isBuyPos Then
+                                    If b.CurrentSlPrice < avgEntry Then b.CurrentSlPrice = avgEntry
+                                Else
+                                    If b.CurrentSlPrice > avgEntry Then b.CurrentSlPrice = avgEntry
+                                End If
+                            Next
+                        End If
+                    End If
+
+                    ' ── FEAT-21: Per-bracket trailing SL update ───────────────────
+                    Dim tick = config.TickSize
+                    If tick > 0D AndAlso config.StopLossTicks > 0 Then
+                        For k = 0 To brackets.Count - 1
+                            Dim b = brackets(k)
+                            Dim isCore = b.AddIndex < config.CoreAddsCount
+                            Dim trailFactor = If(isCore, 2.0D, 1.0D)
+                            Dim trailDist = config.StopLossTicks * trailFactor * tick
+
+                            Dim potentialSl As Decimal
+                            If isBuyPos Then
+                                potentialSl = bar.Close - trailDist
+                                ' Add-on breakeven floor after 5-tick profit
+                                If Not isCore Then
+                                    Dim profit = bar.Close - b.EntryPrice
+                                    If profit > 5D * tick Then
+                                        Dim bePrice = b.EntryPrice + tick
+                                        If potentialSl < bePrice Then potentialSl = bePrice
+                                    End If
+                                End If
+                                ' Free-ride floor
+                                If freeRideActive AndAlso potentialSl < avgEntry Then potentialSl = avgEntry
+                                ' Monotonic: only move up
+                                If potentialSl > b.CurrentSlPrice Then b.CurrentSlPrice = potentialSl
+                            Else
+                                potentialSl = bar.Close + trailDist
+                                ' Add-on breakeven floor after 5-tick profit
+                                If Not isCore Then
+                                    Dim profit = b.EntryPrice - bar.Close
+                                    If profit > 5D * tick Then
+                                        Dim bePrice = b.EntryPrice - tick
+                                        If potentialSl > bePrice Then potentialSl = bePrice
+                                    End If
+                                End If
+                                ' Free-ride floor
+                                If freeRideActive AndAlso potentialSl > avgEntry Then potentialSl = avgEntry
+                                ' Monotonic: only move down
+                                If potentialSl < b.CurrentSlPrice Then b.CurrentSlPrice = potentialSl
+                            End If
+                        Next
+                    End If
+
+                    ' ── Exit check: per-bracket SL, then TP ──────────────────────
                     Dim exitReason As String = Nothing
                     Dim exitPrice As Decimal = bar.Close
 
-                    If slPrice <> 0D OrElse tpPrice <> 0D Then
-                        exitReason = BacktestMetrics.CheckFixedExit(openLegs(0).Side, bar, slPrice, tpPrice)
-                        If exitReason IsNot Nothing Then
-                            exitPrice = BacktestMetrics.GetExitPrice(openLegs(0), bar, exitReason, slPrice, tpPrice)
-                            If exitReason = "StopLoss" AndAlso config.SlippageTicks > 0 AndAlso config.TickSize > 0D Then
-                                Dim slipD = config.SlippageTicks * config.TickSize
-                                exitPrice += If(openLegs(0).Side = "Buy", -slipD, slipD)
+                    ' Check per-bracket SL (use the worst/best-case bracket that was hit)
+                    If brackets.Count > 0 Then
+                        For Each b In brackets
+                            If b.CurrentSlPrice <> 0D Then
+                                Dim slHit = If(isBuyPos,
+                                    bar.Low <= b.CurrentSlPrice,
+                                    bar.High >= b.CurrentSlPrice)
+                                If slHit Then
+                                    exitReason = "StopLoss"
+                                    ' Exit at SL price (with optional slippage)
+                                    exitPrice = b.CurrentSlPrice
+                                    If config.SlippageTicks > 0 AndAlso tick > 0D Then
+                                        Dim slipD = config.SlippageTicks * tick
+                                        exitPrice += If(isBuyPos, -slipD, slipD)
+                                    End If
+                                    Exit For
+                                End If
                             End If
+                        Next
+                    End If
+
+                    ' Check TP (fixed offset from avgEntry — FEAT-20 behaviour; fires if SL not hit)
+                    If exitReason Is Nothing AndAlso tpPrice <> 0D Then
+                        Dim tpHit = If(isBuyPos, bar.High >= tpPrice, bar.Low <= tpPrice)
+                        If tpHit Then
+                            exitReason = "TakeProfit"
+                            exitPrice = tpPrice
                         End If
                     End If
 
                     If exitReason IsNot Nothing Then
-                        ' Stamp MaxContractsHeld on all legs before closing
+                        ' Stamp MaxContractsHeld and FEAT-21 trailing fields on all legs before closing
                         Dim maxContracts = openLegs.Sum(Function(l) l.Quantity)
+                        StampTrailingFields(openLegs, brackets, freeRideActive, exitPrice, config)
                         For Each leg In openLegs
                             leg.MaxContractsHeld = maxContracts
                         Next
                         CloseAllLegs(openLegs, fillPrices, trades, bar.Timestamp, exitPrice, exitReason, config)
-                        openLegs.Clear() : fillPrices.Clear()
+                        openLegs.Clear() : brackets.Clear() : fillPrices.Clear()
                         lastEntryPrice = 0D : positionSide = Nothing
-                        slPrice = 0D : tpPrice = 0D
+                        tpPrice = 0D : freeRideActive = False : avgEntry = 0D
                         addIndex = 0
                         Continue For
                     End If
@@ -287,6 +396,7 @@ Namespace TopStepTrader.Services.Backtest
             If openLegs.Count > 0 Then
                 Dim lastBar = filteredBars.Last()
                 Dim maxContracts = openLegs.Sum(Function(l) l.Quantity)
+                StampTrailingFields(openLegs, brackets, freeRideActive, lastBar.Close, config)
                 For Each leg In openLegs
                     leg.MaxContractsHeld = maxContracts
                 Next
@@ -339,6 +449,46 @@ Namespace TopStepTrader.Services.Backtest
             heat += newTicks * addQty
             Return heat
         End Function
+
+        ''' <summary>
+        ''' FEAT-21: Stamps FreeRideActivated, FinalSlAtExit, and TrailingTicksCaptured onto
+        ''' every open leg using the matched bracket for that leg (matched by PyramidAddIndex).
+        ''' Called immediately before CloseAllLegs.
+        ''' </summary>
+        Private Shared Sub StampTrailingFields(openLegs As List(Of BacktestTrade),
+                                               brackets As List(Of BracketState),
+                                               freeRideActive As Boolean,
+                                               exitPrice As Decimal,
+                                               config As BacktestConfiguration)
+            For Each leg In openLegs
+                leg.FreeRideActivated = freeRideActive
+                Dim matchedBracket = brackets.FirstOrDefault(
+                    Function(b) b.AddIndex = leg.PyramidAddIndex.GetValueOrDefault(-1))
+                If matchedBracket IsNot Nothing Then
+                    leg.FinalSlAtExit = matchedBracket.CurrentSlPrice
+                    If config.TickSize > 0D AndAlso matchedBracket.InitialSlPrice <> 0D Then
+                        Dim slMoved = Math.Abs(matchedBracket.CurrentSlPrice - matchedBracket.InitialSlPrice)
+                        leg.TrailingTicksCaptured = slMoved / config.TickSize
+                    End If
+                End If
+            Next
+        End Sub
+
+        ' ── FEAT-21: Per-bracket SL state ────────────────────────────────────────────
+
+        ''' <summary>
+        ''' Tracks the dynamic stop-loss price for a single pyramid bracket.
+        ''' One instance is created per fill and updated each bar by the free-ride
+        ''' check and per-bracket trailing logic.
+        ''' </summary>
+        Private Class BracketState
+            Public Property AddIndex As Integer
+            Public Property EntryPrice As Decimal
+            ''' <summary>Initial SL set at fill time (avgEntry ± stopLossTicks × tickSize).</summary>
+            Public Property InitialSlPrice As Decimal
+            ''' <summary>Current (possibly trailed) SL — the live floor used for exit detection.</summary>
+            Public Property CurrentSlPrice As Decimal
+        End Class
 
     End Class
 
