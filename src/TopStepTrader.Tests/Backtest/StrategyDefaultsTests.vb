@@ -20,8 +20,6 @@ Namespace TopStepTrader.Tests.Backtest
             Assert.NotNull(result)
             Assert.Equal("1000", result.Capital)
             Assert.Equal("1", result.Qty)
-            Assert.Equal("20", result.TpDollarBracket)
-            Assert.Equal("15", result.SlDollarBracket)
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════

@@ -49,7 +49,7 @@ Namespace TopStepTrader.Services.Backtest
         ''' passed unchanged on every subsequent bar so the trailing distance stays constant.
         ''' They are strategy-agnostic — the caller derives them from either dollar-based config
         ''' or ATR price levels:
-        '''   Standard strategies: stopDelta = SlDollarBracket / (PointValue × Qty)
+        '''   Standard strategies: stopDelta = SlAtrMultiple × ATR(14) at entry (price units)
         '''   MultiConfluence/SuperTrend: stopDelta = Abs(entryPrice − mcOpenSlPrice)
         '''
         ''' Trailing stop  — advances <paramref name="currentStop"/> toward price, never away.

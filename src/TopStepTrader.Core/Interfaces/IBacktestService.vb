@@ -62,7 +62,7 @@ Namespace TopStepTrader.Core.Interfaces
         ''' When True, SL and TP are expressed as multiples of the 14-bar ATR at entry
         ''' rather than fixed dollar amounts.  ATR is in price units; dollar P&amp;L is computed
         ''' via PointValue × Quantity as normal.
-        ''' When False (default), SlDollarBracket / TpDollarBracket are used.
+        ''' When False, no fixed-dollar brackets are used (ATR is the recommended mode).
         ''' </summary>
         Public Property UseAtrMode As Boolean = True
 

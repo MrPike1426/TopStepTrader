@@ -36,8 +36,6 @@ Namespace TopStepTrader.Tests.Backtest
                 .Quantity         = 1,
                 .MaxScaleIns      = 0,
                 .UseAtrMode       = False,       ' ATR-relative stops off — only NeutralExit matters
-                .SlDollarBracket  = 500D,        ' large enough that SL won't be hit in test
-                .TpDollarBracket  = 500D,        ' large enough that TP won't be hit in test
                 .SlippageTicks    = 0,
                 .MinSignalConfidence = 0.0F,
                 .StrategyCondition = StrategyConditionType.DonchianBreakout

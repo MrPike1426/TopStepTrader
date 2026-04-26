@@ -71,23 +71,23 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _TpDollarBracket As String = "20"
-        Public Property TpDollarBracket As String
+        Private _TpAtrMultiple As String = "3.0"
+        Public Property TpAtrMultiple As String
             Get
-                Return _TpDollarBracket
+                Return _TpAtrMultiple
             End Get
             Set(value As String)
-                SetProperty(_TpDollarBracket, value)
+                SetProperty(_TpAtrMultiple, value)
             End Set
         End Property
 
-        Private _SlDollarBracket As String = "10"
-        Public Property SlDollarBracket As String
+        Private _SlAtrMultiple As String = "1.5"
+        Public Property SlAtrMultiple As String
             Get
-                Return _SlDollarBracket
+                Return _SlAtrMultiple
             End Get
             Set(value As String)
-                SetProperty(_SlDollarBracket, value)
+                SetProperty(_SlAtrMultiple, value)
             End Set
         End Property
 
@@ -375,23 +375,23 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _btTpDollarBracket As String = "20"
-        Public Property BtTpDollarBracket As String
+        Private _btTpAtrMultiple As String = "3.0"
+        Public Property BtTpAtrMultiple As String
             Get
-                Return _btTpDollarBracket
+                Return _btTpAtrMultiple
             End Get
             Set(value As String)
-                SetProperty(_btTpDollarBracket, value)
+                SetProperty(_btTpAtrMultiple, value)
             End Set
         End Property
 
-        Private _btSlDollarBracket As String = "10"
-        Public Property BtSlDollarBracket As String
+        Private _btSlAtrMultiple As String = "1.5"
+        Public Property BtSlAtrMultiple As String
             Get
-                Return _btSlDollarBracket
+                Return _btSlAtrMultiple
             End Get
             Set(value As String)
-                SetProperty(_btSlDollarBracket, value)
+                SetProperty(_btSlAtrMultiple, value)
             End Set
         End Property
 
@@ -636,8 +636,8 @@ Namespace TopStepTrader.UI.ViewModels
             Dim tpDollars As Decimal = 0D
             Dim slDollars As Decimal = 0D
 
-            Decimal.TryParse(_TpDollarBracket, tpDollars)
-            Decimal.TryParse(_SlDollarBracket, slDollars)
+            Decimal.TryParse(_TpAtrMultiple, tpDollars)
+            Decimal.TryParse(_SlAtrMultiple, slDollars)
             Double.TryParse(_scaleInTriggerTicks, scaleK) ' 'k' factor (ATR multiplier)
             Integer.TryParse(_maxRiskHeatTicks, heat)
 
@@ -780,8 +780,8 @@ Namespace TopStepTrader.UI.ViewModels
                 Return
             End If
             Dim slMult, tpMult As Decimal
-            If Not Decimal.TryParse(_btSlDollarBracket, slMult) OrElse slMult <= 0D Then slMult = 1.0D
-            If Not Decimal.TryParse(_btTpDollarBracket, tpMult) OrElse tpMult <= 0D Then tpMult = 2.5D
+            If Not Decimal.TryParse(_btSlAtrMultiple, slMult) OrElse slMult <= 0D Then slMult = 1.0D
+            If Not Decimal.TryParse(_btTpAtrMultiple, tpMult) OrElse tpMult <= 0D Then tpMult = 2.5D
 
             ' Parse pyramid fields from existing ViewModel bindings (FEAT-20)
             Dim btHeat, btTargetSize, btCoreAdds, btMomSize, btExtSize As Integer

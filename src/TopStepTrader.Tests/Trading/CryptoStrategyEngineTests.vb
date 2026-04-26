@@ -201,10 +201,6 @@ Namespace TopStepTrader.Tests.Trading
                 .ContractId = "99999",
                 .Name = "CryptoTest",
                 .AccountId = 1L,
-                .CapitalAtRisk = 200D,
-                .Leverage = 5,
-                .SlDollarBracket = 10D,
-                .TpDollarBracket = 20D,
                 .MinConfidencePct = 85
             }
 

@@ -190,19 +190,19 @@
 
                                     <!-- Row 2 values -->
                                     <TextBox Grid.Row="2" Grid.Column="0"
-                                             Text="{Binding TpDollarBracket, UpdateSourceTrigger=PropertyChanged}"
+                                             Text="{Binding TpAtrMultiple, UpdateSourceTrigger=PropertyChanged}"
                                              IsEnabled="{Binding IsNotRunning}">
                                         <TextBox.ToolTip>
                                             <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
-                                                Text="Dollar profit target placed as a bracket order at each entry. Example: 20 means the order targets $20 profit per contract from entry price."/></ToolTip>
+                                                Text="Take-profit distance as a multiple of ATR(14) at entry. Example: 3.0 means TP is 3× the current ATR from entry price."/></ToolTip>
                                         </TextBox.ToolTip>
                                     </TextBox>
                                     <TextBox Grid.Row="2" Grid.Column="3"
-                                             Text="{Binding SlDollarBracket, UpdateSourceTrigger=PropertyChanged}"
+                                             Text="{Binding SlAtrMultiple, UpdateSourceTrigger=PropertyChanged}"
                                              IsEnabled="{Binding IsNotRunning}">
                                         <TextBox.ToolTip>
                                             <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
-                                                Text="Dollar stop-loss placed as a bracket order at each entry. Example: 10 means the stop is $10 below (long) or above (short) the entry price per contract."/></ToolTip>
+                                                Text="Stop-loss distance as a multiple of ATR(14) at entry. Example: 1.5 means SL is 1.5× the current ATR from entry price."/></ToolTip>
                                         </TextBox.ToolTip>
                                     </TextBox>
                                     <TextBox Grid.Row="2" Grid.Column="6"
@@ -585,25 +585,25 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Take Profit ($)"
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="TP × ATR"
                                                FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="Stop Loss ($)"
+                                    <TextBlock Grid.Row="0" Grid.Column="3" Text="SL × ATR"
                                                FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
 
                                     <TextBox Grid.Row="2" Grid.Column="0"
-                                             Text="{Binding BtTpDollarBracket, UpdateSourceTrigger=PropertyChanged}"
+                                             Text="{Binding BtTpAtrMultiple, UpdateSourceTrigger=PropertyChanged}"
                                              IsEnabled="{Binding IsNotBacktesting}">
                                         <TextBox.ToolTip>
                                             <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
-                                                Text="Dollar profit target per contract for the backtest. Uses the same bracket logic as the live Sniper."/></ToolTip>
+                                                Text="Take-profit as a multiple of ATR(14) at entry for the backtest."/></ToolTip>
                                         </TextBox.ToolTip>
                                     </TextBox>
                                     <TextBox Grid.Row="2" Grid.Column="3"
-                                             Text="{Binding BtSlDollarBracket, UpdateSourceTrigger=PropertyChanged}"
+                                             Text="{Binding BtSlAtrMultiple, UpdateSourceTrigger=PropertyChanged}"
                                              IsEnabled="{Binding IsNotBacktesting}">
                                         <TextBox.ToolTip>
                                             <ToolTip><TextBlock TextWrapping="Wrap" MaxWidth="260" FontSize="13"
-                                                Text="Dollar stop-loss per contract for the backtest. Set the same value you plan to use live to get realistic results."/></ToolTip>
+                                                Text="Stop-loss as a multiple of ATR(14) at entry for the backtest."/></ToolTip>
                                         </TextBox.ToolTip>
                                     </TextBox>
                                 </Grid>

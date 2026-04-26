@@ -304,18 +304,6 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Public ReadOnly Property AvailableLeverages As Integer() = {1, 2, 5, 10}
-
-        Private _testTradeLeverage As Integer = 1
-        Public Property TestTradeLeverage As Integer
-            Get
-                Return _testTradeLeverage
-            End Get
-            Set(value As Integer)
-                SetProperty(_testTradeLeverage, value)
-            End Set
-        End Property
-
         Private _testTradeStatus As String
         Public Property TestTradeStatus As String
             Get

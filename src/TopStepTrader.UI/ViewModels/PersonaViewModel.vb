@@ -78,16 +78,6 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _leverage As Integer
-        Public Property Leverage As Integer
-            Get
-                Return _leverage
-            End Get
-            Set(value As Integer)
-                SetProperty(_leverage, value)
-            End Set
-        End Property
-
         Private _maxScaleIns As Integer
         Public Property MaxScaleIns As Integer
             Get
@@ -105,16 +95,6 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
             Set(value As Decimal)
                 SetProperty(_slMultipleOfN, value)
-            End Set
-        End Property
-
-        Private _leveragedSlMultipleOfN As Decimal
-        Public Property LeveragedSlMultipleOfN As Decimal
-            Get
-                Return _leveragedSlMultipleOfN
-            End Get
-            Set(value As Decimal)
-                SetProperty(_leveragedSlMultipleOfN, value)
             End Set
         End Property
 

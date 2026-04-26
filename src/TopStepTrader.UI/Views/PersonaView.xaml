@@ -86,17 +86,6 @@
                                              HorizontalContentAlignment="Right"
                                              ToolTip="Number of contracts per initial trade entry on TopStepX (e.g. 'BUY +1 MARKET'). Lewis=1 · Damian=3 · Joe=5."/>
 
-                                    <!-- Leverage -->
-                                    <TextBlock Grid.Row="2" Grid.Column="0"
-                                               Text="Leverage (×)"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               FontSize="12" VerticalAlignment="Center"/>
-                                    <TextBox Grid.Row="2" Grid.Column="1"
-                                             Text="{Binding Leverage, UpdateSourceTrigger=PropertyChanged}"
-                                             Height="26" VerticalContentAlignment="Center"
-                                             HorizontalContentAlignment="Right"
-                                             ToolTip="Preferred leverage multiplier (capped by instrument regulatory maximum)."/>
-
                                     <!-- Max scale-ins -->
                                     <TextBlock Grid.Row="4" Grid.Column="0"
                                                Text="Max scale-ins"
@@ -118,18 +107,6 @@
                                              Height="26" VerticalContentAlignment="Center"
                                              HorizontalContentAlignment="Right"
                                              ToolTip="Stop-loss distance = SlMultipleOfN × ATR(14) × DollarPerPoint."/>
-
-                                    <!-- Leveraged SL multiple -->
-                                    <TextBlock Grid.Row="8" Grid.Column="0"
-                                               Text="Leveraged SL multiple of N"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               FontSize="12" VerticalAlignment="Center"
-                                               TextWrapping="Wrap"/>
-                                    <TextBox Grid.Row="8" Grid.Column="1"
-                                             Text="{Binding LeveragedSlMultipleOfN, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}"
-                                             Height="26" VerticalContentAlignment="Center"
-                                             HorizontalContentAlignment="Right"
-                                             ToolTip="Wider SL for leveraged CFDs (eToro spread buffer). 0 = disabled, falls back to SL multiple above."/>
 
                                     <!-- TP multiple -->
                                     <TextBlock Grid.Row="10" Grid.Column="0"

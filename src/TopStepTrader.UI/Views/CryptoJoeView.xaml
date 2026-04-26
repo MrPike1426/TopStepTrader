@@ -125,39 +125,16 @@
 
                         </StackPanel>
 
-                        <!-- Row 2: TP / SL | Confidence -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>  <!-- "TP $ / SL $:" label -->
-                                <ColumnDefinition Width="Auto"/>  <!-- TP / SL inputs -->
-                                <ColumnDefinition Width="16"/>    <!-- gap -->
-                                <ColumnDefinition Width="Auto"/>  <!-- "Confidence %:" label -->
-                                <ColumnDefinition Width="50"/>    <!-- Confidence input -->
-                            </Grid.ColumnDefinitions>
-
-                            <TextBlock Grid.Column="0"
-                                       Text="TP $ / SL $:" VerticalAlignment="Center"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       Margin="0,0,8,0"/>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <TextBox Text="{Binding TpDollarBracket, UpdateSourceTrigger=LostFocus}"
-                                         Width="44" ToolTip="Initial take-profit dollar fallback (used when ATR unavailable)"/>
-                                <TextBlock Text="/" VerticalAlignment="Center" Margin="5,0,5,0"
-                                           Foreground="{StaticResource TextSecondaryBrush}"/>
-                                <TextBox Text="{Binding SlDollarBracket, UpdateSourceTrigger=LostFocus}"
-                                         Width="44" ToolTip="Initial stop-loss dollar fallback (used when ATR unavailable)"/>
-                            </StackPanel>
-
-                            <TextBlock Grid.Column="3"
-                                       Text="Confidence %:" VerticalAlignment="Center"
+                        <!-- Row 2: Confidence -->
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Confidence %:" VerticalAlignment="Center"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        Margin="0,0,8,0"
                                        ToolTip="Minimum weighted score 0–100 required to fire a signal across all 5 assets"/>
-                            <TextBox Grid.Column="4"
-                                     Text="{Binding MinConfidencePct, UpdateSourceTrigger=PropertyChanged}"
+                            <TextBox Text="{Binding MinConfidencePct, UpdateSourceTrigger=PropertyChanged}"
+                                     Width="50"
                                      ToolTip="Default 85 — fires Long when UP ≥ this %, Short when DOWN ≥ this %"/>
-
-                        </Grid>
+                        </StackPanel>
 
                     </StackPanel>
                 </Border>

@@ -73,7 +73,6 @@ Namespace TopStepTrader.UI.ViewModels
                        Optional etoroPositionId As Long? = Nothing,
                        Optional openedAtUtc As DateTimeOffset = Nothing,
                        Optional exposureUsd As Decimal = 0D,
-                       Optional leverage As Integer = 1,
                        Optional entryPrice As Decimal = 0D)
             Me.EntryTime = entryTime
             Me.ContractDisplay = ToFriendlyName(contractId)
@@ -83,7 +82,6 @@ Namespace TopStepTrader.UI.ViewModels
             _etoroPositionId = etoroPositionId
             _openedAtUtc = If(openedAtUtc = DateTimeOffset.MinValue, entryTime, openedAtUtc)
             Me.ExposureUsd = exposureUsd
-            Me.LeverageMultiplier = If(leverage > 0, leverage, 1)
             _entryPrice = entryPrice
             _tradeSide = side
         End Sub
@@ -124,7 +122,6 @@ Namespace TopStepTrader.UI.ViewModels
         End Property
 
         Public ReadOnly Property ExposureUsd As Decimal
-        Public ReadOnly Property LeverageMultiplier As Integer
 
         Public ReadOnly Property EtoroPositionIdDisplay As String
             Get
@@ -142,9 +139,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property ExposureDisplay As String
             Get
                 If ExposureUsd = 0D Then Return "—"
-                Return If(LeverageMultiplier > 1,
-                          $"${ExposureUsd:N0}×{LeverageMultiplier}",
-                          $"${ExposureUsd:N0}")
+                Return $"${ExposureUsd:N0}"
             End Get
         End Property
 

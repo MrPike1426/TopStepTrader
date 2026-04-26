@@ -225,7 +225,7 @@ Namespace TopStepTrader.Services.Trading
 
         ' ── Confidence-driven scale-in state ──────────────────────────────────────
         ' Used exclusively by the EmaRsiWeightedScore strategy condition.
-        ' ScaleInAmount and ScaleInLeverage are both driven by the strategy definition (set from UI).
+        ' Scale-in fires when confidence extreme persists for ScaleInRequiredTicks consecutive ticks.
         Private Const ScaleInRequiredTicks As Integer = 3      ' consecutive extreme ticks before scale-in fires
         ''' <summary>
         ''' Maximum additional positions after the initial entry.
@@ -1875,7 +1875,7 @@ Namespace TopStepTrader.Services.Trading
                True AndAlso ' _turtleBracket Is Nothing AndAlso
                 _lastEntryPrice > 0D AndAlso _currentAtrValue > 0D Then
                 ' TopStepX futures DPP = tickValue / tickSize × contracts
-                ' (eToro CFD formula removed: Amount×Leverage/Price produces 0 for TopStepX snapshots)
+                ' TopStepX DPP is tick-value-based (not CFD dollar-per-unit)
                 Dim dppDeferred As Decimal = _totalDollarPerPoint
                 If dppDeferred <= 0D Then
                     Dim tickSzDef = If(_strategy.TickSize > 0D, _strategy.TickSize, 0.01D)
@@ -2219,7 +2219,7 @@ Namespace TopStepTrader.Services.Trading
                 .InitialStopTicks = initialStopTicks,
                 .InitialTakeProfitTicks = initialTpTicks,
                 .EstimatedEntryPrice = priceUsed
-            }   ' No StopLossRate, no TakeProfitRate, no Amount, no Leverage for futures
+            }   ' No StopLossRate, no TakeProfitRate for futures (tick-based bracket only)
 
             Dim placedOrder = Await _orderService.PlaceOrderAsync(order)
 

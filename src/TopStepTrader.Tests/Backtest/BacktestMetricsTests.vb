@@ -987,7 +987,7 @@ Namespace TopStepTrader.Tests.Backtest
         ''' </summary>
         <Fact>
         Public Sub ScaleIn_TwoLegBuy_StopLoss_AggregateLossIsCorrect()
-            Dim config = MakeConfig(slTicks:=10, tpTicks:=20)
+            Dim config = MakeConfig()
             ' SL is 10 ticks = 2.5 pts below entry; both legs exit at the same SL fill price
             Dim slFill = 4997.5D   ' entry(5000) − 10 ticks × 0.25
 

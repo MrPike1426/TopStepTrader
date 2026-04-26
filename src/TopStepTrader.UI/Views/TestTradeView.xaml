@@ -390,10 +390,9 @@
                                 <ColumnDefinition Width="6"/>
                                 <ColumnDefinition Width="48"/>     <!-- 8: size input -->
                                 <ColumnDefinition Width="10"/>
-                                <!-- Leverage (hidden on TopStepX) -->
-                                <ColumnDefinition Width="Auto"/>   <!-- 10: lev label -->
-                                <ColumnDefinition Width="Auto"/>   <!-- 11: lev combo -->
-                                <ColumnDefinition Width="Auto"/>   <!-- 12: lev gap -->
+                                <ColumnDefinition Width="0"/>      <!-- 10: removed -->
+                                <ColumnDefinition Width="0"/>      <!-- 11: removed -->
+                                <ColumnDefinition Width="0"/>      <!-- 12: removed -->
                                 <!-- SL -->
                                 <ColumnDefinition Width="Auto"/>   <!-- 13: SL label -->
                                 <ColumnDefinition Width="6"/>
@@ -434,22 +433,6 @@
                             <TextBox   Grid.Column="8" Text="{Binding TestTradeAmount, UpdateSourceTrigger=PropertyChanged}"
                                        Style="{StaticResource TerminalBox}"/>
 
-                            <!-- Leverage — hidden on TopStepX; Auto cols collapse to 0 -->
-                            <TextBlock Grid.Column="10" Text="LEV" Style="{StaticResource FieldLabel}"
-                                       Visibility="{Binding IsNotTopStepX, Converter={StaticResource BoolToVisibilityConverter}}"/>
-                            <ComboBox  Grid.Column="11"
-                                       ItemsSource="{Binding AvailableLeverages}"
-                                       SelectedItem="{Binding TestTradeLeverage, Mode=TwoWay}"
-                                       MaxWidth="52" FontFamily="Consolas" FontSize="12"
-                                       Style="{StaticResource UnclippedComboBoxStyle}"
-                                       ItemContainerStyle="{StaticResource DarkComboBoxItemStyle}"
-                                       Visibility="{Binding IsNotTopStepX, Converter={StaticResource BoolToVisibilityConverter}}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding StringFormat='x{0}'}" Foreground="White" FontFamily="Consolas"/>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
                             <TextBlock Grid.Column="12" Width="10"
                                        Visibility="{Binding IsNotTopStepX, Converter={StaticResource BoolToVisibilityConverter}}"/>
 

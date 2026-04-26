@@ -45,12 +45,8 @@ Namespace TopStepTrader.Tests.Trading
                 .DurationHours = 8,
                 .GoLongWhenBelowBands = True,
                 .GoShortWhenAboveBands = True,
-                .SlDollarBracket = slPct,
-                .TpDollarBracket = tpPct,
-                .SlMultipleOfN = 0D,
-                .TpMultipleOfN = 0D,
-                .Leverage = leverage,
-                .CapitalAtRisk = capitalAtRisk,
+                .SlMultipleOfN = slPct,
+                .TpMultipleOfN = tpPct,
                 .MinConfidencePct = minConfidencePct
             }
         End Function
@@ -172,28 +168,6 @@ Namespace TopStepTrader.Tests.Trading
         ' 3 — Zero % = no bracket order
         ' ══════════════════════════════════════════════════════════════════
 
-        <Fact>
-        Public Sub SlAmount_Zero_MeansNoSlOrder()
-            Dim strategy = BuildStrategy("OIL", slPct:=0D, tpPct:=1.5D, capitalAtRisk:=1000D)
-            ' Engine guard: If _strategy.SlDollarBracket > 0 Then ... bracket initialised with SL price
-            Assert.Equal(0D, strategy.SlDollarBracket)
-            ' slPrice remains 0 → engine skips SL bracket placement
-        End Sub
-
-        <Fact>
-        Public Sub TpAmount_Zero_MeansNoTpOrder()
-            Dim strategy = BuildStrategy("OIL", slPct:=0.75D, tpPct:=0D, capitalAtRisk:=1000D)
-            Assert.Equal(0D, strategy.TpDollarBracket)
-        End Sub
-
-        <Fact>
-        Public Sub BothAmounts_Zero_NoBrackets_OrderStillValidToPlace()
-            ' A trade can be opened without SL/TP — just a market open with no brackets.
-            Dim strategy = BuildStrategy("OIL", slPct:=0D, tpPct:=0D, capitalAtRisk:=1000D)
-            Assert.Equal(0D, strategy.SlDollarBracket)
-            Assert.Equal(0D, strategy.TpDollarBracket)
-        End Sub
-
         ' ══════════════════════════════════════════════════════════════════
         ' 4 — eToro minimum trade size enforcement
         ' ══════════════════════════════════════════════════════════════════
@@ -279,7 +253,6 @@ Namespace TopStepTrader.Tests.Trading
             For Each c In contracts
                 Assert.True(c.InstrumentId > 0, $"{c.ContractId}: InstrumentId must be > 0")
                 Assert.True(c.MinNotionalUsd > 0, $"{c.ContractId}: MinNotionalUsd must be > 0")
-                Assert.True(c.MaxLeverage >= 1, $"{c.ContractId}: MaxLeverage must be >= 1")
             Next
         End Sub
 
@@ -432,37 +405,6 @@ Namespace TopStepTrader.Tests.Trading
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════
-        ' 8 — StrategyDefinition defaults after refactor
-        ' ══════════════════════════════════════════════════════════════════
-
-        <Fact>
-        Public Sub StrategyDefinition_NewDollarFields_DefaultToTwentyAndTen()
-            Dim sd As New StrategyDefinition()
-
-            Assert.Equal(20D, sd.TpDollarBracket)
-            Assert.Equal(10D, sd.SlDollarBracket)
-            Assert.Equal(1, sd.Leverage)
-        End Sub
-
-        <Fact>
-        Public Sub StrategyDefinition_DollarFields_RoundTrip()
-            Dim sd = BuildStrategy("OIL", slPct:=0.75D, tpPct:=1.5D, capitalAtRisk:=1000D, leverage:=2)
-
-            Assert.Equal(0.75D, sd.SlDollarBracket)
-            Assert.Equal(1.5D, sd.TpDollarBracket)
-            Assert.Equal(2, sd.Leverage)
-        End Sub
-
-        <Fact>
-        Public Sub StrategyDefinition_Summary_ShowsDollarAmountWhenSet()
-            Dim sd = BuildStrategy("OIL", slPct:=0.75D, tpPct:=1.5D, capitalAtRisk:=1000D)
-            Dim summary = sd.Summary
-
-            Assert.Contains("TP:$2", summary)   ' 1.5D rounds to $2 with :F0
-            Assert.Contains("SL:$1", summary)   ' 0.75D rounds to $1 with :F0
-        End Sub
-
-        ' ══════════════════════════════════════════════════════════════════
         ' 10 — Reversal detection state machine
         ' ══════════════════════════════════════════════════════════════════
         '
@@ -588,7 +530,7 @@ Namespace TopStepTrader.Tests.Trading
         Public Sub TradeRow_Close_Reversal_SetsOrangeResult()
             Dim row As New TradeRowViewModel(
                 OrderSide.Sell, "OIL", 77, DateTimeOffset.UtcNow,
-                exposureUsd:=1000D, leverage:=1, entryPrice:=85.0D)
+                exposureUsd:=1000D, entryPrice:=85.0D)
 
             row.UpdatePnl(84.0D, 100D)   ' short going in our favour; MCL DPP = $100/pt
             row.Close("Reversal", row.UnrealizedPnlUsd)
@@ -623,26 +565,23 @@ Namespace TopStepTrader.Tests.Trading
         End Sub
 
         <Fact>
-        Public Sub TradeRow_ExposureDisplay_ShowsAmountAndLeverageSuffix()
+        Public Sub TradeRow_ExposureDisplay_ShowsAmount()
             Dim row As New TradeRowViewModel(
                 OrderSide.Sell, "OIL", 77,
                 DateTimeOffset.UtcNow,
-                exposureUsd:=1007D,
-                leverage:=2)
+                exposureUsd:=1007D)
 
-            ' leverage > 1 → "×N" suffix
-            Assert.Equal("$1,007×2", row.ExposureDisplay)
+            Assert.Equal("$1,007", row.ExposureDisplay)
         End Sub
 
         <Fact>
-        Public Sub TradeRow_ExposureDisplay_NoSuffix_WhenLeverage1()
+        Public Sub TradeRow_ExposureDisplay_ZeroShowsDash()
             Dim row As New TradeRowViewModel(
                 OrderSide.Buy, "OIL", 77,
                 DateTimeOffset.UtcNow,
-                exposureUsd:=1000D,
-                leverage:=1)
+                exposureUsd:=0D)
 
-            Assert.Equal("$1,000", row.ExposureDisplay)
+            Assert.Equal("—", row.ExposureDisplay)
         End Sub
 
         <Fact>
@@ -654,7 +593,6 @@ Namespace TopStepTrader.Tests.Trading
                 OrderSide.Buy, "OIL", 77,
                 DateTimeOffset.UtcNow,
                 exposureUsd:=1000D,
-                leverage:=1,
                 entryPrice:=85.0D)
 
             row.UpdatePnl(86.0D, 100D)
@@ -671,7 +609,6 @@ Namespace TopStepTrader.Tests.Trading
                 OrderSide.Sell, "OIL", 77,
                 DateTimeOffset.UtcNow,
                 exposureUsd:=1000D,
-                leverage:=1,
                 entryPrice:=85.0D)
 
             row.UpdatePnl(86.0D, 100D)
@@ -686,7 +623,6 @@ Namespace TopStepTrader.Tests.Trading
                 OrderSide.Buy, "OIL", 77,
                 DateTimeOffset.UtcNow,
                 exposureUsd:=1000D,
-                leverage:=1,
                 entryPrice:=85.0D)
 
             row.UpdatePnl(86.0D, 100D)   ' MCL DPP = $100/pt → P&L = $100.00

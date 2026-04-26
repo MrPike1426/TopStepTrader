@@ -24,7 +24,7 @@ Namespace TopStepTrader.UI.ViewModels
     '''       fires a same-direction (reversal) confirming signal.
     '''   Q3. Asset selector: dropdown of FavouriteContracts for the active broker.
     '''   Q4. Strategy enable state resets to all-off on each launch.
-    '''   Q5. Each strategy uses its own SlN/TpN defaults; all share CapitalAtRisk/Leverage.
+    '''   Q5. Each strategy uses its own SlN/TpN defaults.
     ''' </summary>
     Public Class AssetBassettViewModel
         Inherits TradingViewModelBase
@@ -192,26 +192,6 @@ Namespace TopStepTrader.UI.ViewModels
                 Case Else                     : Return Nothing
             End Select
         End Function
-
-        Private _capitalAtRisk As Decimal = 500D
-        Public Property CapitalAtRisk As Decimal
-            Get
-                Return _capitalAtRisk
-            End Get
-            Set(value As Decimal)
-                SetProperty(_capitalAtRisk, Math.Max(0D, value))
-            End Set
-        End Property
-
-        Private _leverage As Integer = 10
-        Public Property Leverage As Integer
-            Get
-                Return _leverage
-            End Get
-            Set(value As Integer)
-                SetProperty(_leverage, Math.Max(1, value))
-            End Set
-        End Property
 
         Private _minConfidencePct As Integer = 65
         Public Property MinConfidencePct As Integer
@@ -506,7 +486,6 @@ Namespace TopStepTrader.UI.ViewModels
             Dim profile = _personaService.GetProfile(profileName)
 
             _selectedProfileName = profileName
-            CapitalAtRisk = CDec(profile.PositionSize)
             AdxThreshold = profile.AdxThreshold
             MaxScaleIns = profile.MaxScaleIns
             MinConfidencePct = profile.DefaultConfidencePct
@@ -539,7 +518,7 @@ Namespace TopStepTrader.UI.ViewModels
             NotifyPropertyChanged(NameOf(IsAtrWideSelected))
         End Sub
 
-        ' ── Strategy definitions (Q5: each uses own SlN/TpN; shared CapitalAtRisk/Leverage) ──
+        ' ── Strategy definitions (Q5: each uses own SlN/TpN defaults) ──
 
         Private Function BuildStrategyDefinition(slotIdx As Integer) As StrategyDefinition
             Dim fav = _selectedContract

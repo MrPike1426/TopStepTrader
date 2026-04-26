@@ -196,39 +196,12 @@ Namespace TopStepTrader.Tests.Trading
         End Sub
 
         <Fact>
-        Public Sub EtoroSl_LeveragedCfd_WiderMultiple()
-            ' Leveraged CFD: LeveragedSlMultipleOfN=2.0 → twice the distance of 1.0N
+        Public Sub EtoroSl_HigherMultiple_WiderStop()
+            ' 2.0N should give twice the distance of 1.0N
             Dim slNormal = ComputeEtoroSl(1800D, 5.0D, 1.0D, isBuy:=True)   ' 1795
-            Dim slLev = ComputeEtoroSl(1800D, 5.0D, 2.0D, isBuy:=True)      ' 1790
-            Assert.True(slLev < slNormal)   ' leveraged SL is wider
-            Assert.Equal(1790.0D, slLev)
-        End Sub
-
-        <Fact>
-        Public Sub EtoroSl_IsNarrowerThan5PctHardcode()
-            ' The old hardcode was entry × 0.95 = 1710 on a 1800 entry.
-            ' ATR-based at 1.0N × ATR=10 gives SL=1790 — much tighter and more sensible.
-            Dim oldSl = Math.Round(1800D * 0.95D, 4)         ' 1710.0
-            Dim newSl = ComputeEtoroSl(1800D, 10.0D, 1.0D, isBuy:=True)    ' 1790.0
-            Assert.True(newSl > oldSl)      ' new SL is tighter (closer to entry = less loss at stop)
-            Assert.Equal(1710.0D, oldSl)
-            Assert.Equal(1790.0D, newSl)
-        End Sub
-
-        <Fact>
-        Public Sub EtoroSl_FallbackWhenAtrZero_UsesSlDollarBracket()
-            ' When ATR=0, engine falls back to SlDollarBracket / dollarPerPoint.
-            ' dollarPerPoint = (amount × leverage) / price = (500 × 1) / 1800 ≈ 0.2778
-            ' slDistance = $10 / 0.2778 ≈ 36.0  → SL ≈ 1800 - 36 = 1764
-            Dim amount = 500D
-            Dim leverage = 1
-            Dim price = 1800D
-            Dim SlDollarBracket = 10D
-            Dim dpp = Math.Round((amount * leverage) / price, 4)
-            Dim dist = Math.Round(SlDollarBracket / dpp, 4)
-            Dim sl = Math.Round(price - dist, 4)
-            Assert.True(sl < price)
-            Assert.True(sl > price * 0.95D)  ' still tighter than the old 5% hardcode
+            Dim slWide   = ComputeEtoroSl(1800D, 5.0D, 2.0D, isBuy:=True)   ' 1790
+            Assert.True(slWide < slNormal)   ' wider SL is further from entry
+            Assert.Equal(1790.0D, slWide)
         End Sub
 
         <Fact>

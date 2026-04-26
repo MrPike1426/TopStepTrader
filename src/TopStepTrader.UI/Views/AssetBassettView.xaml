@@ -272,13 +272,7 @@
                 <Border Background="{StaticResource SurfaceBrush}"
                         CornerRadius="6" Padding="12,8" Margin="0,4,0,0">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Capital:"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <TextBox Text="{Binding CapitalAtRisk, UpdateSourceTrigger=PropertyChanged}"
-                                 Width="65" Height="26" VerticalAlignment="Center"
-                                 ToolTip="Capital at risk per trade (dollar fallback for bracket sizing)"/>
-                        <TextBlock Text="  ADX≥:"
+                        <TextBlock Text="ADX≥:"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <TextBox Text="{Binding AdxThreshold, UpdateSourceTrigger=PropertyChanged}"
