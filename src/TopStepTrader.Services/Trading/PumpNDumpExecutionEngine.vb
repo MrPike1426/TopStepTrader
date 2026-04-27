@@ -13,11 +13,11 @@ Imports TopStepTrader.Services.Market
 Namespace TopStepTrader.Services.Trading
 
     ''' <summary>
-    ''' Pump-n-Dump execution engine: 3-bar price-action entry on 1-minute bars.
+    ''' Pump-n-Dump execution engine: 3-bar price-action entry on 3-minute bars.
     ''' Poll every 15 seconds.
     '''
     ''' State machine:
-    '''   FLAT   → 3 consecutive 1-min bars all closing in same direction → OPEN (1 contract)
+    '''   FLAT   → 3 consecutive 3-min bars all closing in same direction → OPEN (1 contract)
     '''   OPEN   → unrealisedPnl ≥ freeRidePnlThreshold → move all SLs to avg entry (free-ride)
     '''   OPEN   → price moved ≥ scaleInTicks → scale in 1 more contract (up to targetTotalSize)
     '''   OPEN   → avg last-3-bar range < ATR × momentumFadeAtrFraction → tighten TP by N ticks/poll
@@ -91,6 +91,7 @@ Namespace TopStepTrader.Services.Trading
         Public Event TradeOpened As EventHandler(Of TradeOpenedEventArgs) Implements IPumpNDumpExecutionEngine.TradeOpened
         Public Event TradeClosed As EventHandler(Of TradeClosedEventArgs) Implements IPumpNDumpExecutionEngine.TradeClosed
         Public Event PositionChanged As EventHandler(Of SniperPositionEventArgs) Implements IPumpNDumpExecutionEngine.PositionChanged
+        Public Event BarCountChanged As EventHandler(Of BarCountEventArgs) Implements IPumpNDumpExecutionEngine.BarCountChanged
 
         Public Sub New(ingestionService As IBarIngestionService,
                        orderService As IOrderService,
@@ -217,7 +218,7 @@ Namespace TopStepTrader.Services.Trading
                              $"Expires={_expiresAt:HH:mm}UTC tick={_tickSize} val={_tickValue}"
             })
 
-            Log($"🚀 Pump-n-Dump started — {_contractId} | 3-Bar Price Action | 1-min bars")
+            Log($"🚀 Pump-n-Dump started — {_contractId} | 3-Bar Price Action | 3-min bars")
             If Not String.Equals(_effectiveContractId, _contractId, StringComparison.OrdinalIgnoreCase) Then
                 Log($"   → PX contract: {_effectiveContractId} | tick size={_tickSize} value=${_tickValue}/tick")
             End If
@@ -341,13 +342,13 @@ Namespace TopStepTrader.Services.Trading
             Dim remaining = _expiresAt - DateTimeOffset.UtcNow
             Dim remStr = $"{CInt(remaining.TotalHours)}h {remaining.Minutes}m remaining"
 
-            ' ── Fetch 1-min bars ─────────────────────────────────────────────────
-            Await _ingestionService.IngestAsync(_contractId, BarTimeframe.OneMinute, 25, ct)
-            Dim bars = Await _ingestionService.GetBarsForMLAsync(_contractId, BarTimeframe.OneMinute, 25, ct)
+            ' ── Fetch 3-min bars ─────────────────────────────────────────────────
+            Await _ingestionService.IngestAsync(_contractId, BarTimeframe.ThreeMinute, 25, ct)
+            Dim bars = Await _ingestionService.GetBarsForMLAsync(_contractId, BarTimeframe.ThreeMinute, 25, ct)
 
             If bars Is Nothing OrElse bars.Count < 20 Then
                 Dim cnt = If(bars Is Nothing, 0, bars.Count)
-                Log($"Waiting for 1-min bars — have {cnt}/20 needed ({remStr})")
+                Log($"Waiting for 3-min bars — have {cnt}/20 needed ({remStr})")
                 Return
             End If
 
@@ -590,6 +591,7 @@ Namespace TopStepTrader.Services.Trading
                 Dim b0 = completedBars(0)
                 Dim b1 = completedBars(1)
                 Dim b2 = completedBars(2)
+                RaiseEvent BarCountChanged(Me, New BarCountEventArgs(3, True))
                 Log($"🟢 PUMP SIGNAL: 3 consecutive green bars")
                 Log($"   {b0.Open:F2}→{b0.Close:F2}  {b1.Open:F2}→{b1.Close:F2}  {b2.Open:F2}→{b2.Close:F2}")
                 _diagLogger.WriteEntry(New DiagnosticLogEntry With {
@@ -605,6 +607,7 @@ Namespace TopStepTrader.Services.Trading
                 Dim b0 = completedBars(0)
                 Dim b1 = completedBars(1)
                 Dim b2 = completedBars(2)
+                RaiseEvent BarCountChanged(Me, New BarCountEventArgs(3, False))
                 Log($"🔴 DUMP SIGNAL: 3 consecutive red bars")
                 Log($"   {b0.Open:F2}→{b0.Close:F2}  {b1.Open:F2}→{b1.Close:F2}  {b2.Open:F2}→{b2.Close:F2}")
                 _diagLogger.WriteEntry(New DiagnosticLogEntry With {
@@ -617,6 +620,32 @@ Namespace TopStepTrader.Services.Trading
                 _tradeSide = OrderSide.Sell
                 Await PlaceInitialEntryAsync(OrderSide.Sell, _lastClose, ct)
             Else
+                ' Count consecutive bars of the same color
+                Dim greenCount As Integer = 0
+                Dim redCount As Integer = 0
+                
+                ' Check last 2 bars
+                If completedBars.Count >= 2 Then
+                    Dim last2Green = completedBars.Skip(1).All(Function(b) b.Close > b.Open)
+                    Dim last2Red = completedBars.Skip(1).All(Function(b) b.Close < b.Open)
+                    
+                    If last2Green Then
+                        greenCount = 2
+                        RaiseEvent BarCountChanged(Me, New BarCountEventArgs(2, True))
+                    ElseIf last2Red Then
+                        redCount = 2
+                        RaiseEvent BarCountChanged(Me, New BarCountEventArgs(2, False))
+                    ElseIf completedBars.Last().Close > completedBars.Last().Open Then
+                        greenCount = 1
+                        RaiseEvent BarCountChanged(Me, New BarCountEventArgs(1, True))
+                    ElseIf completedBars.Last().Close < completedBars.Last().Open Then
+                        redCount = 1
+                        RaiseEvent BarCountChanged(Me, New BarCountEventArgs(1, False))
+                    Else
+                        RaiseEvent BarCountChanged(Me, New BarCountEventArgs(0, True))
+                    End If
+                End If
+                
                 Dim last = completedBars.Last()
                 Dim dirs = String.Join(" ", completedBars.Select(Function(b) If(b.Close > b.Open, "🟢", "🔴")))
                 Log($"Watching — {dirs} | Close={_lastClose:F2} | {remStr}")

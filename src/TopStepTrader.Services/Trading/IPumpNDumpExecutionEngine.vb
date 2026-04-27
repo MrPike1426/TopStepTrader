@@ -21,6 +21,7 @@ Namespace TopStepTrader.Services.Trading
         Event TradeOpened As EventHandler(Of TradeOpenedEventArgs)
         Event TradeClosed As EventHandler(Of TradeClosedEventArgs)
         Event PositionChanged As EventHandler(Of SniperPositionEventArgs)
+        Event BarCountChanged As EventHandler(Of BarCountEventArgs)
 
         Sub Start(contractId As String,
                    accountId As Long,

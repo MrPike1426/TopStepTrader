@@ -20,9 +20,7 @@ Namespace TopStepTrader.UI.Views
         End Sub
 
         Private Sub OnLogChanged(sender As Object, e As NotifyCollectionChangedEventArgs)
-            If e.Action = NotifyCollectionChangedAction.Add AndAlso LogList.Items.Count > 0 Then
-                LogList.ScrollIntoView(LogList.Items(LogList.Items.Count - 1))
-            End If
+            ' UX-05: No auto-scroll needed — newest entries at top are always visible
         End Sub
 
     End Class

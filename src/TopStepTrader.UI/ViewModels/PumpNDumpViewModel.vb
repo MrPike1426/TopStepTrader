@@ -271,6 +271,29 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Private _barCountDisplay As String = "Watching…"
+        Public Property BarCountDisplay As String
+            Get
+                Return _barCountDisplay
+            End Get
+            Set(value As String)
+                SetProperty(_barCountDisplay, value)
+                NotifyPropertyChanged(NameOf(BarCountBrush))
+            End Set
+        End Property
+
+        Private _barCountIsGreen As Boolean = True
+        Public ReadOnly Property BarCountBrush As Brush
+            Get
+                If _barCountDisplay = "Watching…" Then
+                    Return DirectCast(New SolidColorBrush(Color.FromRgb(&H95, &H99, &H9C)), Brush)
+                End If
+                Return If(_barCountIsGreen,
+                          DirectCast(New SolidColorBrush(Color.FromRgb(&H4A, &HBA, &H61)), Brush),
+                          New SolidColorBrush(Color.FromRgb(&HE5, &H53, &H3A)))
+            End Get
+        End Property
+
         ' ══════════════════════════════════════════════════════════════════════
         ' PERFORMANCE
         ' ══════════════════════════════════════════════════════════════════════
@@ -328,15 +351,17 @@ Namespace TopStepTrader.UI.ViewModels
             AddHandler _engine.TradeOpened, AddressOf OnTradeOpened
             AddHandler _engine.TradeClosed, AddressOf OnTradeClosed
             AddHandler _engine.PositionChanged, AddressOf OnPositionChanged
+            AddHandler _engine.BarCountChanged, AddressOf OnBarCountChanged
 
-            LogEntries.Add("📌 STRATEGY: PUMP-N-DUMP (3-Bar Price Action)")
-            LogEntries.Add("Entry: 3 consecutive 1-min bars all closing in the same direction.")
-            LogEntries.Add("       3× Green → Long (Pump).  3× Red → Short (Dump).")
-            LogEntries.Add("Scale-In: Adds 1 contract each time price moves ScaleIn ticks further.")
-            LogEntries.Add("Free-Ride: When unrealised P&L ≥ threshold, all SLs move to avg entry (zero risk).")
-            LogEntries.Add("Tighten: When bar ranges shrink vs ATR (momentum fading), TP is moved closer each poll.")
-            LogEntries.Add("—")
-            LogEntries.Add("Setup: Select Account & Contract, then click Start.")
+            ' Seed lines inserted in reverse order so they read top-to-bottom after construction
+            LogEntries.Insert(0, "Setup: Select Account & Contract, then click Start.")
+            LogEntries.Insert(0, "—")
+            LogEntries.Insert(0, "Tighten: When bar ranges shrink vs ATR (momentum fading), TP is moved closer each poll.")
+            LogEntries.Insert(0, "Free-Ride: When unrealised P&L ≥ threshold, all SLs move to avg entry (zero risk).")
+            LogEntries.Insert(0, "Scale-In: Adds 1 contract each time price moves ScaleIn ticks further.")
+            LogEntries.Insert(0, "       3× Green → Long (Pump).  3× Red → Short (Dump).")
+            LogEntries.Insert(0, "Entry: 3 consecutive 3-min bars all closing in the same direction.")
+            LogEntries.Insert(0, "📌 STRATEGY: PUMP-N-DUMP (3-Bar Price Action)")
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════════
@@ -419,10 +444,11 @@ Namespace TopStepTrader.UI.ViewModels
             UnrealisedPnlDisplay = "—"
             HeatDisplay = ""
             FreeRideDisplay = ""
+            BarCountDisplay = "Watching…"
             LogEntries.Clear()
 
-            LogEntries.Add($"⚡ Starting Pump-n-Dump: MaxSize={maxSize} | TP={tp}t SL={sl}t | FreeRide>=${freeRideThreshold:F0}")
-            LogEntries.Add($"   ScaleIn={scaleIn}t | MaxHeat={heat}t | Fade<{fadeFraction:F2}×ATR tighten={tighten}t/poll")
+            LogEntries.Insert(0, $"   ScaleIn={scaleIn}t | MaxHeat={heat}t | Fade<{fadeFraction:F2}×ATR tighten={tighten}t/poll")
+            LogEntries.Insert(0, $"⚡ Starting Pump-n-Dump: MaxSize={maxSize} | TP={tp}t SL={sl}t | FreeRide>=${freeRideThreshold:F0}")
 
             IsRunning = True
 
@@ -494,6 +520,32 @@ Namespace TopStepTrader.UI.ViewModels
                          Else
                              UnrealisedPnlDisplay = "—"
                          End If
+
+                         ' Reset bar count when position opens
+                         If e.CurrentQty > 0 Then
+                             BarCountDisplay = "Watching…"
+                         End If
+                     End Sub)
+        End Sub
+
+        Private Sub OnBarCountChanged(sender As Object, e As BarCountEventArgs)
+            Dispatch(Sub()
+                         _barCountIsGreen = e.IsGreen
+                         Dim direction = If(e.IsGreen, "GREEN", "RED")
+                         
+                         Select Case e.Count
+                             Case 0
+                                 BarCountDisplay = "Watching…"
+                             Case 1
+                                 BarCountDisplay = $"ONE {direction}"
+                             Case 2
+                                 BarCountDisplay = $"TWO {direction}"
+                             Case 3
+                                 Dim signal = If(e.IsGreen, "LONG", "SHORT")
+                                 BarCountDisplay = $"⚡ THREE {direction} → {signal}"
+                             Case Else
+                                 BarCountDisplay = "Watching…"
+                         End Select
                      End Sub)
         End Sub
 
@@ -502,7 +554,7 @@ Namespace TopStepTrader.UI.ViewModels
         ' ══════════════════════════════════════════════════════════════════════
 
         Private Sub AddLog(message As String)
-            LogEntries.Add(message)
+            LogEntries.Insert(0, message)
         End Sub
 
         Private Shared Sub Dispatch(action As Action)

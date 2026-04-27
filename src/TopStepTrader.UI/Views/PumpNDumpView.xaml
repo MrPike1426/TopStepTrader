@@ -25,7 +25,7 @@
                                Foreground="{StaticResource TextSecondaryBrush}"
                                LineHeight="18">
                         <Run Foreground="White" FontWeight="SemiBold">Entry — </Run>
-                        <Run>Watches for 3 consecutive 1-minute bars all closing in the same direction. Three green bars triggers a Long (Pump). Three red bars triggers a Short (Dump). Reacts directly to vertical price action — no indicators, no lag.</Run>
+                        <Run>Watches for 3 consecutive 3-minute bars all closing in the same direction. Three green bars triggers a Long (Pump). Three red bars triggers a Short (Dump). Reacts directly to vertical price action — no indicators, no lag.</Run>
                     </TextBlock>
                     <TextBlock TextWrapping="Wrap" FontSize="12" Margin="0,6,0,0"
                                Foreground="{StaticResource TextSecondaryBrush}"
@@ -229,6 +229,8 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="12"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="20"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
@@ -245,8 +247,15 @@
                             Width="80" Height="32"
                             Style="{StaticResource DangerButtonStyle}"/>
 
+                    <!-- Bar Count Indicator -->
+                    <TextBlock Grid.Column="4"
+                               Text="{Binding BarCountDisplay}"
+                               Foreground="{Binding BarCountBrush}"
+                               FontSize="13" FontWeight="Bold" VerticalAlignment="Center"
+                               Margin="0,0,16,0"/>
+
                     <!-- Live position info -->
-                    <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="{Binding PositionDisplay}"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    FontSize="12" VerticalAlignment="Center"
