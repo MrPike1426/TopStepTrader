@@ -29,6 +29,8 @@ Namespace TopStepTrader.Services.Backtest
                 Case StrategyConditionType.PumpNDump : Return New PumpNDumpSignalProvider()
                 ' STRAT-31
                 Case StrategyConditionType.VwapMeanReversion : Return New VwapMeanReversionSignalProvider()
+                ' FEAT-19
+                Case StrategyConditionType.SuperTrendAdx : Return New SuperTrendAdxSignalProvider()
                 Case Else
                     Throw New NotImplementedException(
                         $"No signal provider implemented for strategy '{condition}'.")

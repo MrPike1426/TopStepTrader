@@ -109,6 +109,16 @@ Namespace TopStepTrader.Core.Enums
         ''' Academic win rate: 60–65%; small average winner — tight stops required.
         ''' </summary>
         VwapMeanReversion = 20
+
+        ''' <summary>
+        ''' SuperTrend + ADX: SuperTrend(10, 3.0) direction gate plus ADX(14) trend-strength
+        ''' filter and +DI/-DI cross confirmation.
+        ''' Long  when SuperTrend direction = +1, ADX ≥ MinAdx, and +DI &gt; -DI.
+        ''' Short when SuperTrend direction = -1, ADX ≥ MinAdx, and -DI &gt; +DI.
+        ''' SL = SuperTrend line at entry (no fixed TP — held until direction flip).
+        ''' Best used on 5min / 15min bars across liquid micro-futures instruments.
+        ''' </summary>
+        SuperTrendAdx = 21
     End Enum
 
 End Namespace

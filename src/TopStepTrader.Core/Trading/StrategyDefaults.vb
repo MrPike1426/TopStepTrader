@@ -28,7 +28,8 @@ Namespace TopStepTrader.Core.Trading
                 {"Double Bubble Butt",     New StrategyParameterSet("1000", "1")},
                 {"Opening Range Breakout", New StrategyParameterSet("1000", "1")},
                 {"Pump-n-Dump",           New StrategyParameterSet("1000", "1")},
-                {"VWAP Mean Reversion",   New StrategyParameterSet("1000", "1")}
+                {"VWAP Mean Reversion",   New StrategyParameterSet("1000", "1")},
+                {"SuperTrend+",           New StrategyParameterSet("1000", "1")}
             }
 
         ''' <summary>

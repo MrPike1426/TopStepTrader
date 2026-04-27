@@ -84,6 +84,8 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of ISniperExecutionEngine, SniperExecutionEngine)()
                         services.AddTransient(Of PumpNDumpView)()
                         services.AddTransient(Of IPumpNDumpExecutionEngine, PumpNDumpExecutionEngine)()
+                        services.AddTransient(Of SuperTrendPlusView)()
+                        services.AddTransient(Of SuperTrendPlusViewModel)()
                         services.AddTransient(Of HydraView)()
                         services.AddTransient(Of AssetBassettView)()
                         services.AddTransient(Of CryptoJoeView)()

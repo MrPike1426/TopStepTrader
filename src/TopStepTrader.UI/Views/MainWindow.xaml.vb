@@ -67,6 +67,8 @@ Namespace TopStepTrader.UI
                     MainContent.Content = _viewModelLocator.SniperView
                 Case "PumpNDump"
                     MainContent.Content = _viewModelLocator.PumpNDumpView
+                Case "SuperTrendPlus"
+                    MainContent.Content = _viewModelLocator.SuperTrendPlusView
                 Case "Hydra"
                     NavigateToTradingView(_viewModelLocator.HydraView)
                 Case "AssetBassett"

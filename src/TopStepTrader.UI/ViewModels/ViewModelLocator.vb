@@ -79,6 +79,12 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        Public ReadOnly Property SuperTrendPlusView As Views.SuperTrendPlusView
+            Get
+                Return Resolve(Of Views.SuperTrendPlusView)("SuperTrendPlus")
+            End Get
+        End Property
+
         Public ReadOnly Property HydraView As Views.HydraView
             Get
                 Return Resolve(Of Views.HydraView)("Hydra")
