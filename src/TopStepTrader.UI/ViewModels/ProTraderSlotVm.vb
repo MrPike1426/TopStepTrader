@@ -177,7 +177,6 @@ Namespace TopStepTrader.UI.ViewModels
             Select Case tf
                 Case BarTimeframe.OneMinute     : Return "1min"
                 Case BarTimeframe.FiveMinute    : Return "5min"
-                Case BarTimeframe.TenMinute     : Return "10min"
                 Case BarTimeframe.FifteenMinute : Return "15min"
                 Case BarTimeframe.ThirtyMinute  : Return "30min"
                 Case BarTimeframe.OneHour       : Return "1hr"

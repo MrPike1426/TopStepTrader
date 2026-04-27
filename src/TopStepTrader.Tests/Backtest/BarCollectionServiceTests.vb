@@ -93,47 +93,7 @@ Namespace TopStepTrader.Tests.Backtest
 
         ' ══════════════════════════════════════════════════════════════════
         ' TEST-03: Non-Native Timeframe Aggregation
-        ' ══════════════════════════════════════════════════════════════════
-
-        ''' <summary>
-        ''' Two consecutive 5-min bars in the same 10-min UTC window are merged into
-        ''' one 10-min candle.  OHLCV: Open=first, High=Max, Low=Min, Close=last, Volume=Sum.
-        ''' Timestamp = first bar's timestamp.
-        ''' </summary>
-        <Fact>
-        Public Sub AggregateBars_FiveMinToTenMin_TwoBarsProduceOneCandle()
-            Dim t0 = New DateTimeOffset(2026, 1, 5, 0, 0, 0, TimeSpan.Zero)
-            Dim t1 = t0.AddMinutes(5)
-
-            Dim src As New List(Of MarketBar) From {
-                New MarketBar With {
-                    .ContractId = "TEST", .Timeframe = BarTimeframe.FiveMinute,
-                    .Timestamp = t0,
-                    .Open = 100D, .High = 105D, .Low = 98D, .Close = 103D,
-                    .Volume = 1000L, .VWAP = 101.5D
-                },
-                New MarketBar With {
-                    .ContractId = "TEST", .Timeframe = BarTimeframe.FiveMinute,
-                    .Timestamp = t1,
-                    .Open = 103D, .High = 107D, .Low = 102D, .Close = 106D,
-                    .Volume = 1500L, .VWAP = 104.5D
-                }
-            }
-
-            Dim result = BarCollectionService.AggregateBars(src, BarTimeframe.TenMinute)
-
-            Assert.Equal(1, result.Count)
-            Dim agg = result(0)
-            Assert.Equal(BarTimeframe.TenMinute, agg.Timeframe)
-            Assert.Equal(t0, agg.Timestamp)          ' timestamp = first bar
-            Assert.Equal(100D, agg.Open)              ' Open = first bar open
-            Assert.Equal(107D, agg.High)              ' max(105, 107)
-            Assert.Equal(98D, agg.Low)                ' min(98, 102)
-            Assert.Equal(106D, agg.Close)             ' Close = last bar close
-            Assert.Equal(2500L, agg.Volume)           ' 1000 + 1500
-        End Sub
-
-        ''' <summary>
+        ' ══════════════════════════════════════════════════════════════════        ''' <summary>
         ''' Three 1-hr bars at 00:00, 01:00, 02:00 UTC.
         ''' 00:00 and 01:00 are in the same 2-hr window; 02:00 starts a new window.
         ''' The odd (unpaired) bar forms its own 2-hr candle — no data is dropped.

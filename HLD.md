@@ -23,8 +23,8 @@ TopStepTrader is a WPF desktop application for live and automated trading on Top
 │                     TopStepTrader (WPF)                    │
 │                                                            │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐   │
-│  │   Strategy   │  │  Backtest /  │  │   Dashboard / │   │
-│  │   Engines    │  │  QuantLab    │  │   Order Book  │   │
+│  │   Strategy   │  │   Backtest   │  │   Dashboard / │   │
+│  │   Engines    │  │              │  │   Order Book  │   │
 │  └──────┬───────┘  └──────┬───────┘  └───────┬───────┘   │
 │         └─────────────────┴──────────────────┘            │
 │                           │                                │
@@ -159,7 +159,7 @@ Two hosted services run for the lifetime of the application:
 
 ### 4.7 Backtesting
 
-`IBacktestService` / `BacktestEngine` (Scoped) runs historical simulations using locally-cached bar data. If bars are missing, `IBarCollectionService` downloads them from Yahoo Finance. Results are persisted to SQLite and recalled by `QuantLab` and the Sniper's Backtest tab.
+`IBacktestService` / `BacktestEngine` (Scoped) runs historical simulations using locally-cached bar data. If bars are missing, `IBarCollectionService` downloads them from Yahoo Finance. Results are persisted to SQLite and recalled by the Backtest and Sniper views.
 
 Key engine behaviours:
 
@@ -236,7 +236,6 @@ BarIngestionWorker (background, continuous)
 | Pump-n-Dump | `PumpNDumpExecutionEngine` | 3-bar scalp with momentum-fade TP tightening; free-ride activates at configured P&L threshold then SL ratchets behind price until the trade closes |
 | CryptoJoe | `CryptoStrategyExecutionEngine` × 2 | Two parallel CME crypto engines (MBT, GMET) |
 | Backtest | `BacktestEngine` | Pre-trade strategy validation against historical bars |
-| QuantLab | `BacktestEngine` | Academic research — same engine, full trade list, no row cap |
 | Order Book | — | Manual order placement and cancellation |
 | Test Trade | — | Diagnostic order placement with bracket validation; no active management |
 | API Keys | — | Credential management for TopStepX, Claude AI, and future platforms |

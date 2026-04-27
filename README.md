@@ -16,7 +16,6 @@ A WPF desktop application for live and simulated trading on **TopStepX (CME Micr
    - [Pump-n-Dump](#4-pump-n-dump-)
    - [CryptoJoe](#5-cryptojoe-)
    - [Backtest](#6-backtest-)
-   - [QuantLab](#7-quantlab-)
    - [Order Book](#8-order-book-)
    - [Test Trade](#9-test-trade-)
    - [API Keys](#10-api-keys-)
@@ -354,25 +353,6 @@ Win-rate and Sharpe ranges on the cards are reference figures from historical re
 - Backtests can be cancelled mid-run.
 - Max 500 trade rows are displayed in the grid; the CSV export matches this cap.
 - Win rate colour: green ≥ 55%, yellow ≥ 40%, red < 40%. Max Drawdown is always shown in red.
-
----
-
-### 7. QuantLab 🧫
-
-**Purpose:** Academic strategy research tool. Same four strategies as Backtest but presented for analysis and export — focused on metrics and trade-by-trade inspection rather than live execution.
-
-**QuantLab and Backtest share the same underlying `IBacktestService`** and the same four strategy templates. The key difference is that QuantLab is oriented towards research (all trades displayed, CSV export always available) whereas Backtest is oriented towards pre-trade validation.
-
-#### How It Works
-
-Identical workflow to Backtest (select card → configure → run). Results panel shows the same seven metrics. The trade list displays all trades with no row cap, making it more suitable for detailed analysis.
-
-#### Metrics Panel
-
-- Total Trades, Win Rate (%, coloured), Total P&L (coloured), Sharpe Ratio
-- Max Drawdown, Average P&L per Trade, Final Capital
-
-Sharpe Ratio colouring: green if > 1.0, yellow otherwise, grey if N/A.
 
 ---
 

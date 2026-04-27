@@ -28,8 +28,7 @@ Namespace TopStepTrader.Services.Market
     '''   3. Resolve PX contract ID → paginate API (5 000 bars/page) → INSERT OR IGNORE into SQLite.
     '''   4. Count final total and return success/failure result.
     '''
-    ''' Non-native timeframes: TenMinute downloads 5-min source bars then aggregates 2:1.
-    ''' TwoHour / FourHour download 1-hr source bars and aggregate accordingly.
+    ''' Non-native timeframes: TwoHour / FourHour download 1-hr source bars and aggregate accordingly.
     ''' </summary>
     Public Class BarCollectionService
         Implements IBarCollectionService
@@ -152,9 +151,6 @@ Namespace TopStepTrader.Services.Market
             Dim sourceUnit As Integer
             Dim sourceUnitNumber As Integer
             Select Case timeframe
-                Case BarTimeframe.TenMinute
-                    sourceTimeframe = BarTimeframe.FiveMinute
-                    sourceUnit = 2 : sourceUnitNumber = 5
                 Case BarTimeframe.TwoHour
                     sourceTimeframe = BarTimeframe.OneHour
                     sourceUnit = 3 : sourceUnitNumber = 1
@@ -354,7 +350,7 @@ Namespace TopStepTrader.Services.Market
         ''' Groups source bars by aligned UTC time windows of the target width so candle
         ''' boundaries always fall on even multiples of the target interval.
         ''' OHLCV: Open=first, High=Max, Low=Min, Close=last, Volume=Sum, VWAP=mean.
-        ''' Used for: TenMinute (2×5-min), TwoHour (2×1-hr), FourHour (4×1-hr).
+        ''' Used for: TwoHour (2×1-hr), FourHour (4×1-hr).
         ''' </summary>
         Friend Shared Function AggregateBars(sourceBars As List(Of MarketBar),
                                              targetTimeframe As BarTimeframe) As List(Of MarketBar)
@@ -392,7 +388,6 @@ Namespace TopStepTrader.Services.Market
                 Case BarTimeframe.OneMinute    : Return "1-min"
                 Case BarTimeframe.ThreeMinute  : Return "3-min"
                 Case BarTimeframe.FiveMinute   : Return "5-min"
-                Case BarTimeframe.TenMinute    : Return "10-min"
                 Case BarTimeframe.FifteenMinute: Return "15-min"
                 Case BarTimeframe.ThirtyMinute : Return "30-min"
                 Case BarTimeframe.OneHour      : Return "1-hour"

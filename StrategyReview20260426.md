@@ -44,9 +44,9 @@ Evaluated against TopStepX session constraints:
 
 ---
 
-## Not Ranked for Live Trading (QuantLab Research Only)
+## Backtest / Research Only
 
-**Connors RSI-2, SuperTrend, Donchian Breakout, BB+RSI Mean Reversion** — QuantLab-only; not wired to `IOrderService`. Donchian in particular is a multi-day swing system (30–40% win rate, large R:R) and is wholly incompatible with a mandatory EOD close.
+**Connors RSI-2, SuperTrend, Donchian Breakout, BB+RSI Mean Reversion** — backtest research only; not wired to `IOrderService`. Donchian in particular is a multi-day swing system (30–40% win rate, large R:R) and is wholly incompatible with a mandatory EOD close.
 
 **Sniper (Triple EMA Cascade)** — separate live view, pyramid-capable. The scaled-position risk at EOD is the primary concern: a 5-contract pyramid entered at 19:50 UTC getting cut at 20:08 can be costly. Best used strictly before 19:00 UTC.
 

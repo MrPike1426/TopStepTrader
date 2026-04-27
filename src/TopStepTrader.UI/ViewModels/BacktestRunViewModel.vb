@@ -951,7 +951,6 @@ Namespace TopStepTrader.UI.ViewModels
             Dim timeframes = New (BarTimeframe, String)() {
                 (BarTimeframe.OneMinute,    "1 min"),
                 (BarTimeframe.FiveMinute,   "5 min"),
-                (BarTimeframe.TenMinute,    "10 min"),
                 (BarTimeframe.FifteenMinute,"15 min"),
                 (BarTimeframe.ThirtyMinute, "30 min"),
                 (BarTimeframe.OneHour,      "1 hr"),
@@ -1084,7 +1083,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public Shared Function GetMaxLookbackDays(tf As BarTimeframe) As Integer
             Select Case tf
                 Case BarTimeframe.OneMinute : Return 7
-                Case BarTimeframe.FiveMinute, BarTimeframe.TenMinute,
+                Case BarTimeframe.FiveMinute,
                      BarTimeframe.FifteenMinute, BarTimeframe.ThirtyMinute : Return 60
                 Case Else : Return 730
             End Select

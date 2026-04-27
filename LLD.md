@@ -63,12 +63,12 @@ src/
 ├── TopStepTrader.UI/
 │   ├── Views/               DashboardView, HydraView, AssetBassettView, SniperView,
 │   │                        PumpNDumpView, CryptoJoeView, BacktestView,
-│   │                        QuantLabView, OrderBookView, TestTradeView,
+│   │                        OrderBookView, TestTradeView,
 │   │                        ApiKeysView, MainWindow
 │   ├── ViewModels/          DashboardViewModel, HydraViewModel, AssetBassettViewModel,
 │   │                        SniperViewModel, PumpNDumpViewModel, CryptoJoeViewModel,
-│   │                        BacktestViewModel, QuantLabViewModel,
-│   │                        OrderBookViewModel, TestTradeViewModel,
+│   │                        BacktestViewModel, OrderBookViewModel,
+│   │                        TestTradeViewModel,
 │   │                        ApiKeysViewModel, ViewModelLocator
 │   │   └── Base/            ViewModelBase, TradingViewModelBase, RelayCommand
 │   ├── Styles/              Dark theme, control overrides, converters
@@ -898,11 +898,11 @@ ClampStopTicksAsync(rootSymbol, requestedTicks)
 | `LultDivergence` | Hydra, CryptoJoe | WaveTrend anchor/trigger divergence, time-gated |
 | `BBSqueezeScalper` | Hydra, CryptoJoe | %B + RSI7, dual-mode (breakout + bounce) |
 | `VidyaCross` | Hydra, CryptoJoe | VIDYA(14) adaptive EMA crossover |
-| `ConnorsRsi2` | QuantLab | ConnorsRSI-2 mean-reversion |
-| `SuperTrend` | QuantLab | SuperTrend trend-following |
-| `DonchianBreakout` | QuantLab | Donchian channel breakout |
-| `BbRsiMeanReversion` | QuantLab | Bollinger Bands + RSI mean reversion |
+| `ConnorsRsi2` | Backtest | ConnorsRSI-2 mean-reversion |
+| `SuperTrend` | Backtest | SuperTrend trend-following |
+| `DonchianBreakout` | Backtest | Donchian channel breakout |
+| `BbRsiMeanReversion` | Backtest | Bollinger Bands + RSI mean reversion |
 | `NakedTrader` | Hydra, CryptoJoe | 4-vote consensus: EMA(9/21), MACD(8,17,9), DMI/ADX(14), VWAP |
-| `DoubleBubbleButt` | Hydra, QuantLab | Double Bollinger Bands (±1.0 SD / ±2.0 SD) zone system; ATR multiples from persona config |
+| `DoubleBubbleButt` | Hydra, Backtest | Double Bollinger Bands (±1.0 SD / ±2.0 SD) zone system; ATR multiples from persona config |
 | `OpeningRangeBreakout` | Backtest | First-30-min OR breakout with volume confirmation; SL = opposite OR extreme; TP = 1.5× OR width |
 | `PumpNDump` | PumpNDump | 3 consecutive same-direction 1-min bars; ATR-based SL/TP |

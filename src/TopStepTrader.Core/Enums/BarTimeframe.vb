@@ -11,7 +11,6 @@ Namespace TopStepTrader.Core.Enums
         OneMinute = 1
         ThreeMinute = 3
         FiveMinute = 5
-        TenMinute = 10
         FifteenMinute = 15
         ThirtyMinute = 30
         OneHour = 60

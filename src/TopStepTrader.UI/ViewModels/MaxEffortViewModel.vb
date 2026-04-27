@@ -241,7 +241,6 @@ Namespace TopStepTrader.UI.ViewModels
             Dim timeframes = New (BarTimeframe, String)() {
                 (BarTimeframe.OneMinute,     "1 min"),
                 (BarTimeframe.FiveMinute,    "5 min"),
-                (BarTimeframe.TenMinute,     "10 min"),
                 (BarTimeframe.FifteenMinute, "15 min"),
                 (BarTimeframe.ThirtyMinute,  "30 min"),
                 (BarTimeframe.OneHour,       "1 hr"),

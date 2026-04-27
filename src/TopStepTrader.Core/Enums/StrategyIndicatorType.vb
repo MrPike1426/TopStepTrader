@@ -37,7 +37,7 @@ Namespace TopStepTrader.Core.Enums
         ''' </summary>
         Vidya = 13
 
-        ' ── QuantLab Research Indicators ─────────────────────────────────────
+        ' ── Backtest / Research Indicators ───────────────────────────────────
 
         ''' <summary>
         ''' Connors RSI-2: 2-period RSI + SMA(200) long-term trend filter + SMA(5) exit trigger.

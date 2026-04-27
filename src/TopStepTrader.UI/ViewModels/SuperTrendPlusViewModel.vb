@@ -224,7 +224,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property DamianBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Damian (Moderate)"}
         Public ReadOnly Property JoeBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Joe (Aggressive)"}
 
-        Public ReadOnly Property Timeframes As String() = {"5min", "10min", "15min", "1hr"}
+        Public ReadOnly Property Timeframes As String() = {"5min", "15min", "1hr"}
 
         Private _selectedTimeframe As String = "15min"
         Public Property SelectedTimeframe As String
@@ -740,7 +740,6 @@ Namespace TopStepTrader.UI.ViewModels
         Private Shared Function MapTimeframe(tf As String) As BarTimeframe
             Select Case tf
                 Case "5min"  : Return BarTimeframe.FiveMinute
-                Case "10min" : Return BarTimeframe.TenMinute
                 Case "1hr"   : Return BarTimeframe.OneHour
                 Case Else    : Return BarTimeframe.FifteenMinute
             End Select

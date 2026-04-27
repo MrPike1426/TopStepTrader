@@ -142,7 +142,6 @@ Namespace TopStepTrader.Services.Market
                 Case BarTimeframe.OneMinute : Return "1m"
                 Case BarTimeframe.ThreeMinute : Return "3m"
                 Case BarTimeframe.FiveMinute : Return "5m"
-                Case BarTimeframe.TenMinute : Return "10m"
                 Case BarTimeframe.FifteenMinute : Return "15m"
                 Case BarTimeframe.ThirtyMinute : Return "30m"
                 Case BarTimeframe.OneHour : Return "1h"
