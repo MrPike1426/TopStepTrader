@@ -13,12 +13,14 @@ Namespace TopStepTrader.Tests.ViewModels
         Private ReadOnly _mockOrderService As Mock(Of IOrderService)
         Private ReadOnly _mockSession As Mock(Of ITradingSessionContext)
         Private ReadOnly _mockPersonaService As Mock(Of IPersonaService)
+        Private ReadOnly _mockAccountService As Mock(Of IAccountService)
 
         Public Sub New()
             _mockBarService     = New Mock(Of IBarIngestionService)()
             _mockOrderService   = New Mock(Of IOrderService)()
             _mockSession        = New Mock(Of ITradingSessionContext)()
             _mockPersonaService = New Mock(Of IPersonaService)()
+            _mockAccountService = New Mock(Of IAccountService)()
 
             ' Default: no account selected
             _mockSession.Setup(Function(s) s.SelectedAccount).Returns(CType(Nothing, Account))
@@ -29,7 +31,8 @@ Namespace TopStepTrader.Tests.ViewModels
                 _mockBarService.Object,
                 _mockOrderService.Object,
                 _mockSession.Object,
-                _mockPersonaService.Object)
+                _mockPersonaService.Object,
+                _mockAccountService.Object)
         End Function
 
         <Fact>
@@ -64,12 +67,13 @@ Namespace TopStepTrader.Tests.ViewModels
 
         <Fact>
         Public Sub StartMonitoring_WithAccount_DoesNotSetWarningStatus()
-            ' Arrange: session with valid account
+            ' Arrange: VM with a valid account set directly on SelectedAccount
             Dim account = New Account With {.Id = 42, .Name = "Test"}
-            _mockSession.Setup(Function(s) s.SelectedAccount).Returns(account)
+            _mockSession.Setup(Sub(s) s.SelectAccount(It.IsAny(Of Account)()))
             _mockPersonaService.Setup(Function(p) p.GetProfile(It.IsAny(Of String))).Returns(CType(Nothing, PersonaProfile))
 
             Dim vm = CreateViewModel()
+            vm.SelectedAccount = account
 
             ' Act
             vm.StartStopCommand.Execute(Nothing)

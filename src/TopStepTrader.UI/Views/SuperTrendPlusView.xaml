@@ -20,7 +20,7 @@
 
                     <!-- Toggle header -->
                     <ToggleButton x:Name="HowItWorksToggle"
-                                  IsChecked="True"
+                                  IsChecked="{Binding IsHowItWorksExpanded, Mode=TwoWay}"
                                   Background="Transparent"
                                   BorderThickness="0"
                                   Cursor="Hand"
@@ -216,24 +216,33 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="16"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Timeframe selector -->
+                    <!-- Account selector -->
                     <ComboBox Grid.Column="0"
+                              ItemsSource="{Binding Accounts}"
+                              SelectedItem="{Binding SelectedAccount}"
+                              DisplayMemberPath="DisplayName"
+                              Width="160" VerticalAlignment="Center"/>
+
+                    <!-- Timeframe selector -->
+                    <ComboBox Grid.Column="2"
                               ItemsSource="{Binding Timeframes}"
                               SelectedItem="{Binding SelectedTimeframe}"
                               Width="90" VerticalAlignment="Center"/>
 
                     <!-- Start / Stop button -->
-                    <Button Grid.Column="2"
+                    <Button Grid.Column="4"
                             Content="{Binding StartStopLabel}"
                             Command="{Binding StartStopCommand}"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Padding="14,6" VerticalAlignment="Center"/>
 
                     <!-- Status label -->
-                    <Border Grid.Column="3"
+                    <Border Grid.Column="5"
                             Background="{Binding StatusBackground}"
                             CornerRadius="4" Margin="12,0,0,0"
                             Visibility="{Binding StatusVisibility}"

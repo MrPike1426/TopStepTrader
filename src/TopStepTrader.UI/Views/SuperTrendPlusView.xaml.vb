@@ -9,6 +9,7 @@ Namespace TopStepTrader.UI.Views
         Public Sub New(vm As SuperTrendPlusViewModel)
             InitializeComponent()
             DataContext = vm
+            vm.LoadDataAsync()
         End Sub
 
     End Class

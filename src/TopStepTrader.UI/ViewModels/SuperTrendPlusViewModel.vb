@@ -214,6 +214,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _orderService As IOrderService
         Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _personaService As IPersonaService
+        Private ReadOnly _accountService As IAccountService
 
         Private _timer As Timer
         Private ReadOnly _timerLock As New Object()
@@ -223,6 +224,31 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property LewisBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Lewis (Averse)"}
         Public ReadOnly Property DamianBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Damian (Moderate)"}
         Public ReadOnly Property JoeBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Joe (Aggressive)"}
+
+        ' ── Accounts ──────────────────────────────────────────────────────────────
+        Public Property Accounts As New ObservableCollection(Of Account)
+
+        Private _selectedAccount As Account
+        Public Property SelectedAccount As Account
+            Get
+                Return _selectedAccount
+            End Get
+            Set(value As Account)
+                SetProperty(_selectedAccount, value)
+                If value IsNot Nothing Then _session.SelectAccount(value)
+            End Set
+        End Property
+
+        ' ── How-it-works panel expand/collapse ────────────────────────────────────
+        Private _isHowItWorksExpanded As Boolean = True
+        Public Property IsHowItWorksExpanded As Boolean
+            Get
+                Return _isHowItWorksExpanded
+            End Get
+            Set(value As Boolean)
+                SetProperty(_isHowItWorksExpanded, value)
+            End Set
+        End Property
 
         Public ReadOnly Property Timeframes As String() = {"5min", "15min", "1hr"}
 
@@ -288,11 +314,13 @@ Namespace TopStepTrader.UI.ViewModels
         Public Sub New(barService As IBarIngestionService,
                        orderService As IOrderService,
                        session As ITradingSessionContext,
-                       personaService As IPersonaService)
+                       personaService As IPersonaService,
+                       accountService As IAccountService)
             _barService     = barService
             _orderService   = orderService
             _session        = session
             _personaService = personaService
+            _accountService = accountService
             StartStopCommand = New RelayCommand(AddressOf OnStartStop)
             For i = 0 To Instruments.Length - 1
                 WatchlistItems.Add(New WatchlistRowVm() With {
@@ -319,13 +347,39 @@ Namespace TopStepTrader.UI.ViewModels
             End If
         End Sub
 
+        Public Async Sub LoadDataAsync()
+            Try
+                Dim accountList = Await _accountService.GetActiveAccountsAsync()
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        Accounts.Clear()
+                        For Each a In accountList
+                            Accounts.Add(a)
+                        Next
+                        If Accounts.Count > 0 Then
+                            Dim sessionAcc = _session.SelectedAccount
+                            Dim preferred = If(
+                                If(sessionAcc IsNot Nothing,
+                                   Accounts.FirstOrDefault(Function(a) a.Id = sessionAcc.Id),
+                                   Nothing),
+                                Accounts.FirstOrDefault(
+                                    Function(a) a.Name IsNot Nothing AndAlso
+                                                a.Name.StartsWith("PRAC", StringComparison.OrdinalIgnoreCase)))
+                            SelectedAccount = If(preferred, Accounts(0))
+                        End If
+                    End Sub)
+            Catch
+            End Try
+        End Sub
+
         Private Sub StartMonitoring()
             LewisBox.Profile  = _personaService.GetProfile("Lewis")
             DamianBox.Profile = _personaService.GetProfile("Damian")
             JoeBox.Profile    = _personaService.GetProfile("Joe")
+            IsHowItWorksExpanded = False
             IsMonitoring = True
             _timer = New Timer(AddressOf TimerCallback, Nothing, 0, 15000)
-            If _session.SelectedAccount Is Nothing OrElse _session.SelectedAccount.Id = 0 Then
+            If _selectedAccount Is Nothing OrElse _selectedAccount.Id = 0 Then
                 StatusText = "⚠ No account selected — monitoring in read-only mode (orders will be blocked until account loads)"
                 Application.Current?.Dispatcher?.Invoke(Sub()
                     StatusBackground = New SolidColorBrush(Color.FromRgb(&HFF, &H8C, &H00))
@@ -536,8 +590,8 @@ Namespace TopStepTrader.UI.ViewModels
                 _lockOwner = box.PersonaName.Split(" "c)(0)
             End SyncLock
 
-            Dim accountId As Long = If(_session.SelectedAccount IsNot Nothing,
-                                       _session.SelectedAccount.Id, 0)
+            Dim accountId As Long = If(_selectedAccount IsNot Nothing,
+                                       _selectedAccount.Id, 0)
             If accountId = 0 Then
                 SyncLock _timerLock
                     _lockOwner = Nothing
@@ -627,6 +681,9 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
             Else
                 box.MissCount = 0
+                If Not box.PositionId.HasValue OrElse box.PositionId.Value = 0 Then
+                    box.PositionId = snapshot.PositionId
+                End If
                 Dim pnl = snapshot.UnrealizedPnlUsd
                 Application.Current?.Dispatcher?.Invoke(Sub() UpdatePositionDisplay(box, pnl))
             End If
@@ -665,6 +722,7 @@ Namespace TopStepTrader.UI.ViewModels
                 If shouldUpdate AndAlso box.PositionId.HasValue Then
                     Try
                         Await _orderService.EditPositionSlTpAsync(box.PositionId.Value, stLine, Nothing)
+                        System.Diagnostics.Debug.WriteLine($"↳ ST SL → {stLine}")
                     Catch
                     End Try
                     box.CurrentStLine = stLine
