@@ -70,7 +70,6 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of AssetBassettViewModel)()
                         services.AddTransient(Of CryptoJoeViewModel)()
                         services.AddTransient(Of ApiKeysViewModel)()
-                        services.AddTransient(Of QuantLabViewModel)()
                         services.AddTransient(Of PersonaViewModel)()
                         services.AddTransient(Of ProTraderViewModel)()
 
@@ -89,7 +88,6 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of AssetBassettView)()
                         services.AddTransient(Of CryptoJoeView)()
                         services.AddTransient(Of ApiKeysView)()
-                        services.AddTransient(Of QuantLabView)()
                         services.AddTransient(Of PersonaView)()
                         services.AddTransient(Of ProTraderView)()
 

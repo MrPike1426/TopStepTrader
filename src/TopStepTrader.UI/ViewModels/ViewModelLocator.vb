@@ -103,12 +103,6 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
-        Public ReadOnly Property QuantLabView As Views.QuantLabView
-            Get
-                Return Resolve(Of Views.QuantLabView)("QuantLab")
-            End Get
-        End Property
-
         Public ReadOnly Property PersonaView As Views.PersonaView
             Get
                 Return Resolve(Of Views.PersonaView)("Persona")

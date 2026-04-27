@@ -23,11 +23,6 @@ Namespace TopStepTrader.Services.Backtest
                 Case StrategyConditionType.VidyaCross           : Return New VidyaCrossSignalProvider()
                 Case StrategyConditionType.NakedTrader          : Return New NakedTraderSignalProvider()
                 Case StrategyConditionType.DoubleBubbleButt     : Return New DoubleBubbleButtSignalProvider()
-                ' ARCH-01d
-                Case StrategyConditionType.ConnorsRsi2       : Return New ConnorsRsi2SignalProvider()
-                Case StrategyConditionType.SuperTrend        : Return New SuperTrendSignalProvider()
-                Case StrategyConditionType.DonchianBreakout  : Return New DonchianBreakoutSignalProvider()
-                Case StrategyConditionType.BbRsiMeanReversion : Return New BbRsiReversionSignalProvider()
                 ' STRAT-29
                 Case StrategyConditionType.OpeningRangeBreakout : Return New OrbSignalProvider()
                 ' TEST-10

@@ -50,15 +50,9 @@ Namespace TopStepTrader.Core.Models
         Public Property BbPctB As Single()
 
         ' ── Other ─────────────────────────────────────────────────────────────────
-        Public Property SuperTrendLine As Single()
-        Public Property SuperTrendDir As Single()
-        Public Property DonchianUpper As Single()
-        Public Property DonchianLower As Single()
-        Public Property DonchianMid As Single()
         Public Property Vidya As Single()
         Public Property DeltaVolume As Single()
         Public Property Vwap As Single()
-        Public Property ConnorsRsi As Single()
 
         ' ── Strategy-specific additions (ARCH-01c) ────────────────────────────
         ''' <summary>EMA(5) — used by BbSqueezeScalper for slope confirmation.</summary>
@@ -76,16 +70,6 @@ Namespace TopStepTrader.Core.Models
         Public Property DbbInnerUpper As Single()
         ''' <summary>DoubleBubbleButt inner lower band (BB(20, 1.0 SD)).</summary>
         Public Property DbbInnerLower As Single()
-
-        ' ── QuantLab-specific (ARCH-01d) ──────────────────────────────────────
-        ''' <summary>RSI(2) — ConnorsRsi2 entry gate (dip &lt; 10 / rally &gt; 90).</summary>
-        Public Property Rsi2 As Single()
-        ''' <summary>SMA(5) — ConnorsRsi2 mean-reversion exit trigger.</summary>
-        Public Property Sma5 As Single()
-        ''' <summary>SMA(200) — ConnorsRsi2 long-term trend gate.</summary>
-        Public Property Sma200 As Single()
-        ''' <summary>ATR(10) — SuperTrend TP sizing (2× ATR from entry).</summary>
-        Public Property SuperTrendAtr As Single()
 
     End Class
 

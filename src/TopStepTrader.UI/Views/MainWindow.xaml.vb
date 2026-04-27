@@ -63,8 +63,6 @@ Namespace TopStepTrader.UI
 
                 Case "Backtest"
                     MainContent.Content = _viewModelLocator.BacktestView
-                Case "QuantLab"
-                    MainContent.Content = _viewModelLocator.QuantLabView
                 Case "Sniper"
                     MainContent.Content = _viewModelLocator.SniperView
                 Case "PumpNDump"

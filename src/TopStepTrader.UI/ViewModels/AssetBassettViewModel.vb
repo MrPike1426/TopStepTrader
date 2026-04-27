@@ -156,7 +156,6 @@ Namespace TopStepTrader.UI.ViewModels
             "EMA/RSI Combined",
             "Naked Trader",
             "VIDYA Cross",
-            "BB+RSI Reversion",
             "Opening Range Breakout"
         }
 
@@ -187,7 +186,6 @@ Namespace TopStepTrader.UI.ViewModels
                 Case "EMA/RSI Combined"       : Return Core.Enums.StrategyConditionType.EmaRsiWeightedScore
                 Case "Naked Trader"           : Return Core.Enums.StrategyConditionType.NakedTrader
                 Case "VIDYA Cross"            : Return Core.Enums.StrategyConditionType.VidyaCross
-                Case "BB+RSI Reversion"       : Return Core.Enums.StrategyConditionType.BbRsiMeanReversion
                 Case "Opening Range Breakout" : Return Core.Enums.StrategyConditionType.OpeningRangeBreakout
                 Case Else                     : Return Nothing
             End Select

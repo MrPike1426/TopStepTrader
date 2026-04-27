@@ -61,45 +61,6 @@ Namespace TopStepTrader.Core.Enums
         ''' </summary>
         VidyaCross = 15
 
-        ' ── QuantLab Research Strategies ─────────────────────────────────────
-
-        ''' <summary>
-        ''' Connors RSI-2 Mean Reversion: 2-period RSI oversold/overbought filtered by SMA(200) trend.
-        ''' Long when RSI(2) &lt; 10 AND close &gt; SMA(200) (trend-filtered oversold dip).
-        ''' Short when RSI(2) &gt; 90 AND close &lt; SMA(200) (trend-filtered overbought rally).
-        ''' Exit Long on bar close &gt; SMA(5) OR RSI(2) &gt; 65.
-        ''' Exit Short on bar close &lt; SMA(5) OR RSI(2) &lt; 35.
-        ''' Academic win rate: 67–72% on daily equity bars; Sharpe 1.0–1.5.
-        ''' </summary>
-        ConnorsRsi2 = 11
-
-        ''' <summary>
-        ''' SuperTrend Trend-Following: ATR-based dynamic support/resistance with direction flips.
-        ''' Long when price closes above the SuperTrend line (direction flips from -1 to +1).
-        ''' Short when price closes below the SuperTrend line (direction flips from +1 to -1).
-        ''' SL anchored to the SuperTrend line level at entry; TP = 2× ATR from entry.
-        ''' Academic win rate: 40–52% trend-following; Sharpe 0.70–1.05.
-        ''' </summary>
-        SuperTrend = 12
-
-        ''' <summary>
-        ''' Donchian Channel Breakout (Turtle Trading): N-bar highest high / lowest low breakout.
-        ''' Long when close breaks above the 20-bar Donchian upper band (new 20-bar high).
-        ''' Short when close breaks below the 20-bar Donchian lower band (new 20-bar low).
-        ''' Exit when close crosses the 10-bar Donchian middle band in the adverse direction.
-        ''' Academic win rate: 30–40%; relies on large winners; Sharpe 0.4–0.8.
-        ''' </summary>
-        DonchianBreakout = 13
-
-        ''' <summary>
-        ''' BB + RSI Dual-Confirmation Mean Reversion: double filter for high-probability reversals.
-        ''' Long when close &lt; lower BB(20,2) AND RSI(14) &lt; 30 (price AND momentum both oversold).
-        ''' Short when close &gt; upper BB(20,2) AND RSI(14) &gt; 70 (price AND momentum both overbought).
-        ''' Exit at middle BB (SMA20) or when RSI crosses 50 (momentum neutral).
-        ''' Academic win rate: 55–65% on daily charts; Sharpe 0.6–1.2.
-        ''' </summary>
-        BbRsiMeanReversion = 14
-
         ''' <summary>
         ''' Naked Trader: 4-vote consensus from EMA(9/21), MACD(8,17,9), DMI/ADX(14), and VWAP.
         ''' Long when Confidence is Medium/High and Direction is Up.

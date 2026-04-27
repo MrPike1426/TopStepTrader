@@ -135,16 +135,7 @@ Namespace TopStepTrader.Services.Backtest
                 Return BacktestMetrics.BuildResult(config, pyramidTrades, config.InitialCapital, 0D)
             End If
 
-            ' State: open SuperTrend SL/TP prices (price-level exit, like MultiConfluence)
-            Dim qlStOpenSlPrice As Decimal = 0D
-            Dim qlStOpenTpPrice As Decimal = 0D
-            Dim qlStIsLong As Boolean = True
-
-            ' State: open Donchian / BbRsi / DoubleBubbleButt exit levels
-            Dim qlDonOpenMidExit As Decimal = 0D    ' adverse mid-channel level at entry
-            Dim qlDonIsLong As Boolean = True
-            Dim qlBbOpenMidExit As Decimal = 0D     ' BB middle band (SMA20) at entry
-            Dim qlBbIsLong As Boolean = True
+            ' State: open DoubleBubbleButt exit level
             Dim dbbIsLong As Boolean = True          ' DoubleBubbleButt position direction
             Dim dbbInner1SdExit As Decimal = 0D     ' inner 1-SD band level at entry (neutral-zone exit trigger)
 
@@ -168,10 +159,6 @@ Namespace TopStepTrader.Services.Backtest
             ' Tracks the bar index of the most recent EndOfDay forced-close.
             ' Used to suppress re-entry for 1 bar after a session-end close.
             Dim lastEndOfDayBarIndex As Integer = -1000
-            ' Tracks the bar index of the most recent DonchianBreakout mid-cross (NeutralExit).
-            ' Suppresses re-entry for 3 bars after a mid-cross exit to prevent oscillation churn.
-            Dim lastDonchianExitBarIndex As Integer = -1000
-
             ' MultiConfluence ATR-based SL/TP prices â€” set at entry, cleared on exit.
             ' Used instead of tick-based config values for MultiConfluence positions.
             Dim mcOpenSlPrice As Decimal = 0D
@@ -248,8 +235,6 @@ Namespace TopStepTrader.Services.Backtest
                         If eodDd > maxDrawdown Then maxDrawdown = eodDd
                         openLegs.Clear()
                         mcOpenSlPrice = 0D : mcOpenTpPrice = 0D
-                        qlStOpenSlPrice = 0D : qlStOpenTpPrice = 0D
-                        qlDonOpenMidExit = 0D : qlBbOpenMidExit = 0D
                         dbbInner1SdExit = 0D
                         dynStop = 0D : dynTp = 0D : dynStopDelta = 0D : dynTpDelta = 0D
                         lastEndOfDayBarIndex = i
@@ -288,16 +273,7 @@ Namespace TopStepTrader.Services.Backtest
                             openLegs.Add(newLeg)
                             ' Initialise dynamic exit levels for initial entry
                             If dynEnabled AndAlso Not pending.IsScaleIn Then
-                                If pending.AbsStSl <> 0D Then
-                                    ' SuperTrend: SL = indicator line (absolute); TP = stored absolute
-                                    qlStOpenSlPrice = pending.AbsStSl
-                                    qlStOpenTpPrice = pending.AbsStTp
-                                    qlStIsLong      = pending.StIsLong
-                                    dynStopDelta = Math.Abs(fillPrice - qlStOpenSlPrice)
-                                    dynTpDelta   = Math.Abs(qlStOpenTpPrice - fillPrice)
-                                    dynStop = qlStOpenSlPrice
-                                    dynTp   = qlStOpenTpPrice
-                                ElseIf pending.StopDelta > 0D Then
+                                If pending.StopDelta > 0D Then
                                     ' ATR-relative exits: anchor SL/TP to fillPrice
                                     dynStopDelta = pending.StopDelta
                                     dynTpDelta   = pending.TpDelta
@@ -310,12 +286,6 @@ Namespace TopStepTrader.Services.Backtest
                                 End If
                             End If
                             ' Indicator-channel exits (set at signal time; independent of fill price)
-                            If pending.DonMid <> 0D Then
-                                qlDonOpenMidExit = pending.DonMid : qlDonIsLong = pending.DonIsLong
-                            End If
-                            If pending.BbMid <> 0D Then
-                                qlBbOpenMidExit = pending.BbMid : qlBbIsLong = pending.BbIsLong
-                            End If
                             If pending.DbbInner <> 0D Then
                                 dbbInner1SdExit = pending.DbbInner : dbbIsLong = pending.DbbIsLong
                             End If
@@ -327,8 +297,7 @@ Namespace TopStepTrader.Services.Backtest
 
                 ' â”€â”€ Check exit for open position â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 ' TP/SL levels are anchored to the first leg's entry price; all legs exit together.
-                ' MultiConfluence / SuperTrend use ATR-based price-level checks.
-                ' DonchianBreakout / BbRsiMeanReversion use indicator-level exits.
+                ' MultiConfluence uses ATR-based price-level checks.
                 ' All others use tick-based config.
                 '
                 ' IMPORTANT â€” exit checks intentionally run BEFORE UpdateDynamicExits.
@@ -375,8 +344,6 @@ Namespace TopStepTrader.Services.Backtest
                             If fcDd > maxDrawdown Then maxDrawdown = fcDd
                             openLegs.Clear()
                             mcOpenSlPrice = 0D : mcOpenTpPrice = 0D
-                            qlStOpenSlPrice = 0D : qlStOpenTpPrice = 0D
-                            qlDonOpenMidExit = 0D : qlBbOpenMidExit = 0D
                             dbbInner1SdExit = 0D
                             dynStop = 0D : dynTp = 0D : dynStopDelta = 0D : dynTpDelta = 0D
                             lastForceCloseBarIndex = i  ' arm 3-bar re-entry cooldown
@@ -384,46 +351,6 @@ Namespace TopStepTrader.Services.Backtest
                             Continue For  ' ForceClose handled exit â€” skip remaining checks for this bar
                         End If
                     End If
-
-                    ' â”€â”€ SuperTrend price-level exit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                    If config.StrategyCondition = StrategyConditionType.SuperTrend AndAlso qlStOpenSlPrice <> 0D Then
-                        exitReason = BacktestMetrics.CheckFixedExit(openLegs(0).Side, bar, qlStOpenSlPrice, qlStOpenTpPrice)
-                        If exitReason IsNot Nothing Then
-                            exitPrice = BacktestMetrics.GetExitPrice(openLegs(0), bar, exitReason, qlStOpenSlPrice, qlStOpenTpPrice)
-                        End If
-                    End If
-
-                    ' â”€â”€ DonchianBreakout indicator-level exit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                    If exitReason Is Nothing AndAlso
-                       config.StrategyCondition = StrategyConditionType.DonchianBreakout AndAlso
-                       qlDonOpenMidExit <> 0D Then
-                        If qlDonIsLong AndAlso bar.Close < qlDonOpenMidExit Then
-                            exitReason = "NeutralExit"
-                        ElseIf Not qlDonIsLong AndAlso bar.Close > qlDonOpenMidExit Then
-                            exitReason = "NeutralExit"
-                        End If
-                    End If
-
-                    ' â”€â”€ BbRsiMeanReversion indicator-level exit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                    ' Exit Long when close >= BB middle (SMA20) or RSI crosses back above 50.
-                    ' Exit Short when close <= BB middle (SMA20) or RSI crosses back below 50.
-                    If exitReason Is Nothing AndAlso
-                       config.StrategyCondition = StrategyConditionType.BbRsiMeanReversion AndAlso
-                       qlBbOpenMidExit <> 0D Then
-                        Dim rsiExitVal = If(qlBbIsLong,
-                                            indicators.Rsi(i) <= 50.0F,   ' long: exit when RSI reverses â‰¤ 50
-                                            indicators.Rsi(i) >= 50.0F)   ' short: exit when RSI reverses â‰¥ 50
-                        If qlBbIsLong AndAlso
-                           (bar.Close >= qlBbOpenMidExit OrElse
-                            (Not Single.IsNaN(indicators.Rsi(i)) AndAlso rsiExitVal)) Then
-                            exitReason = "TakeProfit"
-                        ElseIf Not qlBbIsLong AndAlso
-                               (bar.Close <= qlBbOpenMidExit OrElse
-                                (Not Single.IsNaN(indicators.Rsi(i)) AndAlso rsiExitVal)) Then
-                            exitReason = "TakeProfit"
-                        End If
-                    End If
-
                     ' â”€â”€ DoubleBubbleButt neutral-zone exit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                     ' Exit Long  when close drops back below the upper 1.0 SD band (neutral zone).
                     ' Exit Short when close rises back above the lower 1.0 SD band (neutral zone).
@@ -434,25 +361,6 @@ Namespace TopStepTrader.Services.Backtest
                             exitReason = "NeutralExit"
                         ElseIf Not dbbIsLong AndAlso bar.Close > dbbInner1SdExit Then
                             exitReason = "NeutralExit"
-                        End If
-                    End If
-
-                    ' â”€â”€ ConnorsRsi2 RSI-based exit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-                    ' Exit Long when close > SMA(5) or RSI(2) > 65.
-                    ' Exit Short when close < SMA(5) or RSI(2) < 35.
-                    If exitReason Is Nothing AndAlso
-                       config.StrategyCondition = StrategyConditionType.ConnorsRsi2 AndAlso
-                       indicators.Rsi2 IsNot Nothing AndAlso indicators.Sma5 IsNot Nothing Then
-                        If Not (Single.IsNaN(indicators.Rsi2(i)) OrElse Single.IsNaN(indicators.Sma5(i))) Then
-                            If openLegs(0).Side = "Buy" Then
-                                If bar.Close > SafeD(indicators.Sma5(i)) OrElse indicators.Rsi2(i) > 65.0F Then
-                                    exitReason = "TakeProfit"
-                                End If
-                            Else
-                                If bar.Close < SafeD(indicators.Sma5(i)) OrElse indicators.Rsi2(i) < 35.0F Then
-                                    exitReason = "TakeProfit"
-                                End If
-                            End If
                         End If
                     End If
 
@@ -497,22 +405,12 @@ Namespace TopStepTrader.Services.Backtest
                         openLegs.Clear()
                         mcOpenSlPrice = 0D
                         mcOpenTpPrice = 0D
-                        ' Clear QuantLab state
-                        qlStOpenSlPrice = 0D
-                        qlStOpenTpPrice = 0D
-                        qlDonOpenMidExit = 0D
-                        qlBbOpenMidExit = 0D
                         dbbInner1SdExit = 0D
                         ' Clear dynamic exit state
                         dynStop      = 0D
                         dynTp        = 0D
                         dynStopDelta = 0D
                         dynTpDelta   = 0D
-                        ' Arm Donchian de-bounce: suppress re-entry for 3 bars after a mid-cross exit
-                        If exitReason = "NeutralExit" AndAlso
-                           config.StrategyCondition = StrategyConditionType.DonchianBreakout Then
-                            lastDonchianExitBarIndex = i
-                        End If
                     Else
                         ' No exit this bar â€” advance trailing stop / break-even / extend TP
                         ' ready for the NEXT bar's exit check.  Must run AFTER all exit checks
@@ -526,9 +424,6 @@ Namespace TopStepTrader.Services.Backtest
                             If config.StrategyCondition = StrategyConditionType.MultiConfluence Then
                                 mcOpenSlPrice = dynStop
                                 mcOpenTpPrice = dynTp
-                            ElseIf config.StrategyCondition = StrategyConditionType.SuperTrend Then
-                                qlStOpenSlPrice = dynStop
-                                qlStOpenTpPrice = dynTp
                             End If
                         End If
                     End If
@@ -542,12 +437,6 @@ Namespace TopStepTrader.Services.Backtest
                 ' EndOfDay re-entry cooldown: suppress entry signals for 1 bar after a
                 ' session-end forced close.
                 If openLegs.Count = 0 AndAlso (i - lastEndOfDayBarIndex) <= 1 Then Continue For
-
-                ' DonchianBreakout de-bounce: suppress re-entry for 3 bars after a mid-cross
-                ' (NeutralExit) to prevent oscillation churn around the 10-bar mid-channel.
-                If openLegs.Count = 0 AndAlso
-                   config.StrategyCondition = StrategyConditionType.DonchianBreakout AndAlso
-                   (i - lastDonchianExitBarIndex) <= 3 Then Continue For
 
                 ' EmaRsi: evaluate even when a position is open (neutral-zone exit fires on
                 ' open positions).  All other strategies: evaluate only when flat.
@@ -588,20 +477,11 @@ Namespace TopStepTrader.Services.Backtest
                             .Confidence = signal.Confidence,
                             .StopDelta  = signal.StopDelta,
                             .TpDelta    = signal.TpDelta,
-                            .AbsStSl    = signal.AbsoluteSlPrice,
-                            .AbsStTp    = signal.AbsoluteTpPrice,
-                            .StIsLong   = signal.IsLong,
                             .IsPartialSignal = signal.IsPartialSignal
                         }
                         ‘ Indicator-channel exit level — strategy-specific pending field
                         If signal.IndicatorExitLevel <> 0D Then
                             Select Case config.StrategyCondition
-                                Case StrategyConditionType.DonchianBreakout
-                                    pending.DonMid    = signal.IndicatorExitLevel
-                                    pending.DonIsLong = signal.IsLong
-                                Case StrategyConditionType.BbRsiMeanReversion
-                                    pending.BbMid    = signal.IndicatorExitLevel
-                                    pending.BbIsLong = signal.IsLong
                                 Case StrategyConditionType.DoubleBubbleButt
                                     pending.DbbInner  = signal.IndicatorExitLevel
                                     pending.DbbIsLong = signal.IsLong
@@ -739,53 +619,8 @@ Namespace TopStepTrader.Services.Backtest
 
             Dim universalAtr14 As Single() = Nothing
             If config.UseAtrMode AndAlso
-               config.StrategyCondition <> StrategyConditionType.MultiConfluence AndAlso
-               config.StrategyCondition <> StrategyConditionType.SuperTrend Then
+               config.StrategyCondition <> StrategyConditionType.MultiConfluence Then
                 universalAtr14 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 14)
-            End If
-
-            ' -- ConnorsRsi2: RSI(2), SMA(5), SMA(200)
-            Dim qlRsi2   As Single() = Nothing
-            Dim qlSma5   As Single() = Nothing
-            Dim qlSma200 As Single() = Nothing
-            If config.StrategyCondition = StrategyConditionType.ConnorsRsi2 Then
-                qlRsi2   = TechnicalIndicators.Rsi2(allCloses)
-                qlSma5   = TechnicalIndicators.SMA(allCloses, 5)
-                qlSma200 = TechnicalIndicators.SMA(allCloses, 200)
-            End If
-
-            ' -- SuperTrend: ATR(10) x 3.0 multiplier
-            Dim qlStLine  As Single() = Nothing
-            Dim qlStDir   As Single() = Nothing
-            Dim qlStAtr10 As Single() = Nothing
-            If config.StrategyCondition = StrategyConditionType.SuperTrend Then
-                Dim stResult  = TechnicalIndicators.SuperTrend(allHighs, allLows, allCloses, 10, 3.0)
-                qlStLine  = stResult.Line
-                qlStDir   = stResult.Direction
-                qlStAtr10 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 10)
-            End If
-
-            ' -- DonchianBreakout: 20-bar entry channel + 10-bar exit channel
-            Dim qlDonUpper20 As Single() = Nothing
-            Dim qlDonLower20 As Single() = Nothing
-            Dim qlDonMid10   As Single() = Nothing
-            If config.StrategyCondition = StrategyConditionType.DonchianBreakout Then
-                Dim don20    = TechnicalIndicators.DonchianChannel(allHighs, allLows, 20)
-                qlDonUpper20 = don20.Upper
-                qlDonLower20 = don20.Lower
-                Dim don10    = TechnicalIndicators.DonchianChannel(allHighs, allLows, 10)
-                qlDonMid10   = don10.Middle
-            End If
-
-            ' -- BbRsiMeanReversion: BB(20,2) + RSI(14)
-            Dim qlBbUpper  As Single() = Nothing
-            Dim qlBbMiddle As Single() = Nothing
-            Dim qlBbLower  As Single() = Nothing
-            If config.StrategyCondition = StrategyConditionType.BbRsiMeanReversion Then
-                Dim bb20   = TechnicalIndicators.BollingerBands(allCloses, 20, 2.0)
-                qlBbUpper  = bb20.Upper
-                qlBbMiddle = bb20.Middle
-                qlBbLower  = bb20.Lower
             End If
 
             ' -- DoubleBubbleButt: BB(20,1.0) inner + BB(20,2.0) outer + ATR(20)
@@ -954,7 +789,6 @@ Namespace TopStepTrader.Services.Backtest
             End If
             Select Case config.StrategyCondition
                 Case StrategyConditionType.MultiConfluence : warmUp = 80
-                Case StrategyConditionType.ConnorsRsi2 : warmUp = 205
                 Case StrategyConditionType.DoubleBubbleButt : warmUp = 25
                 Case StrategyConditionType.LultDivergence : warmUp = 100
                 Case StrategyConditionType.VwapMeanReversion : warmUp = 20
@@ -982,27 +816,6 @@ Namespace TopStepTrader.Services.Backtest
                     indicators.StochRsiK = mcStochRsiK
                     indicators.Atr = mcAtr14
                     indicators.VolMa20 = mcVolMa20
-                Case StrategyConditionType.ConnorsRsi2
-                    indicators.Rsi2   = qlRsi2
-                    indicators.Sma5   = qlSma5
-                    indicators.Sma200 = qlSma200
-                    indicators.Adx    = adx14Series
-                    indicators.Atr    = universalAtr14
-                Case StrategyConditionType.SuperTrend
-                    indicators.SuperTrendLine = qlStLine
-                    indicators.SuperTrendDir  = qlStDir
-                    indicators.SuperTrendAtr  = qlStAtr10
-                Case StrategyConditionType.DonchianBreakout
-                    indicators.DonchianUpper = qlDonUpper20
-                    indicators.DonchianLower = qlDonLower20
-                    indicators.DonchianMid   = qlDonMid10
-                    indicators.Atr           = universalAtr14
-                Case StrategyConditionType.BbRsiMeanReversion
-                    indicators.BbUpper  = qlBbUpper
-                    indicators.BbMiddle = qlBbMiddle
-                    indicators.BbLower  = qlBbLower
-                    indicators.Rsi      = rsi14Series
-                    indicators.Atr      = universalAtr14
                 Case StrategyConditionType.DoubleBubbleButt
                     indicators.DbbInnerUpper = dbbInnerUpper
                     indicators.DbbInnerLower = dbbInnerLower

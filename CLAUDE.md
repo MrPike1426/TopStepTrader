@@ -326,7 +326,6 @@ Two `IHostedService` workers run continuously:
 | Bar timeframe enum | `Core/Enums/BarTimeframe.vb` |
 | Bar download + cache | `Services/Market/BarCollectionService.vb` |
 | Backtest engine | `Services/Backtest/BacktestEngine.vb` |
-| QuantLab research page | `UI/ViewModels/QuantLabViewModel.vb` · `UI/Views/QuantLabView.xaml` |
 | Sniper live engine | `UI/ViewModels/SniperViewModel.vb` · `UI/Views/SniperView.xaml` · `Services/Trading/SniperExecutionEngine.vb` |
 | Claude AI integration | `Services/AI/ClaudeReviewService.vb` |
 | API key management | `UI/Views/ApiKeysView.xaml` · `UI/Views/ApiKeysView.xaml.vb` |
@@ -489,20 +488,6 @@ Both buttons are only visible when `HasOpenPosition` is `True` (derived from `_p
 
 **Note:** `ApplySl` signature is `(slPrice As Decimal, tpPrice As Decimal, isAdvance As Boolean, isFreeRide As Boolean)`. Do not call the old 3-parameter version.
 
-### QuantLab View (`UI/ViewModels/QuantLabViewModel.vb`)
-
-A dedicated research page for testing academically-validated strategies that are **not** used in live Hydra/AssetBassett trading. Accessed via sidebar.
-
-Five strategy cards (descriptions in **REFERENCE.md**): Connors RSI-2, SuperTrend, Donchian Breakout, BB+RSI Reversion, Double Bubble Butt.
-
-**Workflow:** Select card → choose contract + date range + interval → Run Backtest → view results (win rate, Sharpe, P&L, drawdown) → optionally "Ask Claude" for AI analysis.
-
-- `MinSignalConfidence = 1.0` — QuantLab strategies use price-level exits, not confidence scoring
-- `SlDollarBracket = 0 / TpDollarBracket = 0` — exits are indicator-driven (SuperTrend line, Donchian mid, RSI 50)
-- CSV export available for the full trade list
-- "Ask Claude" calls `ClaudeReviewService.AnalyseBacktestResultsAsync` with strategy description and result summary
-- `QuantLabViewModel` accepts `IBacktestService`, `IBarCollectionService`, `ClaudeReviewService`
-
 ### Sniper View (`UI/ViewModels/SniperViewModel.vb`)
 
 Live trading interface for the **3-EMA Cascade** strategy (`TripleEmaCascade = 7`) on 1-minute bars.
@@ -534,6 +519,6 @@ Toggle **Show/Hide** button masks all password boxes simultaneously. "💾 Save 
 Three methods, all using the API key from `ApiKeyStore` (falls back to `appsettings.json`):
 - `ReviewStrategyAsync` — strategy improvement suggestions (used by HydraView)
 - `ConfidenceCheckAsync` — macro/session bias for a contract
-- `AnalyseBacktestResultsAsync` — quantitative analysis of a backtest results table (used by Maximum Effort tab and QuantLab "Ask Claude"). Always uses `claude-haiku-4-5-20251001` regardless of the model setting, for cost efficiency.
+- `AnalyseBacktestResultsAsync` — quantitative analysis of a backtest results table (used by Maximum Effort tab). Always uses `claude-haiku-4-5-20251001` regardless of the model setting, for cost efficiency.
 
-`ClaudeSettings.Model` defaults to `claude-haiku-4-5`. Registered as **Scoped** in `ServicesExtensions.vb`. Injected into `BacktestViewModel` and `QuantLabViewModel` via constructor.
+`ClaudeSettings.Model` defaults to `claude-haiku-4-5`. Registered as **Scoped** in `ServicesExtensions.vb`. Injected into `BacktestViewModel` via constructor.

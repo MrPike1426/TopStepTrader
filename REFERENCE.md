@@ -26,28 +26,6 @@ Integer values are DB discriminators — **must not change** once data is stored
 | 18 | `OpeningRangeBreakout` | First-30-min OR high/low breakout with volume ≥ 1.2× avg; SL = opposite OR extreme; TP = 1.5× OR width |
 | 19 | `PumpNDump` | 3 consecutive same-direction 1-min bars (3 green → Long, 3 red → Short); ATR-based SL/TP |
 
-**QuantLab research-only strategies (not live-traded):**
-
-| Value | ConditionType | Description |
-|---|---|---|
-| 11 | `ConnorsRsi2` | RSI(2) mean reversion filtered by SMA(200); 67–72% win rate |
-| 12 | `SuperTrend` | ATR(10)×3.0 trend flip; 40–52% win rate |
-| 13 | `DonchianBreakout` | 20-bar Turtle breakout; 30–40% win rate |
-| 14 | `BbRsiMeanReversion` | BB(20,2) + RSI(14) dual-confirmation reversion; 55–65% win rate |
-| 17 | `DoubleBubbleButt` | Also available in QuantLab |
-
----
-
-## QuantLab Strategy Cards
-
-Five cards in `UI/ViewModels/QuantLabViewModel.vb` / `UI/Views/QuantLabView.xaml`:
-
-1. **Connors RSI-2** — Mean reversion · RSI(2) dips vs SMA(200) trend · 67–72% win rate · Sharpe 1.0–1.5
-2. **SuperTrend** — Trend-following · ATR(10)×3.0 direction flip · 40–52% win rate · Sharpe 0.70–1.05
-3. **Donchian Breakout** — Turtle breakout · 20-bar high/low channel · 30–40% win rate · Sharpe 0.4–0.8
-4. **BB + RSI Reversion** — Dual-confirm reversion · BB(20,2) AND RSI(14) · 55–65% win rate · Sharpe 0.6–1.2
-5. **Double Bubble Butt** — Zone momentum · ±1.0 SD inner / ±2.0 SD outer BB · 45–60% win rate · Sharpe 0.6–1.1
-
 ---
 
 ## Technical Indicators (`ML/Features/TechnicalIndicators.vb`)
