@@ -12,6 +12,201 @@
             <TextBlock Text="📈  SuperTrend+"
                        Style="{StaticResource PageTitleStyle}"/>
 
+            <!-- ── How it works panel (collapsible) ── -->
+            <Border Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Margin="0,8,0,0"
+                    BorderBrush="#3A5A8A" BorderThickness="1">
+                <StackPanel>
+
+                    <!-- Toggle header -->
+                    <ToggleButton x:Name="HowItWorksToggle"
+                                  IsChecked="True"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  Cursor="Hand"
+                                  Padding="14,10"
+                                  HorizontalContentAlignment="Stretch">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <TextBlock Text="💡" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="How does SuperTrend+ Autopilot work?"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           FontSize="13" FontWeight="SemiBold"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1"
+                                       VerticalAlignment="Center"
+                                       FontSize="11"
+                                       Foreground="{StaticResource TextSecondaryBrush}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="▲ hide"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsChecked, ElementName=HowItWorksToggle}" Value="False">
+                                                <Setter Property="Text" Value="▼ show"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </ToggleButton>
+
+                    <!-- Collapsible body -->
+                    <Border Padding="16,4,16,14">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsChecked, ElementName=HowItWorksToggle}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="12" LineHeight="20" Margin="0,0,0,10">
+                                <Run FontWeight="SemiBold" Foreground="White">SuperTrend+ is a fully automatic trading assistant.</Run>
+                                <Run>Once you press</Run>
+                                <Run FontStyle="Italic">Start Monitoring</Run>
+                                <Run>, it watches the markets for you around the clock and places trades on its own — you don't need to do anything else.</Run>
+                            </TextBlock>
+
+                            <!-- Step cards -->
+                            <Grid Margin="0,4,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="10"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Step 1 -->
+                                <Border Grid.Column="0" Background="#1A2440" CornerRadius="5" Padding="10,8">
+                                    <StackPanel>
+                                        <TextBlock Text="🔍  Step 1 — Spot the trend"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
+                                            The system draws an invisible line under a rising market or above a falling one.  When price crosses that line the trend has flipped.
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Step 2 -->
+                                <Border Grid.Column="2" Background="#1A2440" CornerRadius="5" Padding="10,8">
+                                    <StackPanel>
+                                        <TextBlock Text="💪  Step 2 — Check the strength"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
+                                            Not every trend is worth following.  The ADX score (shown in the watchlist) tells us how strong the move is.  We only trade when the market has real momentum behind it.
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Step 3 -->
+                                <Border Grid.Column="4" Background="#1A2440" CornerRadius="5" Padding="10,8">
+                                    <StackPanel>
+                                        <TextBlock Text="🚀  Step 3 — Enter the trade"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
+                                            When a strong trend is confirmed the bot automatically places a buy (▲) or sell (▼) order.  The persona you choose controls how cautiously or aggressively it sizes that trade.
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Step 4 -->
+                                <Border Grid.Column="6" Background="#1A2440" CornerRadius="5" Padding="10,8">
+                                    <StackPanel>
+                                        <TextBlock Text="🛡️  Step 4 — Protect &amp; exit"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
+                                            A moving stop-loss follows the SuperTrend line throughout the trade.  The moment the trend reverses the position is closed automatically — no manual action needed.
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <!-- Persona explainer -->
+                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,10,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="👥  Choosing a persona"
+                                               Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="16"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="16"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="🟢  Lewis — Averse"
+                                                       Foreground="LimeGreen" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/>
+                                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="16">
+                                                Small position sizes, strict entry rules.  Aims to protect capital first and grow it second.  Best if you prefer steady, low-risk trading.
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="🟡  Damian — Moderate"
+                                                       Foreground="Gold" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/>
+                                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="16">
+                                                Balanced approach.  Trades with enough size to make meaningful returns while still respecting risk limits.  A good everyday setting.
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="4">
+                                            <TextBlock Text="🔴  Joe — Aggressive"
+                                                       Foreground="OrangeRed" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/>
+                                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="16">
+                                                Larger sizes, scales into winning trades.  Higher potential reward — but also higher drawdown if a trend fails.  For experienced risk-takers.
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Reading the watchlist callout -->
+                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,8,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="📊  Reading the watchlist below"
+                                               Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                    <WrapPanel>
+                                        <Border Background="#1F3A1F" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
+                                            <TextBlock Foreground="LimeGreen" FontFamily="Consolas" FontSize="11">▲  BULL — price is climbing</TextBlock>
+                                        </Border>
+                                        <Border Background="#3A1F1F" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
+                                            <TextBlock Foreground="OrangeRed" FontFamily="Consolas" FontSize="11">▼  BEAR — price is falling</TextBlock>
+                                        </Border>
+                                        <Border Background="#2A2A2A" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
+                                            <TextBlock Foreground="Gray" FontFamily="Consolas" FontSize="11">–   flat — no clear direction yet</TextBlock>
+                                        </Border>
+                                        <Border Background="#1A2440" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
+                                            <TextBlock Foreground="SteelBlue" FontFamily="Consolas" FontSize="11">ADX ●●●  very strong trend</TextBlock>
+                                        </Border>
+                                        <Border Background="#1A2440" CornerRadius="4" Padding="8,4" Margin="0,0,0,4">
+                                            <TextBlock Foreground="SteelBlue" FontFamily="Consolas" FontSize="11">ADX ○○○  choppy / wait</TextBlock>
+                                        </Border>
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Border>
+
             <!-- ── Header row ── -->
             <Border Background="{StaticResource SurfaceBrush}"
                     CornerRadius="6" Padding="14,10" Margin="0,8,0,0"
@@ -48,6 +243,64 @@
                                    Foreground="White" FontSize="12"
                                    VerticalAlignment="Center"/>
                     </Border>
+                </Grid>
+            </Border>
+
+            <!-- ── Watchlist panel ── -->
+            <Border Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Padding="14,10" Margin="0,10,0,0"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- column header -->
+                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="110"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Symbol"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="1" Text="Trend"     Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="2" Text="Signal"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="3" Text="Strength"  Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                    </Grid>
+
+                    <!-- rows -->
+                    <ItemsControl Grid.Row="1" ItemsSource="{Binding WatchlistItems}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="110"/>
+                                        <ColumnDefinition Width="50"/>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding Label, Mode=OneWay}"
+                                               Foreground="White"
+                                               FontFamily="Consolas" FontSize="12" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Arrow, Mode=OneWay}"
+                                               Foreground="{Binding RowColor}"
+                                               FontFamily="Consolas" FontSize="13" FontWeight="Bold"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding Signal, Mode=OneWay}"
+                                               Foreground="{Binding RowColor}"
+                                               FontFamily="Consolas" FontSize="12"/>
+                                    <TextBlock Grid.Column="3"
+                                               Text="{Binding TrendStrength, Mode=OneWay}"
+                                               Foreground="{Binding RowColor}"
+                                               FontFamily="Consolas" FontSize="12"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </Grid>
             </Border>
 

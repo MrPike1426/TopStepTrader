@@ -12,6 +12,64 @@ Imports TopStepTrader.UI.ViewModels.Base
 
 Namespace TopStepTrader.UI.ViewModels
 
+    Public Class WatchlistRowVm
+        Inherits ViewModelBase
+
+        Public Property Symbol As String = String.Empty
+        Public Property Label As String = String.Empty
+
+        Private _arrow As String = "–"
+        Public Property Arrow As String
+            Get
+                Return _arrow
+            End Get
+            Set(value As String)
+                SetProperty(_arrow, value)
+            End Set
+        End Property
+
+        Private _adxDisplay As String = "ADX: –"
+        Public Property AdxDisplay As String
+            Get
+                Return _adxDisplay
+            End Get
+            Set(value As String)
+                SetProperty(_adxDisplay, value)
+            End Set
+        End Property
+
+        Private _signal As String = "flat"
+        Public Property Signal As String
+            Get
+                Return _signal
+            End Get
+            Set(value As String)
+                SetProperty(_signal, value)
+            End Set
+        End Property
+
+        Private _rowColor As Brush = Brushes.White
+        Public Property RowColor As Brush
+            Get
+                Return _rowColor
+            End Get
+            Set(value As Brush)
+                SetProperty(_rowColor, value)
+            End Set
+        End Property
+
+        Private _trendStrength As String = ""
+        Public Property TrendStrength As String
+            Get
+                Return _trendStrength
+            End Get
+            Set(value As String)
+                SetProperty(_trendStrength, value)
+            End Set
+        End Property
+
+    End Class
+
     Public Class SymbolRowVm
         Inherits ViewModelBase
 
@@ -145,9 +203,11 @@ Namespace TopStepTrader.UI.ViewModels
         Inherits ViewModelBase
         Implements IDisposable
 
-        Private Shared ReadOnly Instruments As String() = {"MCL", "MGC", "MES", "MNQ", "M6E"}
-        Private Shared ReadOnly InstrumentLabels As String() = {"Oil", "Gold", "MES", "MNQ", "M6E"}
+        Private Shared ReadOnly Instruments As String() = {"MCLE", "MGC", "MES", "MNQ", "M6E"}
+        Private Shared ReadOnly InstrumentLabels As String() = {"Oil", "Gold", "S&P 500", "NQ", "EUR/USD"}
         Private Const BarsToFetch As Integer = 60
+
+        Public ReadOnly Property WatchlistItems As New ObservableCollection(Of WatchlistRowVm)
         Private Const SyncMissThreshold As Integer = 3
 
         Private ReadOnly _barService As IBarIngestionService
@@ -234,6 +294,12 @@ Namespace TopStepTrader.UI.ViewModels
             _session        = session
             _personaService = personaService
             StartStopCommand = New RelayCommand(AddressOf OnStartStop)
+            For i = 0 To Instruments.Length - 1
+                WatchlistItems.Add(New WatchlistRowVm() With {
+                    .Symbol = Instruments(i),
+                    .Label  = InstrumentLabels(i)
+                })
+            Next
             For Each box In AllBoxes()
                 For i = 0 To Instruments.Length - 1
                     box.Symbols.Add(New SymbolRowVm() With {.Symbol = InstrumentLabels(i)})
@@ -257,12 +323,14 @@ Namespace TopStepTrader.UI.ViewModels
             LewisBox.Profile  = _personaService.GetProfile("Lewis")
             DamianBox.Profile = _personaService.GetProfile("Damian")
             JoeBox.Profile    = _personaService.GetProfile("Joe")
-            Dim accountId As Long = If(_session.SelectedAccount IsNot Nothing, _session.SelectedAccount.Id, 0)
-            For Each box In AllBoxes()
-                box.AccountId = accountId
-            Next
             IsMonitoring = True
             _timer = New Timer(AddressOf TimerCallback, Nothing, 0, 15000)
+            If _session.SelectedAccount Is Nothing OrElse _session.SelectedAccount.Id = 0 Then
+                StatusText = "⚠ No account selected — monitoring in read-only mode (orders will be blocked until account loads)"
+                Application.Current?.Dispatcher?.Invoke(Sub()
+                    StatusBackground = New SolidColorBrush(Color.FromRgb(&HFF, &H8C, &H00))
+                End Sub)
+            End If
         End Sub
 
         Private Sub StopMonitoring()
@@ -274,6 +342,13 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
             End SyncLock
             _lockOwner = Nothing
+            For Each wRow In WatchlistItems
+                wRow.Arrow         = "–"
+                wRow.AdxDisplay    = "ADX:–"
+                wRow.Signal        = "–"
+                wRow.TrendStrength = ""
+                wRow.RowColor      = Brushes.Gray
+            Next
             For Each box In AllBoxes()
                 box.IsPaused        = False
                 box.HasPosition     = False
@@ -302,6 +377,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Async Function DoTickAsync() As Task
             Dim tf = MapTimeframe(_selectedTimeframe)
+            Await ScanWatchlistAsync(tf)
             If _lockOwner IsNot Nothing Then
                 Dim ownerBox = AllBoxes().FirstOrDefault(Function(b) b.PersonaName.StartsWith(_lockOwner))
                 If ownerBox IsNot Nothing Then
@@ -316,6 +392,66 @@ Namespace TopStepTrader.UI.ViewModels
                     StatusText = String.Format("SuperTrend+ monitoring - {0} TimeFrame - updated {1:HH:mm:ss}", _selectedTimeframe, DateTime.Now)
                     FlashStatusAsync()
                 End Sub)
+        End Function
+
+        Private Async Function ScanWatchlistAsync(tf As BarTimeframe) As Task
+            For i = 0 To Instruments.Length - 1
+                Dim contractId = Instruments(i)
+                Dim wRow = WatchlistItems(i)
+                Dim bars As IList(Of MarketBar)
+                Try
+                    bars = Await _barService.GetLiveBarsAsync(contractId, tf, BarsToFetch)
+                Catch
+                    Continue For
+                End Try
+                If bars Is Nothing OrElse bars.Count < 15 Then Continue For
+
+                Dim highs   = bars.Select(Function(b) b.High).ToList()
+                Dim lows    = bars.Select(Function(b) b.Low).ToList()
+                Dim closes  = bars.Select(Function(b) b.Close).ToList()
+
+                Dim st      = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=3.0)
+                Dim dmi     = TechnicalIndicators.DMI(highs, lows, closes, period:=14)
+                Dim n       = bars.Count - 1
+                Dim stDir   = st.Direction(n)
+                Dim adxVal  = dmi.ADX(n)
+                Dim plusDi  = dmi.PlusDI(n)
+                Dim minusDi = dmi.MinusDI(n)
+
+                Dim arrow As String
+                Dim signal As String
+                Dim rowColor As Brush
+                Dim strength As String
+                If stDir > 0 Then
+                    arrow = "▲" : signal = "BULL" : rowColor = Brushes.LimeGreen
+                ElseIf stDir < 0 Then
+                    arrow = "▼" : signal = "BEAR" : rowColor = Brushes.Red
+                Else
+                    arrow = "–" : signal = "flat" : rowColor = Brushes.Gray
+                End If
+
+                If Single.IsNaN(adxVal) Then
+                    strength = "ADX: –"
+                ElseIf adxVal >= 40 Then
+                    strength = String.Format("ADX:{0:D2} ●●●", CInt(adxVal))
+                ElseIf adxVal >= 25 Then
+                    strength = String.Format("ADX:{0:D2} ●●○", CInt(adxVal))
+                ElseIf adxVal >= 15 Then
+                    strength = String.Format("ADX:{0:D2} ●○○", CInt(adxVal))
+                Else
+                    strength = String.Format("ADX:{0:D2} ○○○", CInt(adxVal))
+                End If
+
+                Dim adxStr As String = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        wRow.Arrow         = arrow
+                        wRow.AdxDisplay    = adxStr
+                        wRow.Signal        = signal
+                        wRow.RowColor      = rowColor
+                        wRow.TrendStrength = strength
+                    End Sub)
+            Next
         End Function
 
         Private Async Sub FlashStatusAsync()
@@ -399,6 +535,23 @@ Namespace TopStepTrader.UI.ViewModels
                 If _lockOwner IsNot Nothing Then Return
                 _lockOwner = box.PersonaName.Split(" "c)(0)
             End SyncLock
+
+            Dim accountId As Long = If(_session.SelectedAccount IsNot Nothing,
+                                       _session.SelectedAccount.Id, 0)
+            If accountId = 0 Then
+                SyncLock _timerLock
+                    _lockOwner = Nothing
+                    _timer?.Change(15000, 15000)
+                End SyncLock
+                Application.Current?.Dispatcher?.Invoke(Sub()
+                    For Each b In AllBoxes()
+                        b.IsPaused = False
+                    Next
+                End Sub)
+                Return
+            End If
+            box.AccountId = accountId
+
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
                     For Each b In AllBoxes()
@@ -424,6 +577,22 @@ Namespace TopStepTrader.UI.ViewModels
             Catch
             End Try
 
+            ' Only show a position tile and keep the lock if the order was actually placed.
+            ' If placement failed, release the lock immediately so the tile stays blank.
+            If placed Is Nothing Then
+                SyncLock _timerLock
+                    _lockOwner = Nothing
+                    _timer?.Change(15000, 15000)
+                End SyncLock
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        For Each b In AllBoxes()
+                            b.IsPaused = False
+                        Next
+                    End Sub)
+                Return
+            End If
+
             box.EntryPrice      = 0D
             box.EntryInstrument = contractId
             box.EntrySide       = side
@@ -431,11 +600,7 @@ Namespace TopStepTrader.UI.ViewModels
             box.CurrentStLine   = stLine
             box.ScaleInCount    = 1
             box.MissCount       = 0
-            If placed IsNot Nothing Then
-                box.PositionId = placed.ExternalPositionId
-            Else
-                box.PositionId = Nothing
-            End If
+            box.PositionId      = placed.ExternalPositionId
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
                     box.HasPosition = True
@@ -444,6 +609,9 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         Private Async Function HandleOpenPositionAsync(box As PersonaBoxVm, tf As BarTimeframe) As Task
+            If box.AccountId = 0 AndAlso _session.SelectedAccount IsNot Nothing Then
+                box.AccountId = _session.SelectedAccount.Id
+            End If
             Dim snapshot As LivePositionSnapshot = Nothing
             Try
                 snapshot = Await _orderService.GetLivePositionSnapshotAsync(

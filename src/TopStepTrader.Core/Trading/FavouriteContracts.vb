@@ -58,6 +58,16 @@ Namespace TopStepTrader.Core.Trading
                 .RoundTripFee = 0.74D
             })
 
+            ' NQ — MNQ (Micro Nasdaq-100)  [ProjectX symbolId: F.US.MNQ; roll: quarterly H/M/U/Z; U26=Sep 2026 front-month]
+            ' PxMinStopDollars=$25: 50 ticks × $0.50 = 12.5 NQ points minimum
+            list.Add(New FavouriteContract("NQ", "NQ", 0, 0.01D, 0.01D, 1D, 0.5D, _
+                "CON.F.US.MNQ.U26", 0.25D, 0.5D, 2.0D, 0.3D, 25D) With {
+                .PxRootSymbol = "MNQ",
+                .CommissionTickBuffer = 1,
+                .MultiConfluenceTimeframeMinutes = 5,
+                .RoundTripFee = 0.74D
+            })
+
             ' Crypto — MBT (Micro Bitcoin): 0.1 BTC/contract, tick=5pts/$0.50
             ' tickValue=$0.50 confirmed via ProjectX API (0.1 BTC × $5/pt index = $0.50/tick)
             ' PxMinStopDollars=$30: 60 ticks × $0.50 = 300 BTC pts — crypto is volatile; 300pt floor prudent
@@ -85,6 +95,7 @@ Namespace TopStepTrader.Core.Trading
 
         ''' <summary>
         ''' Returns the FavouriteContract whose eToro symbol or PX contract ID matches, or whose
+        ''' PxRootSymbol matches the given symbol directly (e.g. "MGC", "MES"), or whose
         ''' PxRootSymbol is embedded in the given ProjectX contract ID (e.g. "CON.F.US.MCL.K26"
         ''' matches the MCL entry regardless of the expiry month code).
         ''' This root-symbol fallback ensures lookups survive quarterly contract rolls without
@@ -95,7 +106,8 @@ Namespace TopStepTrader.Core.Trading
                 Function(f) String.Equals(f.EToroContractId, symbol, StringComparison.OrdinalIgnoreCase) OrElse
                             String.Equals(f.PxContractId, symbol, StringComparison.OrdinalIgnoreCase) OrElse
                             (Not String.IsNullOrEmpty(f.PxRootSymbol) AndAlso
-                             symbol.StartsWith($"CON.F.US.{f.PxRootSymbol}.", StringComparison.OrdinalIgnoreCase)))
+                             (String.Equals(f.PxRootSymbol, symbol, StringComparison.OrdinalIgnoreCase) OrElse
+                              symbol.StartsWith($"CON.F.US.{f.PxRootSymbol}.", StringComparison.OrdinalIgnoreCase))))
         End Function
 
         ''' <summary>Returns the FavouriteContract with the given eToro numeric instrumentId, or Nothing.</summary>

@@ -1627,6 +1627,55 @@ Namespace TopStepTrader.Services.Trading
                             End If
                         End If
 
+                    Case StrategyConditionType.SuperTrendAdx
+                        ' ── SuperTrend + ADX ─────────────────────────────────────────────────
+                        ' Long  when SuperTrend direction = +1, ADX ≥ AdxThreshold, and +DI > -DI.
+                        ' Short when SuperTrend direction = -1, ADX ≥ AdxThreshold, and -DI > +DI.
+                        ' SL = SuperTrend line at entry (ATR bracket applied by PlaceBracketOrdersAsync).
+                        Dim stResult = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=3.0)
+                        Dim stDir = stResult.Direction(stResult.Direction.Length - 1)
+                        Dim stLine = CDec(stResult.Line(stResult.Line.Length - 1))
+                        Dim stDmi = TechnicalIndicators.DMI(highs, lows, closes)
+                        Dim stAdx = TechnicalIndicators.LastValid(stDmi.ADX)
+                        Dim stPlusDi = TechnicalIndicators.LastValid(stDmi.PlusDI)
+                        Dim stMinusDi = TechnicalIndicators.LastValid(stDmi.MinusDI)
+                        Dim stAtrVals = TechnicalIndicators.ATR(highs, lows, closes, 14)
+                        _currentAtrValue = CDec(TechnicalIndicators.LastValid(stAtrVals))
+                        _lastAdxValue = CSng(stAdx)
+
+                        Dim stLongConf = If(stDir > 0.0F AndAlso stPlusDi > stMinusDi, 100, 0)
+                        Dim stShortConf = If(stDir < 0.0F AndAlso stMinusDi > stPlusDi, 100, 0)
+                        RaiseEvent ConfidenceUpdated(Me, New ConfidenceUpdatedEventArgs(
+                            stLongConf, stShortConf,
+                            adxGatePassed:=(stAdx >= _strategy.AdxThreshold),
+                            adxValue:=CSng(stAdx),
+                            lastClose:=CDec(lastBar.Close)) With {
+                            .PlusDI = CSng(stPlusDi),
+                            .MinusDI = CSng(stMinusDi),
+                            .AdxThreshold = _strategy.AdxThreshold,
+                            .MinConfidencePct = _strategy.MinConfidencePct
+                        })
+
+                        If _currentAtrValue <= 0 Then
+                            Log($"Bar checked — SuperTrend+: ATR too low (degenerate bar) | {remStr}")
+                        ElseIf stDir = 0.0F OrElse Single.IsNaN(stDir) Then
+                            Log($"Bar checked — SuperTrend+: direction warming up | ADX={stAdx:F1} | {remStr}")
+                        ElseIf stAdx < _strategy.AdxThreshold Then
+                            Log($"Bar checked — SuperTrend+: ADX={stAdx:F1} < {_strategy.AdxThreshold:F0} (ranging market) | " &
+                                $"dir={If(stDir > 0, "UP", "DOWN")} ST={stLine:F4} +DI={stPlusDi:F1} -DI={stMinusDi:F1} | {remStr}")
+                        ElseIf stDir > 0.0F AndAlso stPlusDi > stMinusDi Then
+                            _pendingConfidencePct = 100
+                            Log($"✅ SuperTrend+ LONG! dir=UP ST={stLine:F4} | ADX={stAdx:F1} +DI={stPlusDi:F1} > -DI={stMinusDi:F1} | ATR={_currentAtrValue:F4} | {remStr}")
+                            side = OrderSide.Buy
+                        ElseIf stDir < 0.0F AndAlso stMinusDi > stPlusDi Then
+                            _pendingConfidencePct = 100
+                            Log($"✅ SuperTrend+ SHORT! dir=DOWN ST={stLine:F4} | ADX={stAdx:F1} -DI={stMinusDi:F1} > +DI={stPlusDi:F1} | ATR={_currentAtrValue:F4} | {remStr}")
+                            side = OrderSide.Sell
+                        Else
+                            Log($"Bar checked — SuperTrend+: dir={If(stDir > 0, "UP", "DOWN")} ST={stLine:F4} " &
+                                $"ADX={stAdx:F1} +DI={stPlusDi:F1} -DI={stMinusDi:F1} | DI confirmation missing | {remStr}")
+                        End If
+
                     Case Else
                         Log($"Condition '{activeCondition}' not yet implemented")
 
