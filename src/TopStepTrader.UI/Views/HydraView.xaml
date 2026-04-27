@@ -400,6 +400,7 @@
                         <ComboBox ItemsSource="{Binding AvailableRegimeOverrides}"
                                   SelectedItem="{Binding SelectedTrendingOverrideName, Mode=TwoWay}"
                                   Width="130" Height="22" FontSize="10" VerticalAlignment="Center" Margin="0,0,8,0"
+                                  Style="{StaticResource UnclippedComboBoxStyle}"
                                   ToolTip="Strategy to use when regime = Trending. Both dropdowns must be set to activate the regime filter."/>
                         <TextBlock Text="Ranging→" Foreground="{StaticResource TextSecondaryBrush}"
                                    FontSize="10" VerticalAlignment="Center" Margin="0,0,4,0"
@@ -407,6 +408,7 @@
                         <ComboBox ItemsSource="{Binding AvailableRegimeOverrides}"
                                   SelectedItem="{Binding SelectedRangingOverrideName, Mode=TwoWay}"
                                   Width="130" Height="22" FontSize="10" VerticalAlignment="Center"
+                                  Style="{StaticResource UnclippedComboBoxStyle}"
                                   ToolTip="Strategy to use when regime = Ranging. Both dropdowns must be set to activate the regime filter."/>
 
                         <!-- Vertical separator -->

@@ -135,4 +135,10 @@
         </Setter>
     </Style>
 
+    <!-- ── Implicit (keyless) ComboBox style ──────────────────────────────
+         Any ComboBox that does NOT explicitly set a Style will inherit this,
+         ensuring dark theme is always applied. ComboBoxes that already set
+         Style="{StaticResource UnclippedComboBoxStyle}" are unaffected.     -->
+    <Style TargetType="ComboBox" BasedOn="{StaticResource UnclippedComboBoxStyle}"/>
+
 </ResourceDictionary>
