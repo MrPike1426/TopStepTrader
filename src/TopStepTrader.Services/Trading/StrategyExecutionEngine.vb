@@ -57,6 +57,8 @@ Namespace TopStepTrader.Services.Trading
 
         ' ── State ─────────────────────────────────────────────────────────────────
         Private _strategy As StrategyDefinition
+        ' SuperTrendAdx: direction on the previous bar check (+1.0, -1.0, or 0.0)
+        Private _stPrevDirection As Single = 0.0F
         Private _timer As System.Threading.Timer
         Private _positionTimer As System.Threading.Timer  ' adaptive bracket trail (5s open / 60s idle)
         Private _cts As CancellationTokenSource       ' cancelled by Stop() / Dispose()
@@ -1656,6 +1658,9 @@ Namespace TopStepTrader.Services.Trading
                             .MinConfidencePct = _strategy.MinConfidencePct
                         })
 
+                        Dim stIsFlip As Boolean = (stDir <> _stPrevDirection AndAlso _stPrevDirection <> 0.0F)
+                        _stPrevDirection = stDir
+
                         If _currentAtrValue <= 0 Then
                             Log($"Bar checked — SuperTrend+: ATR too low (degenerate bar) | {remStr}")
                         ElseIf stDir = 0.0F OrElse Single.IsNaN(stDir) Then
@@ -1665,11 +1670,13 @@ Namespace TopStepTrader.Services.Trading
                                 $"dir={If(stDir > 0, "UP", "DOWN")} ST={stLine:F4} +DI={stPlusDi:F1} -DI={stMinusDi:F1} | {remStr}")
                         ElseIf stDir > 0.0F AndAlso stPlusDi > stMinusDi Then
                             _pendingConfidencePct = 100
-                            Log($"✅ SuperTrend+ LONG! dir=UP ST={stLine:F4} | ADX={stAdx:F1} +DI={stPlusDi:F1} > -DI={stMinusDi:F1} | ATR={_currentAtrValue:F4} | {remStr}")
+                            Dim prefix = If(stIsFlip, "✅", "→")
+                            Log($"{prefix} SuperTrend+ LONG! dir=UP ST={stLine:F4} | ADX={stAdx:F1} +DI={stPlusDi:F1} > -DI={stMinusDi:F1} | ATR={_currentAtrValue:F4} | {remStr}")
                             side = OrderSide.Buy
                         ElseIf stDir < 0.0F AndAlso stMinusDi > stPlusDi Then
                             _pendingConfidencePct = 100
-                            Log($"✅ SuperTrend+ SHORT! dir=DOWN ST={stLine:F4} | ADX={stAdx:F1} -DI={stMinusDi:F1} > +DI={stPlusDi:F1} | ATR={_currentAtrValue:F4} | {remStr}")
+                            Dim prefix2 = If(stIsFlip, "✅", "→")
+                            Log($"{prefix2} SuperTrend+ SHORT! dir=DOWN ST={stLine:F4} | ADX={stAdx:F1} -DI={stMinusDi:F1} > +DI={stPlusDi:F1} | ATR={_currentAtrValue:F4} | {remStr}")
                             side = OrderSide.Sell
                         Else
                             Log($"Bar checked — SuperTrend+: dir={If(stDir > 0, "UP", "DOWN")} ST={stLine:F4} " &
@@ -2627,6 +2634,7 @@ Namespace TopStepTrader.Services.Trading
             _barsInTrade = 0
             _lastSignalArgs = Nothing
             _lastSignalBar = Nothing
+            _stPrevDirection = 0.0F
         End Sub
 
         ' ── 15-second bracket trail ───────────────────────────────────────────────
