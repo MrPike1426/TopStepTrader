@@ -83,10 +83,8 @@
                             </ToggleButton.Template>
                         </ToggleButton>
 
-                        <!--  Header: SelectionBoxItemTemplate = the caller's ItemTemplate
-                              (WPF copies ItemTemplate → SelectionBoxItemTemplate automatically).
-                              The DataTemplate's TextBlock has Foreground="White" as a local
-                              value, so the rendered text is always white.  -->
+                        <!--  Non-editable closed-state display (IsEditable=False).
+                              Hidden when IsEditable=True via trigger below.  -->
                         <ContentPresenter x:Name="ContentSite"
                                           Grid.Column="0"
                                           Margin="{TemplateBinding Padding}"
@@ -96,6 +94,25 @@
                                           VerticalAlignment="Center"
                                           HorizontalAlignment="Left"
                                           IsHitTestVisible="False"/>
+
+                        <!--  Editable closed-state display (IsEditable=True).
+                              PART_EditableTextBox is the WPF-required named part that
+                              renders the typed / selected text when IsEditable=True.
+                              Hidden when IsEditable=False via trigger below.  -->
+                        <TextBox x:Name="PART_EditableTextBox"
+                                 Grid.Column="0"
+                                 Margin="{TemplateBinding Padding}"
+                                 Foreground="#FFE0E0F0"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 CaretBrush="#FFE0E0F0"
+                                 SelectionBrush="#FF2E3F6E"
+                                 VerticalAlignment="Center"
+                                 HorizontalAlignment="Left"
+                                 Focusable="True"
+                                 Visibility="Collapsed"
+                                 IsReadOnly="{Binding IsReadOnly,
+                                              RelativeSource={RelativeSource TemplatedParent}}"/>
 
                         <Path Grid.Column="1"
                               Fill="#FFE0E0F0"
@@ -128,6 +145,11 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Root" Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                        <!-- When editable: show the TextBox, hide the ContentPresenter -->
+                        <Trigger Property="IsEditable" Value="True">
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="ContentSite"          Property="Visibility" Value="Collapsed"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
