@@ -248,7 +248,9 @@ Namespace TopStepTrader.Services.Trading
             cancel As CancellationToken) As Task(Of ContractDto)
 
             Dim prefix = $"CON.F.US.{fav.PxRootSymbol}."
-            Dim cutoff = DateTime.UtcNow.Date.AddDays(-28)
+            ' Exclude contracts expiring within RollLeadDays days — they have rolled or are rolling.
+            ' Monthly contracts (MCL/MGC) use 28; quarterly (MES/M6E etc.) default to 7.
+            Dim cutoff = DateTime.UtcNow.Date.AddDays(fav.RollLeadDays)
 
             ' Try simulated universe first, then full exchange universe
             For Each liveFlag In {False, True}

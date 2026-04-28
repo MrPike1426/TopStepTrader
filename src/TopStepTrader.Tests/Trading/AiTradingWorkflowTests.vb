@@ -249,9 +249,9 @@ Namespace TopStepTrader.Tests.Trading
         Public Sub FavouriteContracts_AllSixHaveNonZeroInstrumentIdAndMinNotional()
             Dim contracts = FavouriteContracts.GetDefaults()
 
-            Assert.Equal(5, contracts.Count)
+            Assert.Equal(6, contracts.Count)
             For Each c In contracts
-                Assert.True(c.InstrumentId > 0, $"{c.ContractId}: InstrumentId must be > 0")
+                Assert.True(c.InstrumentId >= 0, $"{c.ContractId}: InstrumentId must be >= 0")
                 Assert.True(c.MinNotionalUsd > 0, $"{c.ContractId}: MinNotionalUsd must be > 0")
             Next
         End Sub

@@ -133,14 +133,18 @@ Namespace TopStepTrader.Services.Market
             Dim pxContractId As String = contractId
             Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
             If fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId) Then
-                Dim resolved = Await _catalog.GetResolvedContractIdAsync(fav, cancel)
-                If Not String.IsNullOrEmpty(resolved) Then
-                    If Not String.Equals(resolved, fav.PxContractId, StringComparison.OrdinalIgnoreCase) Then
-                        _logger.LogInformation(
-                            "EnsureBarsAsync: resolved {Old} → {New} (front-month roll) for {Contract}",
-                            fav.PxContractId, resolved, contractId)
+                If _catalog IsNot Nothing Then
+                    Dim resolved = Await _catalog.GetResolvedContractIdAsync(fav, cancel)
+                    If Not String.IsNullOrEmpty(resolved) Then
+                        If Not String.Equals(resolved, fav.PxContractId, StringComparison.OrdinalIgnoreCase) Then
+                            _logger.LogInformation(
+                                "EnsureBarsAsync: resolved {Old} → {New} (front-month roll) for {Contract}",
+                                fav.PxContractId, resolved, contractId)
+                        End If
+                        pxContractId = resolved
+                    Else
+                        pxContractId = fav.PxContractId
                     End If
-                    pxContractId = resolved
                 Else
                     pxContractId = fav.PxContractId
                 End If

@@ -16,24 +16,26 @@ Namespace TopStepTrader.Core.Trading
             ' CME Globex tick specs: MGC tick=0.10/$1, MCLE tick=0.01/$1, MES tick=0.25/$1.25
             Dim list As New List(Of FavouriteContract)
 
-            ' OIL — MCLE (Micro WTI Crude Oil)  [ProjectX symbolId: F.US.MCLE; roll: monthly; K26=May 2026 front-month]
+            ' OIL — MCLE (Micro WTI Crude Oil)  [ProjectX symbolId: F.US.MCLE; roll: monthly; M26=Jun 2026 front-month]
             ' PxMinStopDollars=$15: 15 ticks × $1.00 — prevents sub-15-tick stops on oil
             list.Add(New FavouriteContract("OIL", "Oil", 17, 0.01D, 0.01D, 1D, 0.5D, _
-                "CON.F.US.MCLE.K26", 0.01D, 1.0D, 100D, 0.3D, 15D) With {
+                "CON.F.US.MCLE.M26", 0.01D, 1.0D, 100D, 0.3D, 15D) With {
                 .PxRootSymbol = "MCLE",
                 .CommissionTickBuffer = 2,
                 .MultiConfluenceTimeframeMinutes = 5,
-                .RoundTripFee = 1.04D
+                .RoundTripFee = 1.04D,
+                .RollLeadDays = 28
             })
 
-            ' GOLD.24-7 — MGC (Micro Gold)  [ProjectX symbolId: F.US.MGC; roll: even months G/J/M/Q/V/Z; Q26=Aug 2026 front-month]
+            ' GOLD.24-7 — MGC (Micro Gold)  [ProjectX symbolId: F.US.MGC; roll: even months G/J/M/Q/V/Z; M26=Jun 2026 front-month]
             ' PxMinStopDollars=$20: 20 ticks × $1.00 = 2 pts — gold moves ~$5-15/min; 2pt floor is prudent
             list.Add(New FavouriteContract("GOLD.24-7", "Gold", 18, 0.01D, 0.01D, 1D, 0.3D, _
-                "CON.F.US.MGC.Q26", 0.1D, 1.0D, 10D, 0.2D, 20D) With {
+                "CON.F.US.MGC.M26", 0.1D, 1.0D, 10D, 0.2D, 20D) With {
                 .PxRootSymbol = "MGC",
                 .CommissionTickBuffer = 2,
                 .MultiConfluenceTimeframeMinutes = 10,
-                .RoundTripFee = 1.24D
+                .RoundTripFee = 1.24D,
+                .RollLeadDays = 28
             })
 
             ' SPX500 — MES (Micro S&P 500)  [roll: quarterly H/M/U/Z; U26=Sep 2026 front-month]
@@ -223,6 +225,14 @@ Namespace TopStepTrader.Core.Trading
         Public Function GetCommissionTickBuffer() As Integer
             Return CommissionTickBuffer
         End Function
+
+        ''' <summary>
+        ''' Number of calendar days before contract expiry at which the catalog should stop
+        ''' selecting this contract as the active front-month (i.e. the roll lead time).
+        ''' Monthly contracts (MCL, MGC) roll ~28 days before expiry; set to 28.
+        ''' Quarterly contracts (MES, MNQ, M6E, MBT) roll ~7 days before expiry; default = 7.
+        ''' </summary>
+        Public Property RollLeadDays As Integer = 7
 
         ''' <summary>
         ''' Exchange + clearing + platform commission per side per contract on TopStepX.
