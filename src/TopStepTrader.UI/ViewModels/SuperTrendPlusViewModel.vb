@@ -198,6 +198,7 @@ Namespace TopStepTrader.UI.ViewModels
         Friend AccountId As Long = 0
         Friend MissCount As Integer = 0
         Friend TpPrice As Decimal = 0D
+        Friend LastScaleInBarTime As DateTimeOffset = DateTimeOffset.MinValue
 
     End Class
 
@@ -455,6 +456,7 @@ Namespace TopStepTrader.UI.ViewModels
                 box.PositionId      = Nothing
                 box.MissCount       = 0
                 box.TpPrice         = 0D
+                box.LastScaleInBarTime = DateTimeOffset.MinValue
                 For Each row In box.Symbols
                     row.Arrow      = "–"
                     row.AdxDisplay = "ADX:–"
@@ -966,6 +968,10 @@ Namespace TopStepTrader.UI.ViewModels
 
             Dim maxScaleIns As Integer = If(box.Profile IsNot Nothing, box.Profile.MaxScaleIns, 1)
             If box.ScaleInCount < maxScaleIns Then
+                Dim latestBarTime = bars.Last().Timestamp
+                If box.LastScaleInBarTime = latestBarTime Then
+                    ' Same bar still forming — skip scale-in this tick
+                Else
                 Dim currentPnl As Decimal = If(snapshot IsNot Nothing, snapshot.UnrealizedPnlUsd, 0D)
                 If currentPnl < 0D Then
                     ' Scale-in suppressed: position P&L is negative
@@ -990,10 +996,12 @@ Namespace TopStepTrader.UI.ViewModels
                     Try
                         Await _orderService.PlaceOrderAsync(order)
                         box.ScaleInCount += 1
+                        box.LastScaleInBarTime = latestBarTime
                         _logger.LogInformation("ST+ scale-in placed for {Box} on {Contract} (count={Count})", box.PersonaName, box.EntryInstrument, box.ScaleInCount)
                     Catch ex As Exception
                         _logger.LogWarning(ex, "ST+ scale-in PlaceOrderAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
                     End Try
+                End If
                 End If
                 End If
             End If
@@ -1013,6 +1021,7 @@ Namespace TopStepTrader.UI.ViewModels
                     box.PositionId       = Nothing
                     box.MissCount        = 0
                     box.TpPrice          = 0D
+                    box.LastScaleInBarTime = DateTimeOffset.MinValue
                     For Each b In AllBoxes()
                         b.IsPaused = False
                     Next

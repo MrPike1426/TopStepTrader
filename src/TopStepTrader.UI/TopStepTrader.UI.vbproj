@@ -29,6 +29,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ApplicationDefinition Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </ApplicationDefinition>
+  </ItemGroup>
+
+  <ItemGroup>
     <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
