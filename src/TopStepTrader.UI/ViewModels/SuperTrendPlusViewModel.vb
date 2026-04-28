@@ -197,6 +197,7 @@ Namespace TopStepTrader.UI.ViewModels
         Friend PositionId As Long? = Nothing
         Friend AccountId As Long = 0
         Friend MissCount As Integer = 0
+        Friend TpPrice As Decimal = 0D
 
     End Class
 
@@ -269,6 +270,28 @@ Namespace TopStepTrader.UI.ViewModels
         End Property
 
         Public ReadOnly Property Timeframes As String() = {"5min", "15min", "1hr"}
+
+        Public ReadOnly Property TpMultiples As String() = {"None / flip only", "1.5×", "2×", "2.5×", "3×"}
+
+        Private _selectedTpMultiple As String = "2×"
+        Public Property SelectedTpMultiple As String
+            Get
+                Return _selectedTpMultiple
+            End Get
+            Set(value As String)
+                SetProperty(_selectedTpMultiple, value)
+            End Set
+        End Property
+
+        Private Function ParseTpMultiple() As Decimal
+            Select Case _selectedTpMultiple
+                Case "1.5×" : Return 1.5D
+                Case "2×"   : Return 2.0D
+                Case "2.5×" : Return 2.5D
+                Case "3×"   : Return 3.0D
+                Case Else   : Return 0D
+            End Select
+        End Function
 
         Private _selectedTimeframe As String = "15min"
         Public Property SelectedTimeframe As String
@@ -431,6 +454,7 @@ Namespace TopStepTrader.UI.ViewModels
                 box.CurrentStLine   = 0D
                 box.PositionId      = Nothing
                 box.MissCount       = 0
+                box.TpPrice         = 0D
                 For Each row In box.Symbols
                     row.Arrow      = "–"
                     row.AdxDisplay = "ADX:–"
@@ -845,6 +869,9 @@ Namespace TopStepTrader.UI.ViewModels
             box.ScaleInCount    = 1
             box.MissCount       = 0
             box.PositionId      = placed.ExternalPositionId
+
+            ' TpPrice will be computed in HandleOpenPositionAsync once the fill price is known via snapshot.
+            box.TpPrice = 0D
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
                     box.HasPosition = True
@@ -874,6 +901,17 @@ Namespace TopStepTrader.UI.ViewModels
                 box.MissCount = 0
                 If Not box.PositionId.HasValue OrElse box.PositionId.Value = 0 Then
                     box.PositionId = snapshot.PositionId
+                End If
+                ' Resolve fill price and TP on the first snapshot tick
+                If box.EntryPrice = 0D AndAlso snapshot.OpenRate <> 0D Then
+                    box.EntryPrice = snapshot.OpenRate
+                    Dim tpMult = ParseTpMultiple()
+                    If tpMult > 0D AndAlso box.CurrentStLine <> 0D Then
+                        Dim initialRisk = Math.Abs(box.EntryPrice - box.CurrentStLine)
+                        box.TpPrice = If(box.EntrySide = "Buy",
+                                         box.EntryPrice + initialRisk * tpMult,
+                                         box.EntryPrice - initialRisk * tpMult)
+                    End If
                 End If
                 Dim pnl = snapshot.UnrealizedPnlUsd
                 Application.Current?.Dispatcher?.Invoke(Sub() UpdatePositionDisplay(box, pnl))
@@ -913,9 +951,10 @@ Namespace TopStepTrader.UI.ViewModels
                     (entryIsLong AndAlso stLine > box.CurrentStLine) OrElse
                     (Not entryIsLong AndAlso stLine < box.CurrentStLine)
                 If shouldUpdate AndAlso box.PositionId.HasValue Then
+                    Dim tpArg As Decimal? = If(box.TpPrice <> 0D, CType(box.TpPrice, Decimal?), Nothing)
                     Try
-                        Await _orderService.EditPositionSlTpAsync(box.PositionId.Value, stLine, Nothing)
-                        _logger.LogInformation("ST+ SL trail → {Price} for {Box} on {Contract}", stLine, box.PersonaName, box.EntryInstrument)
+                        Await _orderService.EditPositionSlTpAsync(box.PositionId.Value, stLine, tpArg)
+                        _logger.LogInformation("ST+ SL trail → {Price} (TP={Tp}) for {Box} on {Contract}", stLine, If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"), box.PersonaName, box.EntryInstrument)
                     Catch ex As Exception
                         _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
                     End Try
@@ -973,6 +1012,7 @@ Namespace TopStepTrader.UI.ViewModels
                     box.CurrentStLine    = 0D
                     box.PositionId       = Nothing
                     box.MissCount        = 0
+                    box.TpPrice          = 0D
                     For Each b In AllBoxes()
                         b.IsPaused = False
                     Next
@@ -986,11 +1026,12 @@ Namespace TopStepTrader.UI.ViewModels
             Dim label As String  = If(idx >= 0, InstrumentLabels(idx), box.EntryInstrument)
             Dim entry As String  = If(box.EntryPrice = 0D, "--", box.EntryPrice.ToString("F2"))
             Dim sl    As String  = If(box.CurrentStLine = 0D, "--", box.CurrentStLine.ToString("F2"))
+            Dim tp    As String  = If(box.TpPrice = 0D, "flip", box.TpPrice.ToString("F2"))
             Dim maxSI As Integer = If(box.Profile IsNot Nothing, box.Profile.MaxScaleIns, 1)
             Dim sign  As String  = If(pnl >= 0, "+", "")
             box.PositionDisplay =
                 String.Format("{0}  {1}  @ {2}", side, label, entry) & Environment.NewLine &
-                String.Format("SL: {0}  (SuperTrend)", sl) & Environment.NewLine &
+                String.Format("SL: {0}  TP: {1}", sl, tp) & Environment.NewLine &
                 String.Format("Scale-ins: {0} / {1}", box.ScaleInCount, maxSI) & Environment.NewLine &
                 String.Format("Entry: {0:HH:mm}  |  P&L: {1}{2:F2}$", box.EntryTime, sign, pnl)
             box.PnlBrush = If(pnl >= 0, Brushes.LimeGreen, Brushes.Red)

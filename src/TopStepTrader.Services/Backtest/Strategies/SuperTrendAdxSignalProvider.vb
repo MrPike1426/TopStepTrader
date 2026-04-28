@@ -48,22 +48,28 @@ Namespace TopStepTrader.Services.Backtest.Strategies
             Dim stLinePrice = CDec(st.Line(n - 1))
 
             If curDir > 0.0F AndAlso plusDi > minusDi Then
+                Dim entryClose = CDec(closes(n - 1))
+                Dim initialRisk = Math.Abs(entryClose - stLinePrice)
+                Dim tpDelta = If(config.TpMultiple > 0D, initialRisk * config.TpMultiple, 0D)
                 Return New SignalResult With {
                     .Side            = "Buy",
                     .IsLong          = True,
                     .Confidence      = 1.0F,
                     .AbsoluteSlPrice = stLinePrice,
                     .StopDelta       = 0D,
-                    .TpDelta         = 0D
+                    .TpDelta         = tpDelta
                 }
             ElseIf curDir < 0.0F AndAlso minusDi > plusDi Then
+                Dim entryClose = CDec(closes(n - 1))
+                Dim initialRisk = Math.Abs(entryClose - stLinePrice)
+                Dim tpDelta = If(config.TpMultiple > 0D, initialRisk * config.TpMultiple, 0D)
                 Return New SignalResult With {
                     .Side            = "Sell",
                     .IsLong          = False,
                     .Confidence      = 1.0F,
                     .AbsoluteSlPrice = stLinePrice,
                     .StopDelta       = 0D,
-                    .TpDelta         = 0D
+                    .TpDelta         = tpDelta
                 }
             End If
 

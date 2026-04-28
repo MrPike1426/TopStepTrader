@@ -278,6 +278,15 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Public Property MinBarsBeforeExit As Integer = 5
 
+        ' ── SuperTrend+ TP multiple (STRAT-33) ─────────────────────────────────
+
+        ''' <summary>
+        ''' Take-profit as a multiple of the initial SL distance (SuperTrend line to entry price).
+        ''' 0.0 = disabled (flip-only exit, preserves legacy behaviour).
+        ''' Default 2.0 = 1:2 R:R.  Used by <see cref="SuperTrendAdxSignalProvider"/>.
+        ''' </summary>
+        Public Property TpMultiple As Decimal = 2.0D
+
     End Class
 
 End Namespace

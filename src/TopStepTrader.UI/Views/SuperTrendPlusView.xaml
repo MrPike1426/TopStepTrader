@@ -220,6 +220,8 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="16"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
@@ -246,15 +248,24 @@
                                      Foreground="Gold" FontSize="11" Margin="0,0,12,0"/>
                     </StackPanel>
 
+                    <!-- TP Multiple selector -->
+                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="TP:" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <ComboBox ItemsSource="{Binding TpMultiples}"
+                                  SelectedItem="{Binding SelectedTpMultiple}"
+                                  Width="110" VerticalAlignment="Center"/>
+                    </StackPanel>
+
                     <!-- Start / Stop button -->
-                    <Button Grid.Column="6"
+                    <Button Grid.Column="8"
                             Content="{Binding StartStopLabel}"
                             Command="{Binding StartStopCommand}"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Padding="14,6" VerticalAlignment="Center"/>
 
                     <!-- Status label -->
-                    <Border Grid.Column="7"
+                    <Border Grid.Column="9"
                             Background="{Binding StatusBackground}"
                             CornerRadius="4" Margin="12,0,0,0"
                             Visibility="{Binding StatusVisibility}"
