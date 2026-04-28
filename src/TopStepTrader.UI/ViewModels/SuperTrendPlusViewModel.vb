@@ -460,6 +460,15 @@ Namespace TopStepTrader.UI.ViewModels
                 End Try
                 If bars Is Nothing OrElse bars.Count < 15 Then Continue For
 
+                Dim tfMinutesScan As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
+                If _selectedTimeframe.EndsWith("hr") Then tfMinutesScan *= 60
+                If bars.Count > 1 Then
+                    Dim lastBarAgeScan = (DateTime.UtcNow - bars.Last().Timestamp).TotalMinutes
+                    If lastBarAgeScan < tfMinutesScan Then
+                        bars = bars.Take(bars.Count - 1).ToList()
+                    End If
+                End If
+
                 Dim highs   = bars.Select(Function(b) b.High).ToList()
                 Dim lows    = bars.Select(Function(b) b.Low).ToList()
                 Dim closes  = bars.Select(Function(b) b.Close).ToList()
@@ -476,10 +485,16 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim signal As String
                 Dim rowColor As Brush
                 Dim strength As String
-                If stDir > 0 Then
+                Dim isLongSignal  As Boolean = stDir > 0 AndAlso Not Single.IsNaN(adxVal) AndAlso plusDi > minusDi
+                Dim isShortSignal As Boolean = stDir < 0 AndAlso Not Single.IsNaN(adxVal) AndAlso minusDi > plusDi
+                If isLongSignal Then
                     arrow = "▲" : signal = "BULL" : rowColor = Brushes.LimeGreen
-                ElseIf stDir < 0 Then
+                ElseIf isShortSignal Then
                     arrow = "▼" : signal = "BEAR" : rowColor = Brushes.Red
+                ElseIf stDir > 0 Then
+                    arrow = "▲" : signal = "WAIT" : rowColor = Brushes.DarkGoldenrod
+                ElseIf stDir < 0 Then
+                    arrow = "▼" : signal = "WAIT" : rowColor = Brushes.DarkGoldenrod
                 Else
                     arrow = "–" : signal = "flat" : rowColor = Brushes.Gray
                 End If
@@ -537,6 +552,15 @@ Namespace TopStepTrader.UI.ViewModels
                     Continue For
                 End Try
                 If bars Is Nothing OrElse bars.Count < 15 Then Continue For
+
+                Dim tfMinutesEval As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
+                If _selectedTimeframe.EndsWith("hr") Then tfMinutesEval *= 60
+                If bars.Count > 1 Then
+                    Dim lastBarAgeEval = (DateTime.UtcNow - bars.Last().Timestamp).TotalMinutes
+                    If lastBarAgeEval < tfMinutesEval Then
+                        bars = bars.Take(bars.Count - 1).ToList()
+                    End If
+                End If
 
                 Dim highs   = bars.Select(Function(b) b.High).ToList()
                 Dim lows    = bars.Select(Function(b) b.Low).ToList()
@@ -733,6 +757,10 @@ Namespace TopStepTrader.UI.ViewModels
 
             Dim maxScaleIns As Integer = If(box.Profile IsNot Nothing, box.Profile.MaxScaleIns, 1)
             If box.ScaleInCount < maxScaleIns Then
+                Dim currentPnl As Decimal = If(snapshot IsNot Nothing, snapshot.UnrealizedPnlUsd, 0D)
+                If currentPnl < 0D Then
+                    ' Scale-in suppressed: position P&L is negative
+                Else
                 Dim dmi     = TechnicalIndicators.DMI(highs, lows, closes, period:=14)
                 Dim adxVal  = dmi.ADX(n)
                 Dim plusDi  = dmi.PlusDI(n)
@@ -755,6 +783,7 @@ Namespace TopStepTrader.UI.ViewModels
                         box.ScaleInCount += 1
                     Catch
                     End Try
+                End If
                 End If
             End If
         End Function
