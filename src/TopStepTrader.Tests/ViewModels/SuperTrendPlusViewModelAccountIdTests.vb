@@ -1,4 +1,5 @@
 Imports Moq
+Imports Microsoft.Extensions.Logging.Abstractions
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Services.Market
@@ -32,7 +33,8 @@ Namespace TopStepTrader.Tests.ViewModels
                 _mockOrderService.Object,
                 _mockSession.Object,
                 _mockPersonaService.Object,
-                _mockAccountService.Object)
+                _mockAccountService.Object,
+                NullLogger(Of SuperTrendPlusViewModel).Instance)
         End Function
 
         <Fact>

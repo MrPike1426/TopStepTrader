@@ -3,6 +3,7 @@ Imports System.Linq
 Imports System.Threading
 Imports System.Windows
 Imports System.Windows.Media
+Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
@@ -215,6 +216,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _personaService As IPersonaService
         Private ReadOnly _accountService As IAccountService
+        Private ReadOnly _logger As ILogger(Of SuperTrendPlusViewModel)
 
         Private _timer As Timer
         Private ReadOnly _timerLock As New Object()
@@ -315,12 +317,14 @@ Namespace TopStepTrader.UI.ViewModels
                        orderService As IOrderService,
                        session As ITradingSessionContext,
                        personaService As IPersonaService,
-                       accountService As IAccountService)
+                       accountService As IAccountService,
+                       logger As ILogger(Of SuperTrendPlusViewModel))
             _barService     = barService
             _orderService   = orderService
             _session        = session
             _personaService = personaService
             _accountService = accountService
+            _logger         = logger
             StartStopCommand = New RelayCommand(AddressOf OnStartStop)
             For i = 0 To Instruments.Length - 1
                 WatchlistItems.Add(New WatchlistRowVm() With {
@@ -652,10 +656,11 @@ Namespace TopStepTrader.UI.ViewModels
             Dim placed As Order = Nothing
             Try
                 placed = Await _orderService.PlaceOrderAsync(order)
-            Catch
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ PlaceOrderAsync failed for {Contract}", contractId)
             End Try
 
-            ' Only show a position tile and keep the lock if the order was actually placed.
+            ' Only show a position tile
             ' If placement failed, release the lock immediately so the tile stays blank.
             If placed Is Nothing Then
                 SyncLock _timerLock
@@ -694,7 +699,8 @@ Namespace TopStepTrader.UI.ViewModels
             Try
                 snapshot = Await _orderService.GetLivePositionSnapshotAsync(
                     box.AccountId, box.EntryInstrument, box.PositionId)
-            Catch
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ GetLivePositionSnapshotAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
             End Try
 
             If snapshot Is Nothing Then
@@ -715,7 +721,8 @@ Namespace TopStepTrader.UI.ViewModels
             Dim bars As IList(Of MarketBar)
             Try
                 bars = Await _barService.GetLiveBarsAsync(box.EntryInstrument, tf, BarsToFetch)
-            Catch
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ GetLiveBarsAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
                 Return
             End Try
             If bars Is Nothing OrElse bars.Count < 15 Then Return
@@ -733,7 +740,8 @@ Namespace TopStepTrader.UI.ViewModels
             If flipped Then
                 Try
                     Await _orderService.FlattenContractAsync(box.AccountId, box.EntryInstrument)
-                Catch
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ FlattenContractAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
                 End Try
                 Await ReleasePositionLockAsync(box)
                 Return
@@ -746,8 +754,9 @@ Namespace TopStepTrader.UI.ViewModels
                 If shouldUpdate AndAlso box.PositionId.HasValue Then
                     Try
                         Await _orderService.EditPositionSlTpAsync(box.PositionId.Value, stLine, Nothing)
-                        System.Diagnostics.Debug.WriteLine($"↳ ST SL → {stLine}")
-                    Catch
+                        _logger.LogInformation("ST+ SL trail → {Price} for {Box} on {Contract}", stLine, box.PersonaName, box.EntryInstrument)
+                    Catch ex As Exception
+                        _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
                     End Try
                     box.CurrentStLine = stLine
                     Dim latestPnl As Decimal = If(snapshot IsNot Nothing, snapshot.UnrealizedPnlUsd, 0D)
@@ -781,7 +790,9 @@ Namespace TopStepTrader.UI.ViewModels
                     Try
                         Await _orderService.PlaceOrderAsync(order)
                         box.ScaleInCount += 1
-                    Catch
+                        _logger.LogInformation("ST+ scale-in placed for {Box} on {Contract} (count={Count})", box.PersonaName, box.EntryInstrument, box.ScaleInCount)
+                    Catch ex As Exception
+                        _logger.LogWarning(ex, "ST+ scale-in PlaceOrderAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
                     End Try
                 End If
                 End If
