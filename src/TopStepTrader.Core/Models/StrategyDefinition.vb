@@ -107,18 +107,20 @@ Namespace TopStepTrader.Core.Models
 
         ''' <summary>
         ''' Earliest UTC hour at which new entry orders are permitted (0–23).
-        ''' Default 6 = 06:00 UTC (07:00 BST) — blocks thin CME Globex overnight session.
+        ''' Default 0 = no lower bound — the TopStepX pre-close blackout (19:50–22:00 UTC) is
+        ''' enforced centrally in StrategyExecutionEngine regardless of this value.
         ''' Set both TradingStartHourUtc and TradingEndHourUtc to 0 to disable the filter.
         ''' Position management (SL trail, reconciliation) continues outside trading hours.
         ''' </summary>
-        Public Property TradingStartHourUtc As Integer = 6
+        Public Property TradingStartHourUtc As Integer = 0
 
         ''' <summary>
         ''' Latest UTC hour (exclusive) at which new entry orders are permitted (0–23).
-        ''' Default 21 = covers through the US equity close.
+        ''' Default 0 = no upper bound — the TopStepX pre-close blackout (19:50–22:00 UTC) is
+        ''' enforced centrally in StrategyExecutionEngine regardless of this value.
         ''' Set both TradingStartHourUtc and TradingEndHourUtc to 0 to disable the filter.
         ''' </summary>
-        Public Property TradingEndHourUtc As Integer = 21
+        Public Property TradingEndHourUtc As Integer = 0
 
         ''' <summary>
         ''' Maximum cumulative realised session loss in USD before all new entries are blocked.

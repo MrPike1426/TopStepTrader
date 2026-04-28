@@ -1026,9 +1026,7 @@ Namespace TopStepTrader.UI.ViewModels
                 .TpMultipleOfN = _tpMultipleOfN,
                 .ExtendTpOnClose = _extendTpOnClose,
                 .PersonaName = _selectedProfileName,
-                .MacdHistMinAtrFraction = _macdHistMinAtrFraction,
-                .TradingWindowUtcStart = New TimeOnly(8, 0),
-                .TradingWindowUtcEnd = New TimeOnly(17, 0)
+                .MacdHistMinAtrFraction = _macdHistMinAtrFraction
             }
 
             HasParsedStrategy = True

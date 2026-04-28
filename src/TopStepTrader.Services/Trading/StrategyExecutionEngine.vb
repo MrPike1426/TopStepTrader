@@ -685,7 +685,20 @@ Namespace TopStepTrader.Services.Trading
             End If
             _lastBarWasStale = barIsStale
 
-
+            ' ── STRAT-37: TopStepX pre-close adverse-exit check ──────────────────
+            ' When a position is open and we are inside the pre-close blackout window
+            ' (19:50–20:10 UTC), close any losing position immediately so it cannot
+            ' deteriorate further before the 20:10 UTC hard cut.
+            ' Winning or flat positions are left open — they may still reach TP.
+            If Not barIsStale AndAlso _positionOpen AndAlso IsInTopStepXBlackout() Then
+                Dim nowUtcMins = DateTimeOffset.UtcNow.Hour * 60 + DateTimeOffset.UtcNow.Minute
+                Dim hardCutMins = TopStepXCloseHourUtc * 60 + TopStepXCloseMinuteUtc  ' 20:10
+                If nowUtcMins < hardCutMins AndAlso _lastApiPnl < 0D Then
+                    Log($"⚠️  Pre-close adverse flatten — position closed before TopStepX 20:10 UTC cut | P&L=${_lastApiPnl:F2}")
+                    Await DoNeutralFlattenAsync(ct)
+                    Return
+                End If
+            End If
 
             If Not barIsStale Then
 
@@ -2108,6 +2121,14 @@ Namespace TopStepTrader.Services.Trading
                             _diagLogger?.WriteEntry(_pendingDiagEntry)
                             _pendingDiagEntry = Nothing
                         End If
+                    ElseIf IsInTopStepXBlackout() Then
+                        Log($"⏸  Entry blocked — TopStepX pre-close window (gate opens again 22:00 UTC) | signal: {side.Value}")
+                        If _pendingDiagEntry IsNot Nothing Then
+                            _pendingDiagEntry.EventType = "REJECT"
+                            _pendingDiagEntry.RejectionReason = "TopStepX pre-close blackout (19:50–22:00 UTC)"
+                            _diagLogger?.WriteEntry(_pendingDiagEntry)
+                            _pendingDiagEntry = Nothing
+                        End If
                     ElseIf Not IsInsideTradingHours() Then
                         Log($"⏸  Outside trading hours (UTC {DateTimeOffset.UtcNow.Hour:00}:xx, window={_strategy.TradingStartHourUtc:00}–{_strategy.TradingEndHourUtc:00}h) — no new entries | signal: {side.Value}")
                         If _pendingDiagEntry IsNot Nothing Then
@@ -3230,10 +3251,35 @@ Namespace TopStepTrader.Services.Trading
             Await Task.CompletedTask
         End Function
 
+        ' ── STRAT-37: TopStepX session boundary constants (UTC) ──────────────────
+        ' TopStepX hard daily close: 20:10 UTC (21:10 UK / 15:10 US Central).
+        ' Pre-close blackout starts 20 minutes before close so adverse positions can be
+        ' exited before the hard cut.  Market re-opens at 22:00 UTC (23:00 UK).
+        ' No lower bound is applied — overnight trading (22:00–06:00 UTC) is permitted.
+        Private Const TopStepXCloseHourUtc   As Integer = 20  ' 20:10 UTC hard close
+        Private Const TopStepXCloseMinuteUtc As Integer = 10
+        Private Const PreCloseBlackoutMinutes As Integer = 20 ' entry gate closes this many minutes before the hard cut
+        Private Const MarketReopenHourUtc    As Integer = 22  ' 22:00 UTC CME re-open
+        Private Const MarketReopenMinuteUtc  As Integer = 0
+
         ''' <summary>
-        ''' Returns True when the current UTC hour falls within the configured trading window.
-        ''' When both TradingStartHourUtc and TradingEndHourUtc are 0 the filter is disabled
-        ''' (always returns True).  Only new entries are blocked — position management continues.
+        ''' Returns True when the current UTC time is inside the TopStepX pre-close blackout
+        ''' or CME maintenance window (19:50–22:00 UTC).  New entry orders are suppressed;
+        ''' position management continues normally throughout.
+        ''' </summary>
+        Private Shared Function IsInTopStepXBlackout() As Boolean
+            Dim nowUtc = DateTimeOffset.UtcNow
+            Dim totalMins = nowUtc.Hour * 60 + nowUtc.Minute
+            ' Blackout start = TopStepX close − PreCloseBlackoutMinutes
+            Dim blackoutStart = TopStepXCloseHourUtc * 60 + TopStepXCloseMinuteUtc - PreCloseBlackoutMinutes  ' = 19:50
+            Dim reopenMins    = MarketReopenHourUtc * 60 + MarketReopenMinuteUtc                              ' = 22:00
+            Return totalMins >= blackoutStart AndAlso totalMins < reopenMins
+        End Function
+
+        ''' <summary>
+        ''' Returns True when the current UTC time falls within the configured legacy integer-hour
+        ''' trading window.  When both TradingStartHourUtc and TradingEndHourUtc are 0 the filter
+        ''' is disabled (always returns True).  Only new entries are blocked.
         ''' </summary>
         Private Function IsInsideTradingHours() As Boolean
             If _strategy.TradingStartHourUtc = 0 AndAlso _strategy.TradingEndHourUtc = 0 Then Return True
@@ -3298,6 +3344,16 @@ Namespace TopStepTrader.Services.Trading
                     If _pendingDiagEntry IsNot Nothing Then
                         _pendingDiagEntry.EventType = "REJECT"
                         _pendingDiagEntry.RejectionReason = $"Daily loss limit hit (session P&L=${_sessionPnl:F2})"
+                        _diagLogger?.WriteEntry(_pendingDiagEntry)
+                        _pendingDiagEntry = Nothing
+                    End If
+                    Return
+                End If
+                If IsInTopStepXBlackout() Then
+                    Log($"⏸  Entry blocked — TopStepX pre-close window (gate opens again 22:00 UTC) | signal: {side.Value} up={upPct:F0}%")
+                    If _pendingDiagEntry IsNot Nothing Then
+                        _pendingDiagEntry.EventType = "REJECT"
+                        _pendingDiagEntry.RejectionReason = "TopStepX pre-close blackout (19:50–22:00 UTC)"
                         _diagLogger?.WriteEntry(_pendingDiagEntry)
                         _pendingDiagEntry = Nothing
                     End If
