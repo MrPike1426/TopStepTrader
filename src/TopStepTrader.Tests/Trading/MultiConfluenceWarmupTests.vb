@@ -1,4 +1,5 @@
 Imports TopStepTrader.Core.Enums
+Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Services.Trading
 Imports Xunit
 

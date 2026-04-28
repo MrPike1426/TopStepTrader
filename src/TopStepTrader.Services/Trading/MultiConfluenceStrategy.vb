@@ -1,52 +1,9 @@
 ﻿Imports TopStepTrader.Core.Enums
+Imports TopStepTrader.Core.Models
+Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.ML.Features
 
 Namespace TopStepTrader.Services.Trading
-
-    ''' <summary>
-    ''' Result returned by <see cref="MultiConfluenceStrategy.Evaluate"/>.
-    ''' </summary>
-    Public Class MultiConfluenceResult
-        ''' <summary>Trade direction signalled, or Nothing when no signal fires.</summary>
-        Public Property Side As OrderSide? = Nothing
-        ''' <summary>Percentage of bullish confluence conditions met (0–100).</summary>
-        Public Property BullScore As Integer = 0
-        ''' <summary>Percentage of bearish confluence conditions met (0–100).</summary>
-        Public Property BearScore As Integer = 0
-        ''' <summary>ATR(14) value — drives dynamic SL/TP sizing.</summary>
-        Public Property AtrValue As Decimal = 0D
-        ''' <summary>
-        ''' Ichimoku cloud edge to use as the SL candidate price.
-        ''' Cloud bottom for Long entries; cloud top for Short entries.
-        ''' Used by <see cref="StrategyExecutionEngine"/> to tighten SL vs the ATR-based level.
-        ''' Nothing when cloud values are not yet available.
-        ''' </summary>
-        Public Property CloudEdgeSl As Decimal? = Nothing
-        ''' <summary>Single-line summary of all indicator values for the execution log.</summary>
-        Public Property StatusLine As String = String.Empty
-        ''' <summary>Raw ADX(14) value at bar-check time. Forwarded to ConfidenceUpdatedEventArgs so the UI card can display it.</summary>
-        Public Property AdxValue As Single = 0F
-        ' ── Extended indicator snapshot for the Hydra grid display ──────────────
-        Public Property Cloud1 As Decimal = 0D         ' higher of SpanA / SpanB
-        Public Property Cloud2 As Decimal = 0D         ' lower of SpanA / SpanB
-        Public Property Tenkan As Decimal = 0D
-        Public Property Kijun As Decimal = 0D
-        Public Property Ema21 As Decimal = 0D
-        Public Property Ema50 As Decimal = 0D
-        Public Property PlusDI As Single = 0F
-        Public Property MinusDI As Single = 0F
-        Public Property MacdHist As Single = 0F
-        Public Property MacdHistPrev As Single = 0F
-        Public Property StochRsiK As Single = 0F
-        Public Property LongCount As Integer = 0
-        Public Property ShortCount As Integer = 0
-        ''' <summary>Graduated confidence score [0–1] based on ADX, DI-spread, MACD magnitude, and StochRSI distance. 0 when no signal fires.</summary>
-        Public Property Confidence As Single = 0F
-        ''' <summary>True when 8/9 conditions align but not all 9. Entry at reduced (half) size.</summary>
-        Public Property IsPartialSignal As Boolean = False
-        ''' <summary>Names of conditions that failed on this evaluation. Empty when all conditions pass.</summary>
-        Public Property FailedConditions As New List(Of String)()
-    End Class
 
     ''' <summary>
     ''' Multi-Confluence Engine for commodities trading via the TopStepX API.
@@ -121,7 +78,7 @@ Namespace TopStepTrader.Services.Trading
                 cfg = config
             Else
                 cfg = New Core.Settings.MultiConfluenceConfig() With {
-                    .AdxThreshold          = adxThreshold,
+                    .AdxThreshold           = adxThreshold,
                     .MacdHistMinAtrFraction = macdHistMinAtrFraction
                 }
             End If
@@ -134,217 +91,50 @@ Namespace TopStepTrader.Services.Trading
                 Return result
             End If
 
-            ' ── Ichimoku Cloud ────────────────────────────────────────────────────
-            Dim ichi = TechnicalIndicators.IchimokuCloud(highs, lows, closes,
-                cfg.TenkanPeriod, cfg.KijunPeriod, cfg.SenkouBPeriod, cfg.IchimokuDisplacement)
-
-            Dim spanANow = ichi.SpanA(n - 1)
-            Dim spanBNow = ichi.SpanB(n - 1)
-
-            If Single.IsNaN(spanANow) OrElse Single.IsNaN(spanBNow) Then
-                result.StatusLine = $"Ichimoku Span B warming up — need {MinBarsRequired}+ bars"
-                Return result
-            End If
-
-            Dim tenkanNow = ichi.Tenkan(n - 1)
-            Dim kijunNow = ichi.Kijun(n - 1)
-            Dim cloudTop = CDec(Math.Max(spanANow, spanBNow))
-            Dim cloudBottom = CDec(Math.Min(spanANow, spanBNow))
-            Dim bullishCloud = (spanANow >= spanBNow)   ' SpanA ≥ SpanB = green/bullish cloud
-            Dim lastClose = closes(n - 1)
-
-            ' ── Lagging span: current close vs price 26 bars ago ──────────────────
-            ' Chikou confirmation: close must be above (Long) / below (Short) the price
-            ' that appeared 26 bars ago on the chart AND must clear the cloud at that position.
-            Dim lagIdx = n - 1 - cfg.IchimokuDisplacement
-            Dim lagClose = If(lagIdx >= 0, closes(lagIdx), Decimal.MinValue)
-
-            ' Historical cloud at the Chikou lag position — guard for index < 0 and NaN.
-            ' lagCloudTop=MaxValue / lagCloudBottom=MinValue ensures conditions fail when unavailable.
-            Dim lagSpanAOk = (lagIdx >= 0 AndAlso Not Single.IsNaN(ichi.SpanA(lagIdx)))
-            Dim lagSpanBOk = (lagIdx >= 0 AndAlso Not Single.IsNaN(ichi.SpanB(lagIdx)))
-            Dim lagCloudTop    = If(lagSpanAOk AndAlso lagSpanBOk,
-                                    CDec(Math.Max(ichi.SpanA(lagIdx), ichi.SpanB(lagIdx))), Decimal.MaxValue)
-            Dim lagCloudBottom = If(lagSpanAOk AndAlso lagSpanBOk,
-                                    CDec(Math.Min(ichi.SpanA(lagIdx), ichi.SpanB(lagIdx))), Decimal.MinValue)
-
-            ' ── EMA 21 / EMA 50 ───────────────────────────────────────────────────
+            ' ── Compute all indicators ────────────────────────────────────────────
+            Dim ichi    = TechnicalIndicators.IchimokuCloud(highs, lows, closes,
+                              cfg.TenkanPeriod, cfg.KijunPeriod, cfg.SenkouBPeriod, cfg.IchimokuDisplacement)
             Dim ema21Arr = TechnicalIndicators.EMA(closes, 21)
             Dim ema50Arr = TechnicalIndicators.EMA(closes, 50)
-            Dim ema21Now = TechnicalIndicators.LastValid(ema21Arr)
-            Dim ema50Now = TechnicalIndicators.LastValid(ema50Arr)
-
-            ' ── DMI / ADX (14) ────────────────────────────────────────────────────
-            Dim dmi = TechnicalIndicators.DMI(highs, lows, closes)
-            Dim plusDINow = TechnicalIndicators.LastValid(dmi.PlusDI)
-            Dim minusDINow = TechnicalIndicators.LastValid(dmi.MinusDI)
-            Dim adxNow = TechnicalIndicators.LastValid(dmi.ADX)
-
-            ' ── MACD (8, 17, 9) — intraday-tuned ─────────────────────────────────
-            Dim macd = TechnicalIndicators.MACD(closes, fastPeriod:=cfg.MacdFastPeriod, slowPeriod:=cfg.MacdSlowPeriod, signalPeriod:=cfg.MacdSignalPeriod)
-            Dim histNow = TechnicalIndicators.LastValid(macd.Histogram)
-            Dim histPrev = TechnicalIndicators.PreviousValid(macd.Histogram)
-
-            ' ── Stochastic RSI (14 / 14) ──────────────────────────────────────────
+            Dim dmi     = TechnicalIndicators.DMI(highs, lows, closes)
+            Dim macd    = TechnicalIndicators.MACD(closes,
+                              fastPeriod:=cfg.MacdFastPeriod, slowPeriod:=cfg.MacdSlowPeriod, signalPeriod:=cfg.MacdSignalPeriod)
             Dim stochRsi = TechnicalIndicators.StochasticRSI(closes)
-            Dim stochKNow = TechnicalIndicators.LastValid(stochRsi.K)
-            Dim stochKPrev = TechnicalIndicators.PreviousValid(stochRsi.K)
+            Dim atrArr  = TechnicalIndicators.ATR(highs, lows, closes, 14)
 
-            ' ── ATR (14) — for SL/TP sizing ───────────────────────────────────────
-            Dim atrArr = TechnicalIndicators.ATR(highs, lows, closes, 14)
-            result.AtrValue = CDec(TechnicalIndicators.LastValid(atrArr))
+            Dim lagIdx = n - 1 - cfg.IchimokuDisplacement
 
-            ' ── Derived thresholds ────────────────────────────────────────────────
-            ' DI spread: require at least 2 points of separation between DI+ and DI-.
-            ' A 0.01-point lead satisfies the raw > comparison but represents no real
-            ' directional conviction — this filters out trending-indicator chop.
-            Dim minDiSpread = cfg.MinDiSpread
-
-            ' Chikou gap: require current close to clear the 26-bar-old price by at least
-            ' ChikouMinGapFraction of the current price (default 0.1%).  A 1-tick gap across
-            ' 130 minutes (on 5-min bars) or 390 minutes (15-min) is statistically meaningless —
-            ' this prevents the Chikou condition being satisfied during flat consolidation.
-            Dim chikouMinGap = lastClose * CDec(cfg.ChikouMinGapFraction)
-
-            ' MACD histogram minimum magnitude: must be at least MacdHistMinAtrFraction of ATR(14).
-            ' When ATR = 0 (warm-up) this degrades to the original > 0 / < 0 check.
-            Dim macdMinMag = CSng(result.AtrValue * CDec(cfg.MacdHistMinAtrFraction))
-
-            Dim adxThresholdEff = cfg.AdxThreshold
-
-            ' ── Long conditions (all 8 must be True) ──────────────────────────────
-            Dim tenkanKijunValid = Not Single.IsNaN(tenkanNow) AndAlso Not Single.IsNaN(kijunNow)
-
-            Dim lc1 = (bullishCloud AndAlso lastClose > cloudTop)                           ' 1. Price above cloud in bullish cloud (cloud twist pre-filter)
-            Dim lc2 = (Not Single.IsNaN(ema21Now) AndAlso lastClose > CDec(ema21Now))         ' 2. Price above EMA 21
-            Dim lc2b = (Not Single.IsNaN(ema50Now) AndAlso lastClose > CDec(ema50Now))     ' 2b. Price above EMA 50 (big-picture trend anchor)
-            Dim lc3 = (tenkanKijunValid AndAlso tenkanNow > kijunNow)                       ' 3. Tenkan-sen > Kijun-sen
-            Dim lc4 = (lagIdx >= 0 AndAlso lastClose > lagClose + chikouMinGap AndAlso
-                       lastClose > lagCloudTop)                                              ' 4. Chikou above price 26 bars ago by ≥0.1% AND above historical cloud top
-            Dim lc5 = (adxNow >= adxThresholdEff AndAlso plusDINow - minusDINow >= minDiSpread) ' 5. ADX gate + DI spread ≥ 2 pts
-            Dim lc6 = (histNow >= macdMinMag AndAlso histNow > histPrev _
-                       AndAlso Not Single.IsNaN(histPrev))                                  ' 6. MACD histogram positive by ≥5% ATR and rising
-            Dim lc7 = (Not Single.IsNaN(stochKNow) AndAlso stochKNow < cfg.StochRsiOverbought)               ' 7. StochRSI K < 0.7 (not overbought)
-
-            ' ── Volume gate: current bar volume must be ≥ 1.2× the 20-bar average ──────
-            ' STRAT-22: ProjectX is the authoritative volume source for the live path.
-            ' When VolumeGateEnabled=False the gate is bypassed for instruments where PX
-            ' returns 0 volume consistently (e.g. M6E EUR/USD micro currency futures).
+            ' ── Build inputs struct ───────────────────────────────────────────────
             Dim volAvg = If(n >= 21, volumes.Skip(n - 21).Take(20).Average(), 0D)
-            Dim lc8 As Boolean
-            If cfg.VolumeGateEnabled Then
-                lc8 = (volAvg > 0D AndAlso volumes(n - 1) >= volAvg * CDec(cfg.VolumeMultiple))
-            Else
-                lc8 = True   ' bypass — no reliable PX volume data for this instrument
-            End If
-            Dim sc8 = lc8   ' same gate for shorts
+            Dim inputs As New Core.Trading.MultiConfluenceInputs With {
+                .SpanA         = ichi.SpanA(n - 1),
+                .SpanB         = ichi.SpanB(n - 1),
+                .Tenkan        = ichi.Tenkan(n - 1),
+                .Kijun         = ichi.Kijun(n - 1),
+                .LagClose      = If(lagIdx >= 0, closes(lagIdx), Decimal.MinValue),
+                .LagSpanA      = If(lagIdx >= 0, ichi.SpanA(lagIdx), Single.NaN),
+                .LagSpanB      = If(lagIdx >= 0, ichi.SpanB(lagIdx), Single.NaN),
+                .Ema21         = TechnicalIndicators.LastValid(ema21Arr),
+                .Ema50         = TechnicalIndicators.LastValid(ema50Arr),
+                .Adx           = TechnicalIndicators.LastValid(dmi.ADX),
+                .PlusDI        = TechnicalIndicators.LastValid(dmi.PlusDI),
+                .MinusDI       = TechnicalIndicators.LastValid(dmi.MinusDI),
+                .MacdHistNow   = TechnicalIndicators.LastValid(macd.Histogram),
+                .MacdHistPrev  = TechnicalIndicators.PreviousValid(macd.Histogram),
+                .StochK        = TechnicalIndicators.LastValid(stochRsi.K),
+                .StochKPrev    = TechnicalIndicators.PreviousValid(stochRsi.K),
+                .Atr           = TechnicalIndicators.LastValid(atrArr),
+                .LastClose     = closes(n - 1),
+                .VolMa20       = volAvg,
+                .CurrentVolume = volumes(n - 1),
+                .Config        = cfg
+            }
 
-            ' ── Short conditions (all 9 must be True) ─────────────────────────────
-            Dim sc1 = (Not bullishCloud AndAlso lastClose < cloudBottom)                    ' 1. Price below cloud in bearish cloud (cloud twist pre-filter)
-            Dim sc2 = (lastClose < CDec(ema21Now))                                           ' 2. Price below EMA 21
-            Dim sc2b = (Not Single.IsNaN(ema50Now) AndAlso lastClose < CDec(ema50Now))      ' 2b. Price below EMA 50
-            Dim sc3 = (tenkanKijunValid AndAlso tenkanNow < kijunNow)                        ' 3. Tenkan-sen < Kijun-sen
-            Dim sc4 = (lagIdx >= 0 AndAlso lastClose < lagClose - chikouMinGap AndAlso
-                       lastClose < lagCloudBottom)                                           ' 4. Chikou below price 26 bars ago by ≥0.1% AND below historical cloud bottom
-            Dim sc5 = (adxNow >= adxThresholdEff AndAlso minusDINow - plusDINow >= minDiSpread) ' 5. ADX gate + DI spread ≥ 2 pts
-            Dim sc6 = (histNow <= -macdMinMag AndAlso histNow < histPrev _
-                       AndAlso Not Single.IsNaN(histPrev))                                   ' 6. MACD histogram negative by ≥5% ATR and falling
-            Dim sc7 = (Not Single.IsNaN(stochKNow) AndAlso stochKNow > cfg.StochRsiOversold _
-                       AndAlso Not Single.IsNaN(stochKPrev) AndAlso stochKNow < stochKPrev) ' 7. StochRSI K not oversold AND falling (room to fall, turning from overbought)
-
-            Dim longCount = {lc1, lc2, lc2b, lc3, lc4, lc5, lc6, lc7, lc8}.Count(Function(c) c)
-            Dim shortCount = {sc1, sc2, sc2b, sc3, sc4, sc5, sc6, sc7, sc8}.Count(Function(c) c)
-
-            result.BullScore = CInt(longCount / 9 * 100)
-            result.BearScore = CInt(shortCount / 9 * 100)
-            result.AdxValue = adxNow
-            result.Cloud1 = cloudTop
-            result.Cloud2 = cloudBottom
-            result.Tenkan = If(Single.IsNaN(tenkanNow), 0D, CDec(tenkanNow))
-            result.Kijun = If(Single.IsNaN(kijunNow), 0D, CDec(kijunNow))
-            result.Ema21 = CDec(ema21Now)
-            result.Ema50 = CDec(ema50Now)
-            result.PlusDI = plusDINow
-            result.MinusDI = minusDINow
-            result.MacdHist = histNow
-            result.MacdHistPrev = If(Single.IsNaN(histPrev), 0F, histPrev)
-            result.StochRsiK = If(Single.IsNaN(stochKNow), 0F, stochKNow)
-            result.LongCount = longCount
-            result.ShortCount = shortCount
-
-            ' ── Collect failed condition names ────────────────────────────────────
-            Dim longLabels = {"Ichimoku", "EMA21", "EMA50", "TenkanKijun", "Chikou", "ADX/DMI", "MACD", "StochRSI", "Volume"}
-            Dim longFlags  = {lc1, lc2, lc2b, lc3, lc4, lc5, lc6, lc7, lc8}
-            Dim shortLabels = {"Ichimoku", "EMA21", "EMA50", "TenkanKijun", "Chikou", "ADX/DMI", "MACD", "StochRSI", "Volume"}
-            Dim shortFlags  = {sc1, sc2, sc2b, sc3, sc4, sc5, sc6, sc7, sc8}
-            ' Report failures for the dominant direction (more conditions met)
-            Dim reportLong = (longCount >= shortCount)
-            Dim evalLabels = If(reportLong, longLabels, shortLabels)
-            Dim evalFlags  = If(reportLong, longFlags, shortFlags)
-            For i = 0 To evalLabels.Length - 1
-                If Not evalFlags(i) Then result.FailedConditions.Add(evalLabels(i))
-            Next
-
-            ' ── StatusLine built after confidence block (see below) ───────────────
-
-            ' ── Signal: all 9 conditions met in one direction ─────────────────────
-            If longCount = 9 Then
-                result.Side = OrderSide.Buy
-                result.CloudEdgeSl = cloudBottom    ' cloud floor = Long SL candidate
-            ElseIf shortCount = 9 Then
-                result.Side = OrderSide.Sell
-                result.CloudEdgeSl = cloudTop       ' cloud ceiling = Short SL candidate
-            ElseIf longCount = 8 AndAlso lc1 AndAlso lc4 AndAlso lc8 Then
-                ' STRAT-16: 8/9 partial-conviction long — one lagging indicator pending
-                result.Side = OrderSide.Buy
-                result.IsPartialSignal = True
-                result.CloudEdgeSl = cloudBottom
-            ElseIf shortCount = 8 AndAlso sc1 AndAlso sc4 AndAlso sc7 AndAlso sc8 Then
-                ' STRAT-16: 8/9 partial-conviction short — one lagging indicator pending
-                result.Side = OrderSide.Sell
-                result.IsPartialSignal = True
-                result.CloudEdgeSl = cloudTop
-            End If
-
-            ' ── STRAT-19: Graduated confidence ────────────────────────────────────
-            ' Weight: ADX 35%, DI-spread 25%, MACD magnitude 25%, StochRSI distance 15%
-            ' Confidence is 0 when no signal fires (Side = Nothing).
-            Dim confAdx  As Single = 0.0F
-            Dim confDi   As Single = 0.0F
-            Dim confMacd As Single = 0.0F
-            Dim confStoch As Single = 0.0F
-            If result.Side IsNot Nothing Then
-                Dim isLong       = (result.Side = OrderSide.Buy)
-                confAdx          = CSng(Math.Min(1.0F, 0.5F + (adxNow - adxThresholdEff) / 60.0F))
-                Dim diSpreadVal  = If(isLong, plusDINow - minusDINow, minusDINow - plusDINow)
-                confDi           = CSng(Math.Min(1.0F, (diSpreadVal - minDiSpread) / 20.0F + 0.5F))
-                Dim macdMagVal   = Math.Abs(histNow)
-                Dim macdNormVal  = CSng(result.AtrValue) * 0.5F + 0.001F
-                confMacd         = CSng(Math.Min(1.0F, macdMagVal / macdNormVal))
-                Dim stochDist    = If(isLong, cfg.StochRsiOverbought - stochKNow, stochKNow - cfg.StochRsiOversold)
-                confStoch        = CSng(Math.Max(0.0F, Math.Min(1.0F, stochDist / 0.7F)))
-                result.Confidence = CSng(Math.Max(0.0F, Math.Min(1.0F,
-                                        confAdx * 0.35F + confDi * 0.25F +
-                                        confMacd * 0.25F + confStoch * 0.15F)))
-            End If
-
-            ' ── Build diagnostic status line ───────────────────────────────────────
-            Dim curVol       = volumes(n - 1)
-            Dim chikouGap    = If(lagIdx >= 0, lastClose - closes(lagIdx), 0D)
-            Dim diSpreadDisp = plusDINow - minusDINow
-            result.StatusLine =
-                $"Close={lastClose:F4} | Cloud=[{cloudBottom:F4}–{cloudTop:F4}] | " &
-                $"T={CDec(tenkanNow):F4} K={CDec(kijunNow):F4} | " &
-                $"EMA21={CDec(ema21Now):F4} EMA50={CDec(ema50Now):F4} | " &
-                $"ADX={adxNow:F1} DI+={plusDINow:F1} DI-={minusDINow:F1} | " &
-                $"MACD-H={histNow:F4}(prev={histPrev:F4}) | StochRSI={stochKNow:F3} | " &
-                $"VolGate={If(cfg.VolumeGateEnabled, lc8.ToString(), "SKIP(PX-no-vol)")} | Long={longCount}/9 Short={shortCount}/9 | " &
-                $"Vol={curVol:F0}/{volAvg * 1.2D:F0} | ChikouGap={chikouGap:F4} | " &
-                $"MACDmag={Math.Abs(histNow):F4}/floor={macdMinMag:F4} | DIspread={diSpreadDisp:F1} | " &
-                $"Conf=adx{confAdx:F2}/di{confDi:F2}/macd{confMacd:F2}/stoch{confStoch:F2}"
-
-            Return result
+            ' ── Delegate to single shared evaluator (ARCH-04) ────────────────────
+            Return s_evaluator.Evaluate(inputs)
         End Function
+
+        Private Shared ReadOnly s_evaluator As New MultiConfluenceEvaluator()
 
     End Class
 
