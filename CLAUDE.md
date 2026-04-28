@@ -91,14 +91,38 @@ MCL rolled from K26 to M26 on April 22. `SearchForFrontMonthAsync` used `cutoff 
 
 ## Ticket & Issue Tracking
 
-All open work is tracked in two artefacts — no separate Priority Queue:
+All open work is tracked in a **local SQLite database** — the single source of truth for index/search — plus individual markdown files for full ticket detail:
 
-- **`Open_TICKETS.md`** — single source of truth: one row per open ticket, with explicit Priority (P0–P3) and Status. Replaces the old `REFACTOR_TRACKER.md`.
+- **`tools/tickets/tickets.db`** — SQLite index (single source of truth for state, priority, search). Local-only, excluded from git.
 - **`tickets/<ID>.md`** — full description, problem, proposed fix, and acceptance criteria for each open ticket.
-- **`Closed_Tickets.md`** — append-only log of every completed ticket.
 - **`tickets/archive/<ID>.md`** — completed ticket files (moved here on close, never deleted).
+- **`Open_TICKETS.md`** / **`Closed_Tickets.md`** — legacy markdown files; retained for reference but no longer edited during routine operations.
 
-These files are local-only (`Open_TICKETS.md`, `Closed_Tickets.md`, `tickets/`) and excluded from the GitHub remote via `.gitignore`.
+All files are local-only and excluded from the GitHub remote via `.gitignore`.
+
+### Ticket CLI
+
+```bash
+# List open tickets (sorted P0→P3 then by ID)
+python tools/tickets/tickets.py list
+
+# Show a ticket (DB row + markdown content)
+python tools/tickets/tickets.py show BUG-17
+
+# Create a new ticket
+python tools/tickets/tickets.py new BUG P1 "Short title" --category Bugs --size S --source UAT
+
+# Close a ticket (moves markdown to archive, updates DB)
+python tools/tickets/tickets.py close BUG-17 --resolution "Fixed by removing stale cache."
+
+# Full-text search
+python tools/tickets/tickets.py search "stale contract"
+
+# Stats
+python tools/tickets/tickets.py stats
+```
+
+See `tools/tickets/README.md` for full usage.
 
 ### Priority Tags
 
@@ -122,7 +146,7 @@ These files are local-only (`Open_TICKETS.md`, `Closed_Tickets.md`, `tickets/`) 
 | `OBS-XX` | Observability — logging, diagnostics, status lines |
 | `FEAT-XX` | New features that don't fit another prefix |
 
-Use the next sequential number within each prefix (check `Open_TICKETS.md` + `Closed_Tickets.md` for the current high-water mark).
+Use the next sequential number within each prefix (the CLI determines it automatically by scanning the DB).
 
 ### T-Shirt Size Estimates
 
@@ -164,18 +188,17 @@ Log/repro: <paste relevant output>
 
 ### Creating a New Ticket
 
-1. Choose the correct prefix and next ID (check `Open_TICKETS.md` + `Closed_Tickets.md` for the high-water mark).
-2. Create `tickets/[ID].md` using the schema above, including `**Size:**`, `**Source:**`, and `**Priority:**`.
-3. Add a row to **`Open_TICKETS.md`** (sorted by priority then ID).
+1. Run `python tools/tickets/tickets.py new <PREFIX> <PRIORITY> "<TITLE>" [--category C] [--size S] [--source SRC]`.
+   - The CLI determines the next ID automatically and creates `tickets/[ID].md`.
+   - A DB row is inserted with `state=Open`.
+2. Edit `tickets/[ID].md` to fill in **Problem**, **Proposed Fix**, and **Acceptance Criteria**.
 
 ### Completing a Ticket
 
 1. Verify build passes and all tests pass.
-2. Move `tickets/[ID].md` → `tickets/archive/[ID].md` (do not delete it).
-3. Append one row to **`Closed_Tickets.md`**.
-4. Remove the row from **`Open_TICKETS.md`** and update its `Last updated` date.
-5. Increment the **Done** count in the **Completion Summary** table inside `Open_TICKETS.md`.
-6. **Commit, push, and pull** — stage all changes and push to origin:
+2. Run `python tools/tickets/tickets.py close [ID] --resolution "<one-line summary>"`.
+   - This moves `tickets/[ID].md` → `tickets/archive/[ID].md` and updates the DB (`state=Closed`).
+3. **Commit, push, and pull** — stage all changes and push to origin:
    ```bash
    git add -A
    git commit -m "<type>(<ID>): <short description>"
@@ -190,7 +213,7 @@ Log/repro: <paste relevant output>
 Execute [ID]
 ```
 
-Claude loads `Open_TICKETS.md` + `tickets/[ID].md` + the referenced source files, implements the change, runs self-verification (build + tests), and completes all ticket artefacts as described above.
+Claude loads `python tools/tickets/tickets.py show [ID]` + the referenced source files, implements the change, runs self-verification (build + tests), and closes the ticket via the CLI as described above.
 
 ---
 
@@ -240,9 +263,9 @@ chore(BUG-12): mark ticket resolved in Open_TICKETS.md
 
 ### Per-Ticket Procedure (automated)
 
-1. Read `CLAUDE.md` (this file) and `Open_TICKETS.md`.
-2. Pick the **highest-priority open row** (lowest P-number, then lowest ID) from `Open_TICKETS.md` (or the ticket explicitly requested).
-3. Read `tickets/[ID].md` and all files listed under `**Files:**`.
+1. Read `CLAUDE.md` (this file).
+2. Pick the **highest-priority open ticket** by running `python tools/tickets/tickets.py list` (lowest P-number, then lowest ID), or use the ticket explicitly requested.
+3. Run `python tools/tickets/tickets.py show [ID]` and read all files listed under `**Files:**`.
 4. Implement the fix following the code style and conventions in this file.
 5. Run self-verification:
    ```bash
@@ -256,13 +279,11 @@ chore(BUG-12): mark ticket resolved in Open_TICKETS.md
    git commit -m "fix(ID): <description>"
    git push origin clean-start
    ```
-7. Complete ticket artefacts (see **Completing a Ticket** above):
-   - Move `tickets/[ID].md` → `tickets/archive/[ID].md`
-   - Append row to `Closed_Tickets.md`
-   - Remove row from `Open_TICKETS.md`, update Done count + Last updated date
+7. Close the ticket via CLI:
    ```bash
+   python tools/tickets/tickets.py close [ID] --resolution "<one-line summary>"
    git add -A
-   git commit -m "chore(ID): mark ticket resolved in Open_TICKETS.md"
+   git commit -m "chore(ID): close ticket"
    git push origin clean-start
    ```
 8. Run `/clear` to reset the context window.

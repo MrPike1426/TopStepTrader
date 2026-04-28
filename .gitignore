@@ -99,3 +99,10 @@ Closed_Tickets.md
 docs/
 Screenshots/
 tickets/
+
+# Ticket tooling — SQLite DB and Python cache (local only)
+tools/tickets/tickets.db
+tools/tickets/tickets.db-shm
+tools/tickets/tickets.db-wal
+tools/tickets/__pycache__/
+tools/tickets/*.pyc
