@@ -81,13 +81,18 @@ Namespace TopStepTrader.Services.Trading
 
             If String.IsNullOrEmpty(fav.PxRootSymbol) Then Return fav.PxContractId
 
-            ' ── Fast path: already resolved for this root (dictionary hit, no API) ────────
+            ' ── Refresh via shared TTL so all callers benefit from the 15-min cache clock ──
+            ' EnsureCacheAsync is a no-op when the cache is warm; when it fires it resolves
+            ' all five instruments at once and populates _rootToActiveId for the fast path.
+            ' This prevents GetResolvedContractIdAsync from returning a permanently-stale entry
+            ' when callers (e.g. SuperTrend+) never touch GetInfoAsync.
+            Await EnsureCacheAsync(cancel)
+
+            ' ── Fast path: populated by EnsureCacheAsync ────────────────────────────────────
             Dim cached As String = Nothing
             If _rootToActiveId.TryGetValue(fav.PxRootSymbol, cached) Then Return cached
 
-            ' ── Slow path: targeted search for this ONE root symbol only ─────────────────
-            ' Do NOT call EnsureCacheAsync here — that rebuilds all 8 contracts regardless
-            ' of which one was requested.  A single SearchForFrontMonthAsync call is enough.
+            ' ── Fallback: targeted search (EnsureCacheAsync may have failed for this root) ──
             If _contractClient Is Nothing Then Return fav.PxContractId
 
             Await _lock.WaitAsync(cancel)
@@ -243,14 +248,36 @@ Namespace TopStepTrader.Services.Trading
         ''' and works regardless of account type.
         ''' Returns the best <see cref="ContractDto"/> or Nothing when no match is found.
         ''' </summary>
+        ''' <summary>
+        ''' Selects the active front-month contract from <paramref name="candidates"/> for the
+        ''' given <paramref name="fav"/> instrument.
+        ''' Contracts expiring within <c>fav.RollLeadDays</c> of <paramref name="asOfDate"/>
+        ''' (default: today UTC) are excluded — they have already rolled or are in the roll window.
+        ''' The earliest-expiry candidate that clears the cutoff is returned.
+        ''' </summary>
+        Friend Shared Function SelectBestContract(
+            candidates As IEnumerable(Of ContractDto),
+            fav As FavouriteContract,
+            Optional asOfDate As DateTime = Nothing) As ContractDto
+
+            If candidates Is Nothing Then Return Nothing
+            Dim today = If(asOfDate = DateTime.MinValue, DateTime.UtcNow.Date, asOfDate.Date)
+            Dim prefix = $"CON.F.US.{fav.PxRootSymbol}."
+            Dim cutoff = today.AddDays(fav.RollLeadDays)
+
+            Return candidates.
+                Where(Function(c) Not String.IsNullOrEmpty(c.ContractId) AndAlso
+                                  c.ContractId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).
+                Select(Function(c) New With {.Contract = c, .Expiry = ParseFuturesExpiry(c.ContractId)}).
+                Where(Function(x) x.Expiry >= cutoff).
+                OrderBy(Function(x) x.Expiry).
+                Select(Function(x) x.Contract).
+                FirstOrDefault()
+        End Function
+
         Private Async Function SearchForFrontMonthAsync(
             fav As FavouriteContract,
             cancel As CancellationToken) As Task(Of ContractDto)
-
-            Dim prefix = $"CON.F.US.{fav.PxRootSymbol}."
-            ' Exclude contracts expiring within RollLeadDays days — they have rolled or are rolling.
-            ' Monthly contracts (MCL/MGC) use 28; quarterly (MES/M6E etc.) default to 7.
-            Dim cutoff = DateTime.UtcNow.Date.AddDays(fav.RollLeadDays)
 
             ' Try simulated universe first, then full exchange universe
             For Each liveFlag In {False, True}
@@ -263,19 +290,13 @@ Namespace TopStepTrader.Services.Trading
                         fav.PxRootSymbol, liveFlag, rawIds.Count, String.Join(", ", rawIds))
                 End If
 
-                Dim best = searchResp?.Contracts?.
-                    Where(Function(c) Not String.IsNullOrEmpty(c.ContractId) AndAlso
-                                      c.ContractId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).
-                    Select(Function(c) New With {.Contract = c, .Expiry = ParseFuturesExpiry(c.ContractId)}).
-                    Where(Function(x) x.Expiry >= cutoff).
-                    OrderBy(Function(x) x.Expiry).
-                    FirstOrDefault()
+                Dim best = SelectBestContract(searchResp?.Contracts, fav)
 
                 If best IsNot Nothing Then
                     _logger.LogInformation(
                         "TopStepXInstrumentCatalog: {Root} matched {Id} (live={Live}, expiry {Exp:yyyy-MM})",
-                        fav.PxRootSymbol, best.Contract.ContractId, liveFlag, best.Expiry)
-                    Return best.Contract
+                        fav.PxRootSymbol, best.ContractId, liveFlag, ParseFuturesExpiry(best.ContractId))
+                    Return best
                 End If
 
                 If Not liveFlag Then
@@ -330,7 +351,7 @@ Namespace TopStepTrader.Services.Trading
         ''' Parses the expiry month from a ProjectX contract ID like "CON.F.US.MCL.K26".
         ''' Returns DateTime.MaxValue when the ID cannot be decoded.
         ''' </summary>
-        Private Shared Function ParseFuturesExpiry(contractId As String) As DateTime
+        Friend Shared Function ParseFuturesExpiry(contractId As String) As DateTime
             If String.IsNullOrEmpty(contractId) Then Return DateTime.MaxValue
             Dim parts = contractId.Split("."c)
             If parts.Length < 2 Then Return DateTime.MaxValue
