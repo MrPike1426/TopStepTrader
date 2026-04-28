@@ -13,7 +13,7 @@ Namespace TopStepTrader.Core.Interfaces
         ''' <summary>The account the user selected on the Dashboard. Nothing until an account is loaded.</summary>
         ReadOnly Property SelectedAccount As Account
 
-        ''' <summary>Broker derived from SelectedAccount. Falls back to eToro when no account is selected.</summary>
+        ''' <summary>Broker derived from SelectedAccount. Falls back to TopStepX when no account is selected.</summary>
         ReadOnly Property ActiveBroker As BrokerType
 
         ''' <summary>Update the globally selected account. Raises AccountChanged.</summary>

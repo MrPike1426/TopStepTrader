@@ -44,7 +44,7 @@ Namespace TopStepTrader.Services.Market
                                           Optional barsToFetch As Integer = 500,
                                           Optional cancel As CancellationToken = Nothing) As Task(Of Integer) Implements IBarIngestionService.IngestAsync
 
-            ' Translate eToro/Yahoo symbol (e.g. "OIL", "GOLD.24-7") to PX contract ID
+            ' Translate display symbol (e.g. "OIL", "GOLD.24-7") to PX contract ID
             ' (e.g. "CON.F.US.MCLE.K26") so StrategyExecutionEngine can pass its ContractId
             ' directly without knowing about the ProjectX naming convention.
             ' Then resolve to the active front-month via the instrument catalog so that

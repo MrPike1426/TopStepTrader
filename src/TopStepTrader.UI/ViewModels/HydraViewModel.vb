@@ -567,17 +567,16 @@ Namespace TopStepTrader.UI.ViewModels
             '   1: GOLD (safe haven — low equity correlation)
             '   2: SPX500 (S&P 500 / MES — primary equity index)
             '   3: EURUSD (EUR/USD / M6E — replaces NSDQ100 to eliminate MES/MNQ correlation)
-            '   4: BTC (/MBT on TopStepX, BTC CFD on eToro)
+            '   4: BTC (/MBT on TopStepX)
             ' NSDQ100 excluded: moves ~0.97 correlated with SPX500 — redundant exposure.
-            Dim activeBroker = _session.ActiveBroker
-            Dim allContracts = FavouriteContracts.GetDefaults(activeBroker)
+            Dim allContracts = FavouriteContracts.GetDefaults()
 
             Dim roster As New List(Of FavouriteContract)
-            Dim oilEntry   = allContracts.FirstOrDefault(Function(f) f.EToroContractId = "OIL")
-            Dim goldEntry  = allContracts.FirstOrDefault(Function(f) f.EToroContractId = "GOLD.24-7")
-            Dim spxEntry   = allContracts.FirstOrDefault(Function(f) f.EToroContractId = "SPX500")
-            Dim fxEntry    = allContracts.FirstOrDefault(Function(f) f.EToroContractId = "EURUSD")
-            Dim btcEntry   = allContracts.FirstOrDefault(Function(f) f.EToroContractId = "BTC")
+            Dim oilEntry   = allContracts.FirstOrDefault(Function(f) f.Name = "OIL")
+            Dim goldEntry  = allContracts.FirstOrDefault(Function(f) f.Name = "GOLD.24-7")
+            Dim spxEntry   = allContracts.FirstOrDefault(Function(f) f.Name = "SPX500")
+            Dim fxEntry    = allContracts.FirstOrDefault(Function(f) f.Name = "EURUSD")
+            Dim btcEntry   = allContracts.FirstOrDefault(Function(f) f.Name = "BTC")
             For Each entry In {oilEntry, goldEntry, spxEntry, fxEntry, btcEntry}
                 If entry IsNot Nothing Then roster.Add(entry)
             Next
@@ -586,7 +585,7 @@ Namespace TopStepTrader.UI.ViewModels
             Dim icons = {"🛢️", "🥇", "📈", "💶", "₿"}
             For i = 0 To Math.Min(roster.Count, 5) - 1
                 Dim fav = roster(i)
-                Dim contractId = fav.GetActiveContractId(activeBroker)
+                Dim contractId = fav.PxContractId
                 Assets.Add(New HydraAssetViewModel(fav.Name, icons(i), contractId))
             Next
             ' Pad to 5 if fewer instruments returned (shouldn't happen in normal config)
@@ -801,7 +800,7 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         ''' <summary>
-        ''' On view load, queries the eToro portfolio API for each of the 5 monitored assets
+        ''' On view load, queries the broker API for each of the 5 monitored assets
         ''' and pre-populates any asset tile that already has an open position.
         ''' This surfaces trades that were placed outside the engine (manual trades or a
         ''' previous session) so the UI is never left showing "No position" incorrectly.
@@ -860,7 +859,7 @@ Namespace TopStepTrader.UI.ViewModels
         ''' Permitted windows: 08:30–13:30 UTC (London main) and 14:00–20:00 UTC (US main).
         ''' </summary>
         Private Shared Function IsInEquitySessionBlackout(contractId As String) As Boolean
-            ' Check whether the contract is an equity index future or eToro equity index CFD
+            ' Check whether the contract is an equity index future
             Dim isEquity = contractId.Contains("MES") OrElse
                            contractId.Contains("MNQ") OrElse
                            contractId.Contains("MYM") OrElse
@@ -1456,7 +1455,7 @@ Namespace TopStepTrader.UI.ViewModels
                                         If currentPrice > 0D Then
                                             Dim favContract = FavouriteContracts.TryGetBySymbol(assetVm.ContractId)
                                             Dim dpp As Decimal = If(favContract IsNot Nothing,
-                                                                    CDec(favContract.GetPointValue(_session.ActiveBroker)), 1D)
+                                                                    CDec(favContract.PxPointValue), 1D)
                                             pnl = Math.Round((currentPrice - snapshot.OpenRate) * dpp * snapshot.Amount *
                                                              If(snapshot.IsBuy, 1D, -1D), 2)
                                         End If

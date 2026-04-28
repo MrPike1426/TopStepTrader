@@ -384,8 +384,8 @@ Namespace TopStepTrader.UI.ViewModels
             _session = session
             _personaService = personaService
 
-            ' Populate asset dropdown — all FavouriteContracts for the active broker (Q3)
-            For Each fc In FavouriteContracts.GetDefaults(_session.ActiveBroker)
+            ' Populate asset dropdown — all FavouriteContracts (Q3)
+            For Each fc In FavouriteContracts.GetDefaults()
                 AvailableContracts.Add(fc)
             Next
             If AvailableContracts.Count > 0 Then
@@ -520,7 +520,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Function BuildStrategyDefinition(slotIdx As Integer) As StrategyDefinition
             Dim fav = _selectedContract
-            Dim contractId = fav.GetActiveContractId(_session.ActiveBroker)
+            Dim contractId = fav.PxContractId
             Dim tickSz = If(fav.PxTickSize > 0D, fav.PxTickSize, 1D)
             Dim tickVal = If(fav.PxTickValue > 0D, fav.PxTickValue, 1D)
             Dim accountId = If(SelectedAccount IsNot Nothing, SelectedAccount.Id, 0L)
@@ -633,7 +633,7 @@ Namespace TopStepTrader.UI.ViewModels
                     ' Override the dropdown selection and pin this slot to M6E (Micro EUR/USD).
                     ' Trading window 07:00–20:00 UTC covers London open through NY close.
                     Dim eurUsdFav = FavouriteContracts.TryGetBySymbol("EURUSD")
-                    Dim dbbContractId = If(eurUsdFav IsNot Nothing, eurUsdFav.GetActiveContractId(_session.ActiveBroker), contractId)
+                    Dim dbbContractId = If(eurUsdFav IsNot Nothing, eurUsdFav.PxContractId, contractId)
                     Dim dbbTickSz = If(eurUsdFav IsNot Nothing AndAlso eurUsdFav.PxTickSize > 0D, eurUsdFav.PxTickSize, tickSz)
                     Dim dbbTickVal = If(eurUsdFav IsNot Nothing AndAlso eurUsdFav.PxTickValue > 0D, eurUsdFav.PxTickValue, tickVal)
                     Return New StrategyDefinition With {

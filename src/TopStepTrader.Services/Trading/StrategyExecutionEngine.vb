@@ -417,7 +417,7 @@ Namespace TopStepTrader.Services.Trading
 
                                  ' Always attach to the existing position — regardless of current P&L.
                                  ' The engine cannot know the intended risk sizing of a position that was
-                                 ' opened at a different notional or placed manually on eToro, so
+                                 ' opened at a different notional or placed manually, so
                                  ' rescue-closing it on startup based on the current strategy's SL
                                  ' dollar amount is inappropriate.  The turtle bracket will establish
                                  ' SL/TP protection once ATR is available on the first bar-check tick.

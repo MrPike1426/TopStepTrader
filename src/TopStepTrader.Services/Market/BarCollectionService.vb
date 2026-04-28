@@ -18,7 +18,7 @@ Namespace TopStepTrader.Services.Market
     ''' Bars are fetched in 5,000-bar pages covering up to 60 calendar days.
     '''
     ''' Symbol resolution:
-    '''   contractId may be an eToro ID ("GOLD.24-7"), a PX root ("MGC"), or a full PX ID
+    '''   contractId may be a display symbol ("GOLD.24-7"), a PX root ("MGC"), or a full PX ID
     '''   ("CON.F.US.MGC.Q26").  The service resolves to PxContractId for the API call, but
     '''   stores bars under the original contractId so the storage key is stable across contract rolls.
     '''
@@ -125,7 +125,7 @@ Namespace TopStepTrader.Services.Market
             End If
 
             ' ── Step 2: Resolve PX contract ID ────────────────────────────────────────
-            ' The contractId stored in SQLite is the stable eToro key (e.g. "GOLD.24-7").
+            ' The contractId stored in SQLite is the stable symbol key (e.g. "GOLD.24-7").
             ' The API call requires the active front-month PX contract ID (e.g. "CON.F.US.MGC.Q25").
             ' Use TopStepXInstrumentCatalog.GetResolvedContractIdAsync — the same catalog-backed
             ' resolution used by TopStepXBarIngestionService — so that quarterly rolls are handled
@@ -222,7 +222,7 @@ Namespace TopStepTrader.Services.Market
                             Continue For
                         End If
                         pageBars.Add(New MarketBar With {
-                            .ContractId = contractId,   ' store under stable eToro key
+                            .ContractId = contractId,   ' store under stable symbol key
                             .Timeframe = sourceTimeframe,
                             .Timestamp = ts,
                             .Open = CDec(b.Open),

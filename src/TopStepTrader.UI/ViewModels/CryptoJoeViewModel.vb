@@ -134,11 +134,11 @@ Namespace TopStepTrader.UI.ViewModels
             Dim iconMap = New Dictionary(Of String, String) From {
                 {"BTC", "₿"}, {"ETH", "Ξ"}, {"XRP", "✕"}, {"SOL", "◎"}, {"BNB", "◈"}}
             Dim roster = FavouriteContracts.GetDefaults().
-                Where(Function(f) f.IsCrypto AndAlso f.IsTradableOn(activeBroker)).
+                Where(Function(f) f.IsCrypto).
                 Take(5).ToList()
             For Each fav In roster
-                Dim icon = If(iconMap.ContainsKey(fav.EToroContractId), iconMap(fav.EToroContractId), "🪙")
-                Assets.Add(New HydraAssetViewModel(fav.Name, icon, fav.GetActiveContractId(activeBroker)))
+                Dim icon = If(iconMap.ContainsKey(fav.Name), iconMap(fav.Name), "🪙")
+                Assets.Add(New HydraAssetViewModel(fav.Name, icon, fav.PxContractId))
             Next
 
             ' Create one DI scope + engine per asset (roster size varies by broker).

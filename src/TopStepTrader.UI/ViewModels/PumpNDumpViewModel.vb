@@ -457,7 +457,7 @@ Namespace TopStepTrader.UI.ViewModels
                           fadeFraction, tighten, dur,
                           GetTickSize(_contractId),
                           GetTickValue(_contractId),
-                          If(_selectedAccount IsNot Nothing, _selectedAccount.Broker, BrokerType.eToro),
+                          BrokerType.TopStepX,
                           tradingStart, tradingEnd)
         End Sub
 
@@ -566,15 +566,13 @@ Namespace TopStepTrader.UI.ViewModels
         Private Function GetTickSize(contractId As String) As Decimal
             Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
             If fav Is Nothing Then Return 0.01D
-            Dim broker = If(_selectedAccount IsNot Nothing, _selectedAccount.Broker, BrokerType.eToro)
-            Return fav.GetTickSize(broker)
+            Return If(fav.PxTickSize > 0, fav.PxTickSize, 0.01D)
         End Function
 
         Private Function GetTickValue(contractId As String) As Decimal
             Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
             If fav Is Nothing Then Return 0.01D
-            Dim broker = If(_selectedAccount IsNot Nothing, _selectedAccount.Broker, BrokerType.eToro)
-            Return fav.GetTickValue(broker)
+            Return If(fav.PxTickValue > 0, fav.PxTickValue, 0.01D)
         End Function
 
         ' ══════════════════════════════════════════════════════════════════════

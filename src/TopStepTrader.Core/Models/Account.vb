@@ -19,8 +19,7 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>Display string for the dropdown: "Name (Broker)".</summary>
         Public ReadOnly Property DisplayName As String
             Get
-                Dim brokerTag = If(Broker = BrokerType.TopStepX, "TopStepX", "eToro")
-                Return If(String.IsNullOrEmpty(Name), brokerTag, $"{Name} ({brokerTag})")
+                Return If(String.IsNullOrEmpty(Name), "TopStepX", $"{Name} (TopStepX)")
             End Get
         End Property
     End Class

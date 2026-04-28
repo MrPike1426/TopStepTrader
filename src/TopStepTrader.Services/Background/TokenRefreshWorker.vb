@@ -9,7 +9,6 @@ Namespace TopStepTrader.Services.Background
 
     ''' <summary>
     ''' Background worker that keeps authentication current.
-    ''' eToro:    no-op — static header keys never expire.
     ''' TopStepX: proactively refreshes the JWT token 30 minutes before its 24-hour expiry.
     ''' Checks every 15 minutes whether a refresh is needed.
     ''' </summary>

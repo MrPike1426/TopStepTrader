@@ -62,12 +62,8 @@ Namespace TopStepTrader.Services.Background
         End Property
 
         Private Function GetActiveContractIds() As IReadOnlyList(Of String)
-            If ActiveBroker = BrokerType.TopStepX Then
-                Return FavouriteContracts.GetDefaults(BrokerType.TopStepX).
-                    Select(Function(f) f.PxContractId).ToList()
-            End If
-            ' eToro: fall back to static config list
-            Return _tradingSettings.ActiveContractIds
+            Return FavouriteContracts.GetDefaults().
+                Select(Function(f) f.PxContractId).ToList()
         End Function
 
         Private Async Sub DoWork(state As Object)

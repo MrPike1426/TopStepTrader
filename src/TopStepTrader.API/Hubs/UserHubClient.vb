@@ -11,8 +11,7 @@ Namespace TopStepTrader.API.Hubs
     ''' Delivers real-time order updates, account balance changes, position changes, and trade fills.
     ''' Hub URL: https://rtc.thefuturesdesk.projectx.com/hubs/user?access_token=JWT
     '''
-    ''' Note: eToro does not use SignalR. When eToro is the active broker, this hub remains
-    ''' disconnected and the REST portfolio endpoint is polled instead.
+    ''' Note: only used when TopStepX is the active broker; no REST polling fallback needed.
     ''' </summary>
     Public Class UserHubClient
         Implements IAsyncDisposable
@@ -28,7 +27,7 @@ Namespace TopStepTrader.API.Hubs
         Public Event TradeReceived As EventHandler(Of PXTradeEventArgs)
         Public Event ConnectionStateChanged As EventHandler(Of HubConnectionState)
 
-        ' ── Legacy eToro event stubs kept for compile compatibility ─────────────────
+        ' ── Legacy event stubs kept for compile compatibility ──────────────────────────
         Public Event OrderFillReceived As EventHandler(Of OrderFillEventArgs)
 
         Public Sub New(options As IOptions(Of ProjectXSettings),
@@ -197,7 +196,7 @@ Namespace TopStepTrader.API.Hubs
         End Sub
     End Class
 
-    ' ── Legacy eToro stubs (kept for compile compatibility) ──────────────────────
+    ' ── Legacy stubs (kept for compile compatibility) ─────────────────────────────
 
     Public Class UserOrderFillData
         Public Property OrderId As Long

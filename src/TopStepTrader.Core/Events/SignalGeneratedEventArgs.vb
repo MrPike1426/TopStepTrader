@@ -64,10 +64,10 @@ Namespace TopStepTrader.Core.Events
         Public ReadOnly Property ContractId As String
         Public ReadOnly Property ConfidencePct As Integer
         Public ReadOnly Property EntryTime As DateTimeOffset
-        ''' <summary>eToro external order ID for the entry order. Nothing if placement failed.</summary>
+        ''' <summary>Broker-assigned order ID for the entry order. Nothing if placement failed.</summary>
         Public ReadOnly Property ExternalOrderId As Long?
-        ''' <summary>eToro positionId resolved after the order fills. Nothing if not yet resolved.</summary>
-        Public ReadOnly Property EtoroPositionId As Long?
+        ''' <summary>Broker position ID resolved after the order fills. Nothing if not yet resolved.</summary>
+        Public ReadOnly Property ExternalPositionId As Long?
         ''' <summary>UTC timestamp recorded when the position was opened by the engine.</summary>
         Public ReadOnly Property OpenedAtUtc As DateTimeOffset
         ''' <summary>Contract count (for futures display).</summary>
@@ -76,7 +76,7 @@ Namespace TopStepTrader.Core.Events
         Public ReadOnly Property EntryPrice As Decimal
         Public Sub New(side As Core.Enums.OrderSide, contractId As String, confidencePct As Integer,
                        entryTime As DateTimeOffset, Optional externalOrderId As Long? = Nothing,
-                       Optional etoroPositionId As Long? = Nothing,
+                       Optional externalPositionId As Long? = Nothing,
                        Optional openedAtUtc As DateTimeOffset = Nothing,
                        Optional amount As Decimal = 0D,
                        Optional entryPrice As Decimal = 0D)
@@ -85,7 +85,7 @@ Namespace TopStepTrader.Core.Events
             Me.ConfidencePct = confidencePct
             Me.EntryTime = entryTime
             Me.ExternalOrderId = externalOrderId
-            Me.EtoroPositionId = etoroPositionId
+            Me.ExternalPositionId = externalPositionId
             Me.OpenedAtUtc = If(openedAtUtc = DateTimeOffset.MinValue, entryTime, openedAtUtc)
             Me.Amount = amount
             Me.EntryPrice = entryPrice
@@ -120,12 +120,12 @@ Namespace TopStepTrader.Core.Events
 
     ''' <summary>
     ''' Raised by StrategyExecutionEngine on every 30-second tick while a position is open.
-    ''' Carries API-authoritative P&amp;L and the eToro positionId (which may have been resolved
+    ''' Carries API-authoritative P&amp;L and the broker positionId (which may have been resolved
     ''' after order placement if the broker API had a propagation delay).
     ''' </summary>
     Public Class PositionSyncedEventArgs
         Inherits EventArgs
-        ''' <summary>eToro positionId confirmed by the portfolio API.</summary>
+        ''' <summary>Broker positionId confirmed by the portfolio API.</summary>
         Public ReadOnly Property PositionId As Long
         ''' <summary>Unrealised P&amp;L in USD as reported by the broker.</summary>
         Public ReadOnly Property UnrealizedPnlUsd As Decimal

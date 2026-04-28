@@ -74,7 +74,7 @@ Namespace TopStepTrader.UI.ViewModels
             Get
                 If String.IsNullOrEmpty(_contractIdText) Then Return String.Empty
                 Dim fav = FavouriteContracts.GetDefaults().FirstOrDefault(
-                    Function(f) String.Equals(f.ContractId, _contractIdText, StringComparison.OrdinalIgnoreCase))
+                    Function(f) String.Equals(f.PxContractId, _contractIdText, StringComparison.OrdinalIgnoreCase))
                 Return If(fav IsNot Nothing, fav.Name, _contractIdText)
             End Get
         End Property
@@ -583,7 +583,7 @@ Namespace TopStepTrader.UI.ViewModels
 
             For Each f In FavouriteContracts.GetDefaults()
                 AvailableContracts.Add(New Contract With {
-                    .Id = f.ContractId,
+                    .Id = f.PxContractId,
                     .FriendlyName = f.Name
                 })
             Next
@@ -1103,8 +1103,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private Function GetTickSize(contractId As String) As Decimal
             Dim fc = FavouriteContracts.TryGetBySymbol(contractId)
             If fc IsNot Nothing Then
-                Dim ts = fc.GetTickSize(_session.ActiveBroker)
-                If ts > 0D Then Return ts
+                If fc.PxTickSize > 0D Then Return fc.PxTickSize
             End If
             Return 0.01D
         End Function
@@ -1112,8 +1111,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private Function GetPointValue(contractId As String) As Decimal
             Dim fc = FavouriteContracts.TryGetBySymbol(contractId)
             If fc IsNot Nothing Then
-                Dim pv = fc.GetPointValue(_session.ActiveBroker)
-                If pv > 0D Then Return pv
+                If fc.PxPointValue > 0D Then Return fc.PxPointValue
             End If
             Return 1.0D
         End Function

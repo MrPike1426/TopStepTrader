@@ -281,7 +281,7 @@ Namespace TopStepTrader.UI.ViewModels
                                 If cts.IsCancellationRequested Then Exit For
 
                                 runIndex += 1
-                                Dim contractId = contract.ContractId
+                                Dim contractId = contract.PxContractId
                                 Dim contractName = contract.Name
                                 Dim stratName = strat.Item1
                                 Dim stratCondition = strat.Item2
@@ -306,8 +306,8 @@ Namespace TopStepTrader.UI.ViewModels
 
                                     If Not barResult.Success Then Continue For
 
-                                    Dim tickSize = contract.GetTickSize(_session.ActiveBroker)
-                                    Dim pointValue = contract.GetPointValue(_session.ActiveBroker)
+                                    Dim tickSize = If(contract.PxTickSize > 0D, contract.PxTickSize, 0.01D)
+                                    Dim pointValue = If(contract.PxPointValue > 0D, contract.PxPointValue, 1.0D)
                                     If tickSize <= 0D Then tickSize = 0.01D
                                     If pointValue <= 0D Then pointValue = 1.0D
 

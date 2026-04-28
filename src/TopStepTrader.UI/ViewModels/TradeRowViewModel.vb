@@ -70,7 +70,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public Sub New(side As OrderSide, contractId As String,
                        confidencePct As Integer, entryTime As DateTimeOffset,
                        Optional externalOrderId As Long? = Nothing,
-                       Optional etoroPositionId As Long? = Nothing,
+                       Optional externalPositionId As Long? = Nothing,
                        Optional openedAtUtc As DateTimeOffset = Nothing,
                        Optional exposureUsd As Decimal = 0D,
                        Optional entryPrice As Decimal = 0D)
@@ -79,7 +79,7 @@ Namespace TopStepTrader.UI.ViewModels
             Me.ConfidencePct = confidencePct
             Me.SideDisplay = If(side = OrderSide.Buy, "BUY", "SELL")
             Me.ExternalOrderId = externalOrderId
-            _etoroPositionId = etoroPositionId
+            _externalPositionId = externalPositionId
             _openedAtUtc = If(openedAtUtc = DateTimeOffset.MinValue, entryTime, openedAtUtc)
             Me.ExposureUsd = exposureUsd
             _entryPrice = entryPrice
@@ -96,15 +96,15 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
-        ' ── eToro position / exposure fields ────────────────────────────────────
-        Private _etoroPositionId As Long?
-        Public Property EtoroPositionId As Long?
+        ' ── Position / exposure fields ────────────────────────────────────────────
+        Private _externalPositionId As Long?
+        Public Property ExternalPositionId As Long?
             Get
-                Return _etoroPositionId
+                Return _externalPositionId
             End Get
             Set(value As Long?)
-                If SetProperty(_etoroPositionId, value) Then
-                    NotifyPropertyChanged(NameOf(EtoroPositionIdDisplay))
+                If SetProperty(_externalPositionId, value) Then
+                    NotifyPropertyChanged(NameOf(ExternalPositionIdDisplay))
                 End If
             End Set
         End Property
@@ -123,9 +123,9 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public ReadOnly Property ExposureUsd As Decimal
 
-        Public ReadOnly Property EtoroPositionIdDisplay As String
+        Public ReadOnly Property ExternalPositionIdDisplay As String
             Get
-                Return If(EtoroPositionId.HasValue, EtoroPositionId.Value.ToString(), "—")
+                Return If(ExternalPositionId.HasValue, ExternalPositionId.Value.ToString(), "—")
             End Get
         End Property
 
@@ -238,7 +238,7 @@ Namespace TopStepTrader.UI.ViewModels
         ''' </summary>
         Public Sub ApplyApiSnapshot(positionId As Long, unrealizedPnlUsd As Decimal, openedAtUtc As DateTimeOffset)
             If Not IsInProgress Then Return
-            If Not EtoroPositionId.HasValue Then EtoroPositionId = positionId
+            If Not ExternalPositionId.HasValue Then ExternalPositionId = positionId
             If openedAtUtc > DateTimeOffset.MinValue AndAlso _openedAtUtc = DateTimeOffset.MinValue Then
                 OpenedAtUtc = openedAtUtc
             End If

@@ -651,7 +651,7 @@ Namespace TopStepTrader.UI.ViewModels
             If slDollars <= 0D Then slDollars = 10D
 
             ' Resolve correct contract ID: TopStepX uses PX contract format (e.g. "CON.F.US.MCLE.K26"),
-            ' not the eToro display symbol (e.g. "OIL"). This ensures IsTopStepX = True in the engine
+            ' not the display symbol (e.g. "OIL"). This ensures IsTopStepX = True in the engine
             ' and that bar ingestion uses the right contract.
             Dim effectiveContractId As String = _contractId
             If _session.ActiveBroker = BrokerType.TopStepX Then
@@ -957,24 +957,22 @@ Namespace TopStepTrader.UI.ViewModels
             End If
         End Sub
 
-        ''' <summary>Price units per tick for the contract — broker-aware.</summary>
+        ''' <summary>Price units per tick for the contract.</summary>
         Private Function GetTickSize(contractId As String) As Decimal
             Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
             If fav Is Nothing Then Return 0.01D
-            Return If(_session.ActiveBroker = BrokerType.TopStepX AndAlso fav.PxTickSize > 0,
-                      fav.PxTickSize, fav.EToroTickSize)
+            Return If(fav.PxTickSize > 0, fav.PxTickSize, 0.01D)
         End Function
 
         Private Function GetTickValue(contractId As String) As Decimal
             Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
             If fav Is Nothing Then Return 0.01D
-            Return If(_session.ActiveBroker = BrokerType.TopStepX AndAlso fav.PxTickValue > 0,
-                      fav.PxTickValue, fav.EToroTickValue)
+            Return If(fav.PxTickValue > 0, fav.PxTickValue, 0.01D)
         End Function
 
         Private Shared Function GetPointValue(contractId As String) As Decimal
             Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
-            Return If(fav IsNot Nothing, fav.EToroPointValue, 1.0D)
+            Return If(fav IsNot Nothing, fav.PxPointValue, 1.0D)
         End Function
 
         ' ══════════════════════════════════════════════════════════════════════

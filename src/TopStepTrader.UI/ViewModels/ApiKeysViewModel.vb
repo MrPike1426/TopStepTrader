@@ -11,25 +11,24 @@ Namespace TopStepTrader.UI.ViewModels
 
         ' ── Active broker selection ───────────────────────────────────────────────
 
-        Private _activeBroker As String = "etoro"
+        Private _activeBroker As String = "topstepx"
         Public Property ActiveBroker As String
             Get
                 Return _activeBroker
             End Get
             Set(value As String)
                 If SetProperty(_activeBroker, value) Then
-                    OnPropertyChanged(NameOf(IsEToroActive))
                     OnPropertyChanged(NameOf(IsTopStepXActive))
                 End If
             End Set
         End Property
 
-        Public Property IsEToroActive As Boolean
+        Public Property IsTopStepXOnly As Boolean
             Get
-                Return String.Equals(_activeBroker, "etoro", StringComparison.OrdinalIgnoreCase)
+                Return String.Equals(_activeBroker, "topstepx", StringComparison.OrdinalIgnoreCase)
             End Get
             Set(value As Boolean)
-                If value Then ActiveBroker = "etoro"
+                If value Then ActiveBroker = "topstepx"
             End Set
         End Property
 
@@ -44,77 +43,77 @@ Namespace TopStepTrader.UI.ViewModels
 
         ' ── Named provider keys — credential (non-secret) + API key (secret) ────────
 
-        Private _etoroKeyName As String = String.Empty
-        Public Property EtoroKeyName As String
+        Private _LegacyKeyName As String = String.Empty
+        Public Property LegacyKeyName As String
             Get
-                Return _etoroKeyName
+                Return _LegacyKeyName
             End Get
             Set(value As String)
-                SetProperty(_etoroKeyName, value)
+                SetProperty(_LegacyKeyName, value)
             End Set
         End Property
 
-        ''' <summary>"demo" or "live" — which eToro account to connect to.</summary>
-        Private _etoroAccountMode As String = "demo"
-        Public Property EtoroAccountMode As String
+        ''' <summary>"demo" or "live" — which legacy account to connect to.</summary>
+        Private _LegacyAccountMode As String = "demo"
+        Public Property LegacyAccountMode As String
             Get
-                Return _etoroAccountMode
+                Return _LegacyAccountMode
             End Get
             Set(value As String)
-                If SetProperty(_etoroAccountMode, value) Then
-                    OnPropertyChanged(NameOf(IsEtoroDemoSelected))
-                    OnPropertyChanged(NameOf(IsEtoroLiveSelected))
+                If SetProperty(_LegacyAccountMode, value) Then
+                    OnPropertyChanged(NameOf(IsLegacyDemoSelected))
+                    OnPropertyChanged(NameOf(IsLegacyLiveSelected))
                 End If
             End Set
         End Property
 
         ''' <summary>True when Demo mode is active — drives radio-button IsChecked binding.</summary>
-        Public Property IsEtoroDemoSelected As Boolean
+        Public Property IsLegacyDemoSelected As Boolean
             Get
-                Return String.Equals(_etoroAccountMode, "demo", StringComparison.OrdinalIgnoreCase)
+                Return String.Equals(_LegacyAccountMode, "demo", StringComparison.OrdinalIgnoreCase)
             End Get
             Set(value As Boolean)
-                If value Then EtoroAccountMode = "demo"
+                If value Then LegacyAccountMode = "demo"
             End Set
         End Property
 
         ''' <summary>True when Live mode is active — drives radio-button IsChecked binding.</summary>
-        Public Property IsEtoroLiveSelected As Boolean
+        Public Property IsLegacyLiveSelected As Boolean
             Get
-                Return String.Equals(_etoroAccountMode, "live", StringComparison.OrdinalIgnoreCase)
+                Return String.Equals(_LegacyAccountMode, "live", StringComparison.OrdinalIgnoreCase)
             End Get
             Set(value As Boolean)
-                If value Then EtoroAccountMode = "live"
+                If value Then LegacyAccountMode = "live"
             End Set
         End Property
 
-        Private _etoroApiKey As String = String.Empty
-        Public Property EtoroApiKey As String
+        Private _LegacyApiKey As String = String.Empty
+        Public Property LegacyApiKey As String
             Get
-                Return _etoroApiKey
+                Return _LegacyApiKey
             End Get
             Set(value As String)
-                SetProperty(_etoroApiKey, value)
+                SetProperty(_LegacyApiKey, value)
             End Set
         End Property
 
-        Private _etoroUserKey As String = String.Empty
-        Public Property EtoroUserKey As String
+        Private _LegacyUserKey As String = String.Empty
+        Public Property LegacyUserKey As String
             Get
-                Return _etoroUserKey
+                Return _LegacyUserKey
             End Get
             Set(value As String)
-                SetProperty(_etoroUserKey, value)
+                SetProperty(_LegacyUserKey, value)
             End Set
         End Property
 
-        Private _etoroLiveUserKey As String = String.Empty
-        Public Property EtoroLiveUserKey As String
+        Private _LegacyLiveUserKey As String = String.Empty
+        Public Property LegacyLiveUserKey As String
             Get
-                Return _etoroLiveUserKey
+                Return _LegacyLiveUserKey
             End Get
             Set(value As String)
-                SetProperty(_etoroLiveUserKey, value)
+                SetProperty(_LegacyLiveUserKey, value)
             End Set
         End Property
 
@@ -356,12 +355,12 @@ Namespace TopStepTrader.UI.ViewModels
         ''' <summary>Reload all key values from the backing file.</summary>
         Public Sub LoadFromStore()
             Dim s = _store.Load()
-            _activeBroker = If(String.IsNullOrEmpty(s.ActiveBroker), "etoro", s.ActiveBroker)
-            _etoroKeyName = s.EtoroKeyName
-            _etoroAccountMode = If(String.IsNullOrEmpty(s.EtoroAccountMode), "demo", s.EtoroAccountMode)
-            _etoroApiKey = s.EtoroApiKey
-            _etoroUserKey = s.EtoroUserKey
-            _etoroLiveUserKey = s.EtoroLiveUserKey
+            _activeBroker = If(String.IsNullOrEmpty(s.ActiveBroker), "topstepx", s.ActiveBroker)
+            _LegacyKeyName = s.LegacyKeyName
+            _LegacyAccountMode = If(String.IsNullOrEmpty(s.LegacyAccountMode), "demo", s.LegacyAccountMode)
+            _LegacyApiKey = s.LegacyApiKey
+            _LegacyUserKey = s.LegacyUserKey
+            _LegacyLiveUserKey = s.LegacyLiveUserKey
             _topStepXUsername = s.TopStepXUsername
             _topStepXApiKey = s.TopStepXApiKey
             _claudeOrgId = s.ClaudeOrgId
@@ -387,11 +386,11 @@ Namespace TopStepTrader.UI.ViewModels
             Try
                 _store.Save(New ApiKeySettings With {
                     .ActiveBroker = _activeBroker,
-                    .EtoroKeyName = _etoroKeyName,
-                    .EtoroAccountMode = _etoroAccountMode,
-                    .EtoroApiKey = _etoroApiKey,
-                    .EtoroUserKey = _etoroUserKey,
-                    .EtoroLiveUserKey = _etoroLiveUserKey,
+                    .LegacyKeyName = _LegacyKeyName,
+                    .LegacyAccountMode = _LegacyAccountMode,
+                    .LegacyApiKey = _LegacyApiKey,
+                    .LegacyUserKey = _LegacyUserKey,
+                    .LegacyLiveUserKey = _LegacyLiveUserKey,
                     .TopStepXUsername = _topStepXUsername,
                     .TopStepXApiKey = _topStepXApiKey,
                     .ClaudeOrgId = _claudeOrgId,

@@ -707,9 +707,7 @@ Namespace TopStepTrader.Services.Trading
 
             Dim instrId As Integer = 0
             Dim fav = TopStepTrader.Core.Trading.FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
-            If fav IsNot Nothing Then
-                instrId = fav.InstrumentId
-            ElseIf Not Integer.TryParse(_strategy.ContractId, instrId) Then
+            If fav Is Nothing AndAlso Not Integer.TryParse(_strategy.ContractId, instrId) Then
                 Log($"⚠️  Cannot resolve instrumentId for '{_strategy.ContractId}' — order aborted. " &
                     $"Add contract to Core.Trading.FavouriteContracts.")
                 _positionOpen = False
@@ -718,9 +716,8 @@ Namespace TopStepTrader.Services.Trading
 
             Dim priceUsed = lastClose
 
-            Dim minNotional = If(fav IsNot Nothing, fav.MinNotionalUsd, 1000D)
+            Dim minNotional = 1000D
             Dim finalAmount = minNotional
-            Dim clamped = False
 
             ' ── DollarPerPoint for TopStepX futures = tickValue / tickSize × contracts ──
             Dim tickSzCj = If(_strategy.TickSize > 0D, _strategy.TickSize, If(fav IsNot Nothing, fav.PxTickSize, 0.01D))
@@ -954,9 +951,7 @@ Namespace TopStepTrader.Services.Trading
 
             Dim instrId As Integer = 0
             Dim fav = TopStepTrader.Core.Trading.FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
-            If fav IsNot Nothing Then
-                instrId = fav.InstrumentId
-            ElseIf Not Integer.TryParse(_strategy.ContractId, instrId) Then
+            If fav Is Nothing AndAlso Not Integer.TryParse(_strategy.ContractId, instrId) Then
                 Log($"⚠️  Cannot resolve instrumentId for '{_strategy.ContractId}' — scale-in {scaleIndex}/{MaxScaleInTrades} aborted.")
                 Return
             End If
@@ -968,7 +963,7 @@ Namespace TopStepTrader.Services.Trading
             Dim slPriceVal As Decimal? = _lastSlPrice
             Dim tpPriceVal As Decimal? = Nothing
 
-            Dim minNotional = If(fav IsNot Nothing, fav.MinNotionalUsd, 1000D)
+            Dim minNotional = 1000D
             Dim finalAmount = minNotional
 
             Log($"📋 SCALE-IN ORDER {scaleIndex}/{MaxScaleInTrades} | instrId={instrId} side={side} | amount=${finalAmount:F2}")

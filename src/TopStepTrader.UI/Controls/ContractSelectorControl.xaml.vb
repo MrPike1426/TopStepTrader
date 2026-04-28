@@ -42,8 +42,8 @@ Namespace TopStepTrader.UI.Controls
         Private Shared ReadOnly _favouriteItems As IReadOnlyList(Of InstrumentItem) =
             FavouriteContracts.GetDefaults() _
                 .Select(Function(f) New InstrumentItem With {
-                    .InstrumentId = f.InstrumentId,
-                    .Symbol = f.ContractId,
+                    .InstrumentId = 0,
+                    .Symbol = f.PxContractId,
                     .DisplayName = f.Name,
                     .IsFavourite = True
                 }).ToList()

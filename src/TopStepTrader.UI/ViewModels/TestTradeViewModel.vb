@@ -1184,11 +1184,7 @@ Namespace TopStepTrader.UI.ViewModels
             End SyncLock
 
             Try
-                If IsTopStepX Then
-                    Await ExecuteTopStepXTestTrade(side, contractId, sideLabel, correlationId)
-                Else
-                    Await ExecuteEToroTestTrade(side, contractId, sideLabel, correlationId)
-                End If
+                Await ExecuteTopStepXTestTrade(side, contractId, sideLabel, correlationId)
             Catch ex As Exception
                 Dim errMsg = ex.Message
                 SyncLock _strategyLock : _isOrderPending = False : End SyncLock
@@ -1271,113 +1267,6 @@ Namespace TopStepTrader.UI.ViewModels
             End If
         End Function
 
-        ''' <summary>eToro path: unchanged percentage-based SL/TP with REST fill polling.</summary>
-        Private Async Function ExecuteEToroTestTrade(side As OrderSide, contractId As String,
-                                                      sideLabel As String,
-                                                      correlationId As String) As Task
-            Dim amountVal As Decimal = 500D
-            If Not Decimal.TryParse(_testTradeAmount, amountVal) OrElse amountVal <= 0 Then amountVal = 500D
-
-            Dispatch(Sub() TestTradeStatus = $"📤 Placing ${amountVal} {sideLabel} for {contractId}...")
-
-            Dim slPct As Decimal = 0
-            Dim tpPct As Decimal = 0
-            Dim slRate As Decimal? = Nothing
-            Dim tpRate As Decimal? = Nothing
-
-            If Decimal.TryParse(_testTradeStopLoss, slPct) AndAlso slPct > 0 AndAlso
-               Decimal.TryParse(_testTradeTakeProfit, tpPct) AndAlso tpPct > 0 Then
-
-                Dim refPrice As Decimal = _lastKnownPrice
-                ' refPrice stays as _lastKnownPrice; if 0 the order is placed without SL/TP
-
-                If refPrice > 0 Then
-                    Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
-                    Dim ptVal = If(fav IsNot Nothing, fav.GetPointValue(BrokerType.eToro), 1D)
-                    Dim slOffset = (slPct / 100D) * (refPrice / ptVal)
-                    Dim tpOffset = (tpPct / 100D) * (refPrice / ptVal)
-                    If side = OrderSide.Buy Then
-                        slRate = Math.Round(refPrice - slOffset, 4)
-                        tpRate = Math.Round(refPrice + tpOffset, 4)
-                    Else
-                        slRate = Math.Round(refPrice + slOffset, 4)
-                        tpRate = Math.Round(refPrice - tpOffset, 4)
-                    End If
-                    Dim slDollars = Math.Round(slPct / 100D * amountVal, 2)
-                    Dim tpDollars = Math.Round(tpPct / 100D * amountVal, 2)
-                    Dispatch(Sub() AddDebugMessage(
-                        $"SL/TP: ref={refPrice:F4}  SL={slRate:F4} (~${slDollars})  TP={tpRate:F4} (~${tpDollars})"))
-                Else
-                    Dispatch(Sub() AddDebugMessage("⚠ Could not resolve price — order placed without SL/TP"))
-                End If
-            End If
-
-            Dim order As New Order With {
-                .AccountId = _selectedAccount.Id,
-                .Broker = BrokerType.eToro,
-                .ContractId = contractId,
-                .InstrumentId = _testTradeInstrumentId,
-                .Side = side,
-                .OrderType = OrderType.Market,
-                .Amount = amountVal,
-                .StopLossRate = slRate,
-                .TakeProfitRate = tpRate,
-                .Status = OrderStatus.Pending,
-                .PlacedAt = DateTimeOffset.UtcNow,
-                .Notes = $"Test Trade — {sideLabel} [{correlationId}]"
-            }
-
-            Dim placedOrder = Await _orderService.PlaceOrderAsync(order)
-
-            SyncLock _strategyLock
-                _pendingEntryOrderId = placedOrder.ExternalOrderId
-            End SyncLock
-
-            If placedOrder.Status = OrderStatus.Rejected Then
-                SyncLock _strategyLock : _isOrderPending = False : End SyncLock
-                Dim reason = If(String.IsNullOrWhiteSpace(placedOrder.Notes), "unknown reason", placedOrder.Notes)
-                Dispatch(Sub() TestTradeStatus = $"❌ {sideLabel} rejected: {reason}")
-            Else
-                Dispatch(Sub() TestTradeStatus =
-                    $"✔ {sideLabel} placed — Order #{placedOrder.ExternalOrderId}. Waiting for fill...")
-
-                Dim fillPrice As Decimal? = Nothing
-                Dim isFilled As Boolean = False
-
-                For i As Integer = 1 To 10
-                    If _isPositionActive Then
-                        isFilled = True
-                        Exit For
-                    End If
-                    If placedOrder.ExternalOrderId.HasValue Then
-                        fillPrice = Await _orderService.TryGetOrderFillPriceAsync(placedOrder.ExternalOrderId.Value, _selectedAccount.Id)
-                        If fillPrice.HasValue Then
-                            isFilled = True
-                            SyncLock _strategyLock
-                                If Not _isPositionActive Then
-                                    _isPositionActive = True
-                                    _isOrderPending = False
-                                    _pendingEntryOrderId = Nothing
-                                    _pendingEntryCorrelationId = String.Empty
-                                    _entryPrice = fillPrice.Value
-                                    _entrySide = side
-                                    placedOrder.FillPrice = fillPrice
-                                    Dim bracketTask = Task.Run(Function() PlaceBracketsAsync(placedOrder, fillPrice.Value))
-                                    Dispatch(Sub() AddDebugMessage($"Strategy: Polling confirmed Fill @ {fillPrice}. Placing brackets..."))
-                                End If
-                            End SyncLock
-                            Exit For
-                        End If
-                    End If
-                    Await Task.Delay(1000)
-                Next
-
-                If Not isFilled AndAlso Not _isPositionActive Then
-                    Dispatch(Sub() AddDebugMessage("Strategy: Order fill polling timed out (10s). Leaving order open."))
-                    SyncLock _strategyLock : _isOrderPending = False : End SyncLock
-                End If
-            End If
-        End Function
 
         Private Async Function PlaceBracketsAsync(entryOrder As Order, explicitFillPrice As Decimal) As Task
             Try
@@ -1612,19 +1501,15 @@ Namespace TopStepTrader.UI.ViewModels
         End Property
 
         Private Sub LoadAvailableContracts()
-            ' Load contracts for all brokers; the ContractSelectorControl filters to the
-            ' selected account's broker at trade time.
             Dim seen As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
-            For Each broker In {BrokerType.eToro, BrokerType.TopStepX}
-                For Each f In FavouriteContracts.GetDefaults(broker)
-                    Dim cid = f.GetActiveContractId(broker)
-                    If seen.Add(cid) Then
-                        AvailableContracts.Add(New Contract With {
-                            .Id = cid,
-                            .FriendlyName = f.Name
-                        })
-                    End If
-                Next
+            For Each f In FavouriteContracts.GetDefaults()
+                Dim cid = f.PxContractId
+                If seen.Add(cid) Then
+                    AvailableContracts.Add(New Contract With {
+                        .Id = cid,
+                        .FriendlyName = f.Name
+                    })
+                End If
             Next
         End Sub
 

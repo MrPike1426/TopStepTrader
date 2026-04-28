@@ -914,7 +914,7 @@ Namespace TopStepTrader.Services.Trading
                 Return
             End If
 
-            ' ── Take Profit Limit (eToro) ────────────────────────────────────────
+            ' ── Take Profit Limit ─────────────────────────────────────────────────
             If _takeProfitTicks > 0 Then
                 Dim tpOffset = _takeProfitTicks * tick
                 Dim tpPrice = If(side = OrderSide.Buy, avgEntry + tpOffset, avgEntry - tpOffset)
@@ -1106,7 +1106,7 @@ Namespace TopStepTrader.Services.Trading
                             Log($"⚠️  Trailing SL: could not resolve open position for {_contractId}")
                         End If
                     Else
-                        ' eToro: cancel the old StopLimit bracket and place a replacement.
+                        ' Cancel the old StopLimit bracket and place a replacement.
                         Dim cancelSlSuccess = True
                         If b.SlOrderId.HasValue Then
                             Try

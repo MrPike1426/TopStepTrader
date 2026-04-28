@@ -5,44 +5,40 @@ Namespace TopStepTrader.Core.Models
     Public Class Order
         Public Property Id As Long
 
-        ''' <summary>eToro market-open orderId returned by the execution endpoint.</summary>
+        ''' <summary>Broker-assigned order ID returned by the execution endpoint.</summary>
         Public Property ExternalOrderId As Long?
 
-        ''' <summary>eToro positionId resolved after the order executes. Required to close a position.</summary>
+        ''' <summary>Broker-assigned position ID resolved after the order executes. Required to close a position.</summary>
         Public Property ExternalPositionId As Long?
 
         Public Property AccountId As Long
 
-        ''' <summary>Ticker symbol (e.g. "AAPL") or numeric instrumentId as string (e.g. "1001").</summary>
+        ''' <summary>Ticker symbol or numeric instrument ID as string.</summary>
         Public Property ContractId As String = String.Empty
 
-        ''' <summary>eToro numeric instrument ID. Resolved from ContractId by ContractMetadataService.</summary>
+        ''' <summary>Numeric instrument ID. Resolved from ContractId by ContractMetadataService.</summary>
         Public Property InstrumentId As Integer
 
         Public Property Side As OrderSide
         Public Property OrderType As OrderType
 
-        ''' <summary>Number of units/shares to trade. Maps to eToro Units field.</summary>
+        ''' <summary>Number of units/contracts to trade.</summary>
         Public Property Quantity As Integer
 
-        ''' <summary>USD dollar amount to invest. Used by eToro by-amount endpoint when set.</summary>
+        ''' <summary>USD dollar amount to invest when set.</summary>
         Public Property Amount As Decimal?
 
         Public Property LimitPrice As Decimal?
         Public Property StopPrice As Decimal?
 
-        ''' <summary>eToro stop-loss trigger price level (absolute price, not ticks).</summary>
+        ''' <summary>Stop-loss trigger price level (absolute price, not ticks).</summary>
         Public Property StopLossRate As Decimal?
 
-        ''' <summary>eToro take-profit trigger price level (absolute price, not ticks).</summary>
+        ''' <summary>Take-profit trigger price level (absolute price, not ticks).</summary>
         Public Property TakeProfitRate As Decimal?
 
         ''' <summary>
-        ''' When True, eToro's native Trailing Stop Loss is enabled on the position.
-        ''' The broker automatically moves StopLossRate whenever price improves, keeping
-        ''' a constant gap equal to (openRate − stopLossRate) from the best price reached.
-        ''' Documented on the by-amount and by-units open endpoints.  NOT available as a
-        ''' standalone edit on the undocumented PUT /positions/{id} endpoint — set at open time.
+        ''' When True, native Trailing Stop Loss is enabled on the position.
         ''' </summary>
         Public Property IsTslEnabled As Boolean = False
 

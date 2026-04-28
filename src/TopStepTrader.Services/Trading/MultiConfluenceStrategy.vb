@@ -49,7 +49,7 @@ Namespace TopStepTrader.Services.Trading
     End Class
 
     ''' <summary>
-    ''' Multi-Confluence Engine for commodities trading via the eToro API.
+    ''' Multi-Confluence Engine for commodities trading via the TopStepX API.
     '''
     ''' Combines nine independent signals on 15-minute bars:
     '''   1. Ichimoku Cloud (9 / 26 / 52 / displacement 26) + cloud twist pre-filter

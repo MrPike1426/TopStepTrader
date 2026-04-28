@@ -9,7 +9,7 @@ Namespace TopStepTrader.Tests.Trading
 
     ''' <summary>
     ''' End-to-end validation of the AI-Trading workflow after the percentage-based
-    ''' exit and eToro minimum-trade-size refactor:
+    ''' exit and minimum-trade-size refactor:
     '''   signal evaluation → % SL/TP price computation → min-notional clamping → order submission.
     '''
     ''' All tests are pure-math / pure-model — no network calls, no DI container.
@@ -169,7 +169,7 @@ Namespace TopStepTrader.Tests.Trading
         ' ══════════════════════════════════════════════════════════════════
 
         ' ══════════════════════════════════════════════════════════════════
-        ' 4 — eToro minimum trade size enforcement
+        ' 4 — minimum trade size enforcement
         ' ══════════════════════════════════════════════════════════════════
 
         <Fact>
@@ -230,29 +230,29 @@ Namespace TopStepTrader.Tests.Trading
         ' ══════════════════════════════════════════════════════════════════
 
         <Fact>
-        Public Sub FavouriteContracts_Oil_HasCorrectInstrumentId()
+        Public Sub FavouriteContracts_Oil_HasNonZeroPxTickSize()
             Dim oil = FavouriteContracts.TryGetBySymbol("OIL")
 
             Assert.NotNull(oil)
-            Assert.Equal(17, oil.InstrumentId)
+            Assert.True(oil.PxTickSize > 0D)
         End Sub
 
         <Fact>
-        Public Sub FavouriteContracts_Oil_HasMinNotional1000()
+        Public Sub FavouriteContracts_Oil_HasNonZeroPxTickValue()
             Dim oil = FavouriteContracts.TryGetBySymbol("OIL")
 
             Assert.NotNull(oil)
-            Assert.Equal(1000D, oil.MinNotionalUsd)
+            Assert.True(oil.PxTickValue > 0D)
         End Sub
 
         <Fact>
-        Public Sub FavouriteContracts_AllSixHaveNonZeroInstrumentIdAndMinNotional()
+        Public Sub FavouriteContracts_AllSixHaveNonZeroPxTickSpecs()
             Dim contracts = FavouriteContracts.GetDefaults()
 
             Assert.Equal(6, contracts.Count)
             For Each c In contracts
-                Assert.True(c.InstrumentId >= 0, $"{c.ContractId}: InstrumentId must be >= 0")
-                Assert.True(c.MinNotionalUsd > 0, $"{c.ContractId}: MinNotionalUsd must be > 0")
+                Assert.True(c.PxTickSize > 0, $"{c.PxContractId}: PxTickSize must be > 0")
+                Assert.True(c.PxTickValue > 0, $"{c.PxContractId}: PxTickValue must be > 0")
             Next
         End Sub
 
@@ -291,9 +291,10 @@ Namespace TopStepTrader.Tests.Trading
             ' Min-notional — $1000 user = $1000 min → no clamp
             Assert.Equal(1000D, finalAmt)
 
-            ' InstrumentId resolves
+            ' PxContractId resolves
             Dim fav = FavouriteContracts.TryGetBySymbol("OIL")
-            Assert.Equal(17, fav.InstrumentId)
+            Assert.NotNull(fav)
+            Assert.NotEmpty(fav.PxContractId)
         End Sub
 
         <Fact>
@@ -541,12 +542,12 @@ Namespace TopStepTrader.Tests.Trading
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════
-        ' 9 — TradeRowViewModel: eToro fields + live P&L
+        ' 9 — TradeRowViewModel: external position fields + live P&L
         ' ══════════════════════════════════════════════════════════════════
 
         <Fact>
-        Public Sub TradeRow_CapturesEtoroPositionIdAndOpenedTime()
-            ' GIVEN: event values that come from a real eToro placement
+        Public Sub TradeRow_CapturesExternalPositionIdAndOpenedTime()
+            ' GIVEN: event values that come from a real broker placement
             Dim positionId = 3454794424L
             Dim openedAt = New DateTimeOffset(2026, 5, 3, 9, 56, 0, TimeSpan.Zero)
 
@@ -555,12 +556,12 @@ Namespace TopStepTrader.Tests.Trading
                 OrderSide.Sell, "OIL", 77,
                 openedAt,
                 externalOrderId:=333223404L,
-                etoroPositionId:=positionId,
+                externalPositionId:=positionId,
                 openedAtUtc:=openedAt)
 
             ' THEN
-            Assert.Equal(positionId, row.EtoroPositionId)
-            Assert.Equal("3454794424", row.EtoroPositionIdDisplay)
+            Assert.Equal(positionId, row.ExternalPositionId)
+            Assert.Equal("3454794424", row.ExternalPositionIdDisplay)
             Assert.Equal(openedAt.ToLocalTime().ToString("dd/MM HH:mm"), row.OpenedAtDisplay)
         End Sub
 

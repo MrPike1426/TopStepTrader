@@ -6,16 +6,16 @@ Namespace TopStepTrader.Core.Settings
     ''' </summary>
     Public Class ApiKeySettings
         ' ── Active broker ────────────────────────────────────────────────────────────
-        ''' <summary>"etoro" or "topstepx" — which broker is currently active. Defaults to "etoro".</summary>
-        Public Property ActiveBroker As String = "etoro"
+        ''' <summary>"topstepx" — which broker is currently active.</summary>
+        Public Property ActiveBroker As String = "topstepx"
 
         ' ── Named providers — credential (non-secret) + API key (secret) ────────────
-        Public Property EtoroKeyName As String = String.Empty       ' Display label for the key set
-        ''' <summary>"demo" or "live" — selects which eToro trading environment to connect to.</summary>
-        Public Property EtoroAccountMode As String = "demo"
-        Public Property EtoroApiKey As String = String.Empty        ' x-api-key  (developer portal key — shared across accounts)
-        Public Property EtoroUserKey As String = String.Empty       ' x-user-key for the Demo account
-        Public Property EtoroLiveUserKey As String = String.Empty   ' x-user-key for the Live account
+        Public Property LegacyKeyName As String = String.Empty       ' Display label for the key set
+        ''' <summary>"demo" or "live" — selects which legacy provider trading environment to connect to.</summary>
+        Public Property LegacyAccountMode As String = "demo"
+        Public Property LegacyApiKey As String = String.Empty        ' x-api-key  (developer portal key — shared across accounts)
+        Public Property LegacyUserKey As String = String.Empty       ' x-user-key for the Demo account
+        Public Property LegacyLiveUserKey As String = String.Empty   ' x-user-key for the Live account
         Public Property TopStepXUsername As String = String.Empty   ' Account email address
         Public Property TopStepXApiKey As String = String.Empty
         Public Property ClaudeOrgId As String = String.Empty        ' Organisation / Workspace ID (optional)

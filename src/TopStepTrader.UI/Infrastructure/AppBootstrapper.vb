@@ -27,7 +27,7 @@ Namespace TopStepTrader.UI.Infrastructure
                     Sub(ctx, cfg)
                         cfg.SetBasePath(AppContext.BaseDirectory)
                         cfg.AddJsonFile("appsettings.json", optional:=False, reloadOnChange:=False)
-                        ' DAMO_DEMO.txt credential overlay removed — eToro is no longer the active broker.
+                        ' DAMO_DEMO.txt credential overlay removed — no longer needed.
                         ' TopStepX credentials are loaded from appsettings.json (ProjectX section) only.
                     End Sub) _
                 .ConfigureServices(

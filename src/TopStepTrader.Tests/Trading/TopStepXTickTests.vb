@@ -4,7 +4,6 @@ Imports Microsoft.Extensions.Logging.Abstractions
 Imports TopStepTrader.API.Http.ProjectX
 Imports TopStepTrader.API.Models.Requests
 Imports TopStepTrader.API.Models.Responses
-Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.Services.Trading
@@ -164,15 +163,15 @@ Namespace TopStepTrader.Tests.Trading
             Assert.Equal(4993.25D, newSl)
         End Sub
 
-        ' ── eToro ATR initial SL ─────────────────────────────────────────────────────
-        ' Mirrors the PlaceBracketOrdersAsync eToro path logic in StrategyExecutionEngine.
+        ' ── ATR initial SL ───────────────────────────────────────────────────────────
+        ' Mirrors the PlaceBracketOrdersAsync initial-SL logic in StrategyExecutionEngine.
 
         ''' <summary>
         ''' Pure helper mirroring the engine's SL computation:
         '''   slDistance = slNMultiple × ATR
         '''   slPrice    = entry ± slDistance (buy = below, sell = above)
         ''' </summary>
-        Private Shared Function ComputeEtoroSl(entry As Decimal, atr As Decimal,
+        Private Shared Function ComputeAtrSlInitial(entry As Decimal, atr As Decimal,
                                                 slNMultiple As Decimal,
                                                 isBuy As Boolean) As Decimal
             Dim dist = Math.Round(slNMultiple * atr, 4)
@@ -180,26 +179,26 @@ Namespace TopStepTrader.Tests.Trading
         End Function
 
         <Fact>
-        Public Sub EtoroSl_Long_BelowEntry()
+        Public Sub AtrSlInitial_Long_BelowEntry()
             ' entry=1800, ATR=5, 1.0N → SL = 1795.0000
-            Dim sl = ComputeEtoroSl(1800D, 5.0D, 1.0D, isBuy:=True)
+            Dim sl = ComputeAtrSlInitial(1800D, 5.0D, 1.0D, isBuy:=True)
             Assert.Equal(1795.0D, sl)
             Assert.True(sl < 1800D)
         End Sub
 
         <Fact>
-        Public Sub EtoroSl_Short_AboveEntry()
+        Public Sub AtrSlInitial_Short_AboveEntry()
             ' entry=1800, ATR=5, 1.0N → SL = 1805.0000
-            Dim sl = ComputeEtoroSl(1800D, 5.0D, 1.0D, isBuy:=False)
+            Dim sl = ComputeAtrSlInitial(1800D, 5.0D, 1.0D, isBuy:=False)
             Assert.Equal(1805.0D, sl)
             Assert.True(sl > 1800D)
         End Sub
 
         <Fact>
-        Public Sub EtoroSl_HigherMultiple_WiderStop()
+        Public Sub AtrSlInitial_HigherMultiple_WiderStop()
             ' 2.0N should give twice the distance of 1.0N
-            Dim slNormal = ComputeEtoroSl(1800D, 5.0D, 1.0D, isBuy:=True)   ' 1795
-            Dim slWide   = ComputeEtoroSl(1800D, 5.0D, 2.0D, isBuy:=True)   ' 1790
+            Dim slNormal = ComputeAtrSlInitial(1800D, 5.0D, 1.0D, isBuy:=True)   ' 1795
+            Dim slWide   = ComputeAtrSlInitial(1800D, 5.0D, 2.0D, isBuy:=True)   ' 1790
             Assert.True(slWide < slNormal)   ' wider SL is further from entry
             Assert.Equal(1790.0D, slWide)
         End Sub
@@ -329,7 +328,7 @@ Namespace TopStepTrader.Tests.Trading
         Public Overrides Function GetInfoAsync(pxContractId As String,
                                                Optional cancel As CancellationToken = Nothing) As Task(Of InstrumentInfo)
             ' Return the hardcoded FavouriteContracts local default directly
-            Dim fav = Core.Trading.FavouriteContracts.GetDefaults(BrokerType.TopStepX).
+            Dim fav = Core.Trading.FavouriteContracts.GetDefaults().
                 FirstOrDefault(Function(f) String.Equals(f.PxContractId, pxContractId, StringComparison.OrdinalIgnoreCase))
             If fav Is Nothing Then
                 Return Task.FromResult(New InstrumentInfo With {.PxContractId = pxContractId, .TickSize = 0.25D})
@@ -431,7 +430,7 @@ Namespace TopStepTrader.Tests.Trading
     ' ══════════════════════════════════════════════════════════════════════════════
     ' InitialSlPrice guard — premature-close regression tests
     '
-    ' Scenario: eToro CFD, UK100 at 7500.
+    ' Scenario: UK100 at 7500.
     '   ATR = 5 pts, SlMultipleOfN = 1.0 → atrSlDistance = 5 pts → _initialSlPrice = 7495.
     '   MinSlDistancePoints clamps to 37.5 pts → broker SL = 7462.5, _lastSlPrice = 7462.5.
     '   First bar close = 7506 (+6 pts). Trail candidate = 7501. 7501 > 7462.5 → ratchet
@@ -503,7 +502,7 @@ Namespace TopStepTrader.Tests.Trading
             ' Quantifies the gap that caused the original bug:
             ' ATR SL = 5 pts, minSlPoints = 37.5 pts.  Difference = 32.5 pts.
             Dim atrSlDist = 5D      ' SlMultipleOfN × ATR
-            Dim minSlPoints = 37.5D ' eToro minimum for UK100 at 7500 with 10× leverage
+            Dim minSlPoints = 37.5D ' minimum stop floor for UK100 at 7500 with 10× leverage
             Assert.True(atrSlDist < minSlPoints,
                 "ATR SL must be narrower than broker min to trigger the premature-close bug.")
             Assert.Equal(32.5D, minSlPoints - atrSlDist)

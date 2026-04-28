@@ -13,7 +13,7 @@ Namespace TopStepTrader.Services.Diagnostics
     '''
     ''' File format: one JSON object per line.  Lines starting with '#' are comments.
     ''' Filename pattern: diag_YYYY-MM-DD_HH-mm-ss_{CONTRACT}_{SESSION}.jsonl
-    ''' Output folder:    [My Documents]\eToroTrader_Diagnostics\
+    ''' Output folder:    [My Documents]\TopStepTrader_Diagnostics\
     '''
     ''' Thread-safe: all writes are serialised via SyncLock.
     ''' AutoFlush enabled so no data is lost if the process crashes.
@@ -123,7 +123,7 @@ Namespace TopStepTrader.Services.Diagnostics
 
                 Dim dir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                    "eToroTrader_Diagnostics")
+                    "TopStepTrader_Diagnostics")
 
                 Directory.CreateDirectory(dir)
 
@@ -143,7 +143,7 @@ Namespace TopStepTrader.Services.Diagnostics
                     "PnL_USD,SL_Price,TP_Price,PositionID,SL_Ticks,TP_Ticks")
 
                 ' Human-readable header comments (stripped by JSONL parsers using comment="#")
-                _writer.WriteLine($"# eToroTrader Diagnostic Log")
+                _writer.WriteLine($"# TopStepTrader Diagnostic Log")
                 _writer.WriteLine($"# Session   : {_sessionId}")
                 _writer.WriteLine($"# Contract  : {contractId}")
                 _writer.WriteLine($"# Strategy  : {strategyName}")

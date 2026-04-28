@@ -21,7 +21,7 @@ Namespace TopStepTrader.Core.Interfaces
                                             Optional cancel As CancellationToken = Nothing) As Task(Of Decimal?)
 
         ''' <summary>
-        ''' Queries the eToro API directly for open positions on a specific instrument.
+        ''' Queries the broker API directly for open positions on a specific instrument.
         ''' Does NOT use the local database — only the API has ground truth on live positions.
         ''' </summary>
         Function GetLiveWorkingOrdersAsync(accountId As Long,
@@ -49,11 +49,8 @@ Namespace TopStepTrader.Core.Interfaces
 
         ''' <summary>
         ''' Updates the SL and/or TP of an open position on the broker.
-        ''' Used by the stepped trailing bracket to push free-ride levels to eToro
+        ''' Used by the stepped trailing bracket to push free-ride levels to the broker
         ''' so positions are protected even if the engine is stopped.
-        ''' Set enableTsl=True to re-enable eToro's native Trailing Stop Loss from the
-        ''' new SL level — this is the documented path and avoids minimum-distance
-        ''' rejections from the undocumented PUT /positions endpoint.
         ''' Returns True on success.
         ''' </summary>
         Function EditPositionSlTpAsync(positionId As Long,

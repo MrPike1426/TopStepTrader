@@ -73,7 +73,7 @@ Namespace TopStepTrader.Services.Market
             Implements IStartupBarCheckService.CheckMissingBarsAsync
 
             Dim cutoff = DateTimeOffset.UtcNow.AddDays(-LookbackDays)
-            Dim contracts = FavouriteContracts.GetDefaults(BrokerType.TopStepX)
+            Dim contracts = FavouriteContracts.GetDefaults()
             Dim results As New List(Of StartupBarCheckResult)()
 
             For Each contract In contracts

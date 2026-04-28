@@ -7,7 +7,7 @@ Namespace TopStepTrader.Core.Models
     ''' is a final macro/session filter only.
     ''' </summary>
     Public Class PreTradeContext
-        ''' <summary>eToro / ProjectX contract identifier, e.g. "MGC" or "GOLD.24-7".</summary>
+        ''' <summary>Contract identifier, e.g. "MGC" or "CON.F.US.MGC.Q26".</summary>
         Public Property ContractId As String = String.Empty
         ''' <summary>Human-readable instrument name, e.g. "Micro Gold Futures".</summary>
         Public Property ContractDescription As String = String.Empty

@@ -192,7 +192,7 @@ Namespace TopStepTrader.Data
                 If mustClose Then conn.Close()
             End Try
 
-            ' ── RC-5: add eToro amount/leverage/SL/TP columns to Orders table ────────
+            ' ── RC-5: add amount/leverage/SL/TP columns to Orders table ───────────────────────────────────────────
             ' SQLite does not support ALTER TABLE ... ADD COLUMN IF NOT EXISTS, so each
             ' statement is attempted individually and "duplicate column name" errors are
             ' silently swallowed, making this block fully idempotent on every startup.

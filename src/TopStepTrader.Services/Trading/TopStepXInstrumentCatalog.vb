@@ -2,7 +2,6 @@ Imports System.Threading
 Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.API.Http.ProjectX
 Imports TopStepTrader.API.Models.Responses
-Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Trading
 
 Namespace TopStepTrader.Services.Trading
@@ -201,7 +200,7 @@ Namespace TopStepTrader.Services.Trading
             End Try
 
             ' Step 2: Resolve front-month contract ID for each favourite via root-symbol search
-            For Each fav In FavouriteContracts.GetDefaults(BrokerType.TopStepX)
+            For Each fav In FavouriteContracts.GetDefaults()
                 If String.IsNullOrEmpty(fav.PxRootSymbol) Then Continue For
                 Try
                     Dim match = Await SearchForFrontMonthAsync(fav, cancel)
@@ -329,7 +328,7 @@ Namespace TopStepTrader.Services.Trading
 
         Private Sub SeedFromDefaults()
             _cache.Clear()
-            For Each fav In FavouriteContracts.GetDefaults(BrokerType.TopStepX)
+            For Each fav In FavouriteContracts.GetDefaults()
                 _cache(fav.PxContractId) = New InstrumentInfo With {
                     .PxContractId = fav.PxContractId,
                     .DisplayName = fav.Name,
@@ -365,7 +364,7 @@ Namespace TopStepTrader.Services.Trading
         End Function
 
         Private Shared Function BuildFromDefaults(pxContractId As String) As InstrumentInfo
-            Dim fav = FavouriteContracts.GetDefaults(BrokerType.TopStepX).
+            Dim fav = FavouriteContracts.GetDefaults().
                 FirstOrDefault(Function(f) String.Equals(f.PxContractId, pxContractId,
                                                          StringComparison.OrdinalIgnoreCase))
             If fav IsNot Nothing Then

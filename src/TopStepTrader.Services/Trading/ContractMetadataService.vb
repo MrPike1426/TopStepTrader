@@ -1,6 +1,5 @@
 Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.API.Http.ProjectX
-Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Trading
@@ -11,7 +10,7 @@ Namespace TopStepTrader.Services.Trading
     ''' TopStepX-only implementation of IContractMetadataService.
     ''' Uses PXContractClient (POST /api/Contract/search and /searchById).
     ''' FavouriteContracts is always consulted first as a fast local cache.
-    ''' eToro ContractClient removed — kept in source but not registered or injected.
+    ''' Legacy ContractClient removed — not registered or injected.
     ''' </summary>
     Public Class ContractMetadataService
         Implements IContractMetadataService
@@ -31,7 +30,7 @@ Namespace TopStepTrader.Services.Trading
             ' Fast path: check FavouriteContracts first
             Dim fav = FavouriteContracts.TryGetBySymbol(symbol)
             If fav IsNot Nothing Then
-                Return fav.GetActiveContractId(BrokerType.TopStepX)
+                Return fav.PxContractId
             End If
 
             ' Slow path: query TopStepX
@@ -54,10 +53,10 @@ Namespace TopStepTrader.Services.Trading
             Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
             If fav IsNot Nothing Then
                 Return New Contract With {
-                    .Id = fav.GetActiveContractId(BrokerType.TopStepX),
+                    .Id = fav.PxContractId,
                     .FriendlyName = fav.Name,
-                    .TickSize = fav.GetTickSize(BrokerType.TopStepX),
-                    .TickValue = fav.GetTickValue(BrokerType.TopStepX)
+                    .TickSize = fav.PxTickSize,
+                    .TickValue = fav.PxTickValue
                 }
             End If
 

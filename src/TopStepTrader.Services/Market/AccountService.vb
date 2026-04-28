@@ -8,7 +8,7 @@ Namespace TopStepTrader.Services.Market
 
     ''' <summary>
     ''' TopStepX-only implementation of IAccountService.
-    ''' eToro account fetching removed — TopStepX is the only active broker.
+    ''' TopStepX is the only active broker.
     ''' </summary>
     Public Class AccountService
         Implements IAccountService

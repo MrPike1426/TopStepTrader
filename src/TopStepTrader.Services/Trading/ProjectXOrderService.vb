@@ -82,7 +82,7 @@ Namespace TopStepTrader.Services.Trading
             ' Default to 1 contract when Quantity is not explicitly set (test phase)
             Dim contractSize = If(order.Quantity > 0, order.Quantity, 1)
 
-            ' Resolve to active front-month contract ID (handles roll-overs and eToro→PX symbol translation)
+            ' Resolve to active front-month contract ID (handles roll-overs and symbol→PX translation)
             Dim resolvedContractId = Await ResolveToActivePxContractIdAsync(order.ContractId)
             If Not String.Equals(resolvedContractId, order.ContractId, StringComparison.OrdinalIgnoreCase) Then
                 _logger.LogInformation(
@@ -397,7 +397,7 @@ Namespace TopStepTrader.Services.Trading
 
         ''' <summary>
         ''' Writes a timestamped line to DebugLog (UI execution log) and appends it to
-        ''' Documents\eToroTrader_Diagnostics\flatten_debug.txt for offline inspection.
+        ''' Documents\TopStepTrader_Diagnostics\flatten_debug.txt for offline inspection.
         ''' </summary>
         Private Shared Sub FlattenDiag(message As String)
             Dim ts = DateTimeOffset.UtcNow.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture)
@@ -405,7 +405,7 @@ Namespace TopStepTrader.Services.Trading
             Try : Core.Logging.DebugLog.Log(line) : Catch : End Try
             Try
                 Dim dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                                       "eToroTrader_Diagnostics")
+                                       "TopStepTrader_Diagnostics")
                 Directory.CreateDirectory(dir)
                 File.AppendAllText(Path.Combine(dir, "flatten_debug.txt"),
                                    line & Environment.NewLine)
@@ -568,7 +568,7 @@ Namespace TopStepTrader.Services.Trading
         ''' Translates a caller-supplied <paramref name="contractId"/> to the live front-month
         ''' ProjectX contract ID.  Handles two cases:
         ''' <list type="bullet">
-        ''' <item>eToro symbol (e.g. "GOLD.24-7") — caller used the favourite's eToro name</item>
+        ''' <item>Display symbol (e.g. "GOLD.24-7") — caller used the favourite's symbol name</item>
         ''' <item>Stale PX ID (e.g. "CON.F.US.MGC.J26") — monthly roll-over has expired it</item>
         ''' </list>
         ''' Falls back to the supplied value when no matching favourite is found.
