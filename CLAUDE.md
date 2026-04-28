@@ -48,6 +48,47 @@ dotnet test --no-build -v q
 - Never report a task complete until both build and test pass.
 - If a test failure is pre-existing (not caused by the current change), flag it explicitly — do not silently ignore it.
 
+## Data Integrity — Hard Rules
+
+**No trade decision may ever be based on stale or inaccurate market data.** This is a non-negotiable constraint. Violation caused BUG-36: the app computed SuperTrend on MCL K26 (stuck at ~$92, BEAR) while the live front-month M26 was at $99.52 (strongly BULL). The engine entered the wrong side.
+
+### What counts as "stale or inaccurate data"
+
+| Category | Example failure |
+|---|---|
+| Wrong contract | Bars from a rolled/expired contract (K26 instead of M26) |
+| Stale cached ID | `_rootToActiveId` never refreshed → engine uses old contract indefinitely |
+| Forming bar | Incomplete bar fed to indicators → direction flips before bar closes (repaint) |
+| Stale bars | Last bar older than `TimeframeMinutes × 3` → market may be closed or feed dead |
+| Wrong tick specs | Hardcoded tick size / point value instead of reading `FavouriteContracts` |
+
+### Enforcement mechanisms already in place
+
+Every mechanism below must be preserved. Do not remove or weaken any of them.
+
+| Mechanism | Where | What it does |
+|---|---|---|
+| `RollLeadDays` on `FavouriteContract` | `Core/Trading/FavouriteContracts.vb` | Per-instrument roll lead time. Monthly (MCL/MGC) = 28 days; quarterly (MES/MNQ/M6E/MBT) = 7 days. |
+| `SelectBestContract` cutoff | `Services/Trading/TopStepXInstrumentCatalog.vb` | Excludes any contract whose expiry falls within `asOf + RollLeadDays`. Automatically selects the true front-month after a roll. Covered by 15 regression tests in `InstrumentCatalogRollTests.vb`. |
+| `EnsureCacheAsync` called by `GetResolvedContractIdAsync` | `Services/Trading/TopStepXInstrumentCatalog.vb` | Forces the 15-min TTL to govern every caller — including SuperTrend+ — not just order-placement paths. Previously the fast-path returned a stale cached ID forever. |
+| Stale bar guard (`barAgeMins > TF × 3`) | `Services/Trading/StrategyExecutionEngine.vb` | Suppresses all entry signals when bars are too old. Fires `IsMarketClosed = True` once on transition; resets on `Start()`. |
+| Partial-bar guard | `Services/Trading/StrategyExecutionEngine.vb` | Drops the last bar when its timestamp is within the still-open TF period. Prevents repaint from incomplete forming bars feeding all 9 MC indicators. |
+| MarketHub roll safety | `Services/Trading/StrategyExecutionEngine.vb` | `OnMarketQuoteReceived` matches by exact `ContractId` OR root symbol so a quarterly roll does not silently freeze `_lastQuotePrice` at 0. |
+
+### Rules for any code that touches the data pipeline
+
+1. **Never bypass `GetResolvedContractIdAsync`.** Any code that fetches bars, quotes, or tick specs must go through `TopStepXInstrumentCatalog` — never cache a raw contract ID in a field and reuse it across ticks without re-resolving.
+2. **Never hardcode a contract expiry month.** `FavouriteContracts.PxContractId` is the *fallback* when the live API is unavailable, not the primary. Update it when a roll is approaching, but it is not a substitute for live resolution.
+3. **When adding a new instrument**, set `RollLeadDays` explicitly. Monthly contracts = 28; quarterly = 7. Add at least one `SelectBestContract` regression test covering the roll window and the pre-roll period.
+4. **When adding a new data-fetch path** (new engine, new view, new background worker), always call `GetResolvedContractIdAsync` — never read `fav.PxContractId` directly for live use.
+5. **When modifying `TopStepXInstrumentCatalog`**, run `dotnet test --filter "FullyQualifiedName~InstrumentCatalogRoll"` to verify the 15 contract-roll regression tests still pass before committing.
+
+### Post-mortem: BUG-36 (2026-04-22 → 2026-04-28)
+
+MCL rolled from K26 to M26 on April 22. `SearchForFrontMonthAsync` used `cutoff = UtcNow - 28 days` — both K26 (expiry May 20) and M26 (expiry June 20) passed, and nearest-expiry ordering selected K26. `GetResolvedContractIdAsync` had no TTL on its fast path, so the stale K26 ID was returned indefinitely. The engine computed SuperTrend on K26 bars (~$92, BEAR) for six days while the live market (M26, ~$99.52) was strongly BULL.
+
+---
+
 ## Ticket & Issue Tracking
 
 All open work is tracked in two artefacts — no separate Priority Queue:
