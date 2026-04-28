@@ -218,6 +218,8 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="16"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
@@ -234,15 +236,25 @@
                               SelectedItem="{Binding SelectedTimeframe}"
                               Width="90" VerticalAlignment="Center"/>
 
+                    <!-- Entry Mode toggle -->
+                    <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                        <RadioButton Content="Confirmed"
+                                     IsChecked="{Binding UseEarlyMode, Converter={StaticResource BoolInverseConverter}}"
+                                     Foreground="White" FontSize="11" Margin="0,0,8,0"/>
+                        <RadioButton Content="Early (Multi-Signal)"
+                                     IsChecked="{Binding UseEarlyMode}"
+                                     Foreground="Gold" FontSize="11" Margin="0,0,12,0"/>
+                    </StackPanel>
+
                     <!-- Start / Stop button -->
-                    <Button Grid.Column="4"
+                    <Button Grid.Column="6"
                             Content="{Binding StartStopLabel}"
                             Command="{Binding StartStopCommand}"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Padding="14,6" VerticalAlignment="Center"/>
 
                     <!-- Status label -->
-                    <Border Grid.Column="5"
+                    <Border Grid.Column="7"
                             Background="{Binding StatusBackground}"
                             CornerRadius="4" Margin="12,0,0,0"
                             Visibility="{Binding StatusVisibility}"

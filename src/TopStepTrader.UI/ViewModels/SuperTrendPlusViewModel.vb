@@ -200,6 +200,11 @@ Namespace TopStepTrader.UI.ViewModels
 
     End Class
 
+    Friend Class ApproachState
+        Friend LastStDir As Integer = 0
+        Friend Distances As New Queue(Of Decimal)
+    End Class
+
     Public Class SuperTrendPlusViewModel
         Inherits ViewModelBase
         Implements IDisposable
@@ -222,6 +227,17 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _timerLock As New Object()
         Private _lockOwner As String = Nothing
         Private _disposed As Boolean = False
+
+        Private ReadOnly _approachHistory As New Dictionary(Of String, ApproachState)
+        Private _useEarlyMode As Boolean = False
+        Public Property UseEarlyMode As Boolean
+            Get
+                Return _useEarlyMode
+            End Get
+            Set(value As Boolean)
+                SetProperty(_useEarlyMode, value)
+            End Set
+        End Property
 
         Public ReadOnly Property LewisBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Lewis (Averse)"}
         Public ReadOnly Property DamianBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Damian (Moderate)"}
@@ -443,7 +459,11 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
             End If
             If _lockOwner Is Nothing Then
-                Await EvaluatePersonasAsync(tf)
+                If _useEarlyMode Then
+                    Await EvaluateEarlyPersonasAsync(tf)
+                Else
+                    Await EvaluatePersonasAsync(tf)
+                End If
             End If
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
@@ -516,6 +536,30 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
 
                 Dim adxStr As String = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
+
+                ' Early mode: overlay EARLY/WATCH signals
+                If _useEarlyMode Then
+                    Dim atr14 = TechnicalIndicators.ATR(highs, lows, closes, period:=14)
+                    Dim atrN  = If(atr14 IsNot Nothing AndAlso atr14.Length > n, CDec(atr14(n)), 0D)
+                    Dim lastClose = closes(n)
+                    Dim stLine = CDec(st.Line(n))
+                    Dim dist = Math.Abs(lastClose - stLine)
+                    Dim sig1 As Boolean = atrN > 0D AndAlso dist <= 1.5D * atrN
+                    Dim sig2 As Boolean = UpdateApproachHistory(contractId, stDir, dist)
+                    Dim spreadDI As Single = Math.Abs(plusDi - minusDi)
+                    Dim anticipatedLong As Boolean = stDir < 0
+                    Dim sig3 As Boolean = If(anticipatedLong, plusDi > minusDi, minusDi > plusDi) OrElse spreadDI < 5
+                    Dim sig4 As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= 20.0F
+                    Dim sigsCount = (If(sig1, 1, 0)) + (If(sig2, 1, 0)) + (If(sig3, 1, 0)) + (If(sig4, 1, 0))
+                    If sig1 AndAlso sig2 AndAlso sig3 AndAlso sig4 Then
+                        signal   = "EARLY"
+                        rowColor = Brushes.Goldenrod
+                    ElseIf sigsCount >= 3 Then
+                        signal   = "WATCH"
+                        rowColor = Brushes.DimGray
+                    End If
+                End If
+
                 Application.Current?.Dispatcher?.Invoke(
                     Sub()
                         wRow.Arrow         = arrow
@@ -532,6 +576,123 @@ Namespace TopStepTrader.UI.ViewModels
             Await Task.Delay(400)
             StatusBackground = Brushes.Transparent
         End Sub
+
+        Private Function UpdateApproachHistory(contractId As String, stDir As Integer, distance As Decimal) As Boolean
+            Dim state As ApproachState = Nothing
+            If Not _approachHistory.TryGetValue(contractId, state) Then
+                state = New ApproachState()
+                _approachHistory(contractId) = state
+            End If
+            If stDir <> state.LastStDir Then
+                state.Distances.Clear()
+                state.LastStDir = stDir
+                Return False
+            End If
+            state.Distances.Enqueue(distance)
+            If state.Distances.Count > 3 Then state.Distances.Dequeue()
+            If state.Distances.Count < 3 Then Return False
+            Dim arr = state.Distances.ToArray()
+            Return arr(0) > arr(1) AndAlso arr(1) > arr(2)
+        End Function
+
+        Private Async Function EvaluateEarlyPersonasAsync(tf As BarTimeframe) As Task
+            For Each box In AllBoxes()
+                If box.IsPaused Then Continue For
+                Await EvaluateEarlyPersonaAsync(box, tf)
+                If _lockOwner IsNot Nothing Then Exit For
+            Next
+        End Function
+
+        Private Async Function EvaluateEarlyPersonaAsync(box As PersonaBoxVm, tf As BarTimeframe) As Task
+            If box.Profile Is Nothing Then Return
+            Dim minAdx As Single = CSng(box.Profile.AdxThreshold)
+            If minAdx <= 0 Then minAdx = 20.0F
+
+            For i = 0 To Instruments.Length - 1
+                Dim contractId = Instruments(i)
+                Dim row = box.Symbols(i)
+                Dim bars15 As IList(Of MarketBar)
+                Dim bars5 As IList(Of MarketBar)
+                Try
+                    bars15 = Await _barService.GetLiveBarsAsync(contractId, tf, BarsToFetch)
+                Catch
+                    Continue For
+                End Try
+                If bars15 Is Nothing OrElse bars15.Count < 15 Then Continue For
+                Try
+                    bars5 = Await _barService.GetLiveBarsAsync(contractId, BarTimeframe.FiveMinute, BarsToFetch)
+                Catch
+                    Continue For
+                End Try
+                If bars5 Is Nothing OrElse bars5.Count < 15 Then Continue For
+
+                ' Strip forming bar from 15-min series
+                Dim tfMinutes As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
+                If _selectedTimeframe.EndsWith("hr") Then tfMinutes *= 60
+                If bars15.Count > 1 Then
+                    Dim age = (DateTime.UtcNow - bars15.Last().Timestamp).TotalMinutes
+                    If age < tfMinutes Then bars15 = bars15.Take(bars15.Count - 1).ToList()
+                End If
+                ' Strip forming bar from 5-min series
+                If bars5.Count > 1 Then
+                    Dim age5 = (DateTime.UtcNow - bars5.Last().Timestamp).TotalMinutes
+                    If age5 < 5 Then bars5 = bars5.Take(bars5.Count - 1).ToList()
+                End If
+
+                Dim highs15  = bars15.Select(Function(b) b.High).ToList()
+                Dim lows15   = bars15.Select(Function(b) b.Low).ToList()
+                Dim closes15 = bars15.Select(Function(b) b.Close).ToList()
+                Dim highs5   = bars5.Select(Function(b) b.High).ToList()
+                Dim lows5    = bars5.Select(Function(b) b.Low).ToList()
+                Dim closes5  = bars5.Select(Function(b) b.Close).ToList()
+
+                Dim st15  = TechnicalIndicators.SuperTrend(highs15, lows15, closes15, period:=10, multiplier:=3.0)
+                Dim dmi   = TechnicalIndicators.DMI(highs15, lows15, closes15, period:=14)
+                Dim st5   = TechnicalIndicators.SuperTrend(highs5, lows5, closes5, period:=10, multiplier:=3.0)
+                Dim n15   = bars15.Count - 1
+                Dim n5    = bars5.Count - 1
+
+                Dim stDir15  = st15.Direction(n15)
+                Dim stLine15 = CDec(st15.Line(n15))
+                Dim adxVal   = dmi.ADX(n15)
+                Dim plusDi   = dmi.PlusDI(n15)
+                Dim minusDi  = dmi.MinusDI(n15)
+                Dim stDir5   = st5.Direction(n5)
+
+                Dim lastClose = closes15(n15)
+                Dim dist = Math.Abs(lastClose - stLine15)
+                Dim atr14 = TechnicalIndicators.ATR(highs15, lows15, closes15, period:=14)
+                Dim atrN  = If(atr14 IsNot Nothing AndAlso atr14.Length > n15, CDec(atr14(n15)), 0D)
+
+                Dim sig1 As Boolean = atrN > 0D AndAlso dist <= 1.5D * atrN
+                Dim sig2 As Boolean = UpdateApproachHistory(contractId, stDir15, dist)
+                Dim spreadDI As Single = Math.Abs(plusDi - minusDi)
+                Dim anticipatedLong As Boolean = stDir15 < 0
+                Dim sig3 As Boolean = If(anticipatedLong, plusDi > minusDi, minusDi > plusDi) OrElse spreadDI < 5
+                Dim sig4 As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= minAdx
+                Dim sig5 As Boolean = If(anticipatedLong, stDir5 > 0, stDir5 < 0)
+
+                Dim earlySignal As Boolean = sig1 AndAlso sig2 AndAlso sig3 AndAlso sig4 AndAlso sig5
+                Dim side As String = If(anticipatedLong, "Buy", "Sell")
+                Dim arrow As String = If(anticipatedLong, "UP", "DN")
+                Dim signal As String = If(earlySignal, "EARLY", "flat")
+                Dim rowColor As Brush = If(earlySignal, Brushes.Goldenrod, Brushes.White)
+                Dim adxStr As String = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
+
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        row.Arrow      = arrow
+                        row.AdxDisplay = adxStr
+                        row.Signal     = signal
+                        row.RowColor   = rowColor
+                    End Sub)
+
+                If earlySignal AndAlso _lockOwner Is Nothing Then
+                    Await FireEntryAsync(box, contractId, side, stLine15)
+                    Return
+                End If
+            Next
+        End Function
 
         Private Async Function EvaluatePersonasAsync(tf As BarTimeframe) As Task
             For Each box In AllBoxes()
