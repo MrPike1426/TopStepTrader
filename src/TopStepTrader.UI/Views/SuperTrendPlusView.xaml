@@ -222,6 +222,8 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="16"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="16"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
@@ -257,15 +259,24 @@
                                   Width="110" VerticalAlignment="Center"/>
                     </StackPanel>
 
+                    <!-- ST Multiplier selector -->
+                    <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="ST×:" Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <ComboBox ItemsSource="{Binding StMultipliers}"
+                                  SelectedItem="{Binding StMultiplier}"
+                                  Width="60" VerticalAlignment="Center"/>
+                    </StackPanel>
+
                     <!-- Start / Stop button -->
-                    <Button Grid.Column="8"
+                    <Button Grid.Column="10"
                             Content="{Binding StartStopLabel}"
                             Command="{Binding StartStopCommand}"
                             Style="{StaticResource PrimaryButtonStyle}"
                             Padding="14,6" VerticalAlignment="Center"/>
 
                     <!-- Status label -->
-                    <Border Grid.Column="9"
+                    <Border Grid.Column="11"
                             Background="{Binding StatusBackground}"
                             CornerRadius="4" Margin="12,0,0,0"
                             Visibility="{Binding StatusVisibility}"

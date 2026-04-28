@@ -287,6 +287,17 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Public Property TpMultiple As Decimal = 2.0D
 
+        ' ── SuperTrend+ band multiplier (STRAT-36) ──────────────────────────────
+
+        ''' <summary>
+        ''' ATR multiplier used to compute the SuperTrend band width.
+        ''' Smaller values (e.g. 2.0, 2.5) produce tighter bands and earlier direction-change signals
+        ''' at the cost of more false flips in choppy conditions.
+        ''' Default 3.0 preserves existing behaviour.
+        ''' Used by <see cref="SuperTrendAdxSignalProvider"/>.
+        ''' </summary>
+        Public Property StMultiplier As Double = 3.0
+
     End Class
 
 End Namespace

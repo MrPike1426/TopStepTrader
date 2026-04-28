@@ -1,4 +1,4 @@
-﻿Imports System.Collections.ObjectModel
+Imports System.Collections.ObjectModel
 Imports System.Linq
 Imports System.Threading
 Imports System.Windows
@@ -19,7 +19,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public Property Symbol As String = String.Empty
         Public Property Label As String = String.Empty
 
-        Private _arrow As String = "–"
+        Private _arrow As String = "�"
         Public Property Arrow As String
             Get
                 Return _arrow
@@ -29,7 +29,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _adxDisplay As String = "ADX: –"
+        Private _adxDisplay As String = "ADX: �"
         Public Property AdxDisplay As String
             Get
                 Return _adxDisplay
@@ -76,7 +76,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public Property Symbol As String = String.Empty
 
-        Private _arrow As String = "–"
+        Private _arrow As String = "�"
         Public Property Arrow As String
             Get
                 Return _arrow
@@ -86,7 +86,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _adxDisplay As String = "ADX:–"
+        Private _adxDisplay As String = "ADX:�"
         Public Property AdxDisplay As String
             Get
                 Return _adxDisplay
@@ -245,7 +245,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property DamianBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Damian (Moderate)"}
         Public ReadOnly Property JoeBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Joe (Aggressive)"}
 
-        ' ── Accounts ──────────────────────────────────────────────────────────────
+        ' -- Accounts --------------------------------------------------------------
         Public Property Accounts As New ObservableCollection(Of Account)
 
         Private _selectedAccount As Account
@@ -259,7 +259,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        ' ── How-it-works panel expand/collapse ────────────────────────────────────
+        ' -- How-it-works panel expand/collapse ------------------------------------
         Private _isHowItWorksExpanded As Boolean = True
         Public Property IsHowItWorksExpanded As Boolean
             Get
@@ -272,9 +272,9 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public ReadOnly Property Timeframes As String() = {"5min", "15min", "1hr"}
 
-        Public ReadOnly Property TpMultiples As String() = {"None / flip only", "1.5×", "2×", "2.5×", "3×"}
+        Public ReadOnly Property TpMultiples As String() = {"None / flip only", "1.5�", "2�", "2.5�", "3�"}
 
-        Private _selectedTpMultiple As String = "2×"
+        Private _selectedTpMultiple As String = "2�"
         Public Property SelectedTpMultiple As String
             Get
                 Return _selectedTpMultiple
@@ -284,12 +284,24 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Public ReadOnly Property StMultipliers As Double() = {2.0, 2.5, 3.0}
+
+        Private _stMultiplier As Double = 3.0
+        Public Property StMultiplier As Double
+            Get
+                Return _stMultiplier
+            End Get
+            Set(value As Double)
+                SetProperty(_stMultiplier, value)
+            End Set
+        End Property
+
         Private Function ParseTpMultiple() As Decimal
             Select Case _selectedTpMultiple
-                Case "1.5×" : Return 1.5D
-                Case "2×"   : Return 2.0D
-                Case "2.5×" : Return 2.5D
-                Case "3×"   : Return 3.0D
+                Case "1.5�" : Return 1.5D
+                Case "2�"   : Return 2.0D
+                Case "2.5�" : Return 2.5D
+                Case "3�"   : Return 3.0D
                 Case Else   : Return 0D
             End Select
         End Function
@@ -424,7 +436,7 @@ Namespace TopStepTrader.UI.ViewModels
             IsMonitoring = True
             _timer = New Timer(AddressOf TimerCallback, Nothing, 0, 15000)
             If _selectedAccount Is Nothing OrElse _selectedAccount.Id = 0 Then
-                StatusText = "⚠ No account selected — monitoring in read-only mode (orders will be blocked until account loads)"
+                StatusText = "? No account selected � monitoring in read-only mode (orders will be blocked until account loads)"
                 Application.Current?.Dispatcher?.Invoke(Sub()
                     StatusBackground = New SolidColorBrush(Color.FromRgb(&HFF, &H8C, &H00))
                 End Sub)
@@ -441,9 +453,9 @@ Namespace TopStepTrader.UI.ViewModels
             End SyncLock
             _lockOwner = Nothing
             For Each wRow In WatchlistItems
-                wRow.Arrow         = "–"
-                wRow.AdxDisplay    = "ADX:–"
-                wRow.Signal        = "–"
+                wRow.Arrow         = "�"
+                wRow.AdxDisplay    = "ADX:�"
+                wRow.Signal        = "�"
                 wRow.TrendStrength = ""
                 wRow.RowColor      = Brushes.Gray
             Next
@@ -458,8 +470,8 @@ Namespace TopStepTrader.UI.ViewModels
                 box.TpPrice         = 0D
                 box.LastScaleInBarTime = DateTimeOffset.MinValue
                 For Each row In box.Symbols
-                    row.Arrow      = "–"
-                    row.AdxDisplay = "ADX:–"
+                    row.Arrow      = "�"
+                    row.AdxDisplay = "ADX:�"
                     row.Signal     = "flat"
                     row.RowColor   = Brushes.White
                 Next
@@ -523,7 +535,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim lows    = bars.Select(Function(b) b.Low).ToList()
                 Dim closes  = bars.Select(Function(b) b.Close).ToList()
 
-                Dim st      = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=3.0)
+                Dim st      = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
                 Dim dmi     = TechnicalIndicators.DMI(highs, lows, closes, period:=14)
                 Dim n       = bars.Count - 1
                 Dim stDir   = st.Direction(n)
@@ -538,27 +550,27 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim isLongSignal  As Boolean = stDir > 0 AndAlso Not Single.IsNaN(adxVal) AndAlso plusDi > minusDi
                 Dim isShortSignal As Boolean = stDir < 0 AndAlso Not Single.IsNaN(adxVal) AndAlso minusDi > plusDi
                 If isLongSignal Then
-                    arrow = "▲" : signal = "BULL" : rowColor = Brushes.LimeGreen
+                    arrow = "?" : signal = "BULL" : rowColor = Brushes.LimeGreen
                 ElseIf isShortSignal Then
-                    arrow = "▼" : signal = "BEAR" : rowColor = Brushes.Red
+                    arrow = "?" : signal = "BEAR" : rowColor = Brushes.Red
                 ElseIf stDir > 0 Then
-                    arrow = "▲" : signal = "WAIT" : rowColor = Brushes.DarkGoldenrod
+                    arrow = "?" : signal = "WAIT" : rowColor = Brushes.DarkGoldenrod
                 ElseIf stDir < 0 Then
-                    arrow = "▼" : signal = "WAIT" : rowColor = Brushes.DarkGoldenrod
+                    arrow = "?" : signal = "WAIT" : rowColor = Brushes.DarkGoldenrod
                 Else
-                    arrow = "–" : signal = "flat" : rowColor = Brushes.Gray
+                    arrow = "�" : signal = "flat" : rowColor = Brushes.Gray
                 End If
 
                 If Single.IsNaN(adxVal) Then
-                    strength = "ADX: –"
+                    strength = "ADX: �"
                 ElseIf adxVal >= 40 Then
-                    strength = String.Format("ADX:{0:D2} ●●●", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} ???", CInt(adxVal))
                 ElseIf adxVal >= 25 Then
-                    strength = String.Format("ADX:{0:D2} ●●○", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} ???", CInt(adxVal))
                 ElseIf adxVal >= 15 Then
-                    strength = String.Format("ADX:{0:D2} ●○○", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} ???", CInt(adxVal))
                 Else
-                    strength = String.Format("ADX:{0:D2} ○○○", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} ???", CInt(adxVal))
                 End If
 
                 Dim adxStr As String = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
@@ -672,9 +684,9 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim lows5    = bars5.Select(Function(b) b.Low).ToList()
                 Dim closes5  = bars5.Select(Function(b) b.Close).ToList()
 
-                Dim st15  = TechnicalIndicators.SuperTrend(highs15, lows15, closes15, period:=10, multiplier:=3.0)
+                Dim st15  = TechnicalIndicators.SuperTrend(highs15, lows15, closes15, period:=10, multiplier:=_stMultiplier)
                 Dim dmi   = TechnicalIndicators.DMI(highs15, lows15, closes15, period:=14)
-                Dim st5   = TechnicalIndicators.SuperTrend(highs5, lows5, closes5, period:=10, multiplier:=3.0)
+                Dim st5   = TechnicalIndicators.SuperTrend(highs5, lows5, closes5, period:=10, multiplier:=_stMultiplier)
                 Dim n15   = bars15.Count - 1
                 Dim n5    = bars5.Count - 1
 
@@ -772,7 +784,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim lows    = bars.Select(Function(b) b.Low).ToList()
                 Dim closes  = bars.Select(Function(b) b.Close).ToList()
 
-                Dim st  = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=3.0)
+                Dim st  = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
                 Dim dmi = TechnicalIndicators.DMI(highs, lows, closes, period:=14)
                 Dim n       = bars.Count - 1
                 Dim stDir   = st.Direction(n)
@@ -946,7 +958,7 @@ Namespace TopStepTrader.UI.ViewModels
             Dim highs   = bars.Select(Function(b) b.High).ToList()
             Dim lows    = bars.Select(Function(b) b.Low).ToList()
             Dim closes  = bars.Select(Function(b) b.Close).ToList()
-            Dim st      = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=3.0)
+            Dim st      = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
             Dim n       = bars.Count - 1
             Dim stDir   = st.Direction(n)
             Dim stLine  = CDec(st.Line(n))
@@ -971,7 +983,7 @@ Namespace TopStepTrader.UI.ViewModels
                     Dim tpArg As Decimal? = If(box.TpPrice <> 0D, CType(box.TpPrice, Decimal?), Nothing)
                     Try
                         Await _orderService.EditPositionSlTpAsync(box.PositionId.Value, stLine, tpArg)
-                        _logger.LogInformation("ST+ SL trail → {Price} (TP={Tp}) for {Box} on {Contract}", stLine, If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"), box.PersonaName, box.EntryInstrument)
+                        _logger.LogInformation("ST+ SL trail ? {Price} (TP={Tp}) for {Box} on {Contract}", stLine, If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"), box.PersonaName, box.EntryInstrument)
                     Catch ex As Exception
                         _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
                     End Try
@@ -985,7 +997,7 @@ Namespace TopStepTrader.UI.ViewModels
             If box.ScaleInCount < maxScaleIns Then
                 Dim latestBarTime = bars.Last().Timestamp
                 If box.LastScaleInBarTime = latestBarTime Then
-                    ' Same bar still forming — skip scale-in this tick
+                    ' Same bar still forming � skip scale-in this tick
                 Else
                 Dim currentPnl As Decimal = If(snapshot IsNot Nothing, snapshot.UnrealizedPnlUsd, 0D)
                 If currentPnl < 0D Then

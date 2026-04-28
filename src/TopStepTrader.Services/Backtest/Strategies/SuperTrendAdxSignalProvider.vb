@@ -32,7 +32,7 @@ Namespace TopStepTrader.Services.Backtest.Strategies
                 lows(i) = allBars(i).Low
                 closes(i) = allBars(i).Close
             Next
-            Dim st = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=3.0)
+            Dim st = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=If(config.StMultiplier > 0, config.StMultiplier, 3.0))
             Dim curDir = st.Direction(n - 1)
             If curDir = 0.0F OrElse Single.IsNaN(curDir) Then Return Nothing
 
