@@ -721,15 +721,30 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         Private Async Function EvaluatePersonasAsync(tf As BarTimeframe) As Task
-            For Each box In AllBoxes()
+            Dim allBoxes = Me.AllBoxes()
+            Dim candidates As New List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single))
+            For Each box In allBoxes
                 If box.IsPaused Then Continue For
-                Await EvaluatePersonaAsync(box, tf)
-                If _lockOwner IsNot Nothing Then Exit For
+                Dim boxSignals = Await EvaluatePersonaAsync(box, tf)
+                candidates.AddRange(boxSignals)
             Next
+            If candidates.Any() Then
+                ' Pick highest ADX; Joe (index 2) > Damian (index 1) > Lewis (index 0) as tiebreaker
+                Dim priorityMap As New Dictionary(Of PersonaBoxVm, Integer)
+                For idx = 0 To allBoxes.Length - 1
+                    priorityMap(allBoxes(idx)) = idx
+                Next
+                Dim best = candidates _
+                    .OrderByDescending(Function(c) c.Item5) _
+                    .ThenByDescending(Function(c) If(priorityMap.ContainsKey(c.Item1), priorityMap(c.Item1), 0)) _
+                    .First()
+                Await FireEntryAsync(best.Item1, best.Item2, best.Item3, best.Item4)
+            End If
         End Function
 
-        Private Async Function EvaluatePersonaAsync(box As PersonaBoxVm, tf As BarTimeframe) As Task
-            If box.Profile Is Nothing Then Return
+        Private Async Function EvaluatePersonaAsync(box As PersonaBoxVm, tf As BarTimeframe) As Task(Of List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single)))
+            Dim results As New List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single))
+            If box.Profile Is Nothing Then Return results
             Dim minAdx As Single = CSng(box.Profile.AdxThreshold)
             If minAdx <= 0 Then minAdx = 20.0F
 
@@ -789,11 +804,11 @@ Namespace TopStepTrader.UI.ViewModels
                         row.RowColor   = rowColor
                     End Sub)
 
-                If (isLong OrElse isShort) AndAlso _lockOwner Is Nothing Then
-                    Await FireEntryAsync(box, contractId, If(isLong, "Buy", "Sell"), CDec(stLine))
-                    Return
+                If isLong OrElse isShort Then
+                    results.Add(Tuple.Create(box, contractId, If(isLong, "Buy", "Sell"), CDec(stLine), adxVal))
                 End If
             Next
+            Return results
         End Function
 
         Private Async Function FireEntryAsync(box As PersonaBoxVm,
