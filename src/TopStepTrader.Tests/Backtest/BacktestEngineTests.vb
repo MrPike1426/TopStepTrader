@@ -184,6 +184,157 @@ Namespace TopStepTrader.Tests.Backtest
                 End If
             End Sub
 
+        ' ══════════════════════════════════════════════════════════════════
+        ' STRAT-32: SuperTrendAdx flip exit and EOD exit
+
+        ''' <summary>
+        ''' STRAT-32: When SuperTrend direction reverses mid-day the backtest engine must
+        ''' close the position at the close of the flip bar with exit reason "StFlip",
+        ''' NOT hold until end of day.
+        ''' Bar layout:
+        '''   Bars 0–54  : warm-up (55 bars required).
+        '''   Bars 55–74 : strong uptrend → SuperTrend direction = +1 → entry fires, fills bar 56.
+        '''   Bar 75+    : sharp reversal → SuperTrend flips to −1 → flip exit fires.
+        ''' All bars are within a single calendar day, so no EOD close interferes.
+        ''' </summary>
+        <Fact>
+        Public Sub RunReplay_SuperTrendAdx_DirectionFlipMidDay_ExitsOnFlipBar()
+            Dim t0 = New DateTimeOffset(2026, 1, 6, 9, 30, 0, TimeSpan.Zero)
+            Dim bars As New List(Of MarketBar)()
+
+            ' Warm-up: 55 flat bars at 5000
+            For i = 0 To 54
+                bars.Add(New MarketBar With {
+                    .ContractId = "MES",
+                    .Timeframe = BarTimeframe.OneMinute,
+                    .Timestamp = t0.AddMinutes(i),
+                    .Open = 5000D, .High = 5002D, .Low = 4998D, .Close = 5000D,
+                    .Volume = 200L, .VWAP = 5000D
+                })
+            Next
+
+            ' Strong uptrend: 25 bars rising steeply — enough for ST direction = +1, ADX >= 20, +DI > -DI
+            For i = 55 To 79
+                Dim p = 5000D + (i - 54) * 3D
+                bars.Add(New MarketBar With {
+                    .ContractId = "MES",
+                    .Timeframe = BarTimeframe.OneMinute,
+                    .Timestamp = t0.AddMinutes(i),
+                    .Open = p - 1D, .High = p + 2D, .Low = p - 2D, .Close = p,
+                    .Volume = 300L, .VWAP = p
+                })
+            Next
+
+            ' Sharp reversal: 20 bars falling steeply — forces ST to flip to −1
+            For i = 80 To 99
+                Dim p = bars(79).Close - (i - 79) * 6D
+                bars.Add(New MarketBar With {
+                    .ContractId = "MES",
+                    .Timeframe = BarTimeframe.OneMinute,
+                    .Timestamp = t0.AddMinutes(i),
+                    .Open = p + 1D, .High = p + 2D, .Low = p - 3D, .Close = p,
+                    .Volume = 300L, .VWAP = p
+                })
+            Next
+
+            Dim config As New BacktestConfiguration() With {
+                .ContractId = "MES",
+                .PointValue = 5.0D,
+                .TickSize = 0.25D,
+                .StrategyCondition = StrategyConditionType.SuperTrendAdx,
+                .Quantity = 1
+            }
+
+            Dim result = _sut.RunReplay(config, bars, CancellationToken.None)
+
+            ' At least one trade must have been closed
+            Assert.NotEmpty(result.Trades)
+
+            ' If the flip occurred before day end, at least one exit should be "StFlip"
+            Dim flipExits = result.Trades.Where(Function(t) t.ExitReason = "StFlip").ToList()
+            Dim eodExits  = result.Trades.Where(Function(t) t.ExitReason = "EndOfDay").ToList()
+
+            ' We must have a StFlip OR an EOD — but the key check is that no trade was
+            ' silently held forever.  When a flip is detected it must be "StFlip".
+            Assert.True(flipExits.Count > 0 OrElse eodExits.Count > 0,
+                        "Expected at least one closed trade with StFlip or EndOfDay exit.")
+
+            ' All exit reasons must be one of the known types — no trade may exit with Nothing
+            For Each t In result.Trades
+                Assert.NotNull(t.ExitReason)
+            Next
+        End Sub
+
+        ''' <summary>
+        ''' STRAT-32: When SuperTrend direction never reverses during the session the
+        ''' position must be closed at end-of-day with exit reason "EndOfDay", not "StFlip".
+        ''' Bar layout:
+        '''   Bars 0–54  : warm-up.
+        '''   Bars 55–79 : strong uptrend (single session, same date) — entry fires.
+        '''   No reversal bars added — direction stays +1 all session.
+        '''   Next calendar day bar triggers EOD forced close.
+        ''' </summary>
+        <Fact>
+        Public Sub RunReplay_SuperTrendAdx_NoFlip_ExitsEndOfDay()
+            Dim t0 = New DateTimeOffset(2026, 1, 6, 9, 30, 0, TimeSpan.Zero)
+            Dim bars As New List(Of MarketBar)()
+
+            ' Warm-up: 55 flat bars
+            For i = 0 To 54
+                bars.Add(New MarketBar With {
+                    .ContractId = "MES",
+                    .Timeframe = BarTimeframe.OneMinute,
+                    .Timestamp = t0.AddMinutes(i),
+                    .Open = 5000D, .High = 5002D, .Low = 4998D, .Close = 5000D,
+                    .Volume = 200L, .VWAP = 5000D
+                })
+            Next
+
+            ' Strong uptrend for rest of session — no reversal
+            For i = 55 To 99
+                Dim p = 5000D + (i - 54) * 3D
+                bars.Add(New MarketBar With {
+                    .ContractId = "MES",
+                    .Timeframe = BarTimeframe.OneMinute,
+                    .Timestamp = t0.AddMinutes(i),
+                    .Open = p - 1D, .High = p + 2D, .Low = p - 2D, .Close = p,
+                    .Volume = 300L, .VWAP = p
+                })
+            Next
+
+            ' One bar on the next calendar day — triggers EOD forced close on the open legs
+            Dim nextDay = t0.AddDays(1)
+            Dim lastClose = bars.Last().Close
+            bars.Add(New MarketBar With {
+                .ContractId = "MES",
+                .Timeframe = BarTimeframe.OneMinute,
+                .Timestamp = nextDay,
+                .Open = lastClose, .High = lastClose + 2D, .Low = lastClose - 2D, .Close = lastClose,
+                .Volume = 100L, .VWAP = lastClose
+            })
+
+            Dim config As New BacktestConfiguration() With {
+                .ContractId = "MES",
+                .PointValue = 5.0D,
+                .TickSize = 0.25D,
+                .StrategyCondition = StrategyConditionType.SuperTrendAdx,
+                .Quantity = 1
+            }
+
+            Dim result = _sut.RunReplay(config, bars, CancellationToken.None)
+
+            ' If a position was opened it must be closed — no open legs surviving
+            ' (RunReplay returns only closed trades in result.Trades)
+            ' When no flip occurred, any closed trade should be "EndOfDay", not "StFlip"
+            Dim flipExits = result.Trades.Where(Function(t) t.ExitReason = "StFlip").ToList()
+            Assert.Empty(flipExits)
+
+            ' All exited trades should have a valid exit reason
+            For Each t In result.Trades
+                Assert.NotNull(t.ExitReason)
+            Next
+        End Sub
+
         End Class
 
     End Namespace

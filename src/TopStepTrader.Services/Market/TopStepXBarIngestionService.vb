@@ -245,7 +245,14 @@ Namespace TopStepTrader.Services.Market
                         .VWAP = (CDec(b.Open) + CDec(b.Close)) / 2D
                     })
                 Next
-                Return result
+                ' The ProjectX API returns bars newest-first (UAT-BUG-005).
+                ' Sort oldest-first so all downstream indicator calculations
+                ' (SuperTrend, DMI, ATR) receive a correctly ordered time series,
+                ' and bars.Last() reliably refers to the most-recent bar.
+                ' Then cap to barCount so callers receive exactly what they requested.
+                Return result.OrderBy(Function(b) b.Timestamp) _
+                             .TakeLast(barCount) _
+                             .ToList()
             Catch ex As Exception
                 _logger.LogDebug(ex, "GetLiveBarsAsync: bar fetch failed for {Id} ({Tf})", contractId, timeframe)
                 Return New List(Of MarketBar)()

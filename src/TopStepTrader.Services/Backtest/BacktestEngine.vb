@@ -139,6 +139,11 @@ Namespace TopStepTrader.Services.Backtest
             Dim dbbIsLong As Boolean = True          ' DoubleBubbleButt position direction
             Dim dbbInner1SdExit As Decimal = 0D     ' inner 1-SD band level at entry (neutral-zone exit trigger)
 
+            ' State: SuperTrendAdx flip-exit tracking (STRAT-32)
+            ' Stores the ST direction (+1 or -1) at the time the position was opened.
+            ' Reset to 0 when the position closes.
+            Dim stAdxEntryDir As Single = 0.0F
+
             ' Resolve provider once before the replay loop.
             Dim provider = StrategySignalProviderFactory.Create(config.StrategyCondition)
 
@@ -178,15 +183,15 @@ Namespace TopStepTrader.Services.Backtest
                              config.TrailingStopEnabled OrElse
                              config.BreakEvenOnHalfTpEnabled OrElse
                              config.ExtendTpEnabled
-            Dim dynStop      As Decimal = 0D
-            Dim dynTp        As Decimal = 0D
+            Dim dynStop As Decimal = 0D
+            Dim dynTp As Decimal = 0D
             Dim dynStopDelta As Decimal = 0D
-            Dim dynTpDelta   As Decimal = 0D
+            Dim dynTpDelta As Decimal = 0D
 
             ' â”€â”€ Next-bar entry state (Items 2+3) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             ' Signal fires at bar[i]; position fills at bar[i+1].Open Â± 1 tick slippage.
             ' Pending state is cleared each bar regardless of whether the fill succeeded.
-            ‘ All pending fields bundled; setting to Nothing clears atomically.
+            ' All pending fields bundled; setting to Nothing clears atomically.
             Dim pending As PendingEntry = Nothing
 
             ' MinSignalConfidence is stored as 0.0â€“1.0 (e.g. 0.75 = 75%).
@@ -236,6 +241,7 @@ Namespace TopStepTrader.Services.Backtest
                         openLegs.Clear()
                         mcOpenSlPrice = 0D : mcOpenTpPrice = 0D
                         dbbInner1SdExit = 0D
+                        stAdxEntryDir = 0.0F
                         dynStop = 0D : dynTp = 0D : dynStopDelta = 0D : dynTpDelta = 0D
                         lastEndOfDayBarIndex = i
                         pending = Nothing
@@ -253,35 +259,41 @@ Namespace TopStepTrader.Services.Backtest
                                           openLegs.Count < config.MaxScaleIns AndAlso
                                           openLegs(0).Side = pending.Side)
                         If canFillLeg Then
-                            Dim isBuyFill  = (pending.Side = “Buy”)
+                            Dim isBuyFill = (pending.Side = “Buy”)
                             ' Base 1-tick adverse slippage + STRAT-25 spread cost (half-spread penalty at entry).
-                            Dim fillSlip   = If(config.TickSize > 0D, config.TickSize, 0D)
+                            Dim fillSlip = If(config.TickSize > 0D, config.TickSize, 0D)
                             Dim spreadCost = If(config.TickSize > 0D, config.SpreadTicks * config.TickSize, 0D)
-                            Dim fillPrice  = bar.Open + If(isBuyFill, fillSlip + spreadCost, -(fillSlip + spreadCost))
+                            Dim fillPrice = bar.Open + If(isBuyFill, fillSlip + spreadCost, -(fillSlip + spreadCost))
                             ' STRAT-16: partial-conviction entries use half quantity
                             Dim fillQty = If(pending.IsPartialSignal,
                                             Math.Max(1, config.Quantity \ 2),
                                             config.Quantity)
                             Dim newLeg As New BacktestTrade With {
                                 .PositionGroupId = If(pending.IsScaleIn, openLegs(0).PositionGroupId, pending.GroupId),
-                                .EntryTime       = bar.Timestamp,
-                                .EntryPrice      = fillPrice,
-                                .Side            = pending.Side,
-                                .Quantity        = fillQty,
+                                .EntryTime = bar.Timestamp,
+                                .EntryPrice = fillPrice,
+                                .Side = pending.Side,
+                                .Quantity = fillQty,
                                 .SignalConfidence = pending.Confidence
                             }
                             openLegs.Add(newLeg)
+                            ' Record ST direction at entry for flip-exit tracking (STRAT-32)
+                            If config.StrategyCondition = StrategyConditionType.SuperTrendAdx AndAlso
+                               Not pending.IsScaleIn AndAlso
+                               indicators.StDirectionSeries IsNot Nothing AndAlso i > 0 Then
+                                stAdxEntryDir = indicators.StDirectionSeries(i - 1)
+                            End If
                             ' Initialise dynamic exit levels for initial entry
                             If dynEnabled AndAlso Not pending.IsScaleIn Then
                                 If pending.StopDelta > 0D Then
                                     ' ATR-relative exits: anchor SL/TP to fillPrice
                                     dynStopDelta = pending.StopDelta
-                                    dynTpDelta   = pending.TpDelta
+                                    dynTpDelta = pending.TpDelta
                                     dynStop = If(isBuyFill, fillPrice - dynStopDelta, fillPrice + dynStopDelta)
-                                    dynTp   = If(isBuyFill, fillPrice + dynTpDelta,  fillPrice - dynTpDelta)
+                                    dynTp = If(isBuyFill, fillPrice + dynTpDelta, fillPrice - dynTpDelta)
                                     If config.StrategyCondition = StrategyConditionType.MultiConfluence Then
                                         mcOpenSlPrice = dynStop : mcOpenTpPrice = dynTp
-                                        mcIsLong      = isBuyFill
+                                        mcIsLong = isBuyFill
                                     End If
                                 End If
                             End If
@@ -345,6 +357,7 @@ Namespace TopStepTrader.Services.Backtest
                             openLegs.Clear()
                             mcOpenSlPrice = 0D : mcOpenTpPrice = 0D
                             dbbInner1SdExit = 0D
+                            stAdxEntryDir = 0.0F
                             dynStop = 0D : dynTp = 0D : dynStopDelta = 0D : dynTpDelta = 0D
                             lastForceCloseBarIndex = i  ' arm 3-bar re-entry cooldown
                             pending = Nothing            ' discard any pending entry from this bar
@@ -364,12 +377,27 @@ Namespace TopStepTrader.Services.Backtest
                         End If
                     End If
 
+                    ' ── SuperTrendAdx flip exit (STRAT-32) ──────────────────────────────
+                    ' Exit when SuperTrend direction reverses relative to the entry direction.
+                    ' Flip exit price = bar.Close of the flip bar (ST direction changes on close).
+                    If exitReason Is Nothing AndAlso
+                       config.StrategyCondition = StrategyConditionType.SuperTrendAdx AndAlso
+                       stAdxEntryDir <> 0.0F AndAlso
+                       indicators.StDirectionSeries IsNot Nothing Then
+                        Dim curStDir = indicators.StDirectionSeries(i)
+                        If curStDir <> 0.0F AndAlso Not Single.IsNaN(curStDir) AndAlso
+                           curStDir <> stAdxEntryDir Then
+                            exitReason = "StFlip"
+                            exitPrice = bar.Close
+                        End If
+                    End If
+
                     If config.StrategyCondition = StrategyConditionType.MultiConfluence AndAlso mcOpenSlPrice <> 0D Then
                         exitReason = BacktestMetrics.CheckFixedExit(openLegs(0).Side, bar, mcOpenSlPrice, mcOpenTpPrice)
                         If exitReason IsNot Nothing Then
                             exitPrice = BacktestMetrics.GetExitPrice(openLegs(0), bar, exitReason, mcOpenSlPrice, mcOpenTpPrice)
                         End If
-                     ElseIf exitReason Is Nothing Then
+                    ElseIf exitReason Is Nothing Then
                         ' Use dynamic price levels when any dynamic-exit flag is on;
                         ' fall back to config-derived fixed levels otherwise.
                         If dynEnabled AndAlso dynStop <> 0D Then
@@ -406,11 +434,12 @@ Namespace TopStepTrader.Services.Backtest
                         mcOpenSlPrice = 0D
                         mcOpenTpPrice = 0D
                         dbbInner1SdExit = 0D
+                        stAdxEntryDir = 0.0F
                         ' Clear dynamic exit state
-                        dynStop      = 0D
-                        dynTp        = 0D
+                        dynStop = 0D
+                        dynTp = 0D
                         dynStopDelta = 0D
-                        dynTpDelta   = 0D
+                        dynTpDelta = 0D
                     Else
                         ' No exit this bar â€” advance trailing stop / break-even / extend TP
                         ' ready for the NEXT bar's exit check.  Must run AFTER all exit checks
@@ -447,8 +476,8 @@ Namespace TopStepTrader.Services.Backtest
                     If signal IsNot Nothing AndAlso signal.NeutralExit AndAlso openLegs.Count > 0 Then
                         Dim neutralPositionPnL = 0D
                         For Each leg In openLegs
-                            leg.ExitTime   = bar.Timestamp
-                            leg.ExitPrice  = bar.Close
+                            leg.ExitTime = bar.Timestamp
+                            leg.ExitPrice = bar.Close
                             leg.ExitReason = "NeutralExit"
                             Dim pnl = BacktestMetrics.CalculatePnL(leg, config)
                             leg.PnL = pnl
@@ -472,29 +501,29 @@ Namespace TopStepTrader.Services.Backtest
                     If openLegs.Count = 0 Then
                         positionGroupCounter += 1
                         pending = New PendingEntry With {
-                            .GroupId    = positionGroupCounter,
-                            .Side       = signal.Side,
+                            .GroupId = positionGroupCounter,
+                            .Side = signal.Side,
                             .Confidence = signal.Confidence,
-                            .StopDelta  = signal.StopDelta,
-                            .TpDelta    = signal.TpDelta,
+                            .StopDelta = signal.StopDelta,
+                            .TpDelta = signal.TpDelta,
                             .IsPartialSignal = signal.IsPartialSignal
                         }
-                        ‘ Indicator-channel exit level — strategy-specific pending field
+                        ' Indicator-channel exit level — strategy-specific pending field
                         If signal.IndicatorExitLevel <> 0D Then
                             Select Case config.StrategyCondition
                                 Case StrategyConditionType.DoubleBubbleButt
-                                    pending.DbbInner  = signal.IndicatorExitLevel
+                                    pending.DbbInner = signal.IndicatorExitLevel
                                     pending.DbbIsLong = signal.IsLong
                             End Select
                         End If
                     ElseIf config.StrategyCondition = StrategyConditionType.EmaRsiWeightedScore AndAlso
                            openLegs.Count < config.MaxScaleIns AndAlso
                            openLegs(0).Side = signal.Side Then
-                        ‘ Scale-in — same direction, up to MaxScaleIns additional legs
+                        ' Scale-in — same direction, up to MaxScaleIns additional legs
                         pending = New PendingEntry With {
-                            .Side       = signal.Side,
+                            .Side = signal.Side,
                             .Confidence = signal.Confidence,
-                            .IsScaleIn  = True
+                            .IsScaleIn = True
                         }
                     End If
                 End If
@@ -585,13 +614,13 @@ Namespace TopStepTrader.Services.Backtest
             }
         End Function
 
-            ''' <summary>
-            ''' Safe CDec for Single values: returns 0D when the value is NaN or Infinity,
-            ''' preventing OverflowException from CDec(Single.PositiveInfinity).
-            ''' </summary>
-            Private Shared Function SafeD(v As Single) As Decimal
-                Return If(Single.IsNaN(v) OrElse Single.IsInfinity(v), 0D, CDec(v))
-            End Function
+        ''' <summary>
+        ''' Safe CDec for Single values: returns 0D when the value is NaN or Infinity,
+        ''' preventing OverflowException from CDec(Single.PositiveInfinity).
+        ''' </summary>
+        Private Shared Function SafeD(v As Single) As Decimal
+            Return If(Single.IsNaN(v) OrElse Single.IsInfinity(v), 0D, CDec(v))
+        End Function
 
 
 
@@ -603,8 +632,8 @@ Namespace TopStepTrader.Services.Backtest
                 ByRef warmUp As Integer) As StrategyIndicators
 
             Dim allCloses = filteredBars.Select(Function(b) b.Close).ToList()
-            Dim allHighs  = filteredBars.Select(Function(b) b.High).ToList()
-            Dim allLows   = filteredBars.Select(Function(b) b.Low).ToList()
+            Dim allHighs = filteredBars.Select(Function(b) b.High).ToList()
+            Dim allLows = filteredBars.Select(Function(b) b.Low).ToList()
 
             ' -- Shared series (EMA21/50, RSI14, ADX14 used by most strategies)
             Dim ema21Series = TechnicalIndicators.EMA(allCloses, 21)
@@ -628,27 +657,27 @@ Namespace TopStepTrader.Services.Backtest
             Dim dbbInnerLower As Single() = Nothing
             Dim dbbOuterUpper As Single() = Nothing
             Dim dbbOuterLower As Single() = Nothing
-            Dim dbbAtr20      As Single() = Nothing
+            Dim dbbAtr20 As Single() = Nothing
             If config.StrategyCondition = StrategyConditionType.DoubleBubbleButt Then
-                Dim dbbInner  = TechnicalIndicators.BollingerBands(allCloses, 20, 1.0)
+                Dim dbbInner = TechnicalIndicators.BollingerBands(allCloses, 20, 1.0)
                 dbbInnerUpper = dbbInner.Upper
                 dbbInnerLower = dbbInner.Lower
-                Dim dbbOuter  = TechnicalIndicators.BollingerBands(allCloses, 20, 2.0)
+                Dim dbbOuter = TechnicalIndicators.BollingerBands(allCloses, 20, 2.0)
                 dbbOuterUpper = dbbOuter.Upper
                 dbbOuterLower = dbbOuter.Lower
-                dbbAtr20      = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 20)
+                dbbAtr20 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 20)
             End If
 
             ' -- MultiConfluence: Ichimoku + DMI + MACD + StochRSI + ATR(14)
             Dim mcIchiTenkan As Single() = Nothing
-            Dim mcIchiKijun  As Single() = Nothing
-            Dim mcIchiSpanA  As Single() = Nothing
-            Dim mcIchiSpanB  As Single() = Nothing
-            Dim mcPlusDI     As Single() = Nothing
-            Dim mcMinusDI    As Single() = Nothing
-            Dim mcAdxSeries  As Single() = Nothing
-            Dim mcMacdHist   As Single() = Nothing
-            Dim mcStochRsiK  As Single() = Nothing
+            Dim mcIchiKijun As Single() = Nothing
+            Dim mcIchiSpanA As Single() = Nothing
+            Dim mcIchiSpanB As Single() = Nothing
+            Dim mcPlusDI As Single() = Nothing
+            Dim mcMinusDI As Single() = Nothing
+            Dim mcAdxSeries As Single() = Nothing
+            Dim mcMacdHist As Single() = Nothing
+            Dim mcStochRsiK As Single() = Nothing
             Dim mcAtr14 As Single() = Nothing
             Dim mcVolMa20 As Single() = Nothing
             If config.StrategyCondition = StrategyConditionType.MultiConfluence Then
@@ -739,6 +768,20 @@ Namespace TopStepTrader.Services.Backtest
                 bbsAtr10 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 10)
             End If
 
+            ' -- SuperTrendAdx: SuperTrend(10,3.0) Direction + DMI/ADX(14)
+            Dim stAdxDirectionSeries As Single() = Nothing
+            Dim stAdxPlusDI As Single() = Nothing
+            Dim stAdxMinusDI As Single() = Nothing
+            Dim stAdxAdxSeries As Single() = Nothing
+            If config.StrategyCondition = StrategyConditionType.SuperTrendAdx Then
+                Dim stResult = TechnicalIndicators.SuperTrend(allHighs, allLows, allCloses, period:=10, multiplier:=3.0)
+                stAdxDirectionSeries = stResult.Direction
+                Dim dmiSt = TechnicalIndicators.DMI(allHighs, allLows, allCloses)
+                stAdxPlusDI = dmiSt.PlusDI
+                stAdxMinusDI = dmiSt.MinusDI
+                stAdxAdxSeries = dmiSt.ADX
+            End If
+
             ' -- Opening Range Breakout: ATR(14), VolMa20
             Dim orbVolMa20 As Single() = Nothing
             Dim orbAtr14 As Single() = Nothing
@@ -762,13 +805,13 @@ Namespace TopStepTrader.Services.Backtest
                 ' Rolling 20-bar standard deviation of (close − VWAP) to set band widths
                 Const VmrPeriod As Integer = 20
                 Dim n = allCloses.Count
-                vmrUpper2Sd  = New Single(n - 1) {}
-                vmrLower2Sd  = New Single(n - 1) {}
+                vmrUpper2Sd = New Single(n - 1) {}
+                vmrLower2Sd = New Single(n - 1) {}
                 vmrUpper15Sd = New Single(n - 1) {}
                 vmrLower15Sd = New Single(n - 1) {}
                 For i = 0 To n - 1
-                    vmrUpper2Sd(i)  = Single.NaN
-                    vmrLower2Sd(i)  = Single.NaN
+                    vmrUpper2Sd(i) = Single.NaN
+                    vmrLower2Sd(i) = Single.NaN
                     vmrUpper15Sd(i) = Single.NaN
                     vmrLower15Sd(i) = Single.NaN
                 Next
@@ -781,8 +824,8 @@ Namespace TopStepTrader.Services.Backtest
                         variance += diff * diff
                     Next
                     Dim sd = Math.Sqrt(variance / VmrPeriod)
-                    vmrUpper2Sd(i)  = CSng(vwapD + 2.0 * sd)
-                    vmrLower2Sd(i)  = CSng(vwapD - 2.0 * sd)
+                    vmrUpper2Sd(i) = CSng(vwapD + 2.0 * sd)
+                    vmrLower2Sd(i) = CSng(vwapD - 2.0 * sd)
                     vmrUpper15Sd(i) = CSng(vwapD + 1.5 * sd)
                     vmrLower15Sd(i) = CSng(vwapD - 1.5 * sd)
                 Next
@@ -819,37 +862,42 @@ Namespace TopStepTrader.Services.Backtest
                 Case StrategyConditionType.DoubleBubbleButt
                     indicators.DbbInnerUpper = dbbInnerUpper
                     indicators.DbbInnerLower = dbbInnerLower
-                    indicators.BbUpper       = dbbOuterUpper
-                    indicators.BbLower       = dbbOuterLower
-                    indicators.Atr           = dbbAtr20
+                    indicators.BbUpper = dbbOuterUpper
+                    indicators.BbLower = dbbOuterLower
+                    indicators.Atr = dbbAtr20
                 Case StrategyConditionType.VidyaCross
-                    indicators.Vidya       = vcVidyaSeries
+                    indicators.Vidya = vcVidyaSeries
                     indicators.DeltaVolume = vcDeltaVolSeries
-                    indicators.Atr         = vcAtr14
+                    indicators.Atr = vcAtr14
                 Case StrategyConditionType.NakedTrader
-                    indicators.Ema9          = ntEma9
+                    indicators.Ema9 = ntEma9
                     indicators.MacdHistogram = ntMacdHist
-                    indicators.MacdLine      = ntMacdLine
-                    indicators.PlusDi        = ntPlusDI
-                    indicators.MinusDi       = ntMinusDI
-                    indicators.Adx           = ntAdxSeries
-                    indicators.Vwap          = ntVwapSeries
-                    indicators.VolMa20       = ntVolMa20
-                    indicators.Atr           = ntAtr14
+                    indicators.MacdLine = ntMacdLine
+                    indicators.PlusDi = ntPlusDI
+                    indicators.MinusDi = ntMinusDI
+                    indicators.Adx = ntAdxSeries
+                    indicators.Vwap = ntVwapSeries
+                    indicators.VolMa20 = ntVolMa20
+                    indicators.Atr = ntAtr14
                 Case StrategyConditionType.LultDivergence
                     indicators.WaveTrend1 = lultWt1
                     indicators.WaveTrend2 = lultWt2
-                    indicators.Atr        = lultAtr14
+                    indicators.Atr = lultAtr14
                 Case StrategyConditionType.BbSqueezeScalper
-                    indicators.BbUpper  = bbsBands.Upper
+                    indicators.BbUpper = bbsBands.Upper
                     indicators.BbMiddle = bbsBands.Middle
-                    indicators.BbLower  = bbsBands.Lower
-                    indicators.BbWidth  = bbsBbwArr
-                    indicators.BbPctB   = bbsPctBArr
-                    indicators.Rsi      = bbsRsi7
-                    indicators.Ema5     = bbsEma5
-                    indicators.BbwSma   = bbsBbwSma
-                    indicators.Atr      = bbsAtr10
+                    indicators.BbLower = bbsBands.Lower
+                    indicators.BbWidth = bbsBbwArr
+                    indicators.BbPctB = bbsPctBArr
+                    indicators.Rsi = bbsRsi7
+                    indicators.Ema5 = bbsEma5
+                    indicators.BbwSma = bbsBbwSma
+                    indicators.Atr = bbsAtr10
+                Case StrategyConditionType.SuperTrendAdx
+                    indicators.StDirectionSeries = stAdxDirectionSeries
+                    indicators.PlusDi = stAdxPlusDI
+                    indicators.MinusDi = stAdxMinusDI
+                    indicators.Adx = stAdxAdxSeries
                 Case StrategyConditionType.EmaRsiWeightedScore
                     Dim emaRsiPeriod = If(config.IndicatorPeriod > 0, config.IndicatorPeriod, 14)
                     indicators.Rsi = If(emaRsiPeriod = 14, rsi14Series, TechnicalIndicators.RSI(allCloses, emaRsiPeriod))

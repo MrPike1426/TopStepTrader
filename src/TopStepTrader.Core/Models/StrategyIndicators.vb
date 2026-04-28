@@ -71,6 +71,13 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>DoubleBubbleButt inner lower band (BB(20, 1.0 SD)).</summary>
         Public Property DbbInnerLower As Single()
 
+        ''' <summary>
+        ''' SuperTrend(10, 3.0) direction series: +1 up-trend, −1 down-trend, 0/NaN during warm-up.
+        ''' Pre-computed over all bars in BuildIndicators for the SuperTrendAdx strategy so the
+        ''' BacktestEngine can detect direction flips bar-by-bar without recomputing the indicator.
+        ''' </summary>
+        Public Property StDirectionSeries As Single()
+
     End Class
 
 End Namespace

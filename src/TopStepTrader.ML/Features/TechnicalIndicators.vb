@@ -616,7 +616,7 @@ Namespace TopStepTrader.ML.Features
             ' State variables
             Dim finalUpper As Double = 0
             Dim finalLower As Double = 0
-            Dim direction As Integer = 1   ' +1 = uptrend, -1 = downtrend
+            Dim direction As Integer = 0   ' 0 = not yet seeded; set on first valid bar
 
             For i = period To n - 1
                 Dim atrVal = atrArr(i)
@@ -648,13 +648,20 @@ Namespace TopStepTrader.ML.Features
                                       basicLower, finalLower)
                 End If
 
-                ' Determine trend direction from close vs finalUpper/finalLower
+                ' Determine trend direction by comparing current close against the
+                ' PREVIOUS bar's final bands (held in finalUpper / finalLower).
+                ' On the very first valid bar we seed direction from the initial bands.
                 Dim closeNow = CDbl(closes(i))
-                If closeNow > newFinalUpper Then
-                    direction = 1
-                ElseIf closeNow < newFinalLower Then
-                    direction = -1
-                ' else direction unchanged
+                If i = period Then
+                    ' Seed: bullish if close is above the lower band, bearish otherwise
+                    direction = If(closeNow >= newFinalLower, 1, -1)
+                Else
+                    If closeNow > finalUpper Then
+                        direction = 1
+                    ElseIf closeNow < finalLower Then
+                        direction = -1
+                    End If
+                    ' else direction unchanged (carry previous value)
                 End If
 
                 lineArr(i) = If(direction = 1, CSng(newFinalLower), CSng(newFinalUpper))
