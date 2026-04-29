@@ -22,6 +22,10 @@ Namespace TopStepTrader.Core.Models
                 Return If(String.IsNullOrEmpty(Name), "TopStepX", $"{Name} (TopStepX)")
             End Get
         End Property
+
+        Public Overrides Function ToString() As String
+            Return DisplayName
+        End Function
     End Class
 
 End Namespace

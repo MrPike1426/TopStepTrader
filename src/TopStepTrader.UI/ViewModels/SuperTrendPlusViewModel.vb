@@ -69,6 +69,26 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Private _signalReason As String = ""
+        Public Property SignalReason As String
+            Get
+                Return _signalReason
+            End Get
+            Set(value As String)
+                SetProperty(_signalReason, value)
+            End Set
+        End Property
+
+        Private _diDisplay As String = "+DI:-- -DI:--"
+        Public Property DiDisplay As String
+            Get
+                Return _diDisplay
+            End Get
+            Set(value As String)
+                SetProperty(_diDisplay, value)
+            End Set
+        End Property
+
     End Class
 
     Public Class SymbolRowVm
@@ -260,7 +280,7 @@ Namespace TopStepTrader.UI.ViewModels
         End Property
 
         ' -- How-it-works panel expand/collapse ------------------------------------
-        Private _isHowItWorksExpanded As Boolean = True
+        Private _isHowItWorksExpanded As Boolean = False
         Public Property IsHowItWorksExpanded As Boolean
             Get
                 Return _isHowItWorksExpanded
@@ -489,7 +509,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Async Function DoTickAsync() As Task
             Dim tf = MapTimeframe(_selectedTimeframe)
-            Await ScanWatchlistAsync(tf)
+            Dim barCache = Await ScanWatchlistAsync(tf)
             If _lockOwner IsNot Nothing Then
                 Dim ownerBox = AllBoxes().FirstOrDefault(Function(b) b.PersonaName.StartsWith(_lockOwner))
                 If ownerBox IsNot Nothing Then
@@ -500,17 +520,18 @@ Namespace TopStepTrader.UI.ViewModels
                 If _useEarlyMode Then
                     Await EvaluateEarlyPersonasAsync(tf)
                 Else
-                    Await EvaluatePersonasAsync(tf)
+                    Await EvaluatePersonasAsync(tf, barCache)
                 End If
             End If
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
-                    StatusText = String.Format("SuperTrend+ monitoring - {0} TimeFrame - updated {1:HH:mm:ss}", _selectedTimeframe, DateTime.Now)
+                    StatusText = String.Format("In Progress: Updated {0:HH:mm:ss}", DateTime.Now)
                     FlashStatusAsync()
                 End Sub)
         End Function
 
-        Private Async Function ScanWatchlistAsync(tf As BarTimeframe) As Task
+        Private Async Function ScanWatchlistAsync(tf As BarTimeframe) As Task(Of Dictionary(Of Integer, IList(Of MarketBar)))
+            Dim cache As New Dictionary(Of Integer, IList(Of MarketBar))
             For i = 0 To Instruments.Length - 1
                 Dim contractId = Instruments(i)
                 Dim wRow = WatchlistItems(i)
@@ -530,6 +551,7 @@ Namespace TopStepTrader.UI.ViewModels
                         bars = bars.Take(bars.Count - 1).ToList()
                     End If
                 End If
+                cache(i) = bars
 
                 Dim highs   = bars.Select(Function(b) b.High).ToList()
                 Dim lows    = bars.Select(Function(b) b.Low).ToList()
@@ -547,33 +569,46 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim signal As String
                 Dim rowColor As Brush
                 Dim strength As String
+                Dim signalReason As String
                 Dim isLongSignal  As Boolean = stDir > 0 AndAlso Not Single.IsNaN(adxVal) AndAlso plusDi > minusDi
                 Dim isShortSignal As Boolean = stDir < 0 AndAlso Not Single.IsNaN(adxVal) AndAlso minusDi > plusDi
                 If isLongSignal Then
-                    arrow = "?" : signal = "BULL" : rowColor = Brushes.LimeGreen
+                    arrow = ChrW(&H25B2) : signal = "BULL" : rowColor = Brushes.LimeGreen
                 ElseIf isShortSignal Then
-                    arrow = "?" : signal = "BEAR" : rowColor = Brushes.Red
+                    arrow = ChrW(&H25BC) : signal = "BEAR" : rowColor = Brushes.Red
                 ElseIf stDir > 0 Then
-                    arrow = "?" : signal = "WAIT" : rowColor = Brushes.DarkGoldenrod
+                    arrow = ChrW(&H25B2) : signal = "WAIT" : rowColor = Brushes.DarkGoldenrod
                 ElseIf stDir < 0 Then
-                    arrow = "?" : signal = "WAIT" : rowColor = Brushes.DarkGoldenrod
+                    arrow = ChrW(&H25BC) : signal = "WAIT" : rowColor = Brushes.DarkGoldenrod
                 Else
-                    arrow = "–" : signal = "flat" : rowColor = Brushes.Gray
+                    arrow = ChrW(&H2013) : signal = "flat" : rowColor = Brushes.Gray
                 End If
 
                 If Single.IsNaN(adxVal) Then
-                    strength = "ADX: –"
+                    strength = "ADX: --"
+                    signalReason = "Waiting for data..."
                 ElseIf adxVal >= 40 Then
-                    strength = String.Format("ADX:{0:D2} ???", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} Strong", CInt(adxVal))
+                    signalReason = If(signal = "BULL", "Strong uptrend — bot may enter long.",
+                                  If(signal = "BEAR", "Strong downtrend — bot may enter short.",
+                                     "Strong trend forming — waiting for direction alignment."))
                 ElseIf adxVal >= 25 Then
-                    strength = String.Format("ADX:{0:D2} ???", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} Active", CInt(adxVal))
+                    signalReason = If(signal = "BULL", "Uptrend active — good conditions for a long entry.",
+                                  If(signal = "BEAR", "Downtrend active — good conditions for a short entry.",
+                                     "Trending — waiting for +DI/-DI to align with SuperTrend."))
                 ElseIf adxVal >= 15 Then
-                    strength = String.Format("ADX:{0:D2} ???", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} Weak", CInt(adxVal))
+                    signalReason = "Trend is weak — watching for momentum to build before entering."
                 Else
-                    strength = String.Format("ADX:{0:D2} ???", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} Chop", CInt(adxVal))
+                    signalReason = "Market is choppy with no clear trend — standing aside to avoid false signals."
                 End If
 
                 Dim adxStr As String = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
+                Dim diStr As String = If(Single.IsNaN(plusDi) OrElse Single.IsNaN(minusDi),
+                                        "+DI:-- -DI:--",
+                                        String.Format("+DI:{0:D2} -DI:{1:D2}", CInt(plusDi), CInt(minusDi)))
 
                 ' Early mode: overlay EARLY/WATCH signals
                 If _useEarlyMode Then
@@ -590,11 +625,13 @@ Namespace TopStepTrader.UI.ViewModels
                     Dim sig4 As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= 20.0F
                     Dim sigsCount = (If(sig1, 1, 0)) + (If(sig2, 1, 0)) + (If(sig3, 1, 0)) + (If(sig4, 1, 0))
                     If sig1 AndAlso sig2 AndAlso sig3 AndAlso sig4 Then
-                        signal   = "EARLY"
-                        rowColor = Brushes.Goldenrod
+                        signal       = "EARLY"
+                        rowColor     = Brushes.Goldenrod
+                        signalReason = "All early signals aligned — potential reversal imminent, preparing to enter."
                     ElseIf sigsCount >= 3 Then
-                        signal   = "WATCH"
-                        rowColor = Brushes.DimGray
+                        signal       = "WATCH"
+                        rowColor     = Brushes.DimGray
+                        signalReason = String.Format("{0}/4 early signals met — watching for the final trigger.", sigsCount)
                     End If
                 End If
 
@@ -605,8 +642,11 @@ Namespace TopStepTrader.UI.ViewModels
                         wRow.Signal        = signal
                         wRow.RowColor      = rowColor
                         wRow.TrendStrength = strength
+                        wRow.SignalReason  = signalReason
+                        wRow.DiDisplay     = diStr
                     End Sub)
             Next
+            Return cache
         End Function
 
         Private Async Sub FlashStatusAsync()
@@ -732,12 +772,13 @@ Namespace TopStepTrader.UI.ViewModels
             Next
         End Function
 
-        Private Async Function EvaluatePersonasAsync(tf As BarTimeframe) As Task
+        Private Async Function EvaluatePersonasAsync(tf As BarTimeframe,
+                                                       barCache As Dictionary(Of Integer, IList(Of MarketBar))) As Task
             Dim allBoxes = Me.AllBoxes()
             Dim candidates As New List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single))
             For Each box In allBoxes
                 If box.IsPaused Then Continue For
-                Dim boxSignals = Await EvaluatePersonaAsync(box, tf)
+                Dim boxSignals = EvaluatePersonaSignals(box, barCache)
                 candidates.AddRange(boxSignals)
             Next
             If candidates.Any() Then
@@ -754,7 +795,8 @@ Namespace TopStepTrader.UI.ViewModels
             End If
         End Function
 
-        Private Async Function EvaluatePersonaAsync(box As PersonaBoxVm, tf As BarTimeframe) As Task(Of List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single)))
+        Private Function EvaluatePersonaSignals(box As PersonaBoxVm,
+                                                 barCache As Dictionary(Of Integer, IList(Of MarketBar))) As List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single))
             Dim results As New List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single))
             If box.Profile Is Nothing Then Return results
             Dim minAdx As Single = CSng(box.Profile.AdxThreshold)
@@ -763,22 +805,9 @@ Namespace TopStepTrader.UI.ViewModels
             For i = 0 To Instruments.Length - 1
                 Dim contractId = Instruments(i)
                 Dim row = box.Symbols(i)
-                Dim bars As IList(Of MarketBar)
-                Try
-                    bars = Await _barService.GetLiveBarsAsync(contractId, tf, BarsToFetch)
-                Catch
-                    Continue For
-                End Try
+                Dim bars As IList(Of MarketBar) = Nothing
+                barCache.TryGetValue(i, bars)
                 If bars Is Nothing OrElse bars.Count < 15 Then Continue For
-
-                Dim tfMinutesEval As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
-                If _selectedTimeframe.EndsWith("hr") Then tfMinutesEval *= 60
-                If bars.Count > 1 Then
-                    Dim lastBarAgeEval = (DateTime.UtcNow - bars.Last().Timestamp).TotalMinutes
-                    If lastBarAgeEval < tfMinutesEval Then
-                        bars = bars.Take(bars.Count - 1).ToList()
-                    End If
-                End If
 
                 Dim highs   = bars.Select(Function(b) b.High).ToList()
                 Dim lows    = bars.Select(Function(b) b.Low).ToList()
@@ -875,8 +904,9 @@ Namespace TopStepTrader.UI.ViewModels
             End Try
 
             ' Only show a position tile
-            ' If placement failed, release the lock immediately so the tile stays blank.
-            If placed Is Nothing Then
+            ' If placement failed or was rejected, release the lock immediately so the tile stays blank.
+            If placed Is Nothing OrElse placed.Status <> OrderStatus.Working Then
+                _logger.LogWarning("ST+ order not accepted for {Contract}: status={Status}", contractId, placed?.Status)
                 SyncLock _timerLock
                     _lockOwner = Nothing
                     _timer?.Change(15000, 15000)
