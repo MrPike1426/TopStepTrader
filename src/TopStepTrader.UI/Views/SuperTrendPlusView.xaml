@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:converters="clr-namespace:TopStepTrader.UI.Infrastructure"
              mc:Ignorable="d"
              Background="{StaticResource BackgroundBrush}">
 
@@ -70,135 +71,74 @@
                         </Border.Style>
                         <StackPanel>
 
-                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}"
-                                       FontSize="12" LineHeight="20" Margin="0,0,0,10">
-                                <Run FontWeight="SemiBold" Foreground="White">SuperTrend+ is a fully automatic trading assistant.</Run>
-                                <Run>Once you press</Run>
-                                <Run FontStyle="Italic">Start Monitoring</Run>
-                                <Run>, it watches the markets for you around the clock and places trades on its own â€” you don't need to do anything else.</Run>
-                            </TextBlock>
-
-                            <!-- Step cards -->
-                            <Grid Margin="0,4,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="10"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="10"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="10"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-
-                                <!-- Step 1 -->
-                                <Border Grid.Column="0" Background="#1A2440" CornerRadius="5" Padding="10,8">
-                                    <StackPanel>
-                                        <TextBlock Text="ðŸ”  Step 1 â€” Spot the trend"
-                                                   Foreground="{StaticResource AccentBrush}"
-                                                   FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
-                                            The system draws an invisible line under a rising market or above a falling one.  When price crosses that line the trend has flipped.
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Step 2 -->
-                                <Border Grid.Column="2" Background="#1A2440" CornerRadius="5" Padding="10,8">
-                                    <StackPanel>
-                                        <TextBlock Text="ðŸ’ª  Step 2 â€” Check the strength"
-                                                   Foreground="{StaticResource AccentBrush}"
-                                                   FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
-                                            Not every trend is worth following.  The ADX score (shown in the watchlist) tells us how strong the move is.  We only trade when the market has real momentum behind it.
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Step 3 -->
-                                <Border Grid.Column="4" Background="#1A2440" CornerRadius="5" Padding="10,8">
-                                    <StackPanel>
-                                        <TextBlock Text="ðŸš€  Step 3 â€” Enter the trade"
-                                                   Foreground="{StaticResource AccentBrush}"
-                                                   FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
-                                            When a strong trend is confirmed the bot automatically places a buy (â–²) or sell (â–¼) order.  The persona you choose controls how cautiously or aggressively it sizes that trade.
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Step 4 -->
-                                <Border Grid.Column="6" Background="#1A2440" CornerRadius="5" Padding="10,8">
-                                    <StackPanel>
-                                        <TextBlock Text="ðŸ›¡ï¸  Step 4 â€” Protect &amp; exit"
-                                                   Foreground="{StaticResource AccentBrush}"
-                                                   FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
-                                            A moving stop-loss follows the SuperTrend line throughout the trade.  The moment the trend reverses the position is closed automatically â€” no manual action needed.
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Border>
-                            </Grid>
-
-                            <!-- Persona explainer -->
-                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,10,0,0">
+                            <!-- Monitoring -->
+                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
                                 <StackPanel>
-                                    <TextBlock Text="ðŸ‘¥  Choosing a persona"
-                                               Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="16"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="16"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <TextBlock Text="ðŸŸ¢  Lewis â€” Averse"
-                                                       Foreground="LimeGreen" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/>
-                                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="16">
-                                                Small position sizes, strict entry rules.  Aims to protect capital first and grow it second.  Best if you prefer steady, low-risk trading.
-                                            </TextBlock>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="ðŸŸ¡  Damian â€” Moderate"
-                                                       Foreground="Gold" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/>
-                                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="16">
-                                                Balanced approach.  Trades with enough size to make meaningful returns while still respecting risk limits.  A good everyday setting.
-                                            </TextBlock>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="4">
-                                            <TextBlock Text="ðŸ”´  Joe â€” Aggressive"
-                                                       Foreground="OrangeRed" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/>
-                                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="16">
-                                                Larger sizes, scales into winning trades.  Higher potential reward â€” but also higher drawdown if a trend fails.  For experienced risk-takers.
-                                            </TextBlock>
-                                        </StackPanel>
-                                    </Grid>
+                                    <TextBlock Text="&#x1F4E1;  Monitoring" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">SuperTrend+ scans your watchlist instruments every 15 seconds on the selected timeframe. For each instrument it computes the SuperTrend indicator, ADX (Average Directional Index), and the Directional Indicators (+DI and -DI) to assess trend direction and strength.</TextBlock>
                                 </StackPanel>
                             </Border>
 
-                            <!-- Reading the watchlist callout -->
-                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,8,0,0">
+                            <!-- Signal Detection -->
+                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
                                 <StackPanel>
-                                    <TextBlock Text="ðŸ“Š  Reading the watchlist below"
-                                               Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                    <WrapPanel>
-                                        <Border Background="#1F3A1F" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
-                                            <TextBlock Foreground="LimeGreen" FontFamily="Consolas" FontSize="11">â–²  BULL â€” price is climbing</TextBlock>
-                                        </Border>
-                                        <Border Background="#3A1F1F" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
-                                            <TextBlock Foreground="OrangeRed" FontFamily="Consolas" FontSize="11">â–¼  BEAR â€” price is falling</TextBlock>
-                                        </Border>
-                                        <Border Background="#2A2A2A" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
-                                            <TextBlock Foreground="Gray" FontFamily="Consolas" FontSize="11">â€“   flat â€” no clear direction yet</TextBlock>
-                                        </Border>
-                                        <Border Background="#1A2440" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
-                                            <TextBlock Foreground="SteelBlue" FontFamily="Consolas" FontSize="11">ADX â—â—â—  very strong trend</TextBlock>
-                                        </Border>
-                                        <Border Background="#1A2440" CornerRadius="4" Padding="8,4" Margin="0,0,0,4">
-                                            <TextBlock Foreground="SteelBlue" FontFamily="Consolas" FontSize="11">ADX â—‹â—‹â—‹  choppy / wait</TextBlock>
-                                        </Border>
-                                    </WrapPanel>
+                                    <TextBlock Text="&#x1F50D;  Signal Detection" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,4">A trade signal is generated when:</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  The SuperTrend line is bullish (price above) or bearish (price below)</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  The Directional Indicators confirm the direction (+DI &gt; -DI for long, -DI &gt; +DI for short)</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,0">&#x2022;  ADX is at or above the minimum threshold (default: 25), indicating an active trend</TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Position Slots -->
+                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="&#x1F4CA;  Position Slots" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,6">SuperTrend+ manages up to three Position Slots per instrument. The number of slots opened is determined by trend strength. Each new slot opens on the next closed bar after the ADX band increases. No two slots open on the same bar. Slots are not opened if the trend is showing signs of deterioration.</TextBlock>
+                                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Grid.Column="0" Background="#1A2440" CornerRadius="4" Padding="8,6" Margin="0,0,4,0"><StackPanel><TextBlock Text="ADX Range" Foreground="{StaticResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/><TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11">25 - 39  (1 slot)</TextBlock><TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11">40 - 59  (up to 2 slots)</TextBlock><TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11">60+      (up to 3 slots)</TextBlock></StackPanel></Border></Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Trade Management - Stop Phases -->
+                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="&#x1F6E1;&#xFE0F;  Trade Management - Stop Phases" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,6">Each open slot advances through stop phases as profit grows. The stop never retreats. R = initial risk (entry price minus stop at entry).</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Initial: Entry  |  Stop: SuperTrend line</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Breakeven: 1R profit  |  Stop: Entry + 0.5R</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Profit Trail: 1.5R profit  |  Stop: ATR-based trail</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Harvest: 2R profit  |  Stop: Locked at 1.5R from entry</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Free Ride: 3R profit  |  Stop: Locked at 2R from entry</TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Intelligent Exit - Degradation Signals -->
+                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="&#x26A0;&#xFE0F;  Intelligent Exit - Degradation Signals" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,6">SuperTrend+ monitors seven degradation signals every bar. Each signal contributes a score. When the combined score reaches a threshold, the slot exits.</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">SuperTrend Flip - Trend has reversed - immediate exit</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Momentum Slowing - Price converging toward ST line over 3 bars</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">ADX Declining - Trend strength fading from entry level</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">DI Compression - Buying/selling pressure equalising</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">DI Crossover - Leading indicator of direction change</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Rejection Bar - Price rejected at extension - wick signal</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">ATR Contraction - Volatility driving the move is fading</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,6,0,0"><Run Foreground="Gold" FontWeight="SemiBold">Amber (Warning)</Run> = degradation building, no new slots. <Run Foreground="OrangeRed" FontWeight="SemiBold">Red (Exiting)</Run> = exit triggered.</TextBlock>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Configuration -->
+                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="&#x2699;&#xFE0F;  Configuration" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,4">All settings are controlled from the configuration panel:</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Maximum slots (1-3)</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Contracts per slot</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  ADX thresholds for each slot band</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Take profit multiple (reward:risk)</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  SuperTrend multiplier</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,0">&#x2022;  Chart timeframe</TextBlock>
                                 </StackPanel>
                             </Border>
 
