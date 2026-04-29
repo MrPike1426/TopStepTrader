@@ -150,8 +150,8 @@ Namespace TopStepTrader.UI.ViewModels
         Inherits ViewModelBase
         Implements IDisposable
 
-        Private Shared ReadOnly Instruments As String() = {"MCLE", "MGC", "MES", "MNQ", "M6E"}
-        Private Shared ReadOnly InstrumentLabels As String() = {"Oil", "Gold", "S&P 500", "NQ", "EUR/USD"}
+        Private Shared ReadOnly Instruments As String() = {"MCLE", "MGC", "SIL", "MES", "MNQ", "M6E", "MBT"}
+        Private Shared ReadOnly InstrumentLabels As String() = {"Oil", "Gold", "Silver", "S&P 500", "NQ", "EUR/USD", "Bitcoin"}
         Private Const BarsToFetch As Integer = 60
 
         Public ReadOnly Property WatchlistItems As New ObservableCollection(Of WatchlistRowVm)

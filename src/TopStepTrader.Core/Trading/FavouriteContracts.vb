@@ -2,7 +2,7 @@ Namespace TopStepTrader.Core.Trading
 
     ''' <summary>
     ''' Master list of TopStepX favourite instruments.
-    ''' Instruments: OIL (MCLE), GOLD (MGC), SPX500 (MES), EUR/USD (M6E), NQ (MNQ), Bitcoin (MBT).
+    ''' Instruments: OIL (MCLE), GOLD (MGC), SILVER (SIL), SPX500 (MES), EUR/USD (M6E), NQ (MNQ), Bitcoin (MBT).
     ''' </summary>
     Public Class FavouriteContracts
 
@@ -31,7 +31,18 @@ Namespace TopStepTrader.Core.Trading
                 .RollLeadDays = 28
             })
 
-            ' SPX500 — MES (Micro S&P 500)  [roll: quarterly H/M/U/Z; U26=Sep 2026 front-month]
+            ' SILVER — SIL (Micro Silver)  [ProjectX symbolId: F.US.SIL; roll: monthly; nearest front-month]
+            ' CME Micro Silver: 1,000 troy oz, tick=0.005/$5.00
+            ' PxMinStopDollars=$25: 5 ticks × $5.00 = $25 floor — silver is volatile intraday
+            list.Add(New FavouriteContract("SILVER", "Silver", "CON.F.US.SIL.N26", 0.005D, 5.0D, 1000D, 0.3D, 25D) With {
+                .PxRootSymbol = "SIL",
+                .CommissionTickBuffer = 2,
+                .MultiConfluenceTimeframeMinutes = 10,
+                .RoundTripFee = 1.24D,
+                .RollLeadDays = 28
+            })
+
+            ' SPX500
             ' PxMinStopDollars=$20: 16 ticks × $1.25 = 4 S&P points minimum
             list.Add(New FavouriteContract("SPX500", "S&P 500", "CON.F.US.MES.U26", 0.25D, 1.25D, 5D, 0.3D, 20D) With {
                 .PxRootSymbol = "MES",
