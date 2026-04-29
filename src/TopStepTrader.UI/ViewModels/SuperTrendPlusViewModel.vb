@@ -7,6 +7,7 @@ Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
+Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.ML.Features
 Imports TopStepTrader.Services.Market
 Imports TopStepTrader.UI.ViewModels.Base
@@ -771,7 +772,7 @@ Namespace TopStepTrader.UI.ViewModels
                     End Sub)
 
                 If earlySignal AndAlso _lockOwner Is Nothing Then
-                    Await FireEntryAsync(box, contractId, side, stLine15)
+                    Await FireEntryAsync(box, contractId, side, stLine15, CDec(lastClose))
                     Return
                 End If
             Next
@@ -780,7 +781,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private Async Function EvaluatePersonasAsync(tf As BarTimeframe,
                                                        barCache As Dictionary(Of Integer, IList(Of MarketBar))) As Task
             Dim allBoxes = Me.AllBoxes()
-            Dim candidates As New List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single))
+            Dim candidates As New List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single, Decimal))
             For Each box In allBoxes
                 If box.IsPaused Then Continue For
                 Dim boxSignals = EvaluatePersonaSignals(box, barCache)
@@ -796,13 +797,13 @@ Namespace TopStepTrader.UI.ViewModels
                     .OrderByDescending(Function(c) c.Item5) _
                     .ThenByDescending(Function(c) If(priorityMap.ContainsKey(c.Item1), priorityMap(c.Item1), 0)) _
                     .First()
-                Await FireEntryAsync(best.Item1, best.Item2, best.Item3, best.Item4)
+                Await FireEntryAsync(best.Item1, best.Item2, best.Item3, best.Item4, best.Item6)
             End If
         End Function
 
         Private Function EvaluatePersonaSignals(box As PersonaBoxVm,
-                                                 barCache As Dictionary(Of Integer, IList(Of MarketBar))) As List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single))
-            Dim results As New List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single))
+                                                 barCache As Dictionary(Of Integer, IList(Of MarketBar))) As List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single, Decimal))
+            Dim results As New List(Of Tuple(Of PersonaBoxVm, String, String, Decimal, Single, Decimal))
             If box.Profile Is Nothing Then Return results
             Dim minAdx As Single = CSng(box.Profile.AdxThreshold)
             If minAdx <= 0 Then minAdx = 20.0F
@@ -851,7 +852,7 @@ Namespace TopStepTrader.UI.ViewModels
                     End Sub)
 
                 If isLong OrElse isShort Then
-                    results.Add(Tuple.Create(box, contractId, If(isLong, "Buy", "Sell"), CDec(stLine), adxVal))
+                    results.Add(Tuple.Create(box, contractId, If(isLong, "Buy", "Sell"), CDec(stLine), adxVal, CDec(closes(n))))
                 End If
             Next
             Return results
@@ -860,7 +861,8 @@ Namespace TopStepTrader.UI.ViewModels
         Private Async Function FireEntryAsync(box As PersonaBoxVm,
                                               contractId As String,
                                               side As String,
-                                              stLine As Decimal) As Task
+                                              stLine As Decimal,
+                                              lastClose As Decimal) As Task
             SyncLock _timerLock
                 If _lockOwner IsNot Nothing Then Return
                 _lockOwner = box.PersonaName.Split(" "c)(0)
@@ -894,12 +896,38 @@ Namespace TopStepTrader.UI.ViewModels
 
             Dim qty As Integer    = If(box.Profile IsNot Nothing, box.Profile.PositionSize, 1)
             Dim oSide As OrderSide = If(side = "Buy", OrderSide.Buy, OrderSide.Sell)
+
+            ' Compute SL ticks from the SuperTrend line distance, clamped to instrument minimums.
+            Dim fc As FavouriteContract = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim stopTicks As Integer? = Nothing
+            Dim tpTicks As Integer? = Nothing
+            If fc IsNot Nothing AndAlso fc.PxTickSize > 0D Then
+                Dim rawDist As Decimal = Math.Abs(lastClose - stLine)
+                Dim rawTicks As Integer = CInt(Math.Round(rawDist / fc.PxTickSize))
+                ' Clamp up to the instrument dollar floor.
+                Dim minTicks As Integer = 1
+                If fc.PxMinStopDollars > 0D AndAlso fc.PxTickValue > 0D Then
+                    minTicks = CInt(Math.Ceiling(fc.PxMinStopDollars / fc.PxTickValue))
+                End If
+                stopTicks = Math.Max(rawTicks, minTicks)
+                Dim tpMult As Decimal = ParseTpMultiple()
+                If tpMult > 0D Then
+                    tpTicks = CInt(Math.Round(stopTicks.Value * tpMult))
+                End If
+            End If
+            _logger.LogInformation("ST+ bracket for {Contract}: SL={SL} ticks, TP={TP} ticks (lastClose={Close}, stLine={St})",
+                                   contractId, If(stopTicks.HasValue, stopTicks.Value.ToString(), "none"),
+                                   If(tpTicks.HasValue, tpTicks.Value.ToString(), "none"),
+                                   lastClose, stLine)
+
             Dim order As New Order With {
-                .AccountId  = box.AccountId,
-                .ContractId = contractId,
-                .Side       = oSide,
-                .Quantity   = qty,
-                .OrderType  = OrderType.Market
+                .AccountId              = box.AccountId,
+                .ContractId            = contractId,
+                .Side                  = oSide,
+                .Quantity              = qty,
+                .OrderType             = OrderType.Market,
+                .InitialStopTicks      = stopTicks,
+                .InitialTakeProfitTicks = tpTicks
             }
             Dim placed As Order = Nothing
             Try
