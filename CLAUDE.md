@@ -41,7 +41,7 @@ dotnet build --no-restore -v q
 dotnet test --no-build -v q
 ```
 
-**Expected output:** `506 passed, 0 failed` (as of 2026-04-28). If the count changes after adding new tests, update this number.
+**Expected output:** `558 passed` (as of 2026-04-29). If the count changes after adding new tests, update this number. One pre-existing failure exists — flag it explicitly rather than silently ignoring it.
 
 **Rules:**
 - Never leave the project in a broken build state.
@@ -68,7 +68,7 @@ Every mechanism below must be preserved. Do not remove or weaken any of them.
 
 | Mechanism | Where | What it does |
 |---|---|---|
-| `RollLeadDays` on `FavouriteContract` | `Core/Trading/FavouriteContracts.vb` | Per-instrument roll lead time. Monthly (MCL/MGC) = 28 days; quarterly (MES/MNQ/M6E/MBT) = 7 days. |
+| `RollLeadDays` on `FavouriteContract` | `Core/Trading/FavouriteContracts.vb` | Per-instrument roll lead time. Monthly (MCL/MGC/SIL) = 28 days; quarterly (MES/MNQ/M6E/MBT) = 7 days. |
 | `SelectBestContract` cutoff | `Services/Trading/TopStepXInstrumentCatalog.vb` | Excludes any contract whose expiry falls within `asOf + RollLeadDays`. Automatically selects the true front-month after a roll. Covered by 15 regression tests in `InstrumentCatalogRollTests.vb`. |
 | `EnsureCacheAsync` called by `GetResolvedContractIdAsync` | `Services/Trading/TopStepXInstrumentCatalog.vb` | Forces the 15-min TTL to govern every caller — including SuperTrend+ — not just order-placement paths. Previously the fast-path returned a stale cached ID forever. |
 | Stale bar guard (`barAgeMins > TF × 3`) | `Services/Trading/StrategyExecutionEngine.vb` | Suppresses all entry signals when bars are too old. Fires `IsMarketClosed = True` once on transition; resets on `Start()`. |
@@ -339,9 +339,9 @@ Dependency flow: UI → Services → (Core, Data, API, ML)
 ### Broker
 `IOrderService` is the unified broker interface. `ProjectXOrderService` is registered directly as `IOrderService` — there is no dispatcher. All engines call `IOrderService` which routes to TopStepX via the ProjectX REST API.
 
-`FavouriteContracts.vb` holds the master instrument list with TopStepX specs (ProjectX contract IDs, tick sizes, tick values). The `EToroContractId` and related eToro fields are retained in source for potential future use but are not active.
+`FavouriteContracts.vb` holds the master instrument list with TopStepX specs (ProjectX contract IDs, tick sizes, tick values). All eToro-era fields have been removed (ARCH-05).
 
-**TopStepX is the sole trading platform.** `FavouriteContract.GetPointValue(broker)` and `GetTickSize(broker)` return the correct TopStepX values (e.g. MGC = $10/pt, MES = $5/pt). Always call these via `_session.ActiveBroker` — never hardcode tick specs.
+**TopStepX is the sole trading platform.**
 
 ### TopStepX / ProjectX Specifics
 - **No take-profit brackets** — `ProjectXOrderService` never sends `takeProfitBracket` when `ManageTakeProfit = False` (the default)
@@ -389,6 +389,7 @@ Two `IHostedService` workers run continuously:
 | Bar download + cache | `Services/Market/BarCollectionService.vb` |
 | Backtest engine | `Services/Backtest/BacktestEngine.vb` |
 | Sniper live engine | `UI/ViewModels/SniperViewModel.vb` · `UI/Views/SniperView.xaml` · `Services/Trading/SniperExecutionEngine.vb` |
+| SuperTrend+ Autopilot | `UI/ViewModels/SuperTrendPlusViewModel.vb` · `UI/Views/SuperTrendPlusView.xaml` · `Core/Trading/PositionSlot.vb` · `Core/Trading/SlotManager.vb` · `Services/Trading/ExitSignalEngine.vb` |
 | Claude AI integration | `Services/AI/ClaudeReviewService.vb` |
 | API key management | `UI/Views/ApiKeysView.xaml` · `UI/Views/ApiKeysView.xaml.vb` |
 

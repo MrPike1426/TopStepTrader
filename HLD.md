@@ -1,7 +1,7 @@
 # TopStepTrader — High-Level Design (HLD)
 
-**Version:** 1.6
-**Date:** 2026-04-25
+**Version:** 1.7
+**Date:** 2026-04-29
 **Status:** Current
 
 ---
@@ -12,7 +12,7 @@ TopStepTrader is a WPF desktop application for live and automated trading on Top
 
 | Broker | Account Type | Instrument Class |
 |---|---|---|
-| **TopStepX** | Funded / Practice futures | CME Micro Futures (MES, MYM, MGC, MCL, MBT, GMET, M6E) |
+| **TopStepX** | Funded / Practice futures | CME Micro Futures (MES, MYM, MGC, MCL, SIL, MBT, GMET, M6E) |
 
 ---
 
@@ -164,10 +164,52 @@ Two hosted services run for the lifetime of the application:
 Key engine behaviours:
 
 - **End-of-day forced close** — detects day boundaries; closes all open legs at the prior bar's `Close` with SL-slippage applied (`ExitReason = "EndOfDay"`). 1-bar re-entry cooldown follows. `BacktestResult.EndOfDayCloseCount` tracks these.
-- **Per-contract commission** — `FavouriteContract.RoundTripFee` is deducted on every open and close leg (OIL=$1.04, GOLD=$1.24, MES=$0.74, M6E=$0.74, MBT=$2.34; default=$0.80).
+- **Per-contract commission** — `FavouriteContract.RoundTripFee` is deducted on every open and close leg (OIL=$1.04, GOLD=$1.24, SIL=$1.24, MES=$0.74, M6E=$0.74, MBT=$2.34; default=$0.80).
 - **Train/test split** — `BacktestConfiguration.TrainTestSplit = 0.6` runs the first 60% of bars as in-sample and the last 40% as out-of-sample. `TestPnL` and `DegradationPct` surface on result rows.
 - **Market regime filter** — `RegimeClassifier.Classify(atr, adx, threshold)` can route each bar to a `TrendingStrategyOverride` or `RangingStrategyOverride` condition type before signal evaluation.
 - **VolumeGateEnabled** — MC volume condition can be disabled per-run via `BacktestConfiguration.McVolumeGateEnabled = False` for zero-PX-volume instruments.
+
+### 4.8 SuperTrend+ Autopilot
+
+`SuperTrendPlusViewModel` (`UI/ViewModels/SuperTrendPlusViewModel.vb`) is a fully autonomous scan-and-trade engine independent of the Hydra/AssetBassett engines. It polls seven instruments every 15 seconds and manages up to three concurrent **Position Slots** per instrument using a composite degradation-signal exit engine.
+
+**Watchlist instruments:** Oil (MCLE) · Gold (MGC) · Silver (SIL) · S&P 500 (MES) · NQ (MNQ) · EUR/USD (M6E) · Bitcoin (MBT)
+
+**Position Slot model (FEAT-23):**
+- `PositionSlot` — identity-free state object per open position (SlotIndex, Instrument, Side, EntryPrice, EntryBarTime, EntryAdx, StopPrice, TakeProfitPrice, SlotHealth)
+- `SlotManager` — owns up to 3 slots; enforces ADX-band slot counts, same-bar blocking, counter-trend blocking, and Exiting-state blocking
+- `SuperTrendPlusConfig` — single unified config (replaces per-persona profiles)
+
+**ADX band → slot count:**
+
+| ADX Range | Slots Opened |
+|---|---|
+| < 25 | No trade |
+| 25–39 | 1 slot |
+| 40–59 | Up to 2 slots |
+| 60+ | Up to 3 slots |
+
+**Phased stop management (FEAT-24):** Each slot advances through stop phases — Initial → Breakeven (1R) → Profit Trail (1.5R) → Harvest (2R) → Free Ride (3R). Stop never retreats.
+
+**Exit degradation signals — `ExitSignalEngine` (FEAT-24, FEAT-25):**
+
+| Signal | Weight | Description |
+|---|---|---|
+| E1 — SuperTrend Flip | Immediate | Trend reversed — close all slots |
+| E2 — Momentum Slowing | 2 | Three consecutive contracting bars toward ST line |
+| E3 — ADX Declining | 2 | ADX falling for 3 bars AND >10 pts below entry ADX |
+| E4 — DI Compression | 2 | +DI/−DI spread narrowing AND below 10 |
+| E5 — DI Crossover | 4 | +DI/−DI crossed (leading indicator) |
+| E6 — Rejection Bar | 2 | Long wick in trade direction; close in lower half |
+| E7 — ATR Contraction | 1 | ATR declining 3 bars AND below 80% of entry ATR |
+| E8 — VWAP Cross | 2 | Price crosses below/above session VWAP |
+| E9 — RSI Hidden Divergence | 3 | Price higher high but RSI lower high over 3–5 bars |
+
+Score 0–2 → Healthy (green); 3–5 → Warning (amber — blocks new slots); 6+ → Exiting (red — close slot).
+
+**Partial exits (FEAT-25):** At 2R profit Slot 2 reduces; at 3R Slot 1 reduces. Uses `IOrderService.PartialCloseContractAsync` with full-close fallback on API failure.
+
+**Order integrity (BUG-27/28/30):** `FireEntryAsync` computes stop ticks from `|lastClose - stLine| / tickSize` clamped to `PxMinStopDollars` floor. Rejected orders (status ≠ Working) release the lock and do not mark a position as open.
 
 ---
 
@@ -239,6 +281,7 @@ BarIngestionWorker (background, continuous)
 | Order Book | — | Manual order placement and cancellation |
 | Test Trade | — | Diagnostic order placement with bracket validation; no active management |
 | API Keys | — | Credential management for TopStepX, Claude AI, and future platforms |
+| SuperTrend+ | `SuperTrendPlusViewModel` | Autonomous 7-instrument scan-and-trade autopilot. Position Slot model (up to 3 slots per instrument), ADX-band entry, phased stop management, 9-signal degradation exit engine, partial exits at 2R/3R. Watchlist: Oil · Gold · Silver · S&P 500 · NQ · EUR/USD · Bitcoin. |
 
 ---
 

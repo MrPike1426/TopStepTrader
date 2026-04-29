@@ -1,7 +1,7 @@
 # TopStepTrader — Low-Level Design (LLD)
 
-**Version:** 1.6
-**Date:** 2026-04-25
+**Version:** 1.7
+**Date:** 2026-04-29
 **Status:** Current
 
 ---
@@ -50,6 +50,7 @@ src/
 │   │   ├── SniperExecutionEngine.vb         Sniper engine
 │   │   ├── CryptoStrategyExecutionEngine.vb CryptoJoe engine
 │   │   ├── PumpNDumpExecutionEngine.vb      PumpNDump engine
+│   │   ├── ExitSignalEngine.vb              SuperTrend+ degradation-signal evaluator
 │   │   ├── ProjectXOrderService.vb          IOrderService implementation
 │   │   ├── TopStepXInstrumentCatalog.vb     Cached tick specs
 │   │   └── TrendAnalysisService.vb
@@ -64,11 +65,13 @@ src/
 │   ├── Views/               DashboardView, HydraView, AssetBassettView, SniperView,
 │   │                        PumpNDumpView, CryptoJoeView, BacktestView,
 │   │                        OrderBookView, TestTradeView,
+│   │                        SuperTrendPlusView,
 │   │                        ApiKeysView, MainWindow
 │   ├── ViewModels/          DashboardViewModel, HydraViewModel, AssetBassettViewModel,
 │   │                        SniperViewModel, PumpNDumpViewModel, CryptoJoeViewModel,
 │   │                        BacktestViewModel, OrderBookViewModel,
 │   │                        TestTradeViewModel,
+│   │                        SuperTrendPlusViewModel, SlotBoxVm, WatchlistRowVm,
 │   │                        ApiKeysViewModel, ViewModelLocator
 │   │   └── Base/            ViewModelBase, TradingViewModelBase, RelayCommand
 │   ├── Styles/              Dark theme, control overrides, converters
@@ -291,7 +294,7 @@ Static module (`FavouriteContracts.vb`) providing the master instrument list. Ne
 
 | Method | Returns | Notes |
 |---|---|---|
-| `GetDefaults(broker)` | List(Of FavouriteContract) | Filtered to instruments tradeable on that broker |
+| `GetDefaults()` | List(Of FavouriteContract) | Returns all tradeable instruments |
 | `TryGetBySymbol(symbol)` | FavouriteContract? | Looks up by instrument symbol key or PX root symbol |
 | `TryGetByPxContractId(id)` | FavouriteContract? | Looks up by full PX dotted contract ID |
 
@@ -300,7 +303,6 @@ Static module (`FavouriteContracts.vb`) providing the master instrument list. Ne
 | Field | Example |
 |---|---|
 | `Name` | "Micro Gold" |
-| `EToroContractId` | "GOLD.24-7" (retained for bar storage key / Yahoo lookup) |
 | `PxRootSymbol` | "MGC" |
 | `PxContractId` | "CON.F.US.MGC.J26" (front-month, updated by catalog) |
 | `PxTickSize` | 0.1 |
@@ -780,7 +782,105 @@ Extend TP on bar-close (if ExtendTpOnClose = True and _tpAdvanceCount < 3):
 
 ---
 
-### 6.9 Multi-Confluence Dual-Frequency Evaluation (Hydra)
+### 6.9 SuperTrend+ Autopilot Engine
+
+`SuperTrendPlusViewModel` (`UI/ViewModels/SuperTrendPlusViewModel.vb`) is a standalone scan-and-trade autopilot that operates independently of the Hydra/AssetBassett engines. It polls seven instruments every 15 seconds and manages up to three concurrent **Position Slots** per instrument.
+
+**Watchlist instruments and labels:**
+
+| Root Symbol | Label |
+|---|---|
+| MCLE | Oil |
+| MGC | Gold |
+| SIL | Silver |
+| MES | S&P 500 |
+| MNQ | NQ |
+| M6E | EUR/USD |
+| MBT | Bitcoin |
+
+#### PositionSlot (Core/Trading/PositionSlot.vb)
+
+Identity-free state object. One instance per open slot.
+
+| Field | Type | Purpose |
+|---|---|---|
+| `SlotIndex` | Integer | 0, 1, or 2 |
+| `Instrument` | String | e.g. "MCLE" |
+| `Side` | OrderSide | Buy / Sell |
+| `EntryPrice` | Decimal | Fill price |
+| `EntryBarTime` | DateTimeOffset | Bar timestamp at entry |
+| `EntryAdx` | Double | ADX at time of entry |
+| `EntryAtr` | Decimal | ATR at time of entry (used by E7) |
+| `StopPrice` | Decimal | Live trailing stop |
+| `TakeProfitPrice` | Decimal | Current TP |
+| `PositionId` | Long? | Broker position reference |
+| `AccountId` | String | Broker account ID |
+| `Contracts` | Integer | Quantity |
+| `IsOpen` | Boolean | Whether the slot is live |
+| `SlotHealth` | SlotHealth | Healthy / Warning / Exiting |
+| `StopPhase` | StopPhase | Initial / Breakeven / ProfitTrail / Harvest / FreeRide |
+
+#### SlotManager (Core/Trading/SlotManager.vb)
+
+Owns the array of up to 3 slots and enforces open/close rules:
+
+- `TryOpenSlot` — blocked when: `OpenSlotCount ≥ TargetSlotCount`; bar timestamp same as an existing open slot; counter-trend direction; any slot in Exiting health.
+- `CloseSlot(index, reason)` — marks slot closed, releases index.
+- `CloseAllForInstrument(instrument, reason)` — used on E1 (ST flip).
+- `TargetSlotCount` — set each bar from ADX band: ADX<25→0, 25–39→1, 40–59→2, 60+→3.
+
+#### ExitSignalEngine (Services/Trading/ExitSignalEngine.vb)
+
+Independently unit-testable (no UI or broker dependencies). Computes degradation score per slot per bar.
+
+Input: bar series (highs, lows, closes, volume), slot state, config.  
+Output: `ExitEvaluation` (score, contributing signals list, recommended action).
+
+| Signal | Weight | Condition |
+|---|---|---|
+| E1 — SuperTrend Flip | Immediate | ST direction reversed; all slots closed regardless of score |
+| E2 — Momentum Slowing | 2 | Three consecutive bars converging toward ST line |
+| E3 — ADX Declining | 2 | ADX[n]<ADX[n-1]<ADX[n-2] AND ADX[n] < entryAdx−10 |
+| E4 — DI Compression | 2 | (plusDI−minusDI) narrowing AND spread < 10 |
+| E5 — DI Crossover | 4 | +DI and −DI have crossed |
+| E6 — Rejection Bar | 2 | Upper/lower wick > 2× body; close in adverse half |
+| E7 — ATR Contraction | 1 | ATR[n]<ATR[n-1]<ATR[n-2] AND ATR[n] < 0.8 × entryAtr |
+| E8 — VWAP Cross | 2 | Price crosses below/above session-anchored VWAP |
+| E9 — RSI Hidden Divergence | 3 | Price higher high + RSI lower high (14-period, 3–5 bar window) |
+
+**SlotHealth state machine:**
+
+```
+Healthy → (score ≥ 3) → Warning   (blocks new slots for this instrument)
+Warning → (score ≥ 6) → Exiting   (slot closes; no recovery)
+Warning → (score < 3) → Healthy   (signal resolved)
+```
+
+#### Phased Stop Management
+
+| Phase | Trigger | Stop Location |
+|---|---|---|
+| Initial | Entry | SuperTrend line |
+| Breakeven | 1R profit | Entry + 0.5R |
+| ProfitTrail | 1.5R profit | ATR-based trail |
+| Harvest | 2R profit | Locked at 1.5R from entry |
+| FreeRide | 3R profit | Locked at 2R from entry |
+
+R = initial risk (entry price − stop at entry). Stop never retreats.
+
+#### Partial Exits
+
+`IOrderService.PartialCloseContractAsync` is called at profit milestones (2R: reduce Slot 2; 3R: reduce Slot 1). Falls back to full close on API failure, logging the limitation.
+
+#### Order Integrity Fixes (BUG-27/28/29/30)
+
+- `FireEntryAsync` computes `stopTicks = |lastClose - stLine| / tickSize` clamped to `PxMinStopDollars` floor; `tpTicks = ParseTpMultiple() × stopTicks`.
+- Rejected orders (`placed.Status ≠ Working`) release the lock without setting `HasPosition = True`.
+- `TimerCallback` catches exceptions via `LogWarning` and updates `StatusText` with the error message.
+
+---
+
+### 6.10 Multi-Confluence Dual-Frequency Evaluation (Hydra)
 
 The Multi-Confluence strategy in Hydra uses two independent evaluation cadences:
 
@@ -792,6 +892,7 @@ The Multi-Confluence strategy in Hydra uses two independent evaluation cadences:
 |---|---|
 | OIL (MCLE) | 5 min |
 | GOLD (MGC) | 10 min |
+| SILVER (SIL) | 10 min |
 | S&P 500 (MES) | 5 min |
 | EUR/USD (M6E) | 10 min |
 | BTC (MBT) | 15 min |
