@@ -103,12 +103,14 @@
                             <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
                                 <StackPanel>
                                     <TextBlock Text="&#x1F6E1;&#xFE0F;  Trade Management - Stop Phases" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,6">Each open slot advances through stop phases as profit grows. The stop never retreats. R = initial risk (entry price minus stop at entry).</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Initial: Entry  |  Stop: SuperTrend line</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Breakeven: 1R profit  |  Stop: Entry + 0.5R</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Profit Trail: 1.5R profit  |  Stop: ATR-based trail</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Harvest: 2R profit  |  Stop: Locked at 1.5R from entry</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Free Ride: 3R profit  |  Stop: Locked at 2R from entry</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,6">Each open slot advances through six stop phases as profit grows. The stop never retreats. R = initial risk (entry price minus stop at entry).</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">Initial:</Run>     Entry → 0.5R profit  |  Stop: SuperTrend line (ratchets with trend)</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">Breakeven:</Run>   0.5R profit  |  Stop: Exact entry price (risk eliminated)</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">ProfitLock:</Run>  1R profit    |  Stop: Entry + 0.3R (partial profit banked)</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">ProfitTrail:</Run> 1.5R profit  |  Stop: ATR-based trailing stop (rides the move)</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">Harvest:</Run>     2R profit    |  Stop: Locked at entry + 1.5R</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">FreeRide:</Run>    3R profit    |  Stop: Locked at entry + 2R (let it run)</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,6,0,0">All thresholds are configurable in <Run Foreground="{StaticResource AccentBrush}">SuperTrendPlusConfig</Run>.</TextBlock>
                                 </StackPanel>
                             </Border>
 
@@ -363,10 +365,17 @@
                                 Visibility="{Binding Slot1.PositionVisibility}"
                                 Background="#1A2A1A" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
-                            <TextBlock Text="{Binding Slot1.PositionDisplay}"
-                                       Foreground="{Binding Slot1.PnlBrush}"
-                                       FontFamily="Consolas" FontSize="11"
-                                       TextWrapping="Wrap"/>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Slot1.PositionDisplay}"
+                                           Foreground="{Binding Slot1.PnlBrush}"
+                                           FontFamily="Consolas" FontSize="11"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Margin="0,4,0,0"
+                                           FontFamily="Consolas" FontSize="10"
+                                           Foreground="{StaticResource TextSecondaryBrush}">
+                                    <Run Text="Phase: "/><Run Text="{Binding Slot1.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
+                                </TextBlock>
+                            </StackPanel>
                         </Border>
                     </Grid>
                 </Border>
@@ -418,10 +427,17 @@
                                 Visibility="{Binding Slot2.PositionVisibility}"
                                 Background="#1A2A1A" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
-                            <TextBlock Text="{Binding Slot2.PositionDisplay}"
-                                       Foreground="{Binding Slot2.PnlBrush}"
-                                       FontFamily="Consolas" FontSize="11"
-                                       TextWrapping="Wrap"/>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Slot2.PositionDisplay}"
+                                           Foreground="{Binding Slot2.PnlBrush}"
+                                           FontFamily="Consolas" FontSize="11"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Margin="0,4,0,0"
+                                           FontFamily="Consolas" FontSize="10"
+                                           Foreground="{StaticResource TextSecondaryBrush}">
+                                    <Run Text="Phase: "/><Run Text="{Binding Slot2.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
+                                </TextBlock>
+                            </StackPanel>
                         </Border>
                     </Grid>
                 </Border>
@@ -473,10 +489,17 @@
                                 Visibility="{Binding Slot3.PositionVisibility}"
                                 Background="#1A2A1A" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
-                            <TextBlock Text="{Binding Slot3.PositionDisplay}"
-                                       Foreground="{Binding Slot3.PnlBrush}"
-                                       FontFamily="Consolas" FontSize="11"
-                                       TextWrapping="Wrap"/>
+                            <StackPanel>
+                                <TextBlock Text="{Binding Slot3.PositionDisplay}"
+                                           Foreground="{Binding Slot3.PnlBrush}"
+                                           FontFamily="Consolas" FontSize="11"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock Margin="0,4,0,0"
+                                           FontFamily="Consolas" FontSize="10"
+                                           Foreground="{StaticResource TextSecondaryBrush}">
+                                    <Run Text="Phase: "/><Run Text="{Binding Slot3.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
+                                </TextBlock>
+                            </StackPanel>
                         </Border>
                     </Grid>
                 </Border>

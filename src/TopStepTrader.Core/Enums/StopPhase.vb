@@ -5,10 +5,12 @@ Namespace TopStepTrader.Core.Enums
     ''' Phases only advance forward — the stop never retreats.
     ''' </summary>
     Public Enum StopPhase
-        ''' <summary>Entry → 1R profit. Stop held at SuperTrend line.</summary>
+        ''' <summary>Entry → 0.5R profit. Stop held at SuperTrend line.</summary>
         Initial
-        ''' <summary>Price reached 1R. Stop moved to entry + 0.5R.</summary>
+        ''' <summary>Price reached 0.5R. Stop moved to entry (breakeven).</summary>
         Breakeven
+        ''' <summary>Price reached 1R. Stop locked at entry + 0.3R (partial profit protected).</summary>
+        ProfitLock
         ''' <summary>Price reached 1.5R. Stop trails via ATR-based formula.</summary>
         ProfitTrail
         ''' <summary>Price reached 2R. Stop locked at entry + 1.5R from entry.</summary>

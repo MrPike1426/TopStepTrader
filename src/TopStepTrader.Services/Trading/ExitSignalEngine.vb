@@ -1,6 +1,7 @@
 Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Models
+Imports TopStepTrader.Core.Settings
 
 Namespace TopStepTrader.Services.Trading
 
@@ -283,6 +284,67 @@ Namespace TopStepTrader.Services.Trading
             ElseIf profit >= 1D * R Then
                 If phase < StopPhase.Breakeven Then phase = StopPhase.Breakeven
                 Dim beStop = If(isLng, entry + 0.5D * R, entry - 0.5D * R)
+                newStop = If(isLng, Math.Max(newStop, beStop), Math.Min(newStop, beStop))
+
+            Else
+                ' Initial phase — trail the SuperTrend line (ratchet only)
+                newStop = If(isLng, Math.Max(newStop, stLine), Math.Min(newStop, stLine))
+            End If
+
+            Return (newStop, phase)
+        End Function
+
+        ''' <summary>
+        ''' SuperTrend+-specific overload of ComputePhasedStop.
+        ''' Uses configurable thresholds from SuperTrendPlusConfig so the 6-phase
+        ''' ladder is tunable without affecting any other strategy.
+        ''' Phases: Initial → Breakeven → ProfitLock → ProfitTrail → Harvest → FreeRide
+        ''' </summary>
+        Public Function ComputePhasedStop(slot As PositionSlot,
+                                          currentPrice As Decimal,
+                                          stLine As Decimal,
+                                          currentAtr As Decimal,
+                                          config As SuperTrendPlusConfig) As (NewStop As Decimal, Phase As StopPhase)
+            If slot.EntryPrice = 0D OrElse slot.InitialRisk = 0D OrElse config Is Nothing Then
+                Return ComputePhasedStop(slot, currentPrice, stLine, currentAtr)
+            End If
+
+            Dim R     = slot.InitialRisk
+            Dim entry = slot.EntryPrice
+            Dim isLng = slot.Side = "Buy"
+            Dim profit = If(isLng, currentPrice - entry, entry - currentPrice)
+
+            Dim phase   = slot.StopPhase
+            Dim newStop = slot.StopPrice
+
+            If profit >= config.FreeRideTriggerR * R Then
+                phase = StopPhase.FreeRide
+                Dim freeStop = If(isLng, entry + config.FreeRideLockR * R,
+                                         entry - config.FreeRideLockR * R)
+                newStop = If(isLng, Math.Max(newStop, freeStop), Math.Min(newStop, freeStop))
+
+            ElseIf profit >= config.HarvestTriggerR * R Then
+                If phase < StopPhase.Harvest Then phase = StopPhase.Harvest
+                Dim harvestStop = If(isLng, entry + config.HarvestLockR * R,
+                                            entry - config.HarvestLockR * R)
+                newStop = If(isLng, Math.Max(newStop, harvestStop), Math.Min(newStop, harvestStop))
+
+            ElseIf profit >= config.ProfitTrailTriggerR * R Then
+                If phase < StopPhase.ProfitTrail Then phase = StopPhase.ProfitTrail
+                If currentAtr > 0D Then
+                    Dim trailStop = If(isLng, currentPrice - currentAtr, currentPrice + currentAtr)
+                    newStop = If(isLng, Math.Max(newStop, trailStop), Math.Min(newStop, trailStop))
+                End If
+
+            ElseIf profit >= config.ProfitLockTriggerR * R Then
+                If phase < StopPhase.ProfitLock Then phase = StopPhase.ProfitLock
+                Dim lockStop = If(isLng, entry + config.ProfitLockOffsetR * R,
+                                         entry - config.ProfitLockOffsetR * R)
+                newStop = If(isLng, Math.Max(newStop, lockStop), Math.Min(newStop, lockStop))
+
+            ElseIf profit >= config.BreakevenTriggerR * R Then
+                If phase < StopPhase.Breakeven Then phase = StopPhase.Breakeven
+                Dim beStop = If(isLng, entry, entry)   ' exact entry
                 newStop = If(isLng, Math.Max(newStop, beStop), Math.Min(newStop, beStop))
 
             Else

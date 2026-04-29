@@ -418,6 +418,7 @@ Namespace TopStepTrader.UI.ViewModels
                 box.IsPaused        = False
                 box.HasPosition     = False
                 box.PositionDisplay = String.Empty
+                box.StopPhaseLabel  = String.Empty
                 For Each row In box.Symbols
                     row.Arrow      = "–"
                     row.AdxDisplay = "ADX:–"
@@ -718,21 +719,25 @@ Namespace TopStepTrader.UI.ViewModels
             _logger.LogInformation("ST+ Best candidate: {Contract} side={Side} ADX={Adx:F1} barTime={BarTime}",
                                    bestContractId, bestSide, bestAdxVal, bestBarTime)
 
-            ' Guard: verify no live position already exists on the exchange for this instrument.
-            ' Prevents re-entry after ReleaseSlotAsync clears the in-memory slot while the real
-            ' position is still open (race window between slot clear and exchange close confirmation).
-            Dim guardAccId As Long = If(_selectedAccount IsNot Nothing, _selectedAccount.Id, 0)
-            If guardAccId <> 0 Then
-                Try
-                    Dim liveCheck = Await _orderService.GetLivePositionSnapshotAsync(guardAccId, bestContractId)
-                    If liveCheck IsNot Nothing Then
-                        _logger.LogInformation("ST+ EvaluateSlotEntries — live position still open on exchange for {Contract} (units={Units}), skipping re-entry.",
-                                               bestContractId, liveCheck.Units)
-                        Return
-                    End If
-                Catch ex As Exception
-                    _logger.LogWarning(ex, "ST+ live-position guard check failed for {Contract} — proceeding with caution", bestContractId)
-                End Try
+            ' Guard: verify no live position already exists on the exchange for this instrument
+            ' UNLESS we already have an in-memory slot open for it (scale-in path).
+            ' This prevents re-entry after ReleaseSlotAsync clears the slot while the real
+            ' position is still open, but does not block legitimate scale-ins.
+            Dim hasInMemorySlot As Boolean = _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = bestContractId)
+            If Not hasInMemorySlot Then
+                Dim guardAccId As Long = If(_selectedAccount IsNot Nothing, _selectedAccount.Id, 0)
+                If guardAccId <> 0 Then
+                    Try
+                        Dim liveCheck = Await _orderService.GetLivePositionSnapshotAsync(guardAccId, bestContractId)
+                        If liveCheck IsNot Nothing Then
+                            _logger.LogInformation("ST+ EvaluateSlotEntries — live position still open on exchange for {Contract} (units={Units}), skipping re-entry.",
+                                                   bestContractId, liveCheck.Units)
+                            Return
+                        End If
+                    Catch ex As Exception
+                        _logger.LogWarning(ex, "ST+ live-position guard check failed for {Contract} — proceeding with caution", bestContractId)
+                    End Try
+                End If
             End If
 
             Dim opened = _slotManager.TryOpenSlot(bestContractId, bestSide, bestAdxVal, bestBarTime, bestStLine, bestLastClose)
@@ -843,19 +848,23 @@ Namespace TopStepTrader.UI.ViewModels
 
             If bestContractId Is Nothing Then Return
 
-            ' Guard: same live-position check as EvaluateSlotEntries (BUG-35)
-            Dim earlyGuardAccId As Long = If(_selectedAccount IsNot Nothing, _selectedAccount.Id, 0)
-            If earlyGuardAccId <> 0 Then
-                Try
-                    Dim liveCheck2 = Await _orderService.GetLivePositionSnapshotAsync(earlyGuardAccId, bestContractId)
-                    If liveCheck2 IsNot Nothing Then
-                        _logger.LogInformation("ST+ EvaluateEarlyEntry — live position still open for {Contract} (units={Units}), skipping re-entry.",
-                                               bestContractId, liveCheck2.Units)
-                        Return
-                    End If
-                Catch ex As Exception
-                    _logger.LogWarning(ex, "ST+ early live-position guard failed for {Contract} — proceeding", bestContractId)
-                End Try
+            ' Guard: only block true re-entries — skip when an in-memory slot already tracks
+            ' this instrument (scale-in path).
+            Dim hasEarlyInMemorySlot As Boolean = _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = bestContractId)
+            If Not hasEarlyInMemorySlot Then
+                Dim earlyGuardAccId As Long = If(_selectedAccount IsNot Nothing, _selectedAccount.Id, 0)
+                If earlyGuardAccId <> 0 Then
+                    Try
+                        Dim liveCheck2 = Await _orderService.GetLivePositionSnapshotAsync(earlyGuardAccId, bestContractId)
+                        If liveCheck2 IsNot Nothing Then
+                            _logger.LogInformation("ST+ EvaluateEarlyEntry — live position still open for {Contract} (units={Units}), skipping re-entry.",
+                                                   bestContractId, liveCheck2.Units)
+                            Return
+                        End If
+                    Catch ex As Exception
+                        _logger.LogWarning(ex, "ST+ early live-position guard failed for {Contract} — proceeding", bestContractId)
+                    End Try
+                End If
             End If
 
             Dim opened = _slotManager.TryOpenSlot(bestContractId, bestSide, bestAdxVal, bestBarTime, bestStLine, bestLastClose)
@@ -926,14 +935,19 @@ Namespace TopStepTrader.UI.ViewModels
                                    If(tpTicks.HasValue, tpTicks.Value.ToString(), "none"),
                                    lastClose, stLine)
 
+            ' Only the primary slot (SlotIndex = 0) places a bracketed order.
+            ' Scale-in slots add contracts without a bracket so TopStepX does not
+            ' create independent SL/TP orders that conflict with the primary bracket.
+            Dim isPrimary As Boolean = slot.SlotIndex = 0 OrElse
+                Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.SlotIndex < slot.SlotIndex)
             Dim order As New Order With {
-                .AccountId              = slot.AccountId,
-                .ContractId            = contractId,
-                .Side                  = oSide,
-                .Quantity              = slot.Contracts,
-                .OrderType             = OrderType.Market,
-                .InitialStopTicks      = stopTicks,
-                .InitialTakeProfitTicks = tpTicks
+                .AccountId               = slot.AccountId,
+                .ContractId             = contractId,
+                .Side                   = oSide,
+                .Quantity               = slot.Contracts,
+                .OrderType              = OrderType.Market,
+                .InitialStopTicks       = If(isPrimary, stopTicks, Nothing),
+                .InitialTakeProfitTicks = If(isPrimary, tpTicks, Nothing)
             }
             Dim placed As Order = Nothing
             Try
@@ -1136,11 +1150,28 @@ Namespace TopStepTrader.UI.ViewModels
                     Return
                 End If
 
-                ' Advance phased stop (ratchet-only)
-                Dim newStop = exitEval.PhasedStopPrice
-                slot.StopPhase = exitEval.StopPhase
+                ' Advance phased stop (ratchet-only).
+                ' Only the primary slot — the lowest-indexed open slot for this instrument —
+                ' is allowed to call EditPositionSlTpAsync.  Scale-in slots update their
+                ' local state and display but do NOT touch the exchange bracket, because
+                ' all slots share the same underlying TopStepX position and racing edits
+                ' would use different InitialRisk baselines and could widen the stop.
+                '
+                ' SuperTrend+ uses a 6-phase configurable ladder via ComputePhasedStop overload.
+                ' This overwrites the generic phased-stop produced by ExitSignalEngine.Evaluate
+                ' and keeps the logic isolated to this strategy only.
+                Dim stLineForPhase = If(Not Single.IsNaN(st.Line(n)), CDec(st.Line(n)), slot.StopPrice)
+                Dim atrForPhase    = If(n < atr14Exit.Length AndAlso Not Single.IsNaN(atr14Exit(n)), CDec(atr14Exit(n)), 0D)
+                Dim stPhasedResult = _exitEngine.ComputePhasedStop(slot, CDec(closes(n)), stLineForPhase, atrForPhase, Config)
+                Dim newStop = stPhasedResult.NewStop
+                slot.StopPhase = stPhasedResult.Phase
 
-                If slot.PositionId.HasValue AndAlso newStop <> slot.StopPrice Then
+                Dim isPrimaryForEdit As Boolean =
+                    Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
+                                               s.Instrument = slot.Instrument AndAlso
+                                               s.SlotIndex < slot.SlotIndex)
+
+                If isPrimaryForEdit AndAlso slot.PositionId.HasValue AndAlso newStop <> slot.StopPrice Then
                     Dim tpArg As Decimal? = If(slot.TakeProfitPrice <> 0D, CType(slot.TakeProfitPrice, Decimal?), Nothing)
                     Try
                         Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, newStop, tpArg)
@@ -1151,6 +1182,12 @@ Namespace TopStepTrader.UI.ViewModels
                     Catch ex As Exception
                         _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
                     End Try
+                ElseIf Not isPrimaryForEdit Then
+                    _logger.LogInformation("ST+ SL ratchet deferred for scale-in [Slot {Idx}] on {Contract} — primary slot owns bracket",
+                                           slot.SlotIndex, slot.Instrument)
+                End If
+
+                If newStop <> slot.StopPrice Then
                     slot.StopPrice = newStop
                     Dim boxForTrail = BoxForSlot(slot)
                     Application.Current?.Dispatcher?.Invoke(Sub()
@@ -1188,6 +1225,7 @@ Namespace TopStepTrader.UI.ViewModels
                     If box IsNot Nothing Then
                         box.HasPosition     = False
                         box.PositionDisplay = String.Empty
+                        box.StopPhaseLabel  = String.Empty
                     End If
                 End Sub)
             _slotManager.CloseSlot(slot.SlotIndex)
@@ -1212,6 +1250,7 @@ Namespace TopStepTrader.UI.ViewModels
                 String.Format("Entry: {0:HH:mm}  |  P&L: {1}{2:F2}$", slot.EntryTime, sign, pnl) & Environment.NewLine &
                 slot.EntryReason
             box.PnlBrush = If(pnl >= 0, Brushes.LimeGreen, Brushes.Red)
+            box.StopPhaseLabel = slot.StopPhase.ToString()
         End Sub
 
         Private Shared Function MapTimeframe(tf As String) As BarTimeframe

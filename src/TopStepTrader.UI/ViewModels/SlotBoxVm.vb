@@ -1,6 +1,7 @@
 Imports System.Collections.ObjectModel
 Imports System.Windows
 Imports System.Windows.Media
+Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.UI.ViewModels.Base
 
@@ -89,6 +90,17 @@ Namespace TopStepTrader.UI.ViewModels
 
         ''' <summary>Reference to the underlying slot state (set by ViewModel).</summary>
         Friend Slot As PositionSlot
+
+        Private _stopPhaseLabel As String = String.Empty
+        ''' <summary>Human-readable current stop phase, e.g. "Breakeven" or "ProfitLock".</summary>
+        Public Property StopPhaseLabel As String
+            Get
+                Return _stopPhaseLabel
+            End Get
+            Set(value As String)
+                SetProperty(_stopPhaseLabel, value)
+            End Set
+        End Property
 
         Private _healthBrush As Brush = Brushes.LimeGreen
         ''' <summary>Slot card border colour: green=Healthy, amber=Warning, red=Exiting.</summary>

@@ -30,6 +30,31 @@ Namespace TopStepTrader.Core.Settings
         ''' <summary>Chart timeframe label shown in the UI (e.g. "5min").</summary>
         Public Property BarTimeframe As String = "5min"
 
+        ' ── Phased stop thresholds (SuperTrend+ only) ────────────────────────────
+        ''' <summary>Profit (in R) at which the stop moves to exact entry (breakeven). Default 0.5R.</summary>
+        Public Property BreakevenTriggerR As Decimal = 0.5D
+
+        ''' <summary>Profit (in R) at which the stop locks at entry + ProfitLockOffsetR. Default 1R.</summary>
+        Public Property ProfitLockTriggerR As Decimal = 1.0D
+
+        ''' <summary>Amount above entry (in R) the stop is locked at the ProfitLock phase. Default 0.3R.</summary>
+        Public Property ProfitLockOffsetR As Decimal = 0.3D
+
+        ''' <summary>Profit (in R) at which the ATR trailing stop activates. Default 1.5R.</summary>
+        Public Property ProfitTrailTriggerR As Decimal = 1.5D
+
+        ''' <summary>Profit (in R) at which the stop is locked at entry + HarvestLockR. Default 2R.</summary>
+        Public Property HarvestTriggerR As Decimal = 2.0D
+
+        ''' <summary>Amount above entry (in R) the stop is locked at the Harvest phase. Default 1.5R.</summary>
+        Public Property HarvestLockR As Decimal = 1.5D
+
+        ''' <summary>Profit (in R) at which the stop is locked at entry + FreeRideLockR. Default 3R.</summary>
+        Public Property FreeRideTriggerR As Decimal = 3.0D
+
+        ''' <summary>Amount above entry (in R) the stop is locked at the FreeRide phase. Default 2R.</summary>
+        Public Property FreeRideLockR As Decimal = 2.0D
+
     End Class
 
 End Namespace
