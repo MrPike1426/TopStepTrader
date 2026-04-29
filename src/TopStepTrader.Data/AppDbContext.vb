@@ -245,6 +245,23 @@ Namespace TopStepTrader.Data
                         cmd.ExecuteNonQuery()
                     End Using
                 Next
+
+                ' ── Idempotent column additions to PersonaSettings ─────────────
+                ' Entity class has properties not present in the original CREATE TABLE DDL.
+                Dim personaAlters = New String() {
+                    "ALTER TABLE ""PersonaSettings"" ADD COLUMN ""PositionSize""             INTEGER NOT NULL DEFAULT 1",
+                    "ALTER TABLE ""PersonaSettings"" ADD COLUMN ""MacdHistMinAtrFraction""   REAL    NOT NULL DEFAULT 0.05"
+                }
+                For Each ddl In personaAlters
+                    Try
+                        Using cmd = conn.CreateCommand()
+                            cmd.CommandText = ddl
+                            cmd.ExecuteNonQuery()
+                        End Using
+                    Catch ex As Exception
+                        If Not ex.Message.Contains("duplicate column") Then Throw
+                    End Try
+                Next
             Finally
                 If mustCloseP Then conn.Close()
             End Try

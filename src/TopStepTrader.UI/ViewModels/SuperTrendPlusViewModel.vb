@@ -453,9 +453,8 @@ Namespace TopStepTrader.UI.ViewModels
 
             If _useEarlyMode Then
                 Await EvaluateEarlyEntrySequenceAsync(tf, barCache)
-            Else
-                Await EvaluateSlotEntriesAsync(barCache)
             End If
+            Await EvaluateSlotEntriesAsync(barCache)
 
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
