@@ -90,6 +90,17 @@ Namespace TopStepTrader.UI.ViewModels
         ''' <summary>Reference to the underlying slot state (set by ViewModel).</summary>
         Friend Slot As PositionSlot
 
+        Private _healthBrush As Brush = Brushes.LimeGreen
+        ''' <summary>Slot card border colour: green=Healthy, amber=Warning, red=Exiting.</summary>
+        Public Property HealthBrush As Brush
+            Get
+                Return _healthBrush
+            End Get
+            Set(value As Brush)
+                SetProperty(_healthBrush, value)
+            End Set
+        End Property
+
     End Class
 
 End Namespace

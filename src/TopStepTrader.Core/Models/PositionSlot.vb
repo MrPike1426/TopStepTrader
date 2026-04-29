@@ -2,6 +2,7 @@ Imports TopStepTrader.Core.Enums
 
 Namespace TopStepTrader.Core.Models
 
+
     ''' <summary>
     ''' Plain state object representing a single concurrent position slot.
     ''' Replaces the PersonaBoxVm identity concept — slots are index-based,
@@ -42,6 +43,15 @@ Namespace TopStepTrader.Core.Models
         Public Property MissCount As Integer
 
         Public Property UnrealizedPnl As Decimal
+
+        ''' <summary>14-period ATR value at the time this slot was opened.</summary>
+        Public Property EntryAtr As Decimal
+
+        ''' <summary>Initial risk in price — |entry - stop| at the moment of entry confirmation.</summary>
+        Public Property InitialRisk As Decimal
+
+        ''' <summary>Current phased stop phase. Only advances forward.</summary>
+        Public Property StopPhase As StopPhase = StopPhase.Initial
 
     End Class
 

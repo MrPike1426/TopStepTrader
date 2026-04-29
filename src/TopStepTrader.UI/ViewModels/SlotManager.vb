@@ -63,6 +63,12 @@ Namespace TopStepTrader.UI.ViewModels
                 Return Nothing
             End If
 
+            ' Rule: no new slot for an instrument that has a Warning or Exiting slot
+            If _slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = instrument AndAlso
+                          (s.Health = SlotHealth.Warning OrElse s.Health = SlotHealth.Exiting)) Then
+                Return Nothing
+            End If
+
             ' Rule: counter-trend not allowed while same-direction slots are open
             Dim openSlots = _slots.Where(Function(s) s.IsOpen).ToList()
             If openSlots.Any() Then
@@ -120,6 +126,9 @@ Namespace TopStepTrader.UI.ViewModels
                 s.UnrealizedPnl = 0D
                 s.EntryReason  = String.Empty
                 s.EntryTime    = DateTime.MinValue
+                s.EntryAtr     = 0D
+                s.InitialRisk  = 0D
+                s.StopPhase    = Core.Enums.StopPhase.Initial
             End If
         End Sub
 

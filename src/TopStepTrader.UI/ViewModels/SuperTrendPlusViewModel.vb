@@ -11,6 +11,7 @@ Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.ML.Features
 Imports TopStepTrader.Services.Market
+Imports TopStepTrader.Services.Trading
 Imports TopStepTrader.UI.ViewModels.Base
 
 Namespace TopStepTrader.UI.ViewModels
@@ -169,6 +170,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private ReadOnly _approachHistory As New Dictionary(Of String, ApproachState)
         Private ReadOnly _prevStDirByInstrument As New Dictionary(Of String, Single)()
+        Private ReadOnly _exitEngine As ExitSignalEngine
         Private _useEarlyMode As Boolean = False
         Public Property UseEarlyMode As Boolean
             Get
@@ -321,6 +323,8 @@ Namespace TopStepTrader.UI.ViewModels
             _logger         = logger
             Config          = New SuperTrendPlusConfig()
             _slotManager    = New SlotManager(Config)
+            _exitEngine     = New ExitSignalEngine(
+                Microsoft.Extensions.Logging.Abstractions.NullLogger(Of ExitSignalEngine).Instance)
             StartStopCommand = New RelayCommand(AddressOf OnStartStop)
 
             Slot1.Slot = _slotManager.Slots(0)
@@ -906,6 +910,25 @@ Namespace TopStepTrader.UI.ViewModels
             slot.PositionId   = placed.ExternalPositionId
             slot.EntryPrice   = 0D
             slot.TakeProfitPrice = 0D
+            slot.StopPhase    = StopPhase.Initial
+            slot.InitialRisk  = 0D  ' computed once EntryPrice is confirmed
+            slot.EntryAtr     = 0D  ' set from bar data below
+
+            ' Capture entry ATR from the bars that were used to fire the entry
+            Try
+                Dim entryBars = Await _barService.GetLiveBarsAsync(contractId, MapTimeframe(_selectedTimeframe), BarsToFetch)
+                If entryBars IsNot Nothing AndAlso entryBars.Count >= 14 Then
+                    Dim eHighs  = entryBars.Select(Function(b) b.High).ToList()
+                    Dim eLows   = entryBars.Select(Function(b) b.Low).ToList()
+                    Dim eCloses = entryBars.Select(Function(b) b.Close).ToList()
+                    Dim atr14   = TechnicalIndicators.ATR(eHighs, eLows, eCloses, period:=14)
+                    Dim eN      = entryBars.Count - 1
+                    If atr14 IsNot Nothing AndAlso atr14.Length > eN AndAlso Not Single.IsNaN(atr14(eN)) Then
+                        slot.EntryAtr = CDec(atr14(eN))
+                    End If
+                End If
+            Catch
+            End Try
 
             Dim box = BoxForSlot(slot)
             Application.Current?.Dispatcher?.Invoke(
@@ -974,29 +997,52 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim lows   = bars.Select(Function(b) b.Low).ToList()
                 Dim closes = bars.Select(Function(b) b.Close).ToList()
                 Dim n = bars.Count - 1
-                Dim st = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
-                Dim stDir  = st.Direction(n)
-                Dim stLine = CDec(st.Line(n))
+                Dim st         = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
+                Dim dmiForExit = TechnicalIndicators.DMI(highs, lows, closes, period:=14)
+                Dim atr14Exit  = TechnicalIndicators.ATR(highs, lows, closes, period:=14)
+                Dim stLine     = CDec(st.Line(n))
 
-                Dim isReversal As Boolean = (slot.Side = "Buy" AndAlso stDir < 0) OrElse
-                                            (slot.Side = "Sell" AndAlso stDir > 0)
-                If isReversal Then
-                    slot.Health = SlotHealth.Exiting
+                ' Set InitialRisk once EntryPrice is confirmed (after first snapshot)
+                If slot.InitialRisk = 0D AndAlso slot.EntryPrice <> 0D AndAlso slot.StopPrice <> 0D Then
+                    slot.InitialRisk = Math.Abs(slot.EntryPrice - slot.StopPrice)
+                End If
+
+                ' Composite exit signal evaluation
+                Dim exitEval = _exitEngine.Evaluate(slot, highs, lows, closes,
+                                                    st.Line, st.Direction,
+                                                    dmiForExit.PlusDI, dmiForExit.MinusDI,
+                                                    dmiForExit.ADX, atr14Exit)
+
+                slot.Health = exitEval.RecommendedHealth
+
+                Dim boxForHealth = BoxForSlot(slot)
+                Application.Current?.Dispatcher?.Invoke(Sub()
+                    If boxForHealth IsNot Nothing Then
+                        boxForHealth.HealthBrush = HealthBrushFor(slot.Health)
+                    End If
+                End Sub)
+
+                If exitEval.ImmediateExit OrElse slot.Health = SlotHealth.Exiting Then
                     Await ReleaseSlotAsync(slot)
                     Return
                 End If
 
-                If slot.PositionId.HasValue AndAlso stLine <> slot.StopPrice Then
+                ' Advance phased stop (ratchet-only)
+                Dim newStop = exitEval.PhasedStopPrice
+                slot.StopPhase = exitEval.StopPhase
+
+                If slot.PositionId.HasValue AndAlso newStop <> slot.StopPrice Then
                     Dim tpArg As Decimal? = If(slot.TakeProfitPrice <> 0D, CType(slot.TakeProfitPrice, Decimal?), Nothing)
                     Try
-                        Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, stLine, tpArg)
-                        _logger.LogInformation("ST+ SL trail → {Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
-                                               stLine, If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"),
+                        Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, newStop, tpArg)
+                        _logger.LogInformation("ST+ SL phase={Phase} trail->{Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
+                                               slot.StopPhase, newStop,
+                                               If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"),
                                                slot.SlotIndex, slot.Instrument)
                     Catch ex As Exception
                         _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
                     End Try
-                    slot.StopPrice = stLine
+                    slot.StopPrice = newStop
                     Dim boxForTrail = BoxForSlot(slot)
                     Application.Current?.Dispatcher?.Invoke(Sub()
                         If boxForTrail IsNot Nothing Then UpdatePositionDisplay(boxForTrail, slot, latestPnl)
@@ -1044,6 +1090,14 @@ Namespace TopStepTrader.UI.ViewModels
                 Case "5min"  : Return BarTimeframe.FiveMinute
                 Case "1hr"   : Return BarTimeframe.OneHour
                 Case Else    : Return BarTimeframe.FifteenMinute
+            End Select
+        End Function
+
+        Private Shared Function HealthBrushFor(health As SlotHealth) As Brush
+            Select Case health
+                Case SlotHealth.Warning : Return New SolidColorBrush(Color.FromRgb(&HFF, &HAA, &H00))  ' amber
+                Case SlotHealth.Exiting : Return Brushes.Red
+                Case Else               : Return Brushes.LimeGreen
             End Select
         End Function
 
