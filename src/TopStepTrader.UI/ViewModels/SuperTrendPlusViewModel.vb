@@ -503,7 +503,12 @@ Namespace TopStepTrader.UI.ViewModels
                 Task.Run(Async Function() As Task
                              Await DoTickAsync()
                          End Function).Wait()
-            Catch
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ DoTickAsync error on timer tick")
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        StatusText = String.Format("Error: {0}", ex.Message)
+                    End Sub)
             End Try
         End Sub
 
