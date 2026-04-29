@@ -7,6 +7,7 @@ Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
+Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.ML.Features
 Imports TopStepTrader.Services.Market
@@ -20,7 +21,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public Property Symbol As String = String.Empty
         Public Property Label As String = String.Empty
 
-        Private _arrow As String = "–"
+        Private _arrow As String = "â€“"
         Public Property Arrow As String
             Get
                 Return _arrow
@@ -30,7 +31,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _adxDisplay As String = "ADX: –"
+        Private _adxDisplay As String = "ADX: â€“"
         Public Property AdxDisplay As String
             Get
                 Return _adxDisplay
@@ -97,7 +98,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public Property Symbol As String = String.Empty
 
-        Private _arrow As String = "–"
+        Private _arrow As String = "â€“"
         Public Property Arrow As String
             Get
                 Return _arrow
@@ -107,7 +108,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _adxDisplay As String = "ADX:–"
+        Private _adxDisplay As String = "ADX:â€“"
         Public Property AdxDisplay As String
             Get
                 Return _adxDisplay
@@ -136,91 +137,6 @@ Namespace TopStepTrader.UI.ViewModels
                 SetProperty(_rowColor, value)
             End Set
         End Property
-
-    End Class
-
-    Public Class PersonaBoxVm
-        Inherits ViewModelBase
-
-        Public ReadOnly Symbols As New ObservableCollection(Of SymbolRowVm)
-        Public Property PersonaName As String = String.Empty
-
-        Private _isPaused As Boolean = False
-        Public Property IsPaused As Boolean
-            Get
-                Return _isPaused
-            End Get
-            Set(value As Boolean)
-                If SetProperty(_isPaused, value) Then
-                    NotifyPropertyChanged(NameOf(BoxOpacity))
-                    NotifyPropertyChanged(NameOf(PausedBadgeVisibility))
-                End If
-            End Set
-        End Property
-
-        Public ReadOnly Property BoxOpacity As Double
-            Get
-                Return If(_isPaused, 0.4, 1.0)
-            End Get
-        End Property
-
-        Public ReadOnly Property PausedBadgeVisibility As Visibility
-            Get
-                Return If(_isPaused, Visibility.Visible, Visibility.Collapsed)
-            End Get
-        End Property
-
-        Private _hasPosition As Boolean = False
-        Public Property HasPosition As Boolean
-            Get
-                Return _hasPosition
-            End Get
-            Set(value As Boolean)
-                If SetProperty(_hasPosition, value) Then
-                    NotifyPropertyChanged(NameOf(PositionVisibility))
-                End If
-            End Set
-        End Property
-
-        Public ReadOnly Property PositionVisibility As Visibility
-            Get
-                Return If(_hasPosition, Visibility.Visible, Visibility.Collapsed)
-            End Get
-        End Property
-
-        Private _positionDisplay As String = String.Empty
-        Public Property PositionDisplay As String
-            Get
-                Return _positionDisplay
-            End Get
-            Set(value As String)
-                SetProperty(_positionDisplay, value)
-            End Set
-        End Property
-
-        Private _pnlBrush As Brush = Brushes.White
-        Public Property PnlBrush As Brush
-            Get
-                Return _pnlBrush
-            End Get
-            Set(value As Brush)
-                SetProperty(_pnlBrush, value)
-            End Set
-        End Property
-
-        Friend Profile As PersonaProfile
-        Friend ScaleInCount As Integer = 0
-        Friend CurrentStLine As Decimal = 0D
-        Friend EntryPrice As Decimal = 0D
-        Friend EntryInstrument As String = String.Empty
-        Friend EntrySide As String = String.Empty
-        Friend EntryTime As DateTime = DateTime.MinValue
-        Friend PositionId As Long? = Nothing
-        Friend AccountId As Long = 0
-        Friend MissCount As Integer = 0
-        Friend TpPrice As Decimal = 0D
-        Friend LastScaleInBarTime As DateTimeOffset = DateTimeOffset.MinValue
-        Friend EntryBarTime As DateTimeOffset = DateTimeOffset.MinValue
 
     End Class
 
@@ -263,11 +179,15 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Public ReadOnly Property LewisBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Lewis (Averse)"}
-        Public ReadOnly Property DamianBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Damian (Moderate)"}
-        Public ReadOnly Property JoeBox As PersonaBoxVm = New PersonaBoxVm() With {.PersonaName = "Joe (Aggressive)"}
+        ' â”€â”€ Slot boxes (replaces persona boxes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        Public ReadOnly Property Slot1 As SlotBoxVm = New SlotBoxVm(0)
+        Public ReadOnly Property Slot2 As SlotBoxVm = New SlotBoxVm(1)
+        Public ReadOnly Property Slot3 As SlotBoxVm = New SlotBoxVm(2)
 
-        ' -- Accounts --------------------------------------------------------------
+        Private ReadOnly _slotManager As SlotManager
+        Friend ReadOnly Property Config As SuperTrendPlusConfig
+
+        ' -- Accounts --------------------------------------------------------
         Public Property Accounts As New ObservableCollection(Of Account)
 
         Private _selectedAccount As Account
@@ -281,7 +201,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        ' -- How-it-works panel expand/collapse ------------------------------------
+        ' -- How-it-works panel expand/collapse ------------------------------
         Private _isHowItWorksExpanded As Boolean = False
         Public Property IsHowItWorksExpanded As Boolean
             Get
@@ -294,9 +214,9 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public ReadOnly Property Timeframes As String() = {"5min", "15min", "1hr"}
 
-        Public ReadOnly Property TpMultiples As String() = {"None / flip only", "1.5×", "2×", "2.5×", "3×"}
+        Public ReadOnly Property TpMultiples As String() = {"None / flip only", "1.5Ã—", "2Ã—", "2.5Ã—", "3Ã—"}
 
-        Private _selectedTpMultiple As String = "2×"
+        Private _selectedTpMultiple As String = "2Ã—"
         Public Property SelectedTpMultiple As String
             Get
                 Return _selectedTpMultiple
@@ -320,10 +240,10 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Function ParseTpMultiple() As Decimal
             Select Case _selectedTpMultiple
-                Case "1.5×" : Return 1.5D
-                Case "2×"   : Return 2.0D
-                Case "2.5×" : Return 2.5D
-                Case "3×"   : Return 3.0D
+                Case "1.5Ã—" : Return 1.5D
+                Case "2Ã—"   : Return 2.0D
+                Case "2.5Ã—" : Return 2.5D
+                Case "3Ã—"   : Return 3.0D
                 Case Else   : Return 0D
             End Select
         End Function
@@ -399,22 +319,33 @@ Namespace TopStepTrader.UI.ViewModels
             _personaService = personaService
             _accountService = accountService
             _logger         = logger
+            Config          = New SuperTrendPlusConfig()
+            _slotManager    = New SlotManager(Config)
             StartStopCommand = New RelayCommand(AddressOf OnStartStop)
+
+            Slot1.Slot = _slotManager.Slots(0)
+            Slot2.Slot = _slotManager.Slots(1)
+            Slot3.Slot = _slotManager.Slots(2)
+
             For i = 0 To Instruments.Length - 1
                 WatchlistItems.Add(New WatchlistRowVm() With {
                     .Symbol = Instruments(i),
                     .Label  = InstrumentLabels(i)
                 })
             Next
-            For Each box In AllBoxes()
+            For Each box In AllSlotBoxes()
                 For i = 0 To Instruments.Length - 1
                     box.Symbols.Add(New SymbolRowVm() With {.Symbol = InstrumentLabels(i)})
                 Next
             Next
         End Sub
 
-        Private Function AllBoxes() As PersonaBoxVm()
-            Return {LewisBox, DamianBox, JoeBox}
+        Private Function AllSlotBoxes() As SlotBoxVm()
+            Return {Slot1, Slot2, Slot3}
+        End Function
+
+        Private Function BoxForSlot(slot As PositionSlot) As SlotBoxVm
+            Return AllSlotBoxes().FirstOrDefault(Function(b) b.SlotIndex = slot.SlotIndex)
         End Function
 
         Private Sub OnStartStop()
@@ -451,14 +382,11 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Private Sub StartMonitoring()
-            LewisBox.Profile  = _personaService.GetProfile("Lewis")
-            DamianBox.Profile = _personaService.GetProfile("Damian")
-            JoeBox.Profile    = _personaService.GetProfile("Joe")
             IsHowItWorksExpanded = False
             IsMonitoring = True
             _timer = New Timer(AddressOf TimerCallback, Nothing, 0, 15000)
             If _selectedAccount Is Nothing OrElse _selectedAccount.Id = 0 Then
-                StatusText = "? No account selected — monitoring in read-only mode (orders will be blocked until account loads)"
+                StatusText = "? No account selected â€” monitoring in read-only mode (orders will be blocked until account loads)"
                 Application.Current?.Dispatcher?.Invoke(Sub()
                     StatusBackground = New SolidColorBrush(Color.FromRgb(&HFF, &H8C, &H00))
                 End Sub)
@@ -475,26 +403,20 @@ Namespace TopStepTrader.UI.ViewModels
             End SyncLock
             _prevStDirByInstrument.Clear()
             For Each wRow In WatchlistItems
-                wRow.Arrow         = "–"
-                wRow.AdxDisplay    = "ADX:–"
-                wRow.Signal        = "–"
+                wRow.Arrow         = "â€“"
+                wRow.AdxDisplay    = "ADX:â€“"
+                wRow.Signal        = "â€“"
                 wRow.TrendStrength = ""
                 wRow.RowColor      = Brushes.Gray
             Next
-            For Each box In AllBoxes()
+            _slotManager.ResetAll()
+            For Each box In AllSlotBoxes()
                 box.IsPaused        = False
                 box.HasPosition     = False
                 box.PositionDisplay = String.Empty
-                box.ScaleInCount    = 0
-                box.CurrentStLine   = 0D
-                box.PositionId      = Nothing
-                box.MissCount       = 0
-                box.TpPrice         = 0D
-                box.LastScaleInBarTime = DateTimeOffset.MinValue
-                box.EntryBarTime    = DateTimeOffset.MinValue
                 For Each row In box.Symbols
-                    row.Arrow      = "–"
-                    row.AdxDisplay = "ADX:–"
+                    row.Arrow      = "â€“"
+                    row.AdxDisplay = "ADX:â€“"
                     row.Signal     = "flat"
                     row.RowColor   = Brushes.White
                 Next
@@ -519,18 +441,16 @@ Namespace TopStepTrader.UI.ViewModels
             Dim tf = MapTimeframe(_selectedTimeframe)
             Dim barCache = Await ScanWatchlistAsync(tf)
 
-            ' Manage open positions for every persona independently
-            For Each box In AllBoxes()
-                If box.HasPosition Then
-                    Await HandleOpenPositionAsync(box, tf)
+            For Each slot In _slotManager.Slots
+                If slot.IsOpen Then
+                    Await HandleOpenPositionAsync(slot, tf)
                 End If
             Next
 
-            ' Evaluate entry sequencing: Joe first, Damian next bar, Lewis the bar after
             If _useEarlyMode Then
                 Await EvaluateEarlyEntrySequenceAsync(tf, barCache)
             Else
-                Await EvaluateEntrySequenceAsync(barCache)
+                Await EvaluateSlotEntriesAsync(barCache)
             End If
 
             Application.Current?.Dispatcher?.Invoke(
@@ -552,7 +472,7 @@ Namespace TopStepTrader.UI.ViewModels
                     Continue For
                 End Try
                 If bars Is Nothing OrElse bars.Count < 15 Then
-                    _logger.LogInformation("ST+ ScanWatchlist [{Contract}] SKIP — bars null or count < 15 (count={Count})",
+                    _logger.LogInformation("ST+ ScanWatchlist [{Contract}] SKIP â€” bars null or count < 15 (count={Count})",
                                            contractId, If(bars Is Nothing, 0, bars.Count))
                     Continue For
                 End If
@@ -562,20 +482,18 @@ Namespace TopStepTrader.UI.ViewModels
                 If bars.Count > 1 Then
                     Dim lastBarAgeScan = (DateTime.UtcNow - bars.Last().Timestamp).TotalMinutes
                     If lastBarAgeScan < tfMinutesScan Then
-                        _logger.LogInformation("ST+ ScanWatchlist [{Contract}] stripping forming bar (lastBarAge={Age:F1}min < tf={Tf}min). bars: {Before} ? {After}",
+                        _logger.LogInformation("ST+ ScanWatchlist [{Contract}] stripping forming bar (lastBarAge={Age:F1}min < tf={Tf}min). bars: {Before} â†’ {After}",
                                                contractId, lastBarAgeScan, tfMinutesScan, bars.Count, bars.Count - 1)
                         bars = bars.Take(bars.Count - 1).ToList()
                     End If
                 End If
-                ' Re-check after forming-bar strip — need at least 14 bars for DMI(14) warmup
                 If bars.Count < 14 Then
-                    _logger.LogInformation("ST+ ScanWatchlist [{Contract}] SKIP — fewer than 14 bars after forming-bar strip (count={Count})",
+                    _logger.LogInformation("ST+ ScanWatchlist [{Contract}] SKIP â€” fewer than 14 bars after forming-bar strip (count={Count})",
                                            contractId, bars.Count)
                     Continue For
                 End If
                 cache(i) = bars
-                _logger.LogInformation("ST+ ScanWatchlist [{Contract}] cached {Count} bars.",
-                                       contractId, bars.Count)
+                _logger.LogInformation("ST+ ScanWatchlist [{Contract}] cached {Count} bars.", contractId, bars.Count)
 
                 Dim highs   = bars.Select(Function(b) b.High).ToList()
                 Dim lows    = bars.Select(Function(b) b.Low).ToList()
@@ -611,22 +529,27 @@ Namespace TopStepTrader.UI.ViewModels
                 If Single.IsNaN(adxVal) Then
                     strength = "ADX: --"
                     signalReason = "Waiting for data..."
-                ElseIf adxVal >= 40 Then
+                ElseIf adxVal >= Config.AdxStrongThreshold Then
                     strength = String.Format("ADX:{0:D2} Strong", CInt(adxVal))
-                    signalReason = If(signal = "BULL", "Strong uptrend — bot may enter long.",
-                                  If(signal = "BEAR", "Strong downtrend — bot may enter short.",
-                                     "Strong trend forming — waiting for direction alignment."))
-                ElseIf adxVal >= 25 Then
+                    signalReason = If(signal = "BULL", "Strong uptrend â€” bot may open up to 3 slots.",
+                                  If(signal = "BEAR", "Strong downtrend â€” bot may open up to 3 slots.",
+                                     "Strong trend forming â€” waiting for direction alignment."))
+                ElseIf adxVal >= Config.AdxModerateThreshold Then
+                    strength = String.Format("ADX:{0:D2} Moderate", CInt(adxVal))
+                    signalReason = If(signal = "BULL", "Moderate uptrend â€” bot may open up to 2 slots.",
+                                  If(signal = "BEAR", "Moderate downtrend â€” bot may open up to 2 slots.",
+                                     "Trending â€” waiting for +DI/-DI to align with SuperTrend."))
+                ElseIf adxVal >= Config.AdxWeakThreshold Then
                     strength = String.Format("ADX:{0:D2} Active", CInt(adxVal))
-                    signalReason = If(signal = "BULL", "Uptrend active — good conditions for a long entry.",
-                                  If(signal = "BEAR", "Downtrend active — good conditions for a short entry.",
-                                     "Trending — waiting for +DI/-DI to align with SuperTrend."))
+                    signalReason = If(signal = "BULL", "Uptrend active â€” bot may open 1 slot.",
+                                  If(signal = "BEAR", "Downtrend active â€” bot may open 1 slot.",
+                                     "Trending â€” waiting for +DI/-DI to align with SuperTrend."))
                 ElseIf adxVal >= 15 Then
                     strength = String.Format("ADX:{0:D2} Weak", CInt(adxVal))
-                    signalReason = "Trend is weak — watching for momentum to build before entering."
+                    signalReason = "Trend is weak â€” watching for momentum to build before entering."
                 Else
                     strength = String.Format("ADX:{0:D2} Chop", CInt(adxVal))
-                    signalReason = "Market is choppy with no clear trend — standing aside to avoid false signals."
+                    signalReason = "Market is choppy with no clear trend â€” standing aside to avoid false signals."
                 End If
 
                 Dim adxStr As String = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
@@ -634,7 +557,6 @@ Namespace TopStepTrader.UI.ViewModels
                                         "+DI:-- -DI:--",
                                         String.Format("+DI:{0:D2} -DI:{1:D2}", CInt(plusDi), CInt(minusDi)))
 
-                ' Early mode: overlay EARLY/WATCH signals
                 If _useEarlyMode Then
                     Dim atr14 = TechnicalIndicators.ATR(highs, lows, closes, period:=14)
                     Dim atrN  = If(atr14 IsNot Nothing AndAlso atr14.Length > n, CDec(atr14(n)), 0D)
@@ -651,11 +573,11 @@ Namespace TopStepTrader.UI.ViewModels
                     If sig1 AndAlso sig2 AndAlso sig3 AndAlso sig4 Then
                         signal       = "EARLY"
                         rowColor     = Brushes.Goldenrod
-                        signalReason = "All early signals aligned — potential reversal imminent, preparing to enter."
+                        signalReason = "All early signals aligned â€” potential reversal imminent, preparing to enter."
                     ElseIf sigsCount >= 3 Then
                         signal       = "WATCH"
                         rowColor     = Brushes.DimGray
-                        signalReason = String.Format("{0}/4 early signals met — watching for the final trigger.", sigsCount)
+                        signalReason = String.Format("{0}/4 early signals met â€” watching for the final trigger.", sigsCount)
                     End If
                 End If
 
@@ -698,33 +620,25 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         ''' <summary>
-        ''' Confirmed-mode entry sequencing: Joe enters first on any favourable signal
-        ''' (direction flip or ADX?25 Active).  Damian scales in on the next closed
-        ''' 5-min bar if the signal is still Active.  Lewis scales in on the bar after that.
+        ''' Confirmed-mode entry: ADX band determines target slot count.
+        ''' ADX 25-39 â†’ 1 slot, 40-59 â†’ 2 slots, 60+ â†’ 3 slots.
+        ''' SlotManager enforces all rules (bar gate, counter-trend, Exiting health).
         ''' </summary>
-        Private Async Function EvaluateEntrySequenceAsync(barCache As Dictionary(Of Integer, IList(Of MarketBar))) As Task
-            Dim joe    = JoeBox
-            Dim damian = DamianBox
-            Dim lewis  = LewisBox
+        Private Async Function EvaluateSlotEntriesAsync(barCache As Dictionary(Of Integer, IList(Of MarketBar))) As Task
+            _logger.LogInformation("ST+ EvaluateSlotEntries tick â€” barCache={Count} instruments, openSlots={Open}",
+                                   barCache.Count, _slotManager.OpenSlotCount)
 
-            _logger.LogInformation("ST+ EvaluateEntry tick — barCache has {Count} instrument(s). Joe.HasPosition={JoePos} Damian.HasPosition={DamPos} Lewis.HasPosition={LewPos}",
-                                   barCache.Count, joe.HasPosition, damian.HasPosition, lewis.HasPosition)
-
-            ' Candidate: prefer instrument Joe is already in; otherwise highest ADX.
-            Dim bestContractId As String          = Nothing
-            Dim bestSide As String                = Nothing
-            Dim bestStLine As Decimal             = 0D
-            Dim bestLastClose As Decimal          = 0D
-            Dim bestAdxVal As Single              = 0F
-            Dim bestBarTime As DateTimeOffset     = DateTimeOffset.MinValue
-            Dim bestIsActive As Boolean           = False   ' ADX >= 25 (for scale-in gate)
+            Dim bestContractId As String      = Nothing
+            Dim bestSide As String            = Nothing
+            Dim bestStLine As Decimal         = 0D
+            Dim bestLastClose As Decimal      = 0D
+            Dim bestAdxVal As Single          = 0F
+            Dim bestBarTime As DateTimeOffset = DateTimeOffset.MinValue
 
             For i = 0 To Instruments.Length - 1
                 Dim contractId = Instruments(i)
                 Dim bars As IList(Of MarketBar) = Nothing
                 If Not barCache.TryGetValue(i, bars) OrElse bars Is Nothing OrElse bars.Count < 14 Then
-                    _logger.LogInformation("ST+ [{Contract}] SKIP — not in barCache or bar count < 14 (count={Count})",
-                                           contractId, If(bars Is Nothing, 0, bars.Count))
                     Continue For
                 End If
 
@@ -741,7 +655,6 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim plusDi  = dmi.PlusDI(n)
                 Dim minusDi = dmi.MinusDI(n)
 
-                ' Flip detection
                 Dim prevDir As Single = 0F
                 _prevStDirByInstrument.TryGetValue(contractId, prevDir)
                 Dim isFlip As Boolean = prevDir <> 0F AndAlso stDir <> prevDir AndAlso stDir <> 0F
@@ -749,29 +662,17 @@ Namespace TopStepTrader.UI.ViewModels
 
                 Dim isLong  As Boolean = stDir > 0 AndAlso Not Single.IsNaN(adxVal) AndAlso plusDi > minusDi
                 Dim isShort As Boolean = stDir < 0 AndAlso Not Single.IsNaN(adxVal) AndAlso minusDi > plusDi
-                Dim isActive As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= 25.0F
-
-                ' Favourable = direction aligned AND (just flipped OR ADX Active)
+                Dim isActive As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= Config.AdxWeakThreshold
                 Dim isFavourable As Boolean = (isLong OrElse isShort) AndAlso (isFlip OrElse isActive)
 
                 _logger.LogInformation(
-                    "ST+ [{Contract}] stDir={StDir} prevDir={PrevDir} ADX={Adx:F1} +DI={PlusDI:F1} -DI={MinusDI:F1} " &
+                    "ST+ [{Contract}] stDir={StDir} ADX={Adx:F1} +DI={PlusDI:F1} -DI={MinusDI:F1} " &
                     "isLong={IsLong} isShort={IsShort} isFlip={IsFlip} isActive={IsActive} isFavourable={IsFav}",
-                    contractId, stDir, prevDir, adxVal, plusDi, minusDi, isLong, isShort, isFlip, isActive, isFavourable)
+                    contractId, stDir, adxVal, plusDi, minusDi, isLong, isShort, isFlip, isActive, isFavourable)
 
                 If Not isFavourable Then
-                    ' Update per-persona symbol row display
-                    For Each box In AllBoxes()
-                        Dim row = box.Symbols(i)
-                        Dim adxStr2 = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
-                        Application.Current?.Dispatcher?.Invoke(
-                            Sub()
-                                row.Arrow      = "--"
-                                row.AdxDisplay = adxStr2
-                                row.Signal     = "flat"
-                                row.RowColor   = Brushes.White
-                            End Sub)
-                    Next
+                    Dim adxStr2 = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
+                    UpdateSlotSymbolRows(i, "--", adxStr2, "flat", Brushes.White)
                     Continue For
                 End If
 
@@ -780,93 +681,51 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim adxStr = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
                 Dim sigLabel = If(isLong, "LONG", "SHORT")
                 Dim sigColor As Brush = If(isLong, Brushes.LimeGreen, Brushes.Red)
-                For Each box In AllBoxes()
-                    Dim row = box.Symbols(i)
-                    Application.Current?.Dispatcher?.Invoke(
-                        Sub()
-                            row.Arrow      = If(isLong, "UP", "DN")
-                            row.AdxDisplay = adxStr
-                            row.Signal     = sigLabel
-                            row.RowColor   = sigColor
-                        End Sub)
-                Next
+                UpdateSlotSymbolRows(i, If(isLong, "UP", "DN"), adxStr, sigLabel, sigColor)
 
-                ' Prefer the instrument Joe is already positioned in; else highest ADX
-                Dim isJoeInstrument = joe.HasPosition AndAlso joe.EntryInstrument = contractId
+                Dim hasOpenSlot = _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = contractId)
                 If bestContractId Is Nothing OrElse
-                   isJoeInstrument OrElse
-                   (Not (joe.HasPosition AndAlso joe.EntryInstrument = bestContractId) AndAlso adxVal > bestAdxVal) Then
+                   hasOpenSlot OrElse
+                   (Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = bestContractId) AndAlso adxVal > bestAdxVal) Then
                     bestContractId = contractId
                     bestSide       = side
                     bestStLine     = stLine
                     bestLastClose  = CDec(closes(n))
                     bestAdxVal     = adxVal
                     bestBarTime    = barTime
-                    bestIsActive   = isActive
                 End If
             Next
 
             If bestContractId Is Nothing Then
-                _logger.LogInformation("ST+ EvaluateEntry — no favourable candidate found this tick.")
+                _logger.LogInformation("ST+ EvaluateSlotEntries â€” no favourable candidate found this tick.")
                 Return
             End If
 
-            _logger.LogInformation(
-                "ST+ Best candidate: {Contract} side={Side} ADX={Adx:F1} barTime={BarTime} isActive={IsActive}",
-                bestContractId, bestSide, bestAdxVal, bestBarTime, bestIsActive)
+            _logger.LogInformation("ST+ Best candidate: {Contract} side={Side} ADX={Adx:F1} barTime={BarTime}",
+                                   bestContractId, bestSide, bestAdxVal, bestBarTime)
 
-            ' Joe enters first on any favourable signal
-            If Not joe.HasPosition Then
-                _logger.LogInformation("ST+ Joe has no position — calling FireEntryAsync for {Contract} {Side}", bestContractId, bestSide)
-                Await FireEntryAsync(joe, bestContractId, bestSide, bestStLine, bestLastClose, bestBarTime)
-
-            ' Damian scales in on the next closed bar if signal still Active
-            ElseIf joe.EntryInstrument = bestContractId AndAlso
-                   Not damian.HasPosition AndAlso
-                   bestIsActive AndAlso
-                   joe.EntryBarTime < bestBarTime Then
-                _logger.LogInformation("ST+ Damian scale-in — calling FireEntryAsync for {Contract} {Side}", bestContractId, bestSide)
-                Await FireEntryAsync(damian, bestContractId, bestSide, bestStLine, bestLastClose, bestBarTime)
-
-            ' Lewis scales in on the bar after Damian
-            ElseIf joe.EntryInstrument = bestContractId AndAlso
-                   damian.HasPosition AndAlso damian.EntryInstrument = bestContractId AndAlso
-                   Not lewis.HasPosition AndAlso
-                   bestIsActive AndAlso
-                   damian.EntryBarTime < bestBarTime Then
-                _logger.LogInformation("ST+ Lewis scale-in — calling FireEntryAsync for {Contract} {Side}", bestContractId, bestSide)
-                Await FireEntryAsync(lewis, bestContractId, bestSide, bestStLine, bestLastClose, bestBarTime)
+            Dim opened = _slotManager.TryOpenSlot(bestContractId, bestSide, bestAdxVal, bestBarTime, bestStLine, bestLastClose)
+            If opened IsNot Nothing Then
+                _logger.LogInformation("ST+ SlotManager opened slot {Idx} for {Contract} {Side} ADX={Adx:F1}",
+                                       opened.SlotIndex, bestContractId, bestSide, bestAdxVal)
+                Await FireEntryAsync(opened, bestContractId, bestSide, bestStLine, bestLastClose, bestBarTime)
             Else
-                _logger.LogInformation(
-                    "ST+ No entry fired — Joe.HasPos={JoePos} Joe.Instrument={JoeInstr} Damian.HasPos={DamPos} Damian.Instrument={DamInstr} bestIsActive={IsActive} joe.EntryBarTime={JoeBarTime} bestBarTime={BestBarTime}",
-                    joe.HasPosition, joe.EntryInstrument, damian.HasPosition, damian.EntryInstrument,
-                    bestIsActive, joe.EntryBarTime, bestBarTime)
+                _logger.LogInformation("ST+ SlotManager blocked new slot (openCount={Open}, target={Target})",
+                                       _slotManager.OpenSlotCount, _slotManager.TargetSlotCount(bestAdxVal))
             End If
         End Function
 
         ''' <summary>
-        ''' Early-mode entry sequencing: same Joe?Damian?Lewis order but uses the
-        ''' multi-signal early reversal trigger for Joe's entry.  Damian and Lewis
-        ''' scale in when the early signal or confirmed signal is still present.
+        ''' Early-mode entry: multi-signal early reversal trigger, then ADX-band slot count.
         ''' </summary>
         Private Async Function EvaluateEarlyEntrySequenceAsync(tf As BarTimeframe,
                                                                 barCache As Dictionary(Of Integer, IList(Of MarketBar))) As Task
-            Dim joe    = JoeBox
-            Dim damian = DamianBox
-            Dim lewis  = LewisBox
-            Dim minAdx As Single = If(joe.Profile IsNot Nothing, CSng(joe.Profile.AdxThreshold), 20.0F)
-            If minAdx <= 0 Then minAdx = 20.0F
-
-            Dim bestContractId As String          = Nothing
-            Dim bestSide As String                = Nothing
-            Dim bestStLine As Decimal             = 0D
-            Dim bestLastClose As Decimal          = 0D
-            Dim bestAdxVal As Single              = 0F
-            Dim bestBarTime As DateTimeOffset     = DateTimeOffset.MinValue
-            Dim bestIsScaleInOk As Boolean        = False
-
-            Dim tfMinutes As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
-            If _selectedTimeframe.EndsWith("hr") Then tfMinutes *= 60
+            Dim bestContractId As String      = Nothing
+            Dim bestSide As String            = Nothing
+            Dim bestStLine As Decimal         = 0D
+            Dim bestLastClose As Decimal      = 0D
+            Dim bestAdxVal As Single          = 0F
+            Dim bestBarTime As DateTimeOffset = DateTimeOffset.MinValue
 
             For i = 0 To Instruments.Length - 1
                 Dim contractId = Instruments(i)
@@ -915,108 +774,87 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim spreadDI As Single = Math.Abs(plusDi - minusDi)
                 Dim anticipatedLong As Boolean = stDir15 < 0
                 Dim sig3 As Boolean = If(anticipatedLong, plusDi > minusDi, minusDi > plusDi) OrElse spreadDI < 5
-                Dim sig4 As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= minAdx
+                Dim sig4 As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= 20.0F
                 Dim sig5 As Boolean = If(anticipatedLong, stDir5 > 0, stDir5 < 0)
                 Dim earlySignal As Boolean = sig1 AndAlso sig2 AndAlso sig3 AndAlso sig4 AndAlso sig5
 
-                ' Scale-in is allowed when the early signal persists OR the signal is now confirmed
-                Dim confirmedLong  As Boolean = stDir15 > 0 AndAlso Not Single.IsNaN(adxVal) AndAlso adxVal >= 25 AndAlso plusDi > minusDi
-                Dim confirmedShort As Boolean = stDir15 < 0 AndAlso Not Single.IsNaN(adxVal) AndAlso adxVal >= 25 AndAlso minusDi > plusDi
-                Dim isScaleInOk As Boolean = earlySignal OrElse confirmedLong OrElse confirmedShort
-
                 Dim side As String    = If(anticipatedLong, "Buy", "Sell")
-                Dim signal As String  = If(earlySignal, "EARLY", "flat")
-                Dim rowColor As Brush = If(earlySignal, Brushes.Goldenrod, Brushes.White)
                 Dim adxStr As String  = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
-                Dim arrowStr As String = If(anticipatedLong, "UP", "DN")
-
-                For Each box In AllBoxes()
-                    Dim row = box.Symbols(i)
-                    Application.Current?.Dispatcher?.Invoke(
-                        Sub()
-                            row.Arrow      = arrowStr
-                            row.AdxDisplay = adxStr
-                            row.Signal     = signal
-                            row.RowColor   = rowColor
-                        End Sub)
-                Next
+                Dim signalLabel As String = If(earlySignal, "EARLY", "flat")
+                Dim sigColor As Brush = If(earlySignal, Brushes.Goldenrod, Brushes.White)
+                UpdateSlotSymbolRows(i, If(anticipatedLong, "UP", "DN"), adxStr, signalLabel, sigColor)
 
                 If Not earlySignal Then Continue For
 
                 Dim barTime = bars15(n15).Timestamp
-                Dim isJoeInstrument = joe.HasPosition AndAlso joe.EntryInstrument = contractId
+                Dim hasOpenSlot = _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = contractId)
                 If bestContractId Is Nothing OrElse
-                   isJoeInstrument OrElse
-                   (Not (joe.HasPosition AndAlso joe.EntryInstrument = bestContractId) AndAlso adxVal > bestAdxVal) Then
-                    bestContractId  = contractId
-                    bestSide        = side
-                    bestStLine      = stLine15
-                    bestLastClose   = CDec(lastClose15)
-                    bestAdxVal      = adxVal
-                    bestBarTime     = barTime
-                    bestIsScaleInOk = isScaleInOk
+                   hasOpenSlot OrElse
+                   (Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = bestContractId) AndAlso adxVal > bestAdxVal) Then
+                    bestContractId = contractId
+                    bestSide       = side
+                    bestStLine     = stLine15
+                    bestLastClose  = CDec(lastClose15)
+                    bestAdxVal     = adxVal
+                    bestBarTime    = barTime
                 End If
             Next
 
             If bestContractId Is Nothing Then Return
 
-            If Not joe.HasPosition Then
-                Await FireEntryAsync(joe, bestContractId, bestSide, bestStLine, bestLastClose, bestBarTime)
-            ElseIf joe.EntryInstrument = bestContractId AndAlso
-                   Not damian.HasPosition AndAlso
-                   bestIsScaleInOk AndAlso
-                   joe.EntryBarTime < bestBarTime Then
-                Await FireEntryAsync(damian, bestContractId, bestSide, bestStLine, bestLastClose, bestBarTime)
-            ElseIf joe.EntryInstrument = bestContractId AndAlso
-                   damian.HasPosition AndAlso damian.EntryInstrument = bestContractId AndAlso
-                   Not lewis.HasPosition AndAlso
-                   bestIsScaleInOk AndAlso
-                   damian.EntryBarTime < bestBarTime Then
-                Await FireEntryAsync(lewis, bestContractId, bestSide, bestStLine, bestLastClose, bestBarTime)
+            Dim opened = _slotManager.TryOpenSlot(bestContractId, bestSide, bestAdxVal, bestBarTime, bestStLine, bestLastClose)
+            If opened IsNot Nothing Then
+                Await FireEntryAsync(opened, bestContractId, bestSide, bestStLine, bestLastClose, bestBarTime)
             End If
         End Function
 
-        Private Async Function FireEntryAsync(box As PersonaBoxVm,
+        Private Sub UpdateSlotSymbolRows(instrIdx As Integer,
+                                          arrow As String,
+                                          adxDisplay As String,
+                                          signal As String,
+                                          color As Brush)
+            For Each box In AllSlotBoxes()
+                Dim row = box.Symbols(instrIdx)
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        row.Arrow      = arrow
+                        row.AdxDisplay = adxDisplay
+                        row.Signal     = signal
+                        row.RowColor   = color
+                    End Sub)
+            Next
+        End Sub
+
+        Private Async Function FireEntryAsync(slot As PositionSlot,
                                                contractId As String,
                                                side As String,
                                                stLine As Decimal,
                                                lastClose As Decimal,
                                                barTime As DateTimeOffset) As Task
-            ' Guard: if this persona already has a position, skip
-            If box.HasPosition Then
-                _logger.LogInformation("ST+ FireEntry [{Persona}] SKIP — already has position on {Contract}",
-                                       box.PersonaName, box.EntryInstrument)
-                Return
-            End If
+            _logger.LogInformation("ST+ FireEntry [Slot {Idx}] {Side} {Contract} â€” resolving account...",
+                                   slot.SlotIndex, side, contractId)
 
-            _logger.LogInformation("ST+ FireEntry [{Persona}] {Side} {Contract} — resolving account...",
-                                   box.PersonaName, side, contractId)
-
-            Dim accountId As Long = If(_selectedAccount IsNot Nothing,
-                                       _selectedAccount.Id, 0)
+            Dim accountId As Long = If(_selectedAccount IsNot Nothing, _selectedAccount.Id, 0)
             If accountId = 0 Then
-                _logger.LogWarning("ST+ FireEntry [{Persona}] BLOCKED — accountId=0. SelectedAccount={Acct}",
-                                   box.PersonaName,
+                _logger.LogWarning("ST+ FireEntry [Slot {Idx}] BLOCKED â€” accountId=0. SelectedAccount={Acct}",
+                                   slot.SlotIndex,
                                    If(_selectedAccount Is Nothing, "null", $"{_selectedAccount.Name} id={_selectedAccount.Id} canTrade={_selectedAccount.CanTrade}"))
+                _slotManager.CloseSlot(slot.SlotIndex)
                 Return
             End If
-            box.AccountId = accountId
+            slot.AccountId = accountId
 
             SyncLock _timerLock
                 _timer?.Change(2000, 2000)
             End SyncLock
 
-            Dim qty As Integer    = If(box.Profile IsNot Nothing, box.Profile.PositionSize, 1)
             Dim oSide As OrderSide = If(side = "Buy", OrderSide.Buy, OrderSide.Sell)
-
-            ' Compute SL ticks from the SuperTrend line distance, clamped to instrument minimums.
             Dim fc As FavouriteContract = FavouriteContracts.TryGetBySymbol(contractId)
             Dim stopTicks As Integer? = Nothing
             Dim tpTicks As Integer? = Nothing
             If fc IsNot Nothing AndAlso fc.PxTickSize > 0D Then
                 Dim rawDist As Decimal = Math.Abs(lastClose - stLine)
                 Dim rawTicks As Integer = CInt(Math.Round(rawDist / fc.PxTickSize))
-                ' Clamp up to the instrument dollar floor.
                 Dim minTicks As Integer = 1
                 If fc.PxMinStopDollars > 0D AndAlso fc.PxTickValue > 0D Then
                     minTicks = CInt(Math.Ceiling(fc.PxMinStopDollars / fc.PxTickValue))
@@ -1033,10 +871,10 @@ Namespace TopStepTrader.UI.ViewModels
                                    lastClose, stLine)
 
             Dim order As New Order With {
-                .AccountId              = box.AccountId,
+                .AccountId              = slot.AccountId,
                 .ContractId            = contractId,
                 .Side                  = oSide,
-                .Quantity              = qty,
+                .Quantity              = slot.Contracts,
                 .OrderType             = OrderType.Market,
                 .InitialStopTicks      = stopTicks,
                 .InitialTakeProfitTicks = tpTicks
@@ -1048,15 +886,12 @@ Namespace TopStepTrader.UI.ViewModels
                 _logger.LogWarning(ex, "ST+ PlaceOrderAsync failed for {Contract}", contractId)
             End Try
 
-            ' Only show a position tile
-            ' Accept Working (bracket/limit) OR Filled (immediate market fill).
-            ' Reject only if Nothing, Rejected, or Cancelled.
             Dim isAccepted = placed IsNot Nothing AndAlso
                              (placed.Status = OrderStatus.Working OrElse placed.Status = OrderStatus.Filled)
             If Not isAccepted Then
                 _logger.LogWarning("ST+ order not accepted for {Contract}: status={Status}", contractId, placed?.Status)
-                ' Slow the timer back if no persona has a position
-                If Not AllBoxes().Any(Function(b) b.HasPosition) Then
+                _slotManager.CloseSlot(slot.SlotIndex)
+                If Not _slotManager.Slots.Any(Function(s) s.IsOpen) Then
                     SyncLock _timerLock
                         _timer?.Change(15000, 15000)
                     End SyncLock
@@ -1064,129 +899,123 @@ Namespace TopStepTrader.UI.ViewModels
                 Return
             End If
 
-            box.EntryPrice      = 0D
-            box.EntryInstrument = contractId
-            box.EntrySide       = side
-            box.EntryTime       = DateTime.Now
-            box.EntryBarTime    = barTime
-            box.CurrentStLine   = stLine
-            box.ScaleInCount    = 1
-            box.MissCount       = 0
-            box.PositionId      = placed.ExternalPositionId
+            slot.StopPrice    = stLine
+            slot.EntryTime    = DateTime.Now
+            slot.EntryBarTime = barTime
+            slot.MissCount    = 0
+            slot.PositionId   = placed.ExternalPositionId
+            slot.EntryPrice   = 0D
+            slot.TakeProfitPrice = 0D
 
-            ' TpPrice will be computed in HandleOpenPositionAsync once the fill price is known via snapshot.
-            box.TpPrice = 0D
+            Dim box = BoxForSlot(slot)
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
-                    box.HasPosition = True
-                    UpdatePositionDisplay(box, 0D)
+                    If box IsNot Nothing Then
+                        box.HasPosition = True
+                        UpdatePositionDisplay(box, slot, 0D)
+                    End If
                 End Sub)
         End Function
 
-        Private Async Function HandleOpenPositionAsync(box As PersonaBoxVm, tf As BarTimeframe) As Task
-            If box.AccountId = 0 AndAlso _session.SelectedAccount IsNot Nothing Then
-                box.AccountId = _session.SelectedAccount.Id
+        Private Async Function HandleOpenPositionAsync(slot As PositionSlot, tf As BarTimeframe) As Task
+            If slot.AccountId = 0 AndAlso _session.SelectedAccount IsNot Nothing Then
+                slot.AccountId = _session.SelectedAccount.Id
             End If
             Dim snapshot As LivePositionSnapshot = Nothing
             Try
                 snapshot = Await _orderService.GetLivePositionSnapshotAsync(
-                    box.AccountId, box.EntryInstrument, box.PositionId)
+                    slot.AccountId, slot.Instrument, slot.PositionId)
             Catch ex As Exception
-                _logger.LogWarning(ex, "ST+ GetLivePositionSnapshotAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
+                _logger.LogWarning(ex, "ST+ GetLivePositionSnapshotAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
             End Try
 
             If snapshot Is Nothing Then
-                box.MissCount += 1
-                If box.MissCount >= SyncMissThreshold Then
-                    Await ReleasePositionLockAsync(box)
+                slot.MissCount += 1
+                If slot.MissCount >= SyncMissThreshold Then
+                    Await ReleaseSlotAsync(slot)
                     Return
                 End If
             Else
-                box.MissCount = 0
-                If Not box.PositionId.HasValue OrElse box.PositionId.Value = 0 Then
-                    box.PositionId = snapshot.PositionId
-                End If
-                ' Resolve fill price and TP on the first snapshot tick
-                If box.EntryPrice = 0D AndAlso snapshot.OpenRate <> 0D Then
-                    box.EntryPrice = snapshot.OpenRate
-                    Dim tpMult = ParseTpMultiple()
-                    If tpMult > 0D AndAlso box.CurrentStLine <> 0D Then
-                        Dim initialRisk = Math.Abs(box.EntryPrice - box.CurrentStLine)
-                        box.TpPrice = If(box.EntrySide = "Buy",
-                                         box.EntryPrice + initialRisk * tpMult,
-                                         box.EntryPrice - initialRisk * tpMult)
+                slot.MissCount = 0
+                If snapshot.OpenRate <> 0D AndAlso slot.EntryPrice = 0D Then
+                    slot.EntryPrice = snapshot.OpenRate
+                    If slot.TakeProfitPrice = 0D Then
+                        Dim fc2 = FavouriteContracts.TryGetBySymbol(slot.Instrument)
+                        If fc2 IsNot Nothing AndAlso fc2.PxTickSize > 0D Then
+                            Dim rawDist = Math.Abs(slot.EntryPrice - slot.StopPrice)
+                            Dim stopTicks2 = CInt(Math.Round(rawDist / fc2.PxTickSize))
+                            Dim tpMult2 = ParseTpMultiple()
+                            If tpMult2 > 0D Then
+                                Dim tpTicks2 = CInt(Math.Round(CDec(stopTicks2) * tpMult2))
+                                slot.TakeProfitPrice = If(slot.Side = "Buy",
+                                    slot.EntryPrice + tpTicks2 * fc2.PxTickSize,
+                                    slot.EntryPrice - tpTicks2 * fc2.PxTickSize)
+                            End If
+                        End If
                     End If
                 End If
-                Dim pnl = snapshot.UnrealizedPnlUsd
-                Application.Current?.Dispatcher?.Invoke(Sub() UpdatePositionDisplay(box, pnl))
-            End If
 
-            Dim bars As IList(Of MarketBar)
-            Try
-                bars = Await _barService.GetLiveBarsAsync(box.EntryInstrument, tf, BarsToFetch)
-            Catch ex As Exception
-                _logger.LogWarning(ex, "ST+ GetLiveBarsAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
-                Return
-            End Try
-            If bars Is Nothing OrElse bars.Count < 15 Then Return
+                Dim latestPnl = snapshot.UnrealizedPnlUsd
+                slot.UnrealizedPnl = latestPnl
+                Dim boxForDisplay = BoxForSlot(slot)
+                Application.Current?.Dispatcher?.Invoke(Sub()
+                    If boxForDisplay IsNot Nothing Then UpdatePositionDisplay(boxForDisplay, slot, latestPnl)
+                End Sub)
 
-            Dim highs   = bars.Select(Function(b) b.High).ToList()
-            Dim lows    = bars.Select(Function(b) b.Low).ToList()
-            Dim closes  = bars.Select(Function(b) b.Close).ToList()
-            Dim st      = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
-            Dim n       = bars.Count - 1
-            Dim stDir   = st.Direction(n)
-            Dim stLine  = CDec(st.Line(n))
-
-            Dim entryIsLong As Boolean = (box.EntrySide = "Buy")
-            Dim flipped As Boolean = (entryIsLong AndAlso stDir < 0) OrElse (Not entryIsLong AndAlso stDir > 0)
-            If flipped Then
+                Dim bars As IList(Of MarketBar)
                 Try
-                    Await _orderService.FlattenContractAsync(box.AccountId, box.EntryInstrument)
-                Catch ex As Exception
-                    _logger.LogWarning(ex, "ST+ FlattenContractAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
+                    bars = Await _barService.GetLiveBarsAsync(slot.Instrument, tf, BarsToFetch)
+                Catch
+                    Return
                 End Try
-                Await ReleasePositionLockAsync(box)
-                Return
-            End If
+                If bars Is Nothing OrElse bars.Count < 14 Then Return
 
-            If Not Single.IsNaN(CSng(stLine)) AndAlso stLine <> 0D Then
-                Dim shouldUpdate As Boolean =
-                    (entryIsLong AndAlso stLine > box.CurrentStLine) OrElse
-                    (Not entryIsLong AndAlso stLine < box.CurrentStLine)
-                If shouldUpdate AndAlso box.PositionId.HasValue Then
-                    Dim tpArg As Decimal? = If(box.TpPrice <> 0D, CType(box.TpPrice, Decimal?), Nothing)
+                Dim highs  = bars.Select(Function(b) b.High).ToList()
+                Dim lows   = bars.Select(Function(b) b.Low).ToList()
+                Dim closes = bars.Select(Function(b) b.Close).ToList()
+                Dim n = bars.Count - 1
+                Dim st = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
+                Dim stDir  = st.Direction(n)
+                Dim stLine = CDec(st.Line(n))
+
+                Dim isReversal As Boolean = (slot.Side = "Buy" AndAlso stDir < 0) OrElse
+                                            (slot.Side = "Sell" AndAlso stDir > 0)
+                If isReversal Then
+                    slot.Health = SlotHealth.Exiting
+                    Await ReleaseSlotAsync(slot)
+                    Return
+                End If
+
+                If slot.PositionId.HasValue AndAlso stLine <> slot.StopPrice Then
+                    Dim tpArg As Decimal? = If(slot.TakeProfitPrice <> 0D, CType(slot.TakeProfitPrice, Decimal?), Nothing)
                     Try
-                        Await _orderService.EditPositionSlTpAsync(box.PositionId.Value, stLine, tpArg)
-                        _logger.LogInformation("ST+ SL trail ? {Price} (TP={Tp}) for {Box} on {Contract}", stLine, If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"), box.PersonaName, box.EntryInstrument)
+                        Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, stLine, tpArg)
+                        _logger.LogInformation("ST+ SL trail â†’ {Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
+                                               stLine, If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"),
+                                               slot.SlotIndex, slot.Instrument)
                     Catch ex As Exception
-                        _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for {Box} on {Contract}", box.PersonaName, box.EntryInstrument)
+                        _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
                     End Try
-                    box.CurrentStLine = stLine
-                    Dim latestPnl As Decimal = If(snapshot IsNot Nothing, snapshot.UnrealizedPnlUsd, 0D)
-                    Application.Current?.Dispatcher?.Invoke(Sub() UpdatePositionDisplay(box, latestPnl))
+                    slot.StopPrice = stLine
+                    Dim boxForTrail = BoxForSlot(slot)
+                    Application.Current?.Dispatcher?.Invoke(Sub()
+                        If boxForTrail IsNot Nothing Then UpdatePositionDisplay(boxForTrail, slot, latestPnl)
+                    End Sub)
                 End If
             End If
-
-            ' Scale-in within a single persona is no longer used.
-            ' Cross-persona sequencing (Joe ? Damian ? Lewis) is handled by EvaluateEntrySequenceAsync.
         End Function
 
-        Private Async Function ReleasePositionLockAsync(box As PersonaBoxVm) As Task
+        Private Async Function ReleaseSlotAsync(slot As PositionSlot) As Task
+            Dim box = BoxForSlot(slot)
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
-                    box.HasPosition        = False
-                    box.PositionDisplay    = String.Empty
-                    box.ScaleInCount       = 0
-                    box.CurrentStLine      = 0D
-                    box.PositionId         = Nothing
-                    box.MissCount          = 0
-                    box.TpPrice            = 0D
-                    box.LastScaleInBarTime = DateTimeOffset.MinValue
-                    box.EntryBarTime       = DateTimeOffset.MinValue
+                    If box IsNot Nothing Then
+                        box.HasPosition     = False
+                        box.PositionDisplay = String.Empty
+                    End If
                 End Sub)
-            ' Slow the polling interval back to 15s only when no persona has an open position
-            If Not AllBoxes().Any(Function(b) b.HasPosition) Then
+            _slotManager.CloseSlot(slot.SlotIndex)
+            If Not _slotManager.Slots.Any(Function(s) s.IsOpen) Then
                 SyncLock _timerLock
                     _timer?.Change(15000, 15000)
                 End SyncLock
@@ -1194,20 +1023,19 @@ Namespace TopStepTrader.UI.ViewModels
             Await Task.CompletedTask
         End Function
 
-        Private Sub UpdatePositionDisplay(box As PersonaBoxVm, pnl As Decimal)
-            Dim side  As String  = If(box.EntrySide = "Buy", "LONG", "SHORT")
-            Dim idx   As Integer = Array.IndexOf(Instruments, box.EntryInstrument)
-            Dim label As String  = If(idx >= 0, InstrumentLabels(idx), box.EntryInstrument)
-            Dim entry As String  = If(box.EntryPrice = 0D, "--", box.EntryPrice.ToString("F2"))
-            Dim sl    As String  = If(box.CurrentStLine = 0D, "--", box.CurrentStLine.ToString("F2"))
-            Dim tp    As String  = If(box.TpPrice = 0D, "flip", box.TpPrice.ToString("F2"))
-            Dim maxSI As Integer = If(box.Profile IsNot Nothing, box.Profile.MaxScaleIns, 1)
-            Dim sign  As String  = If(pnl >= 0, "+", "")
+        Private Sub UpdatePositionDisplay(box As SlotBoxVm, slot As PositionSlot, pnl As Decimal)
+            Dim sideLbl As String = If(slot.Side = "Buy", "LONG", "SHORT")
+            Dim idx   As Integer  = Array.IndexOf(Instruments, slot.Instrument)
+            Dim label As String   = If(idx >= 0, InstrumentLabels(idx), slot.Instrument)
+            Dim entry As String   = If(slot.EntryPrice = 0D, "--", slot.EntryPrice.ToString("F2"))
+            Dim sl    As String   = If(slot.StopPrice = 0D, "--", slot.StopPrice.ToString("F2"))
+            Dim tp    As String   = If(slot.TakeProfitPrice = 0D, "flip", slot.TakeProfitPrice.ToString("F2"))
+            Dim sign  As String   = If(pnl >= 0, "+", "")
             box.PositionDisplay =
-                String.Format("{0}  {1}  @ {2}", side, label, entry) & Environment.NewLine &
+                String.Format("{0}  {1}  @ {2}", sideLbl, label, entry) & Environment.NewLine &
                 String.Format("SL: {0}  TP: {1}", sl, tp) & Environment.NewLine &
-                String.Format("Scale-ins: {0} / {1}", box.ScaleInCount, maxSI) & Environment.NewLine &
-                String.Format("Entry: {0:HH:mm}  |  P&L: {1}{2:F2}$", box.EntryTime, sign, pnl)
+                String.Format("Entry: {0:HH:mm}  |  P&L: {1}{2:F2}$", slot.EntryTime, sign, pnl) & Environment.NewLine &
+                slot.EntryReason
             box.PnlBrush = If(pnl >= 0, Brushes.LimeGreen, Brushes.Red)
         End Sub
 

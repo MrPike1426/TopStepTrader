@@ -1,4 +1,4 @@
-<UserControl x:Class="TopStepTrader.UI.Views.SuperTrendPlusView"
+﻿<UserControl x:Class="TopStepTrader.UI.Views.SuperTrendPlusView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -9,10 +9,10 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="24,20,24,8">
 
-            <TextBlock Text="📈  SuperTrend+"
+            <TextBlock Text="ðŸ“ˆ  SuperTrend+"
                        Style="{StaticResource PageTitleStyle}"/>
 
-            <!-- ── How it works panel (collapsible) ── -->
+            <!-- â”€â”€ How it works panel (collapsible) â”€â”€ -->
             <Border Background="{StaticResource SurfaceBrush}"
                     CornerRadius="6" Margin="0,8,0,0"
                     BorderBrush="#3A5A8A" BorderThickness="1">
@@ -32,7 +32,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                <TextBlock Text="💡" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="ðŸ’¡" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <TextBlock Text="How does SuperTrend+ Autopilot work?"
                                            Foreground="{StaticResource AccentBrush}"
                                            FontSize="13" FontWeight="SemiBold"
@@ -44,10 +44,10 @@
                                        Foreground="{StaticResource TextSecondaryBrush}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="▲ hide"/>
+                                        <Setter Property="Text" Value="â–² hide"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsChecked, ElementName=HowItWorksToggle}" Value="False">
-                                                <Setter Property="Text" Value="▼ show"/>
+                                                <Setter Property="Text" Value="â–¼ show"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -75,7 +75,7 @@
                                 <Run FontWeight="SemiBold" Foreground="White">SuperTrend+ is a fully automatic trading assistant.</Run>
                                 <Run>Once you press</Run>
                                 <Run FontStyle="Italic">Start Monitoring</Run>
-                                <Run>, it watches the markets for you around the clock and places trades on its own — you don't need to do anything else.</Run>
+                                <Run>, it watches the markets for you around the clock and places trades on its own â€” you don't need to do anything else.</Run>
                             </TextBlock>
 
                             <!-- Step cards -->
@@ -93,7 +93,7 @@
                                 <!-- Step 1 -->
                                 <Border Grid.Column="0" Background="#1A2440" CornerRadius="5" Padding="10,8">
                                     <StackPanel>
-                                        <TextBlock Text="🔍  Step 1 — Spot the trend"
+                                        <TextBlock Text="ðŸ”  Step 1 â€” Spot the trend"
                                                    Foreground="{StaticResource AccentBrush}"
                                                    FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
                                         <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
@@ -105,7 +105,7 @@
                                 <!-- Step 2 -->
                                 <Border Grid.Column="2" Background="#1A2440" CornerRadius="5" Padding="10,8">
                                     <StackPanel>
-                                        <TextBlock Text="💪  Step 2 — Check the strength"
+                                        <TextBlock Text="ðŸ’ª  Step 2 â€” Check the strength"
                                                    Foreground="{StaticResource AccentBrush}"
                                                    FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
                                         <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
@@ -117,11 +117,11 @@
                                 <!-- Step 3 -->
                                 <Border Grid.Column="4" Background="#1A2440" CornerRadius="5" Padding="10,8">
                                     <StackPanel>
-                                        <TextBlock Text="🚀  Step 3 — Enter the trade"
+                                        <TextBlock Text="ðŸš€  Step 3 â€” Enter the trade"
                                                    Foreground="{StaticResource AccentBrush}"
                                                    FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
                                         <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
-                                            When a strong trend is confirmed the bot automatically places a buy (▲) or sell (▼) order.  The persona you choose controls how cautiously or aggressively it sizes that trade.
+                                            When a strong trend is confirmed the bot automatically places a buy (â–²) or sell (â–¼) order.  The persona you choose controls how cautiously or aggressively it sizes that trade.
                                         </TextBlock>
                                     </StackPanel>
                                 </Border>
@@ -129,11 +129,11 @@
                                 <!-- Step 4 -->
                                 <Border Grid.Column="6" Background="#1A2440" CornerRadius="5" Padding="10,8">
                                     <StackPanel>
-                                        <TextBlock Text="🛡️  Step 4 — Protect &amp; exit"
+                                        <TextBlock Text="ðŸ›¡ï¸  Step 4 â€” Protect &amp; exit"
                                                    Foreground="{StaticResource AccentBrush}"
                                                    FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
                                         <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">
-                                            A moving stop-loss follows the SuperTrend line throughout the trade.  The moment the trend reverses the position is closed automatically — no manual action needed.
+                                            A moving stop-loss follows the SuperTrend line throughout the trade.  The moment the trend reverses the position is closed automatically â€” no manual action needed.
                                         </TextBlock>
                                     </StackPanel>
                                 </Border>
@@ -142,7 +142,7 @@
                             <!-- Persona explainer -->
                             <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,10,0,0">
                                 <StackPanel>
-                                    <TextBlock Text="👥  Choosing a persona"
+                                    <TextBlock Text="ðŸ‘¥  Choosing a persona"
                                                Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6"/>
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -153,24 +153,24 @@
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0">
-                                            <TextBlock Text="🟢  Lewis — Averse"
+                                            <TextBlock Text="ðŸŸ¢  Lewis â€” Averse"
                                                        Foreground="LimeGreen" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/>
                                             <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="16">
                                                 Small position sizes, strict entry rules.  Aims to protect capital first and grow it second.  Best if you prefer steady, low-risk trading.
                                             </TextBlock>
                                         </StackPanel>
                                         <StackPanel Grid.Column="2">
-                                            <TextBlock Text="🟡  Damian — Moderate"
+                                            <TextBlock Text="ðŸŸ¡  Damian â€” Moderate"
                                                        Foreground="Gold" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/>
                                             <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="16">
                                                 Balanced approach.  Trades with enough size to make meaningful returns while still respecting risk limits.  A good everyday setting.
                                             </TextBlock>
                                         </StackPanel>
                                         <StackPanel Grid.Column="4">
-                                            <TextBlock Text="🔴  Joe — Aggressive"
+                                            <TextBlock Text="ðŸ”´  Joe â€” Aggressive"
                                                        Foreground="OrangeRed" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/>
                                             <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="16">
-                                                Larger sizes, scales into winning trades.  Higher potential reward — but also higher drawdown if a trend fails.  For experienced risk-takers.
+                                                Larger sizes, scales into winning trades.  Higher potential reward â€” but also higher drawdown if a trend fails.  For experienced risk-takers.
                                             </TextBlock>
                                         </StackPanel>
                                     </Grid>
@@ -180,23 +180,23 @@
                             <!-- Reading the watchlist callout -->
                             <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,8,0,0">
                                 <StackPanel>
-                                    <TextBlock Text="📊  Reading the watchlist below"
+                                    <TextBlock Text="ðŸ“Š  Reading the watchlist below"
                                                Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
                                     <WrapPanel>
                                         <Border Background="#1F3A1F" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
-                                            <TextBlock Foreground="LimeGreen" FontFamily="Consolas" FontSize="11">▲  BULL — price is climbing</TextBlock>
+                                            <TextBlock Foreground="LimeGreen" FontFamily="Consolas" FontSize="11">â–²  BULL â€” price is climbing</TextBlock>
                                         </Border>
                                         <Border Background="#3A1F1F" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
-                                            <TextBlock Foreground="OrangeRed" FontFamily="Consolas" FontSize="11">▼  BEAR — price is falling</TextBlock>
+                                            <TextBlock Foreground="OrangeRed" FontFamily="Consolas" FontSize="11">â–¼  BEAR â€” price is falling</TextBlock>
                                         </Border>
                                         <Border Background="#2A2A2A" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
-                                            <TextBlock Foreground="Gray" FontFamily="Consolas" FontSize="11">–   flat — no clear direction yet</TextBlock>
+                                            <TextBlock Foreground="Gray" FontFamily="Consolas" FontSize="11">â€“   flat â€” no clear direction yet</TextBlock>
                                         </Border>
                                         <Border Background="#1A2440" CornerRadius="4" Padding="8,4" Margin="0,0,8,4">
-                                            <TextBlock Foreground="SteelBlue" FontFamily="Consolas" FontSize="11">ADX ●●●  very strong trend</TextBlock>
+                                            <TextBlock Foreground="SteelBlue" FontFamily="Consolas" FontSize="11">ADX â—â—â—  very strong trend</TextBlock>
                                         </Border>
                                         <Border Background="#1A2440" CornerRadius="4" Padding="8,4" Margin="0,0,0,4">
-                                            <TextBlock Foreground="SteelBlue" FontFamily="Consolas" FontSize="11">ADX ○○○  choppy / wait</TextBlock>
+                                            <TextBlock Foreground="SteelBlue" FontFamily="Consolas" FontSize="11">ADX â—‹â—‹â—‹  choppy / wait</TextBlock>
                                         </Border>
                                     </WrapPanel>
                                 </StackPanel>
@@ -207,7 +207,7 @@
                 </StackPanel>
             </Border>
 
-            <!-- ── Header row ── -->
+            <!-- â”€â”€ Header row â”€â”€ -->
             <Border Background="{StaticResource SurfaceBrush}"
                     CornerRadius="6" Padding="14,10" Margin="0,8,0,0"
                     BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,2">
@@ -261,7 +261,7 @@
 
                     <!-- ST Multiplier selector -->
                     <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="ST×:" Foreground="{StaticResource TextSecondaryBrush}"
+                        <TextBlock Text="STÃ—:" Foreground="{StaticResource TextSecondaryBrush}"
                                    FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
                         <ComboBox ItemsSource="{Binding StMultipliers}"
                                   SelectedItem="{Binding StMultiplier}"
@@ -289,7 +289,7 @@
                 </Grid>
             </Border>
 
-            <!-- ── Watchlist panel ── -->
+            <!-- â”€â”€ Watchlist panel â”€â”€ -->
             <Border Background="{StaticResource SurfaceBrush}"
                     CornerRadius="6" Padding="14,10" Margin="0,10,0,0"
                     BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
@@ -363,7 +363,7 @@
                 </Grid>
             </Border>
 
-            <!-- ── Three persona boxes ── -->
+            <!-- â”€â”€ Three persona boxes â”€â”€ -->
             <Grid Margin="0,12,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -375,7 +375,7 @@
 
                 <!-- Lewis box -->
                 <Border Grid.Column="0"
-                        Opacity="{Binding LewisBox.BoxOpacity}"
+                        Opacity="{Binding Slot1.BoxOpacity}"
                         Background="{StaticResource SurfaceBrush}"
                         CornerRadius="6" Padding="12,10"
                         BorderBrush="{StaticResource AccentBrush}" BorderThickness="1">
@@ -389,10 +389,10 @@
 
                         <!-- Header -->
                         <Grid Grid.Row="0" Margin="0,0,0,6">
-                            <TextBlock Text="{Binding LewisBox.PersonaName}"
+                            <TextBlock Text="{Binding Slot1.SlotLabel}"
                                        FontWeight="Bold" Foreground="White" FontSize="13"/>
-                            <TextBlock Text="⏸ Paused"
-                                       Visibility="{Binding LewisBox.PausedBadgeVisibility}"
+                            <TextBlock Text="â¸ Paused"
+                                       Visibility="{Binding Slot1.PausedBadgeVisibility}"
                                        Foreground="Orange" FontSize="11"
                                        HorizontalAlignment="Right" VerticalAlignment="Center"/>
                         </Grid>
@@ -400,7 +400,7 @@
                         <Separator Grid.Row="1" Margin="0,0,0,6"/>
 
                         <!-- Symbol rows -->
-                        <ItemsControl Grid.Row="2" ItemsSource="{Binding LewisBox.Symbols}">
+                        <ItemsControl Grid.Row="2" ItemsSource="{Binding Slot1.Symbols}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Margin="0,2"
@@ -420,11 +420,11 @@
 
                         <!-- Position area -->
                         <Border Grid.Row="3"
-                                Visibility="{Binding LewisBox.PositionVisibility}"
+                                Visibility="{Binding Slot1.PositionVisibility}"
                                 Background="#1A2A1A" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
-                            <TextBlock Text="{Binding LewisBox.PositionDisplay}"
-                                       Foreground="{Binding LewisBox.PnlBrush}"
+                            <TextBlock Text="{Binding Slot1.PositionDisplay}"
+                                       Foreground="{Binding Slot1.PnlBrush}"
                                        FontFamily="Consolas" FontSize="11"
                                        TextWrapping="Wrap"/>
                         </Border>
@@ -433,7 +433,7 @@
 
                 <!-- Damian box -->
                 <Border Grid.Column="2"
-                        Opacity="{Binding DamianBox.BoxOpacity}"
+                        Opacity="{Binding Slot2.BoxOpacity}"
                         Background="{StaticResource SurfaceBrush}"
                         CornerRadius="6" Padding="12,10"
                         BorderBrush="{StaticResource AccentBrush}" BorderThickness="1">
@@ -446,17 +446,17 @@
                         </Grid.RowDefinitions>
 
                         <Grid Grid.Row="0" Margin="0,0,0,6">
-                            <TextBlock Text="{Binding DamianBox.PersonaName}"
+                            <TextBlock Text="{Binding Slot2.SlotLabel}"
                                        FontWeight="Bold" Foreground="White" FontSize="13"/>
-                            <TextBlock Text="⏸ Paused"
-                                       Visibility="{Binding DamianBox.PausedBadgeVisibility}"
+                            <TextBlock Text="â¸ Paused"
+                                       Visibility="{Binding Slot2.PausedBadgeVisibility}"
                                        Foreground="Orange" FontSize="11"
                                        HorizontalAlignment="Right" VerticalAlignment="Center"/>
                         </Grid>
 
                         <Separator Grid.Row="1" Margin="0,0,0,6"/>
 
-                        <ItemsControl Grid.Row="2" ItemsSource="{Binding DamianBox.Symbols}">
+                        <ItemsControl Grid.Row="2" ItemsSource="{Binding Slot2.Symbols}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Margin="0,2"
@@ -475,11 +475,11 @@
                         </ItemsControl>
 
                         <Border Grid.Row="3"
-                                Visibility="{Binding DamianBox.PositionVisibility}"
+                                Visibility="{Binding Slot2.PositionVisibility}"
                                 Background="#1A2A1A" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
-                            <TextBlock Text="{Binding DamianBox.PositionDisplay}"
-                                       Foreground="{Binding DamianBox.PnlBrush}"
+                            <TextBlock Text="{Binding Slot2.PositionDisplay}"
+                                       Foreground="{Binding Slot2.PnlBrush}"
                                        FontFamily="Consolas" FontSize="11"
                                        TextWrapping="Wrap"/>
                         </Border>
@@ -488,7 +488,7 @@
 
                 <!-- Joe box -->
                 <Border Grid.Column="4"
-                        Opacity="{Binding JoeBox.BoxOpacity}"
+                        Opacity="{Binding Slot3.BoxOpacity}"
                         Background="{StaticResource SurfaceBrush}"
                         CornerRadius="6" Padding="12,10"
                         BorderBrush="{StaticResource AccentBrush}" BorderThickness="1">
@@ -501,17 +501,17 @@
                         </Grid.RowDefinitions>
 
                         <Grid Grid.Row="0" Margin="0,0,0,6">
-                            <TextBlock Text="{Binding JoeBox.PersonaName}"
+                            <TextBlock Text="{Binding Slot3.SlotLabel}"
                                        FontWeight="Bold" Foreground="White" FontSize="13"/>
-                            <TextBlock Text="⏸ Paused"
-                                       Visibility="{Binding JoeBox.PausedBadgeVisibility}"
+                            <TextBlock Text="â¸ Paused"
+                                       Visibility="{Binding Slot3.PausedBadgeVisibility}"
                                        Foreground="Orange" FontSize="11"
                                        HorizontalAlignment="Right" VerticalAlignment="Center"/>
                         </Grid>
 
                         <Separator Grid.Row="1" Margin="0,0,0,6"/>
 
-                        <ItemsControl Grid.Row="2" ItemsSource="{Binding JoeBox.Symbols}">
+                        <ItemsControl Grid.Row="2" ItemsSource="{Binding Slot3.Symbols}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <TextBlock Margin="0,2"
@@ -530,11 +530,11 @@
                         </ItemsControl>
 
                         <Border Grid.Row="3"
-                                Visibility="{Binding JoeBox.PositionVisibility}"
+                                Visibility="{Binding Slot3.PositionVisibility}"
                                 Background="#1A2A1A" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
-                            <TextBlock Text="{Binding JoeBox.PositionDisplay}"
-                                       Foreground="{Binding JoeBox.PnlBrush}"
+                            <TextBlock Text="{Binding Slot3.PositionDisplay}"
+                                       Foreground="{Binding Slot3.PnlBrush}"
                                        FontFamily="Consolas" FontSize="11"
                                        TextWrapping="Wrap"/>
                         </Border>
