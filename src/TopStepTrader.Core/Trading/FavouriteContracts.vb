@@ -2,7 +2,7 @@ Namespace TopStepTrader.Core.Trading
 
     ''' <summary>
     ''' Master list of TopStepX favourite instruments.
-    ''' Instruments: OIL (MCLE), GOLD (MGC), SILVER (SIL), SPX500 (MES), EUR/USD (M6E), NQ (MNQ), Bitcoin (MBT).
+    ''' SuperTrend+ watchlist: MES, MNQ, M2K, MYM, MGC, M6J, MCL (OIL reserve).
     ''' </summary>
     Public Class FavouriteContracts
 
@@ -11,17 +11,45 @@ Namespace TopStepTrader.Core.Trading
             ' CME Globex tick specs: MGC tick=0.10/$1, MCLE tick=0.01/$1, MES tick=0.25/$1.25
             Dim list As New List(Of FavouriteContract)
 
-            ' OIL — MCLE (Micro WTI Crude Oil)  [ProjectX symbolId: F.US.MCLE; roll: monthly; M26=Jun 2026 front-month]
-            ' PxMinStopDollars=$15: 15 ticks × $1.00 — prevents sub-15-tick stops on oil
-            list.Add(New FavouriteContract("OIL", "Oil", "CON.F.US.MCLE.M26", 0.01D, 1.0D, 100D, 0.3D, 15D) With {
-                .PxRootSymbol = "MCLE",
-                .CommissionTickBuffer = 2,
+            ' MES — Micro E-mini S&P 500  [ProjectX symbolId: F.US.MES; roll: quarterly H/M/U/Z; U26=Sep 2026]
+            ' PxMinStopDollars=$20: 16 ticks × $1.25 = 4 S&P points minimum
+            list.Add(New FavouriteContract("SPX500", "S&P 500", "CON.F.US.MES.U26", 0.25D, 1.25D, 5D, 0.3D, 20D) With {
+                .PxRootSymbol = "MES",
+                .CommissionTickBuffer = 1,
                 .MultiConfluenceTimeframeMinutes = 5,
-                .RoundTripFee = 1.04D,
-                .RollLeadDays = 28
+                .RoundTripFee = 0.74D
             })
 
-            ' GOLD.24-7 — MGC (Micro Gold)  [ProjectX symbolId: F.US.MGC; roll: even months G/J/M/Q/V/Z; M26=Jun 2026 front-month]
+            ' MNQ — Micro Nasdaq-100  [ProjectX symbolId: F.US.MNQ; roll: quarterly H/M/U/Z; U26=Sep 2026]
+            ' PxMinStopDollars=$25: 50 ticks × $0.50 = 12.5 NQ points minimum
+            list.Add(New FavouriteContract("NQ", "NQ", "CON.F.US.MNQ.U26", 0.25D, 0.5D, 2.0D, 0.3D, 25D) With {
+                .PxRootSymbol = "MNQ",
+                .CommissionTickBuffer = 1,
+                .MultiConfluenceTimeframeMinutes = 5,
+                .RoundTripFee = 0.74D
+            })
+
+            ' M2K — Micro Russell 2000  [ProjectX symbolId: F.US.M2K; roll: quarterly H/M/U/Z; U26=Sep 2026]
+            ' Contract: $5 × Russell 2000 index. Tick = 0.10 pts = $0.50.
+            ' PxMinStopDollars=$15: 30 ticks × $0.50 = 15 Russell points minimum
+            list.Add(New FavouriteContract("M2K", "Russell 2K", "CON.F.US.M2K.U26", 0.1D, 0.5D, 5D, 0.3D, 15D) With {
+                .PxRootSymbol = "M2K",
+                .CommissionTickBuffer = 1,
+                .MultiConfluenceTimeframeMinutes = 5,
+                .RoundTripFee = 0.74D
+            })
+
+            ' MYM — Micro Dow Jones  [ProjectX symbolId: F.US.MYM; roll: quarterly H/M/U/Z; U26=Sep 2026]
+            ' Contract: $0.50 × DJIA. Tick = 1 DJIA point = $0.50.
+            ' PxMinStopDollars=$15: 30 ticks × $0.50 = 30 Dow points minimum
+            list.Add(New FavouriteContract("MYM", "Dow", "CON.F.US.MYM.U26", 1.0D, 0.5D, 0.5D, 0.3D, 15D) With {
+                .PxRootSymbol = "MYM",
+                .CommissionTickBuffer = 1,
+                .MultiConfluenceTimeframeMinutes = 5,
+                .RoundTripFee = 0.74D
+            })
+
+            ' MGC — Micro Gold  [ProjectX symbolId: F.US.MGC; roll: even months G/J/M/Q/V/Z; M26=Jun 2026]
             ' PxMinStopDollars=$20: 20 ticks × $1.00 = 2 pts — gold moves ~$5-15/min; 2pt floor is prudent
             list.Add(New FavouriteContract("GOLD.24-7", "Gold", "CON.F.US.MGC.M26", 0.1D, 1.0D, 10D, 0.2D, 20D) With {
                 .PxRootSymbol = "MGC",
@@ -31,53 +59,25 @@ Namespace TopStepTrader.Core.Trading
                 .RollLeadDays = 28
             })
 
-            ' SILVER — SIL (Micro Silver)  [ProjectX symbolId: F.US.SIL; roll: monthly; nearest front-month]
-            ' CME Micro Silver: 1,000 troy oz, tick=0.005/$5.00
-            ' PxMinStopDollars=$25: 5 ticks × $5.00 = $25 floor — silver is volatile intraday
-            list.Add(New FavouriteContract("SILVER", "Silver", "CON.F.US.SIL.N26", 0.005D, 5.0D, 1000D, 0.3D, 25D) With {
-                .PxRootSymbol = "SIL",
+            ' M6J — Micro USD/JPY  [ProjectX symbolId: F.US.M6J; roll: quarterly H/M/U/Z; U26=Sep 2026]
+            ' Contract: 1,250,000 JPY. Tick = 0.000001 USD/JPY = $1.25. Asian session core instrument.
+            ' PxMinStopDollars=$12.50: 10 ticks × $1.25 minimum
+            list.Add(New FavouriteContract("M6J", "USD/JPY", "CON.F.US.M6J.U26", 0.000001D, 1.25D, 1250000D, 0.1D, 12.5D) With {
+                .PxRootSymbol = "M6J",
+                .CommissionTickBuffer = 1,
+                .MultiConfluenceTimeframeMinutes = 10,
+                .RoundTripFee = 0.74D
+            })
+
+            ' OIL — MCLE (Micro WTI Crude Oil)  [ProjectX symbolId: F.US.MCLE; roll: monthly; M26=Jun 2026 front-month]
+            ' Reserve/momentum slot. PxMinStopDollars=$15: 15 ticks × $1.00.
+            ' Note: resolved via root-symbol lookup — "MCL" is embedded in "MCLE" contract ID.
+            list.Add(New FavouriteContract("OIL", "Oil", "CON.F.US.MCLE.M26", 0.01D, 1.0D, 100D, 0.3D, 15D) With {
+                .PxRootSymbol = "MCLE",
                 .CommissionTickBuffer = 2,
-                .MultiConfluenceTimeframeMinutes = 10,
-                .RoundTripFee = 1.24D,
+                .MultiConfluenceTimeframeMinutes = 5,
+                .RoundTripFee = 1.04D,
                 .RollLeadDays = 28
-            })
-
-            ' SPX500
-            ' PxMinStopDollars=$20: 16 ticks × $1.25 = 4 S&P points minimum
-            list.Add(New FavouriteContract("SPX500", "S&P 500", "CON.F.US.MES.U26", 0.25D, 1.25D, 5D, 0.3D, 20D) With {
-                .PxRootSymbol = "MES",
-                .CommissionTickBuffer = 1,
-                .MultiConfluenceTimeframeMinutes = 5,
-                .RoundTripFee = 0.74D
-            })
-
-            ' EURUSD — M6E (Micro EUR/USD)  [ProjectX symbolId: F.US.M6E; roll: quarterly H/M/U/Z; U26=Sep 2026 front-month]
-            ' Contract size: 12,500 EUR.  tick=0.0001/$1.25.  Forex pairs trade CME Globex ~23h/day.
-            ' PxMinStopDollars=$12.50: 10 ticks × $1.25 — forex is liquid; tight floor appropriate.
-            list.Add(New FavouriteContract("EURUSD", "EUR/USD", "CON.F.US.M6E.U26", 0.0001D, 1.25D, 12500D, 0.1D, 12.5D) With {
-                .PxRootSymbol = "M6E",
-                .CommissionTickBuffer = 1,
-                .MultiConfluenceTimeframeMinutes = 10,
-                .RoundTripFee = 0.74D
-            })
-
-            ' NQ — MNQ (Micro Nasdaq-100)  [ProjectX symbolId: F.US.MNQ; roll: quarterly H/M/U/Z; U26=Sep 2026 front-month]
-            ' PxMinStopDollars=$25: 50 ticks × $0.50 = 12.5 NQ points minimum
-            list.Add(New FavouriteContract("NQ", "NQ", "CON.F.US.MNQ.U26", 0.25D, 0.5D, 2.0D, 0.3D, 25D) With {
-                .PxRootSymbol = "MNQ",
-                .CommissionTickBuffer = 1,
-                .MultiConfluenceTimeframeMinutes = 5,
-                .RoundTripFee = 0.74D
-            })
-
-            ' Crypto — MBT (Micro Bitcoin): 0.1 BTC/contract, tick=5pts/$0.50
-            ' tickValue=$0.50 confirmed via ProjectX API (0.1 BTC × $5/pt index = $0.50/tick)
-            ' PxMinStopDollars=$30: 60 ticks × $0.50 = 300 BTC pts — crypto is volatile; 300pt floor prudent
-            list.Add(New FavouriteContract("BTC", "Bitcoin", "CON.F.US.MBT.U26", 5.0D, 0.5D, 0.1D, 0.5D, 30D) With {
-                .IsCrypto = True,
-                .PxRootSymbol = "MBT",
-                .MultiConfluenceTimeframeMinutes = 15,
-                .RoundTripFee = 2.34D
             })
 
             Return list
