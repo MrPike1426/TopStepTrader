@@ -264,12 +264,26 @@ Namespace TopStepTrader.Services.Trading
             Dim prefix = $"CON.F.US.{fav.PxRootSymbol}."
             Dim cutoff = today.AddDays(fav.RollLeadDays)
 
-            Return candidates.
+            Dim ranked = candidates.
                 Where(Function(c) Not String.IsNullOrEmpty(c.ContractId) AndAlso
                                   c.ContractId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).
                 Select(Function(c) New With {.Contract = c, .Expiry = ParseFuturesExpiry(c.ContractId)}).
-                Where(Function(x) x.Expiry >= cutoff).
                 OrderBy(Function(x) x.Expiry).
+                ToList()
+
+            ' Prefer the earliest contract that still has at least RollLeadDays of life left.
+            Dim preferred = ranked.
+                Where(Function(x) x.Expiry >= cutoff).
+                Select(Function(x) x.Contract).
+                FirstOrDefault()
+            If preferred IsNot Nothing Then Return preferred
+
+            ' Safety net: when no candidate clears the roll cutoff (e.g. API only returned a
+            ' contract about to expire), fall back to the earliest contract whose expiry is
+            ' still on or after today, rather than dropping back to a hardcoded far-month ID
+            ' that has no live bars.
+            Return ranked.
+                Where(Function(x) x.Expiry >= today).
                 Select(Function(x) x.Contract).
                 FirstOrDefault()
         End Function

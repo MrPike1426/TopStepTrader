@@ -29,6 +29,14 @@ Namespace TopStepTrader.Data.Entities
         <Required>
         Public Property Quantity As Integer
 
+        ''' <summary>
+        ''' Leverage multiplier for the order. Required because the Orders table has a
+        ''' NOT NULL constraint with DEFAULT 1 (added by RC-5 schema migration). EF must
+        ''' emit this column on every INSERT to avoid a NOT NULL violation.
+        ''' </summary>
+        <Required>
+        Public Property Leverage As Integer = 1
+
         ''' <summary>USD cash amount invested (by-amount order path). Nothing = quantity-based order.</summary>
         <Column(TypeName:="decimal(18,6)")>
         Public Property Amount As Decimal?
