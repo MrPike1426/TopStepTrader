@@ -718,6 +718,23 @@ Namespace TopStepTrader.UI.ViewModels
             _logger.LogInformation("ST+ Best candidate: {Contract} side={Side} ADX={Adx:F1} barTime={BarTime}",
                                    bestContractId, bestSide, bestAdxVal, bestBarTime)
 
+            ' Guard: verify no live position already exists on the exchange for this instrument.
+            ' Prevents re-entry after ReleaseSlotAsync clears the in-memory slot while the real
+            ' position is still open (race window between slot clear and exchange close confirmation).
+            Dim guardAccId As Long = If(_selectedAccount IsNot Nothing, _selectedAccount.Id, 0)
+            If guardAccId <> 0 Then
+                Try
+                    Dim liveCheck = Await _orderService.GetLivePositionSnapshotAsync(guardAccId, bestContractId)
+                    If liveCheck IsNot Nothing Then
+                        _logger.LogInformation("ST+ EvaluateSlotEntries — live position still open on exchange for {Contract} (units={Units}), skipping re-entry.",
+                                               bestContractId, liveCheck.Units)
+                        Return
+                    End If
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ live-position guard check failed for {Contract} — proceeding with caution", bestContractId)
+                End Try
+            End If
+
             Dim opened = _slotManager.TryOpenSlot(bestContractId, bestSide, bestAdxVal, bestBarTime, bestStLine, bestLastClose)
             If opened IsNot Nothing Then
                 _logger.LogInformation("ST+ SlotManager opened slot {Idx} for {Contract} {Side} ADX={Adx:F1}",
@@ -825,6 +842,21 @@ Namespace TopStepTrader.UI.ViewModels
             Next
 
             If bestContractId Is Nothing Then Return
+
+            ' Guard: same live-position check as EvaluateSlotEntries (BUG-35)
+            Dim earlyGuardAccId As Long = If(_selectedAccount IsNot Nothing, _selectedAccount.Id, 0)
+            If earlyGuardAccId <> 0 Then
+                Try
+                    Dim liveCheck2 = Await _orderService.GetLivePositionSnapshotAsync(earlyGuardAccId, bestContractId)
+                    If liveCheck2 IsNot Nothing Then
+                        _logger.LogInformation("ST+ EvaluateEarlyEntry — live position still open for {Contract} (units={Units}), skipping re-entry.",
+                                               bestContractId, liveCheck2.Units)
+                        Return
+                    End If
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ early live-position guard failed for {Contract} — proceeding", bestContractId)
+                End Try
+            End If
 
             Dim opened = _slotManager.TryOpenSlot(bestContractId, bestSide, bestAdxVal, bestBarTime, bestStLine, bestLastClose)
             If opened IsNot Nothing Then
@@ -1129,6 +1161,27 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         Private Async Function ReleaseSlotAsync(slot As PositionSlot) As Task
+            ' ── Close the live position on TopStepX before forgetting the slot ──
+            ' Without this, the real position stays open on the exchange while the
+            ' slot clears in-memory, causing EvaluateSlotEntriesAsync to re-enter the
+            ' same instrument on the next tick (BUG-35).
+            If slot.AccountId <> 0 AndAlso Not String.IsNullOrEmpty(slot.Instrument) Then
+                Try
+                    If slot.PositionId.HasValue Then
+                        Dim ok = Await _orderService.CancelOrderAsync(slot.PositionId.Value)
+                        _logger.LogInformation("ST+ ReleaseSlot [Slot {Idx}] close {Contract} posId={PosId}: ok={Ok}",
+                                               slot.SlotIndex, slot.Instrument, slot.PositionId.Value, ok)
+                    Else
+                        Await _orderService.FlattenContractAsync(slot.AccountId, slot.Instrument)
+                        _logger.LogInformation("ST+ ReleaseSlot [Slot {Idx}] flatten {Contract} (no positionId)",
+                                               slot.SlotIndex, slot.Instrument)
+                    End If
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ ReleaseSlot [Slot {Idx}] close order failed for {Contract} — slot cleared anyway",
+                                       slot.SlotIndex, slot.Instrument)
+                End Try
+            End If
+
             Dim box = BoxForSlot(slot)
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
@@ -1143,7 +1196,6 @@ Namespace TopStepTrader.UI.ViewModels
                     _timer?.Change(15000, 15000)
                 End SyncLock
             End If
-            Await Task.CompletedTask
         End Function
 
         Private Sub UpdatePositionDisplay(box As SlotBoxVm, slot As PositionSlot, pnl As Decimal)
