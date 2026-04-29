@@ -374,6 +374,150 @@ Namespace TopStepTrader.Tests.Trading
             Assert.Equal(120D, eval.PhasedStopPrice)
         End Sub
 
+        ' ── E8: VWAP cross ───────────────────────────────────────────────────
+
+        <Fact>
+        Public Sub E8_Long_CrossesBelowVwap_Fires()
+            Dim slot = MakeSlot("Buy")
+            Dim n    = 5
+            Dim dirs = FillArr(n, 1.0F)
+            ' close[n-1]=101 >= vwap[n-1]=100; close[n]=99 < vwap[n]=100 → crossed below
+            Dim closes = New Decimal() {100D, 100D, 100D, 101D, 99D}
+            Dim vwap   = New Single()  {100F, 100F, 100F, 100F, 100F}
+            Dim eval = _engine.Evaluate(slot,
+                FillDecArr(n, 101D), FillDecArr(n, 98D), closes,
+                FillArr(n, 90.0F), dirs,
+                FillArr(n, 30.0F), FillArr(n, 20.0F),
+                FillArr(n, 35.0F), FillArr(n, 5.0F),
+                vwapValues:=vwap)
+            Assert.Contains("E8:2", eval.ContributingSignals)
+        End Sub
+
+        <Fact>
+        Public Sub E8_Long_AlreadyBelowVwap_DoesNotFire()
+            Dim slot = MakeSlot("Buy")
+            Dim n    = 5
+            Dim dirs = FillArr(n, 1.0F)
+            ' already below VWAP on previous bar — no cross
+            Dim closes = New Decimal() {100D, 100D, 100D, 98D, 97D}
+            Dim vwap   = New Single()  {100F, 100F, 100F, 100F, 100F}
+            Dim eval = _engine.Evaluate(slot,
+                FillDecArr(n, 101D), FillDecArr(n, 96D), closes,
+                FillArr(n, 90.0F), dirs,
+                FillArr(n, 30.0F), FillArr(n, 20.0F),
+                FillArr(n, 35.0F), FillArr(n, 5.0F),
+                vwapValues:=vwap)
+            Assert.DoesNotContain("E8:2", eval.ContributingSignals)
+        End Sub
+
+        <Fact>
+        Public Sub E8_Short_CrossesAboveVwap_Fires()
+            Dim slot = MakeSlot("Sell", stopPrice:=110D)
+            Dim n    = 5
+            Dim dirs = FillArr(n, -1.0F)
+            ' close[n-1]=99 <= vwap[n-1]=100; close[n]=101 > vwap[n]=100 → crossed above
+            Dim closes = New Decimal() {100D, 100D, 100D, 99D, 101D}
+            Dim vwap   = New Single()  {100F, 100F, 100F, 100F, 100F}
+            Dim eval = _engine.Evaluate(slot,
+                FillDecArr(n, 102D), FillDecArr(n, 98D), closes,
+                FillArr(n, 110.0F), dirs,
+                FillArr(n, 20.0F), FillArr(n, 30.0F),
+                FillArr(n, 35.0F), FillArr(n, 5.0F),
+                vwapValues:=vwap)
+            Assert.Contains("E8:2", eval.ContributingSignals)
+        End Sub
+
+        <Fact>
+        Public Sub E8_NoVwapProvided_DoesNotFire()
+            Dim slot = MakeSlot("Buy")
+            Dim n    = 5
+            Dim dirs = FillArr(n, 1.0F)
+            Dim closes = New Decimal() {100D, 100D, 100D, 101D, 99D}
+            ' vwapValues = Nothing (omitted)
+            Dim eval = _engine.Evaluate(slot,
+                FillDecArr(n, 101D), FillDecArr(n, 98D), closes,
+                FillArr(n, 90.0F), dirs,
+                FillArr(n, 30.0F), FillArr(n, 20.0F),
+                FillArr(n, 35.0F), FillArr(n, 5.0F))
+            Assert.DoesNotContain("E8:2", eval.ContributingSignals)
+        End Sub
+
+        ' ── E9: RSI hidden divergence ────────────────────────────────────────
+
+        <Fact>
+        Public Sub E9_Long_HigherHighLowerRsiAbove50_Fires()
+            Dim slot = MakeSlot("Buy")
+            Dim n    = 5
+            Dim dirs = FillArr(n, 1.0F)
+            ' high[n]=105 > high[n-2]=102; RSI[n]=60 < RSI[n-2]=65; RSI[n] > 50
+            Dim highs  = New Decimal() {100D, 100D, 102D, 103D, 105D}
+            Dim lows   = New Decimal() {99D,  99D,  99D,  99D,  99D}
+            Dim closes = New Decimal() {100D, 100D, 100D, 100D, 100D}
+            Dim rsi    = New Single()  {Single.NaN, 65F, 65F, 62F, 60F}
+            Dim eval = _engine.Evaluate(slot,
+                highs, lows, closes,
+                FillArr(n, 90.0F), dirs,
+                FillArr(n, 30.0F), FillArr(n, 20.0F),
+                FillArr(n, 35.0F), FillArr(n, 5.0F),
+                rsiValues:=rsi)
+            Assert.Contains("E9:3", eval.ContributingSignals)
+        End Sub
+
+        <Fact>
+        Public Sub E9_Long_RsiBelow50_DoesNotFire()
+            Dim slot = MakeSlot("Buy")
+            Dim n    = 5
+            Dim dirs = FillArr(n, 1.0F)
+            ' RSI[n] = 45 — not in bull territory
+            Dim highs  = New Decimal() {100D, 100D, 102D, 103D, 105D}
+            Dim lows   = New Decimal() {99D,  99D,  99D,  99D,  99D}
+            Dim closes = New Decimal() {100D, 100D, 100D, 100D, 100D}
+            Dim rsi    = New Single()  {Single.NaN, 65F, 65F, 50F, 45F}
+            Dim eval = _engine.Evaluate(slot,
+                highs, lows, closes,
+                FillArr(n, 90.0F), dirs,
+                FillArr(n, 30.0F), FillArr(n, 20.0F),
+                FillArr(n, 35.0F), FillArr(n, 5.0F),
+                rsiValues:=rsi)
+            Assert.DoesNotContain("E9:3", eval.ContributingSignals)
+        End Sub
+
+        <Fact>
+        Public Sub E9_Short_LowerLowHigherRsiBelow50_Fires()
+            Dim slot = MakeSlot("Sell", stopPrice:=110D)
+            Dim n    = 5
+            Dim dirs = FillArr(n, -1.0F)
+            ' low[n]=85 < low[n-2]=88; RSI[n]=40 > RSI[n-2]=35; RSI[n] < 50
+            Dim highs  = New Decimal() {100D, 100D, 100D, 100D, 100D}
+            Dim lows   = New Decimal() {99D,  99D,  88D,  87D,  85D}
+            Dim closes = New Decimal() {100D, 100D, 100D, 100D, 100D}
+            Dim rsi    = New Single()  {Single.NaN, 35F, 35F, 38F, 40F}
+            Dim eval = _engine.Evaluate(slot,
+                highs, lows, closes,
+                FillArr(n, 110.0F), dirs,
+                FillArr(n, 20.0F), FillArr(n, 30.0F),
+                FillArr(n, 35.0F), FillArr(n, 5.0F),
+                rsiValues:=rsi)
+            Assert.Contains("E9:3", eval.ContributingSignals)
+        End Sub
+
+        <Fact>
+        Public Sub E9_NoRsiProvided_DoesNotFire()
+            Dim slot = MakeSlot("Buy")
+            Dim n    = 5
+            Dim dirs = FillArr(n, 1.0F)
+            Dim highs  = New Decimal() {100D, 100D, 102D, 103D, 105D}
+            Dim lows   = New Decimal() {99D,  99D,  99D,  99D,  99D}
+            Dim closes = New Decimal() {100D, 100D, 100D, 100D, 100D}
+            ' rsiValues = Nothing (omitted)
+            Dim eval = _engine.Evaluate(slot,
+                highs, lows, closes,
+                FillArr(n, 90.0F), dirs,
+                FillArr(n, 30.0F), FillArr(n, 20.0F),
+                FillArr(n, 35.0F), FillArr(n, 5.0F))
+            Assert.DoesNotContain("E9:3", eval.ContributingSignals)
+        End Sub
+
     End Class
 
 End Namespace

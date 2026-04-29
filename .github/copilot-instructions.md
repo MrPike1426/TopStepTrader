@@ -16,6 +16,6 @@ Short version:
    - Verify it no longer appears in `python tools/tickets/tickets.py list`
 5. **Commit, push, and pull** — stage everything, commit with `git add -A && git commit -m "<ticket-id>: <short description>"`, push with `git push origin HEAD`, then `git pull`. Never mark a ticket done without completing this step.
 
-Never reference `REFACTOR_TRACKER.md`
+Never reference `REFACTOR_TRACKER.md`, `Open_TICKETS.md`, or `Closed_Tickets.md` — ticket state is managed exclusively via the SQLite DB in `tools/tickets/tickets.db` and the CLI.
 Never close a ticket without first confirming the build and tests pass.
 Keep the ticket description concise; let code comments and tests capture details.

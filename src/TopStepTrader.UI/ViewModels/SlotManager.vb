@@ -129,6 +129,7 @@ Namespace TopStepTrader.UI.ViewModels
                 s.EntryAtr     = 0D
                 s.InitialRisk  = 0D
                 s.StopPhase    = Core.Enums.StopPhase.Initial
+                s.MilestoneFlag = False
             End If
         End Sub
 

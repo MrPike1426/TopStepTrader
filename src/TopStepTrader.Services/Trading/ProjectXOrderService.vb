@@ -592,6 +592,27 @@ Namespace TopStepTrader.Services.Trading
             End Select
         End Function
 
+        ''' <summary>
+        ''' Partially closes an open position by the specified number of contracts using the
+        ''' ProjectX /api/Position/partialCloseContract endpoint.
+        ''' Returns True when the API call succeeds.
+        ''' </summary>
+        Public Async Function PartialCloseContractAsync(accountId As Long, contractId As String, size As Integer,
+                                                         Optional cancel As CancellationToken = Nothing) _
+            As Task(Of Boolean) Implements IOrderService.PartialCloseContractAsync
+            Try
+                Dim resolvedId = Await ResolveToActivePxContractIdAsync(contractId, cancel)
+                Dim resp = Await _orderClient.PartialCloseAsync(accountId, resolvedId, size, cancel)
+                _logger.LogInformation(
+                    "TopStepX PartialClose: {Contract} size={Size} success={Ok} code={Code} msg={Msg}",
+                    resolvedId, size, resp.Success, resp.ErrorCode, resp.ErrorMessage)
+                Return resp.Success
+            Catch ex As Exception
+                _logger.LogWarning(ex, "PartialCloseContractAsync failed for {Contract}", contractId)
+                Return False
+            End Try
+        End Function
+
     End Class
 
 End Namespace

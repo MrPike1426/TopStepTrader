@@ -30,6 +30,8 @@ Namespace TopStepTrader.Services.Trading
         ''' <param name="minusDIs">-DI array (same length).</param>
         ''' <param name="adxValues">ADX array (same length).</param>
         ''' <param name="atrValues">14-period ATR array (same length).</param>
+        ''' <param name="vwapValues">Intraday VWAP array (same length). Nothing or empty skips E8.</param>
+        ''' <param name="rsiValues">14-period RSI array (same length). Nothing or empty skips E9.</param>
         ''' <returns>ExitEvaluation containing score, signals list, recommended health, and phased stop.</returns>
         Public Function Evaluate(slot As PositionSlot,
                                  highs As IList(Of Decimal),
@@ -40,7 +42,9 @@ Namespace TopStepTrader.Services.Trading
                                  plusDIs As Single(),
                                  minusDIs As Single(),
                                  adxValues As Single(),
-                                 atrValues As Single()) As ExitEvaluation
+                                 atrValues As Single(),
+                                 Optional vwapValues As Single() = Nothing,
+                                 Optional rsiValues As Single() = Nothing) As ExitEvaluation
 
             Dim n = closes.Count - 1
             Dim eval As New ExitEvaluation()
@@ -166,6 +170,55 @@ Namespace TopStepTrader.Services.Trading
                     If atrN < atrN1 AndAlso atrN1 < atrN2 AndAlso CDec(atrN) < 0.8D * slot.EntryAtr Then
                         signals.Add("E7:1")
                         eval.Score += 1
+                    End If
+                End If
+            End If
+
+            ' ── E8: VWAP cross (weight 2) ────────────────────────────────────────
+            ' Long:  close[n] < VWAP[n]  AND close[n-1] >= VWAP[n-1]
+            ' Short: close[n] > VWAP[n]  AND close[n-1] <= VWAP[n-1]
+            If n >= 1 AndAlso vwapValues IsNot Nothing AndAlso vwapValues.Length > n Then
+                Dim vN  = vwapValues(n)
+                Dim vN1 = vwapValues(n - 1)
+                If Not Single.IsNaN(vN) AndAlso Not Single.IsNaN(vN1) Then
+                    Dim crossedBelowVwap As Boolean = isLong AndAlso
+                                                      closes(n) < CDec(vN) AndAlso
+                                                      closes(n - 1) >= CDec(vN1)
+                    Dim crossedAboveVwap As Boolean = Not isLong AndAlso
+                                                      closes(n) > CDec(vN) AndAlso
+                                                      closes(n - 1) <= CDec(vN1)
+                    If crossedBelowVwap OrElse crossedAboveVwap Then
+                        signals.Add("E8:2")
+                        eval.Score += 2
+                    End If
+                End If
+            End If
+
+            ' ── E9: RSI hidden divergence (weight 3) ────────────────────────────
+            ' Long (hidden bearish): price making higher high, RSI making lower high
+            '   high[n] > high[n-2]  AND  RSI[n] < RSI[n-2]  AND  RSI[n] > 50
+            ' Short (hidden bullish): price making lower low, RSI making higher low
+            '   low[n] < low[n-2]   AND  RSI[n] > RSI[n-2]  AND  RSI[n] < 50
+            If n >= 2 AndAlso rsiValues IsNot Nothing AndAlso rsiValues.Length > n Then
+                Dim rsiN  = rsiValues(n)
+                Dim rsiN2 = rsiValues(n - 2)
+                If Not Single.IsNaN(rsiN) AndAlso Not Single.IsNaN(rsiN2) Then
+                    If isLong Then
+                        Dim higherHigh    As Boolean = highs(n) > highs(n - 2)
+                        Dim rsiLowerHigh  As Boolean = rsiN < rsiN2
+                        Dim bullTerritory As Boolean = rsiN > 50.0F
+                        If higherHigh AndAlso rsiLowerHigh AndAlso bullTerritory Then
+                            signals.Add("E9:3")
+                            eval.Score += 3
+                        End If
+                    Else
+                        Dim lowerLow      As Boolean = lows(n) < lows(n - 2)
+                        Dim rsiHigherLow  As Boolean = rsiN > rsiN2
+                        Dim bearTerritory As Boolean = rsiN < 50.0F
+                        If lowerLow AndAlso rsiHigherLow AndAlso bearTerritory Then
+                            signals.Add("E9:3")
+                            eval.Score += 3
+                        End If
                     End If
                 End If
             End If

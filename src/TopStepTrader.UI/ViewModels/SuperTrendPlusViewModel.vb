@@ -1002,16 +1002,73 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim atr14Exit  = TechnicalIndicators.ATR(highs, lows, closes, period:=14)
                 Dim stLine     = CDec(st.Line(n))
 
+                ' Compute VWAP from bar volumes (anchored at start of cached series)
+                Dim volumes    = bars.Select(Function(b) b.Volume).ToList()
+                Dim vwapExit   = TechnicalIndicators.VWAP(highs, lows, closes, volumes)
+
+                ' Compute RSI-14 from bar closes
+                Dim rsiExit    = TechnicalIndicators.RSI(closes, 14)
+
                 ' Set InitialRisk once EntryPrice is confirmed (after first snapshot)
                 If slot.InitialRisk = 0D AndAlso slot.EntryPrice <> 0D AndAlso slot.StopPrice <> 0D Then
                     slot.InitialRisk = Math.Abs(slot.EntryPrice - slot.StopPrice)
+                End If
+
+                ' ── Profit-milestone partial exits ────────────────────────────────
+                ' At 2R: reduce Slot 2 (index 1) to 0 contracts via partial close.
+                ' At 3R: reduce Slot 1 (index 0) to 0 contracts via partial close.
+                ' Slot 0 continues as a free-ride until E1 or phase exit.
+                If slot.InitialRisk > 0D AndAlso slot.EntryPrice <> 0D Then
+                    Dim profit = If(slot.Side = "Buy",
+                                    CDec(closes(n)) - slot.EntryPrice,
+                                    slot.EntryPrice - CDec(closes(n)))
+                    Dim R = slot.InitialRisk
+                    ' 2R milestone: partial-close Slot 2 (index 1)
+                    If profit >= 2D * R AndAlso slot.SlotIndex = 1 AndAlso Not slot.MilestoneFlag Then
+                        slot.MilestoneFlag = True
+                        Dim ok = Await _orderService.PartialCloseContractAsync(
+                            slot.AccountId, slot.Instrument, slot.Contracts)
+                        If ok Then
+                            _logger.LogInformation(
+                                "ST+ Milestone 2R: partial-closed Slot {Idx} ({Size} contracts) on {Contract}",
+                                slot.SlotIndex, slot.Contracts, slot.Instrument)
+                        Else
+                            _logger.LogWarning(
+                                "ST+ Milestone 2R: partial close failed for Slot {Idx} on {Contract} — falling back to full close",
+                                slot.SlotIndex, slot.Instrument)
+                            Await ReleaseSlotAsync(slot)
+                            Return
+                        End If
+                        Await ReleaseSlotAsync(slot)
+                        Return
+                    End If
+                    ' 3R milestone: partial-close Slot 1 (index 0)
+                    If profit >= 3D * R AndAlso slot.SlotIndex = 0 AndAlso Not slot.MilestoneFlag Then
+                        slot.MilestoneFlag = True
+                        Dim ok = Await _orderService.PartialCloseContractAsync(
+                            slot.AccountId, slot.Instrument, slot.Contracts)
+                        If ok Then
+                            _logger.LogInformation(
+                                "ST+ Milestone 3R: partial-closed Slot {Idx} ({Size} contracts) on {Contract}",
+                                slot.SlotIndex, slot.Contracts, slot.Instrument)
+                        Else
+                            _logger.LogWarning(
+                                "ST+ Milestone 3R: partial close failed for Slot {Idx} on {Contract} — falling back to full close",
+                                slot.SlotIndex, slot.Instrument)
+                            Await ReleaseSlotAsync(slot)
+                            Return
+                        End If
+                        Await ReleaseSlotAsync(slot)
+                        Return
+                    End If
                 End If
 
                 ' Composite exit signal evaluation
                 Dim exitEval = _exitEngine.Evaluate(slot, highs, lows, closes,
                                                     st.Line, st.Direction,
                                                     dmiForExit.PlusDI, dmiForExit.MinusDI,
-                                                    dmiForExit.ADX, atr14Exit)
+                                                    dmiForExit.ADX, atr14Exit,
+                                                    vwapExit, rsiExit)
 
                 slot.Health = exitEval.RecommendedHealth
 

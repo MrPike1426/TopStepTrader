@@ -58,6 +58,16 @@ Namespace TopStepTrader.Core.Interfaces
                                        tpRate As Decimal?,
                                        Optional enableTsl As Boolean = False,
                                        Optional cancel As CancellationToken = Nothing) As Task(Of Boolean)
+
+        ''' <summary>
+        ''' Partially closes an open position by reducing it to zero contracts for the
+        ''' specified <paramref name="size"/>.  Uses the ProjectX partialCloseContract
+        ''' endpoint.  Returns True on success.
+        ''' </summary>
+        Function PartialCloseContractAsync(accountId As Long,
+                                           contractId As String,
+                                           size As Integer,
+                                           Optional cancel As CancellationToken = Nothing) As Task(Of Boolean)
     End Interface
 
 End Namespace

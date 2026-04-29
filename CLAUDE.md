@@ -96,7 +96,7 @@ All open work is tracked in a **local SQLite database** — the single source of
 - **`tools/tickets/tickets.db`** — SQLite index (single source of truth for state, priority, search). Local-only, excluded from git.
 - **`tickets/<ID>.md`** — full description, problem, proposed fix, and acceptance criteria for each open ticket.
 - **`tickets/archive/<ID>.md`** — completed ticket files (moved here on close, never deleted).
-- **`Open_TICKETS.md`** / **`Closed_Tickets.md`** — legacy markdown files; retained for reference but no longer edited during routine operations.
+- **`Open_TICKETS.md`** / **`Closed_Tickets.md`** — obsolete; do not read or write these files.
 
 All files are local-only and excluded from the GitHub remote via `.gitignore`.
 
