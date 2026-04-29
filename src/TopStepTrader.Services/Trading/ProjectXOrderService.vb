@@ -77,7 +77,11 @@ Namespace TopStepTrader.Services.Trading
             order.Status = OrderStatus.Pending
             order.Id = Await _orderRepo.SaveOrderAsync(order)
 
-            Dim accountId = Await GetActiveAccountIdAsync()
+            ' Prefer the account ID already on the order (set by the calling ViewModel).
+            ' Fall back to session/API lookup only when the caller did not supply one.
+            Dim accountId As Long = If(order.AccountId > 0, order.AccountId, Await GetActiveAccountIdAsync())
+            _logger.LogInformation("TopStepX PlaceOrder: using accountId={AccId} (order.AccountId={OrderAccId})",
+                                   accountId, order.AccountId)
 
             ' Default to 1 contract when Quantity is not explicitly set (test phase)
             Dim contractSize = If(order.Quantity > 0, order.Quantity, 1)
@@ -555,12 +559,18 @@ Namespace TopStepTrader.Services.Trading
         ' ── Helpers ─────────────────────────────────────────────────────────────────
 
         Private Async Function GetActiveAccountIdAsync() As Task(Of Long)
-            ' Use the session account when set (user chose on Dashboard); fall back to API search.
-            If _session.SelectedAccount IsNot Nothing AndAlso _session.SelectedAccount.CanTrade Then
+            ' Use the session account when set (user chose on Dashboard).
+            ' Note: TopStepX practice/sim accounts may have CanTrade=False from the API even though
+            ' they accept orders — do not gate on CanTrade here; accept any non-zero Id.
+            If _session.SelectedAccount IsNot Nothing AndAlso _session.SelectedAccount.Id > 0 Then
                 Return _session.SelectedAccount.Id
             End If
             Dim accounts = Await _accountService.GetActiveAccountsAsync()
+            ' Prefer a CanTrade account; fall back to any TopStepX account if none flagged.
             Dim acc = accounts?.FirstOrDefault(Function(a) a.CanTrade AndAlso a.Broker = BrokerType.TopStepX)
+            If acc Is Nothing Then
+                acc = accounts?.FirstOrDefault(Function(a) a.Broker = BrokerType.TopStepX)
+            End If
             Return If(acc IsNot Nothing, acc.Id, 0L)
         End Function
 

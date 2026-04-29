@@ -2,6 +2,7 @@ Imports System.IO
 Imports Microsoft.Extensions.Configuration
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
+Imports Serilog
 Imports TopStepTrader.API
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.UI.Views
@@ -22,7 +23,20 @@ Namespace TopStepTrader.UI.Infrastructure
     Public Module AppBootstrapper
 
         Public Function BuildHost() As IHost
+            ' ── Serilog rolling file logger ──────────────────────────────────────
+            Dim logPath = Path.Combine(AppContext.BaseDirectory, "logs", "topstep-.log")
+            Log.Logger = New LoggerConfiguration() _
+                .MinimumLevel.Information() _
+                .MinimumLevel.Override("Microsoft.EntityFrameworkCore", Serilog.Events.LogEventLevel.Warning) _
+                .Enrich.FromLogContext() _
+                .WriteTo.File(logPath,
+                              rollingInterval:=RollingInterval.Day,
+                              retainedFileCountLimit:=7,
+                              outputTemplate:="{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}") _
+                .CreateLogger()
+
             Return Host.CreateDefaultBuilder() _
+                .UseSerilog() _
                 .ConfigureAppConfiguration(
                     Sub(ctx, cfg)
                         cfg.SetBasePath(AppContext.BaseDirectory)

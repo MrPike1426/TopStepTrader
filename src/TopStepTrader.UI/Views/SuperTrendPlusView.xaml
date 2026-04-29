@@ -10,7 +10,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="24,20,24,8">
 
-            <TextBlock Text="ðŸ“ˆ  SuperTrend+"
+            <TextBlock Text="&#x1F4C8;  SuperTrend+"
                        Style="{StaticResource PageTitleStyle}"/>
 
             <!-- â”€â”€ How it works panel (collapsible) â”€â”€ -->
@@ -33,7 +33,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                <TextBlock Text="ðŸ’¡" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="&#x1F4A1;" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <TextBlock Text="How does SuperTrend+ Autopilot work?"
                                            Foreground="{StaticResource AccentBrush}"
                                            FontSize="13" FontWeight="SemiBold"
@@ -45,10 +45,10 @@
                                        Foreground="{StaticResource TextSecondaryBrush}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="â–² hide"/>
+                                        <Setter Property="Text" Value="&#x25B2; hide"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsChecked, ElementName=HowItWorksToggle}" Value="False">
-                                                <Setter Property="Text" Value="â–¼ show"/>
+                                                <Setter Property="Text" Value="&#x25BC; show"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -201,7 +201,7 @@
 
                     <!-- ST Multiplier selector -->
                     <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="STÃ—:" Foreground="{StaticResource TextSecondaryBrush}"
+                        <TextBlock Text="ST&#xD7;:" Foreground="{StaticResource TextSecondaryBrush}"
                                    FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
                         <ComboBox ItemsSource="{Binding StMultipliers}"
                                   SelectedItem="{Binding StMultiplier}"
@@ -331,7 +331,7 @@
                         <Grid Grid.Row="0" Margin="0,0,0,6">
                             <TextBlock Text="{Binding Slot1.SlotLabel}"
                                        FontWeight="Bold" Foreground="White" FontSize="13"/>
-                            <TextBlock Text="â¸ Paused"
+                            <TextBlock Text="&#x23F8; Paused"
                                        Visibility="{Binding Slot1.PausedBadgeVisibility}"
                                        Foreground="Orange" FontSize="11"
                                        HorizontalAlignment="Right" VerticalAlignment="Center"/>
@@ -388,7 +388,7 @@
                         <Grid Grid.Row="0" Margin="0,0,0,6">
                             <TextBlock Text="{Binding Slot2.SlotLabel}"
                                        FontWeight="Bold" Foreground="White" FontSize="13"/>
-                            <TextBlock Text="â¸ Paused"
+                            <TextBlock Text="&#x23F8; Paused"
                                        Visibility="{Binding Slot2.PausedBadgeVisibility}"
                                        Foreground="Orange" FontSize="11"
                                        HorizontalAlignment="Right" VerticalAlignment="Center"/>
@@ -443,7 +443,7 @@
                         <Grid Grid.Row="0" Margin="0,0,0,6">
                             <TextBlock Text="{Binding Slot3.SlotLabel}"
                                        FontWeight="Bold" Foreground="White" FontSize="13"/>
-                            <TextBlock Text="â¸ Paused"
+                            <TextBlock Text="&#x23F8; Paused"
                                        Visibility="{Binding Slot3.PausedBadgeVisibility}"
                                        Foreground="Orange" FontSize="11"
                                        HorizontalAlignment="Right" VerticalAlignment="Center"/>

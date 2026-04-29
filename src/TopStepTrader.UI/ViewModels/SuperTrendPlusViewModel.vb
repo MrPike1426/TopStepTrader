@@ -632,6 +632,17 @@ Namespace TopStepTrader.UI.ViewModels
             _logger.LogInformation("ST+ EvaluateSlotEntries tick — barCache={Count} instruments, openSlots={Open}",
                                    barCache.Count, _slotManager.OpenSlotCount)
 
+            ' Guard: do not attempt entries without a valid account — avoids open/close slot loop.
+            If _selectedAccount Is Nothing OrElse _selectedAccount.Id = 0 Then
+                _logger.LogWarning("ST+ EvaluateSlotEntries BLOCKED — no valid account (selectedAccount={Acct})",
+                                   If(_selectedAccount Is Nothing, "null", $"{_selectedAccount.Name} id={_selectedAccount.Id}"))
+                Application.Current?.Dispatcher?.Invoke(Sub()
+                    StatusText = "⚠ No account loaded — waiting before entering trades"
+                    StatusBackground = New SolidColorBrush(Color.FromRgb(&HFF, &H8C, &H00))
+                End Sub)
+                Return
+            End If
+
             Dim bestContractId As String      = Nothing
             Dim bestSide As String            = Nothing
             Dim bestStLine As Decimal         = 0D
@@ -724,6 +735,16 @@ Namespace TopStepTrader.UI.ViewModels
         ''' </summary>
         Private Async Function EvaluateEarlyEntrySequenceAsync(tf As BarTimeframe,
                                                                 barCache As Dictionary(Of Integer, IList(Of MarketBar))) As Task
+            ' Guard: do not attempt entries without a valid account.
+            If _selectedAccount Is Nothing OrElse _selectedAccount.Id = 0 Then
+                _logger.LogWarning("ST+ EvaluateEarlyEntry BLOCKED — no valid account")
+                Application.Current?.Dispatcher?.Invoke(Sub()
+                    StatusText = "⚠ No account loaded — waiting before entering trades"
+                    StatusBackground = New SolidColorBrush(Color.FromRgb(&HFF, &H8C, &H00))
+                End Sub)
+                Return
+            End If
+
             Dim bestContractId As String      = Nothing
             Dim bestSide As String            = Nothing
             Dim bestStLine As Decimal         = 0D
