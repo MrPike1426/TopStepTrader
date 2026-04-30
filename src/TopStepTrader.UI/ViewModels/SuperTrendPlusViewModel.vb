@@ -150,8 +150,12 @@ Namespace TopStepTrader.UI.ViewModels
         Inherits ViewModelBase
         Implements IDisposable
 
-        Private Shared ReadOnly Instruments As String() = {"MES", "MNQ", "M2K", "MYM", "MGC", "M6J", "MCLE"}
-        Private Shared ReadOnly InstrumentLabels As String() = {"MES", "MNQ", "M2K", "MYM", "MGC", "M6J", "OIL"}
+        ' Root symbols and friendly display names are driven directly from FavouriteContracts —
+        ' no hardcoded parallel arrays, so a single change in GetDefaults() is enough.
+        Private Shared ReadOnly _stDefaults As IReadOnlyList(Of Core.Trading.FavouriteContract) =
+            Core.Trading.FavouriteContracts.GetDefaults().Where(Function(f) Not String.IsNullOrEmpty(f.PxRootSymbol)).ToList()
+        Private Shared ReadOnly Instruments As String() = _stDefaults.Select(Function(f) f.PxRootSymbol).ToArray()
+        Private Shared ReadOnly InstrumentLabels As String() = _stDefaults.Select(Function(f) If(String.IsNullOrWhiteSpace(f.DisplayName), f.PxRootSymbol, f.DisplayName)).ToArray()
         Private Const BarsToFetch As Integer = 60
 
         Public ReadOnly Property WatchlistItems As New ObservableCollection(Of WatchlistRowVm)

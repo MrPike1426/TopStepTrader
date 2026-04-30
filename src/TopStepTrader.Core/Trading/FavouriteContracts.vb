@@ -142,6 +142,9 @@ Namespace TopStepTrader.Core.Trading
         ' ── Shared ──────────────────────────────────────────────────────────────────
         Public Property Name As String
 
+        ''' <summary>Human-readable display name shown in the UI watchlist (e.g. "S&P 500", "Gold").</summary>
+        Public Property DisplayName As String = String.Empty
+
         ''' <summary>True for crypto instruments (BTC, ETH, XRP, SOL, BNB).</summary>
         Public Property IsCrypto As Boolean = False
 
@@ -222,6 +225,7 @@ Namespace TopStepTrader.Core.Trading
                        Optional pxMinSlDistPct As Decimal = 0D,
                        Optional pxMinStopDollars As Decimal = 0D)
             Me.Name = name
+            Me.DisplayName = If(String.IsNullOrWhiteSpace(displayName), name, displayName)
             Me.PxContractId = If(pxContractId, String.Empty)
             PxTickSize = pxTickSz
             PxTickValue = pxTickVal
@@ -237,7 +241,7 @@ Namespace TopStepTrader.Core.Trading
         ''' </summary>
         Public Function WithContractId(liveContractId As String) As FavouriteContract
             Dim copy As New FavouriteContract(
-                Me.Name, Me.Name, liveContractId,
+                Me.Name, Me.DisplayName, liveContractId,
                 Me.PxTickSize, Me.PxTickValue, Me.PxPointValue,
                 Me.PxMinSlDistancePct, Me.PxMinStopDollars) With {
                 .PxRootSymbol                  = Me.PxRootSymbol,
