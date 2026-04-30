@@ -83,14 +83,35 @@ Namespace TopStepTrader.Services.Trading
                                    staleSymbols.Count, String.Join(", ", staleSymbols))
 
             ' Query the ProjectX API for each stale root symbol
+            Dim anyUpserted As Boolean = False
             For Each root In staleSymbols
                 Try
-                    ' Search by root symbol — returns contracts whose ID contains the root
-                    Dim response = Await _contractClient.SearchContractsAsync(root, live:=True, cancel:=cancel)
+                    ' live:=False — TopStepX practice accounts serve simulated contracts;
+                    ' passing live:=True returns empty results for all micro futures.
+                    Dim response = Await _contractClient.SearchContractsAsync(root, live:=False, cancel:=cancel)
+
+                    ' Log the raw API response before any filtering to aid diagnosis.
+                    Dim previewIds = If(response.Contracts.Count > 0,
+                        String.Join(", ", response.Contracts.Take(5).Select(Function(c) c.ContractId)),
+                        "(none)")
+                    _logger.LogInformation(
+                        "ContractCache API [{Root}] success={Ok} errorCode={Err} count={N} ids=[{Ids}]",
+                        root, response.Success, response.ErrorCode, response.Contracts.Count, previewIds)
 
                     If Not response.Success OrElse response.Contracts.Count = 0 Then
-                        _logger.LogWarning("ContractCache MISS [{Root}] — API returned no contracts.", root)
-                        _failed.Add(root)
+                        _logger.LogWarning("ContractCache MISS [{Root}] — API returned no contracts (errorCode={Err}).",
+                                           root, response.ErrorCode)
+                        ' Stale-but-usable fallback: use any existing SQLite row rather than
+                        ' fully blocking trading after a transient API hiccup.
+                        Dim staleRow As Entities.ContractCacheEntity = Nothing
+                        If existing.TryGetValue(root, staleRow) Then
+                            _cache(root) = staleRow.ContractId
+                            _logger.LogWarning(
+                                "ContractCache FALLBACK [{Root}] → {Id} (stale row from {Date})",
+                                root, staleRow.ContractId, staleRow.LastUpdated)
+                        Else
+                            _failed.Add(root)
+                        End If
                         Continue For
                     End If
 
@@ -102,8 +123,18 @@ Namespace TopStepTrader.Services.Trading
                         .FirstOrDefault()
 
                     If match Is Nothing Then
-                        _logger.LogWarning("ContractCache MISS [{Root}] — no matching contract in search results.", root)
-                        _failed.Add(root)
+                        _logger.LogWarning("ContractCache MISS [{Root}] — no matching contract in {N} search results.",
+                                           root, response.Contracts.Count)
+                        ' Stale-but-usable fallback
+                        Dim staleRow As Entities.ContractCacheEntity = Nothing
+                        If existing.TryGetValue(root, staleRow) Then
+                            _cache(root) = staleRow.ContractId
+                            _logger.LogWarning(
+                                "ContractCache FALLBACK [{Root}] → {Id} (stale row from {Date})",
+                                root, staleRow.ContractId, staleRow.LastUpdated)
+                        Else
+                            _failed.Add(root)
+                        End If
                         Continue For
                     End If
 
@@ -123,16 +154,26 @@ Namespace TopStepTrader.Services.Trading
                     End If
 
                     _cache(root) = match.ContractId
+                    anyUpserted = True
                     _logger.LogInformation("ContractCache RESOLVED [{Root}] → {Id}", root, match.ContractId)
 
                 Catch ex As Exception
                     _logger.LogError(ex, "ContractCache ERROR resolving [{Root}]", root)
-                    _failed.Add(root)
+                    ' Stale-but-usable fallback on exception too
+                    Dim staleRow As Entities.ContractCacheEntity = Nothing
+                    If existing.TryGetValue(root, staleRow) Then
+                        _cache(root) = staleRow.ContractId
+                        _logger.LogWarning(
+                            "ContractCache FALLBACK [{Root}] → {Id} (stale row from {Date})",
+                            root, staleRow.ContractId, staleRow.LastUpdated)
+                    Else
+                        _failed.Add(root)
+                    End If
                 End Try
             Next
 
             ' Persist all upserts in one round-trip
-            If staleSymbols.Count > _failed.Count Then
+            If anyUpserted Then
                 Await _db.SaveChangesAsync(cancel)
             End If
 

@@ -173,6 +173,14 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _prevStDirByInstrument As New Dictionary(Of String, Single)()
         Private ReadOnly _exitEngine As ExitSignalEngine
         Private _useEarlyMode As Boolean = False
+
+        ''' <summary>Set when any slot is released during a tick; cleared at tick start.
+        ''' Prevents same-tick re-entry after a position is closed.</summary>
+        Private _releasedThisTick As Boolean = False
+
+        ''' <summary>Stores the DateTimeOffset when each instrument's slot was last released.
+        ''' Re-entry is blocked until at least one full bar has elapsed.</summary>
+        Private ReadOnly _reEntryCooldown As New Dictionary(Of String, DateTimeOffset)(StringComparer.OrdinalIgnoreCase)
         Public Property UseEarlyMode As Boolean
             Get
                 Return _useEarlyMode
@@ -446,6 +454,7 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Private Async Function DoTickAsync() As Task
+            _releasedThisTick = False
             Dim tf = MapTimeframe(_selectedTimeframe)
             Dim barCache = Await ScanWatchlistAsync(tf)
 
@@ -455,10 +464,16 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
             Next
 
-            If _useEarlyMode Then
+            ' Do not attempt new entries in the same tick that a position was released.
+            ' This prevents rapid-fire re-entry when SL fires and snapshot disappears.
+            If _releasedThisTick Then
+                _logger.LogInformation("ST+ DoTickAsync — slot released this tick, skipping entry evaluation.")
+            ElseIf _useEarlyMode Then
                 Await EvaluateEarlyEntrySequenceAsync(tf, barCache)
+                Await EvaluateSlotEntriesAsync(barCache)
+            Else
+                Await EvaluateSlotEntriesAsync(barCache)
             End If
-            Await EvaluateSlotEntriesAsync(barCache)
 
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
@@ -660,6 +675,13 @@ Namespace TopStepTrader.UI.ViewModels
                     Continue For
                 End If
 
+                ' Skip instruments whose contract ID failed to resolve — trading them risks
+                ' using a stale/wrong contract ID (e.g. wrong expiry month).
+                If _contractResolver.FailedSymbols.Contains(contractId, StringComparer.OrdinalIgnoreCase) Then
+                    _logger.LogWarning("ST+ EvaluateSlotEntries [{Contract}] SKIP — contract resolution failed.", contractId)
+                    Continue For
+                End If
+
                 Dim highs   = bars.Select(Function(b) b.High).ToList()
                 Dim lows    = bars.Select(Function(b) b.Low).ToList()
                 Dim closes  = bars.Select(Function(b) b.Close).ToList()
@@ -682,6 +704,20 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim isShort As Boolean = stDir < 0 AndAlso Not Single.IsNaN(adxVal) AndAlso minusDi > plusDi
                 Dim isActive As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= Config.AdxWeakThreshold
                 Dim isFavourable As Boolean = (isLong OrElse isShort) AndAlso (isFlip OrElse isActive)
+
+                ' Re-entry cooldown: skip this instrument if it was released within the last bar duration.
+                If isFavourable AndAlso Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = contractId) Then
+                    Dim cooldownUntil As DateTimeOffset
+                    If _reEntryCooldown.TryGetValue(contractId, cooldownUntil) Then
+                        Dim barMinutes As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
+                        If _selectedTimeframe.EndsWith("hr") Then barMinutes *= 60
+                        If DateTimeOffset.UtcNow < cooldownUntil.AddMinutes(barMinutes) Then
+                            _logger.LogInformation("ST+ [{Contract}] re-entry cooldown active — skipping until {Until:HH:mm:ss}",
+                                                   contractId, cooldownUntil.AddMinutes(barMinutes).UtcDateTime)
+                            isFavourable = False
+                        End If
+                    End If
+                End If
 
                 _logger.LogInformation(
                     "ST+ [{Contract}] stDir={StDir} ADX={Adx:F1} +DI={PlusDI:F1} -DI={MinusDI:F1} " &
@@ -781,6 +817,11 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim bars15 As IList(Of MarketBar) = Nothing
                 barCache.TryGetValue(i, bars15)
                 If bars15 Is Nothing OrElse bars15.Count < 15 Then Continue For
+
+                If _contractResolver.FailedSymbols.Contains(contractId, StringComparer.OrdinalIgnoreCase) Then
+                    _logger.LogWarning("ST+ EvaluateEarlyEntry [{Contract}] SKIP — contract resolution failed.", contractId)
+                    Continue For
+                End If
                 Dim bars5 As IList(Of MarketBar)
                 Try
                     bars5 = Await _barService.GetLiveBarsAsync(contractId, BarTimeframe.FiveMinute, BarsToFetch)
@@ -826,6 +867,18 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim sig4 As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= 20.0F
                 Dim sig5 As Boolean = If(anticipatedLong, stDir5 > 0, stDir5 < 0)
                 Dim earlySignal As Boolean = sig1 AndAlso sig2 AndAlso sig3 AndAlso sig4 AndAlso sig5
+
+                ' Re-entry cooldown for early-mode: skip instrument released within last bar
+                If earlySignal AndAlso Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = contractId) Then
+                    Dim cooldownUntilE As DateTimeOffset
+                    If _reEntryCooldown.TryGetValue(contractId, cooldownUntilE) Then
+                        Dim barMinsE As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
+                        If _selectedTimeframe.EndsWith("hr") Then barMinsE *= 60
+                        If DateTimeOffset.UtcNow < cooldownUntilE.AddMinutes(barMinsE) Then
+                            earlySignal = False
+                        End If
+                    End If
+                End If
 
                 Dim side As String    = If(anticipatedLong, "Buy", "Sell")
                 Dim adxStr As String  = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
@@ -912,9 +965,8 @@ Namespace TopStepTrader.UI.ViewModels
             End If
             slot.AccountId = accountId
 
-            SyncLock _timerLock
-                _timer?.Change(2000, 2000)
-            End SyncLock
+            ' Keep the 15-second scan interval — do NOT accelerate to 2 s here.
+            ' Accelerating caused rapid-fire re-entries when a bracket filled quickly.
 
             Dim oSide As OrderSide = If(side = "Buy", OrderSide.Buy, OrderSide.Sell)
             Dim fc As FavouriteContract = FavouriteContracts.TryGetBySymbolResolved(contractId, _contractResolver)
@@ -1205,6 +1257,11 @@ Namespace TopStepTrader.UI.ViewModels
             ' Without this, the real position stays open on the exchange while the
             ' slot clears in-memory, causing EvaluateSlotEntriesAsync to re-enter the
             ' same instrument on the next tick (BUG-35).
+            _releasedThisTick = True  ' block same-tick re-entry
+            ' Record cooldown: re-entry on this instrument is blocked for at least one full bar
+            If Not String.IsNullOrEmpty(slot.Instrument) Then
+                _reEntryCooldown(slot.Instrument) = DateTimeOffset.UtcNow
+            End If
             If slot.AccountId <> 0 AndAlso Not String.IsNullOrEmpty(slot.Instrument) Then
                 Try
                     If slot.PositionId.HasValue Then
