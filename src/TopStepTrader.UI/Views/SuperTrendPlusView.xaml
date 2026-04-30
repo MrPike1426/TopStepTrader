@@ -315,21 +315,33 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Lewis box -->
+                <!-- Slot 1 box -->
                 <Border Grid.Column="0"
                         Opacity="{Binding Slot1.BoxOpacity}"
                         Background="{StaticResource SurfaceBrush}"
-                        CornerRadius="6" Padding="12,10"
-                        BorderBrush="{StaticResource AccentBrush}" BorderThickness="1">
+                        CornerRadius="6" Padding="12,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Slot1.IsBorderFlashing}" Value="True">
+                                    <Setter Property="BorderBrush" Value="White"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <!-- Header -->
+                        <!-- Header: instrument label when occupied, blank when empty -->
                         <Grid Grid.Row="0" Margin="0,0,0,6">
                             <TextBlock Text="{Binding Slot1.SlotLabel}"
                                        FontWeight="Bold" Foreground="White" FontSize="13"/>
@@ -360,8 +372,30 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <!-- Position area -->
+                        <!-- Idle monitoring text (shown when no position is open) -->
                         <Border Grid.Row="3"
+                                Visibility="{Binding Slot1.IdleVisibility}"
+                                Padding="0,6,0,0">
+                            <TextBlock>
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text"       Value="{Binding Slot1.IdleMonitorText}"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                        <Setter Property="FontFamily" Value="Consolas"/>
+                                        <Setter Property="FontSize"   Value="10"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Slot1.IsIdleFlashing}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+
+                        <!-- Position area -->
+                        <Border Grid.Row="4"
                                 Visibility="{Binding Slot1.PositionVisibility}"
                                 Background="#1A2A1A" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
@@ -380,14 +414,26 @@
                     </Grid>
                 </Border>
 
-                <!-- Damian box -->
+                <!-- Slot 2 box -->
                 <Border Grid.Column="2"
                         Opacity="{Binding Slot2.BoxOpacity}"
                         Background="{StaticResource SurfaceBrush}"
-                        CornerRadius="6" Padding="12,10"
-                        BorderBrush="{StaticResource AccentBrush}" BorderThickness="1">
+                        CornerRadius="6" Padding="12,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Slot2.IsBorderFlashing}" Value="True">
+                                    <Setter Property="BorderBrush" Value="White"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -423,7 +469,29 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
+                        <!-- Idle monitoring text -->
                         <Border Grid.Row="3"
+                                Visibility="{Binding Slot2.IdleVisibility}"
+                                Padding="0,6,0,0">
+                            <TextBlock>
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text"       Value="{Binding Slot2.IdleMonitorText}"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                        <Setter Property="FontFamily" Value="Consolas"/>
+                                        <Setter Property="FontSize"   Value="10"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Slot2.IsIdleFlashing}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+
+                        <Border Grid.Row="4"
                                 Visibility="{Binding Slot2.PositionVisibility}"
                                 Background="#1A2A1A" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
@@ -442,14 +510,26 @@
                     </Grid>
                 </Border>
 
-                <!-- Joe box -->
+                <!-- Slot 3 box -->
                 <Border Grid.Column="4"
                         Opacity="{Binding Slot3.BoxOpacity}"
                         Background="{StaticResource SurfaceBrush}"
-                        CornerRadius="6" Padding="12,10"
-                        BorderBrush="{StaticResource AccentBrush}" BorderThickness="1">
+                        CornerRadius="6" Padding="12,10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            <Setter Property="BorderThickness" Value="1"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Slot3.IsBorderFlashing}" Value="True">
+                                    <Setter Property="BorderBrush" Value="White"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -485,7 +565,29 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
+                        <!-- Idle monitoring text -->
                         <Border Grid.Row="3"
+                                Visibility="{Binding Slot3.IdleVisibility}"
+                                Padding="0,6,0,0">
+                            <TextBlock>
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text"       Value="{Binding Slot3.IdleMonitorText}"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                        <Setter Property="FontFamily" Value="Consolas"/>
+                                        <Setter Property="FontSize"   Value="10"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Slot3.IsIdleFlashing}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+
+                        <Border Grid.Row="4"
                                 Visibility="{Binding Slot3.PositionVisibility}"
                                 Background="#1A2A1A" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">

@@ -1,4 +1,5 @@
 Imports System.Collections.ObjectModel
+Imports System.Threading.Tasks
 Imports System.Windows
 Imports System.Windows.Media
 Imports TopStepTrader.Core.Enums
@@ -8,22 +9,88 @@ Imports TopStepTrader.UI.ViewModels.Base
 Namespace TopStepTrader.UI.ViewModels
 
     ''' <summary>
-    ''' UI view-model for a single position slot card (Slot 1 / Slot 2 / Slot 3).
-    ''' Replaces PersonaBoxVm — slots are identity-free.
+    ''' UI view-model for a single position slot card.
+    ''' Identity-free — header shows the instrument when occupied, blank when empty.
     ''' </summary>
     Public Class SlotBoxVm
         Inherits ViewModelBase
 
         Public ReadOnly Symbols As New ObservableCollection(Of SymbolRowVm)
 
-        ''' <summary>Display label, e.g. "Slot 1".</summary>
-        Public ReadOnly Property SlotLabel As String
         Public ReadOnly Property SlotIndex As Integer
 
         Public Sub New(slotIndex As Integer)
             Me.SlotIndex = slotIndex
-            SlotLabel = $"Slot {slotIndex + 1}"
         End Sub
+
+        ' ── Slot label: instrument name when open, blank when empty ─────────
+        Private _slotLabel As String = String.Empty
+        ''' <summary>e.g. "GOLD  MGC" when occupied; blank when empty.</summary>
+        Public Property SlotLabel As String
+            Get
+                Return _slotLabel
+            End Get
+            Set(value As String)
+                SetProperty(_slotLabel, value)
+            End Set
+        End Property
+
+        ' ── Idle monitoring pulse ────────────────────────────────────────────
+        Private _idleMonitorText As String = String.Empty
+        ''' <summary>"Actively Monitoring: HH:mm:ss" shown in empty boxes while running.</summary>
+        Public Property IdleMonitorText As String
+            Get
+                Return _idleMonitorText
+            End Get
+            Set(value As String)
+                If SetProperty(_idleMonitorText, value) Then
+                    NotifyPropertyChanged(NameOf(IdleVisibility))
+                End If
+            End Set
+        End Property
+
+        Private _isIdleFlashing As Boolean = False
+        ''' <summary>True for 400 ms after each scan tick — drives XAML flash on idle text.</summary>
+        Public Property IsIdleFlashing As Boolean
+            Get
+                Return _isIdleFlashing
+            End Get
+            Set(value As Boolean)
+                SetProperty(_isIdleFlashing, value)
+            End Set
+        End Property
+
+        Public ReadOnly Property IdleVisibility As Visibility
+            Get
+                Return If(Not _hasPosition AndAlso Not String.IsNullOrEmpty(_idleMonitorText),
+                          Visibility.Visible, Visibility.Collapsed)
+            End Get
+        End Property
+
+        ''' <summary>Pulse the idle text for 400 ms on each scan tick.</summary>
+        Public Async Function FlashIdleAsync() As Task
+            IsIdleFlashing = True
+            Await Task.Delay(400)
+            IsIdleFlashing = False
+        End Function
+
+        ' ── Border flash when a new instrument claims this box ───────────────
+        Private _isBorderFlashing As Boolean = False
+        Public Property IsBorderFlashing As Boolean
+            Get
+                Return _isBorderFlashing
+            End Get
+            Set(value As Boolean)
+                SetProperty(_isBorderFlashing, value)
+            End Set
+        End Property
+
+        ''' <summary>400 ms border accent pulse when a new instrument fills this slot.</summary>
+        Public Async Function FlashBorderAsync() As Task
+            IsBorderFlashing = True
+            Await Task.Delay(400)
+            IsBorderFlashing = False
+        End Function
 
         Private _isPaused As Boolean = False
         Public Property IsPaused As Boolean
@@ -58,6 +125,7 @@ Namespace TopStepTrader.UI.ViewModels
             Set(value As Boolean)
                 If SetProperty(_hasPosition, value) Then
                     NotifyPropertyChanged(NameOf(PositionVisibility))
+                    NotifyPropertyChanged(NameOf(IdleVisibility))
                 End If
             End Set
         End Property

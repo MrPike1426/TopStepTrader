@@ -63,26 +63,37 @@ Namespace TopStepTrader.UI.ViewModels
                 Return Nothing
             End If
 
-            ' Rule: no new slot for an instrument that has a Warning or Exiting slot
-            If _slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = instrument AndAlso
+            ' Rule: no new slot for an instrument that already has an open slot (one per instrument)
+            If _slots.Any(Function(s) s.IsOpen AndAlso
+                          String.Equals(s.Instrument, instrument, StringComparison.OrdinalIgnoreCase)) Then
+                Return Nothing
+            End If
+
+            ' Rule: no counter-trend on the SAME instrument (cross-instrument conflicts are allowed)
+            Dim sameInstrumentSlots = _slots.Where(Function(s) s.IsOpen AndAlso
+                String.Equals(s.Instrument, instrument, StringComparison.OrdinalIgnoreCase)).ToList()
+            If sameInstrumentSlots.Any() AndAlso sameInstrumentSlots.First().Side <> side Then
+                Return Nothing
+            End If
+
+            ' Rule: no new slot if same instrument has a Warning or Exiting slot
+            If _slots.Any(Function(s) s.IsOpen AndAlso
+                          String.Equals(s.Instrument, instrument, StringComparison.OrdinalIgnoreCase) AndAlso
                           (s.Health = SlotHealth.Warning OrElse s.Health = SlotHealth.Exiting)) Then
                 Return Nothing
             End If
 
-            ' Rule: counter-trend not allowed while same-direction slots are open
-            Dim openSlots = _slots.Where(Function(s) s.IsOpen).ToList()
-            If openSlots.Any() Then
-                Dim existingSide = openSlots.First().Side
-                If existingSide <> side Then Return Nothing
-            End If
+            ' Rule: total concurrent slot cap
+            If OpenSlotCount >= _config.MaxSlots Then Return Nothing
 
-            ' Rule: target count gate
-            Dim target = TargetSlotCount(entryAdx)
-            If OpenSlotCount >= target Then Return Nothing
+            ' Rule: ADX must meet weak threshold to open any slot
+            If TargetSlotCount(entryAdx) = 0 Then Return Nothing
 
             ' Rule: bar timestamp must be newer than the most recently opened slot's EntryBarTime
+            ' for the same instrument (prevents double-open on the same bar)
             Dim lastOpened = _slots _
-                .Where(Function(s) s.IsOpen) _
+                .Where(Function(s) s.IsOpen AndAlso
+                       String.Equals(s.Instrument, instrument, StringComparison.OrdinalIgnoreCase)) _
                 .OrderByDescending(Function(s) s.EntryBarTime) _
                 .FirstOrDefault()
             If lastOpened IsNot Nothing AndAlso barTime <= lastOpened.EntryBarTime Then

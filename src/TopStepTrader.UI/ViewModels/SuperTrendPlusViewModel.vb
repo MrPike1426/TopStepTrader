@@ -434,6 +434,9 @@ Namespace TopStepTrader.UI.ViewModels
                 box.HasPosition     = False
                 box.PositionDisplay = String.Empty
                 box.StopPhaseLabel  = String.Empty
+                box.SlotLabel       = String.Empty
+                box.IdleMonitorText = String.Empty
+                box.IsIdleFlashing  = False
                 For Each row In box.Symbols
                     row.Arrow      = "–"
                     row.AdxDisplay = "ADX:–"
@@ -483,6 +486,16 @@ Namespace TopStepTrader.UI.ViewModels
                 Sub()
                     StatusText = String.Format("In Progress: Updated {0:HH:mm:ss}", DateTime.Now)
                     FlashStatusAsync()
+                    ' Pulse idle text on empty boxes and refresh their timestamp
+                    Dim now = DateTime.Now
+                    For Each box In AllSlotBoxes()
+                        If Not box.HasPosition Then
+                            box.IdleMonitorText = String.Format("Actively Monitoring: {0:HH:mm:ss}", now)
+                            Task.Run(Async Function() As Task
+                                         Await box.FlashIdleAsync()
+                                     End Function)
+                        End If
+                    Next
                 End Sub)
         End Function
 
@@ -646,9 +659,10 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         ''' <summary>
-        ''' Confirmed-mode entry: ADX band determines target slot count.
-        ''' ADX 25-39 → 1 slot, 40-59 → 2 slots, 60+ → 3 slots.
-        ''' SlotManager enforces all rules (bar gate, counter-trend, Exiting health).
+        ''' Confirmed-mode entry: evaluates ALL instruments each tick and opens a slot for every
+        ''' favourable signal, up to the 3-slot cap. One slot per instrument maximum.
+        ''' SlotManager enforces all remaining rules (bar gate, same-instrument counter-trend,
+        ''' Exiting health, total cap).
         ''' </summary>
         Private Async Function EvaluateSlotEntriesAsync(barCache As Dictionary(Of Integer, IList(Of MarketBar))) As Task
             _logger.LogInformation("ST+ EvaluateSlotEntries tick — barCache={Count} instruments, openSlots={Open}",
@@ -665,22 +679,21 @@ Namespace TopStepTrader.UI.ViewModels
                 Return
             End If
 
-            Dim bestContractId As String      = Nothing
-            Dim bestSide As String            = Nothing
-            Dim bestStLine As Decimal         = 0D
-            Dim bestLastClose As Decimal      = 0D
-            Dim bestAdxVal As Single          = 0F
-            Dim bestBarTime As DateTimeOffset = DateTimeOffset.MinValue
-
             For i = 0 To Instruments.Length - 1
+                ' Stop evaluating new entries once the slot cap is reached
+                If _slotManager.OpenSlotCount >= Config.MaxSlots Then
+                    _logger.LogInformation("ST+ EvaluateSlotEntries — slot cap reached ({Open}/{Max}), stopping entry evaluation.",
+                                           _slotManager.OpenSlotCount, Config.MaxSlots)
+                    Exit For
+                End If
+
                 Dim contractId = Instruments(i)
                 Dim bars As IList(Of MarketBar) = Nothing
                 If Not barCache.TryGetValue(i, bars) OrElse bars Is Nothing OrElse bars.Count < 14 Then
                     Continue For
                 End If
 
-                ' Skip instruments whose contract ID failed to resolve — trading them risks
-                ' using a stale/wrong contract ID (e.g. wrong expiry month).
+                ' Skip instruments whose contract ID failed to resolve
                 If _contractResolver.FailedSymbols.Contains(contractId, StringComparer.OrdinalIgnoreCase) Then
                     _logger.LogWarning("ST+ EvaluateSlotEntries [{Contract}] SKIP — contract resolution failed.", contractId)
                     Continue For
@@ -709,8 +722,9 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim isActive As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= Config.AdxWeakThreshold
                 Dim isFavourable As Boolean = (isLong OrElse isShort) AndAlso (isFlip OrElse isActive)
 
-                ' Re-entry cooldown: skip this instrument if it was released within the last bar duration.
-                If isFavourable AndAlso Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = contractId) Then
+                ' Re-entry cooldown: skip if released within the last bar duration
+                If isFavourable AndAlso Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
+                    String.Equals(s.Instrument, contractId, StringComparison.OrdinalIgnoreCase)) Then
                     Dim cooldownUntil As DateTimeOffset
                     If _reEntryCooldown.TryGetValue(contractId, cooldownUntil) Then
                         Dim barMinutes As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
@@ -734,64 +748,44 @@ Namespace TopStepTrader.UI.ViewModels
                     Continue For
                 End If
 
-                Dim side = If(isLong, "Buy", "Sell")
-                Dim barTime = bars(n).Timestamp
-                Dim adxStr = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
+                Dim side     = If(isLong, "Buy", "Sell")
+                Dim barTime  = bars(n).Timestamp
+                Dim adxStr   = If(Single.IsNaN(adxVal), "ADX:--", String.Format("ADX:{0:D2}", CInt(adxVal)))
                 Dim sigLabel = If(isLong, "LONG", "SHORT")
                 Dim sigColor As Brush = If(isLong, Brushes.LimeGreen, Brushes.Red)
                 UpdateSlotSymbolRows(i, If(isLong, "UP", "DN"), adxStr, sigLabel, sigColor)
 
-                Dim hasOpenSlot = _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = contractId)
-                If bestContractId Is Nothing OrElse
-                   hasOpenSlot OrElse
-                   (Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = bestContractId) AndAlso adxVal > bestAdxVal) Then
-                    bestContractId = contractId
-                    bestSide       = side
-                    bestStLine     = stLine
-                    bestLastClose  = CDec(closes(n))
-                    bestAdxVal     = adxVal
-                    bestBarTime    = barTime
+                ' Skip if this instrument already has an in-memory slot open
+                If _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
+                    String.Equals(s.Instrument, contractId, StringComparison.OrdinalIgnoreCase)) Then
+                    Continue For
                 End If
-            Next
 
-            If bestContractId Is Nothing Then
-                _logger.LogInformation("ST+ EvaluateSlotEntries — no favourable candidate found this tick.")
-                Return
-            End If
-
-            _logger.LogInformation("ST+ Best candidate: {Contract} side={Side} ADX={Adx:F1} barTime={BarTime}",
-                                   bestContractId, bestSide, bestAdxVal, bestBarTime)
-
-            ' Guard: verify no live position already exists on the exchange for this instrument
-            ' UNLESS we already have an in-memory slot open for it (scale-in path).
-            ' This prevents re-entry after ReleaseSlotAsync clears the slot while the real
-            ' position is still open, but does not block legitimate scale-ins.
-            Dim hasInMemorySlot As Boolean = _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = bestContractId)
-            If Not hasInMemorySlot Then
+                ' Guard: verify no live position already exists on the exchange for this instrument
                 Dim guardAccId As Long = If(_selectedAccount IsNot Nothing, _selectedAccount.Id, 0)
                 If guardAccId <> 0 Then
                     Try
-                        Dim liveCheck = Await _orderService.GetLivePositionSnapshotAsync(guardAccId, bestContractId)
+                        Dim liveCheck = Await _orderService.GetLivePositionSnapshotAsync(guardAccId, contractId)
                         If liveCheck IsNot Nothing Then
-                            _logger.LogInformation("ST+ EvaluateSlotEntries — live position still open on exchange for {Contract} (units={Units}), skipping re-entry.",
-                                                   bestContractId, liveCheck.Units)
-                            Return
+                            _logger.LogInformation("ST+ [{Contract}] live position still open on exchange (units={Units}), skipping re-entry.",
+                                                   contractId, liveCheck.Units)
+                            Continue For
                         End If
                     Catch ex As Exception
-                        _logger.LogWarning(ex, "ST+ live-position guard check failed for {Contract} — proceeding with caution", bestContractId)
+                        _logger.LogWarning(ex, "ST+ live-position guard check failed for {Contract} — proceeding with caution", contractId)
                     End Try
                 End If
-            End If
 
-            Dim opened = _slotManager.TryOpenSlot(bestContractId, bestSide, bestAdxVal, bestBarTime, bestStLine, bestLastClose)
-            If opened IsNot Nothing Then
-                _logger.LogInformation("ST+ SlotManager opened slot {Idx} for {Contract} {Side} ADX={Adx:F1}",
-                                       opened.SlotIndex, bestContractId, bestSide, bestAdxVal)
-                Await FireEntryAsync(opened, bestContractId, bestSide, bestStLine, bestLastClose, bestBarTime)
-            Else
-                _logger.LogInformation("ST+ SlotManager blocked new slot (openCount={Open}, target={Target})",
-                                       _slotManager.OpenSlotCount, _slotManager.TargetSlotCount(bestAdxVal))
-            End If
+                Dim opened = _slotManager.TryOpenSlot(contractId, side, adxVal, barTime, stLine, CDec(closes(n)))
+                If opened IsNot Nothing Then
+                    _logger.LogInformation("ST+ SlotManager opened slot {Idx} for {Contract} {Side} ADX={Adx:F1}",
+                                           opened.SlotIndex, contractId, side, adxVal)
+                    Await FireEntryAsync(opened, contractId, side, stLine, CDec(closes(n)), barTime)
+                Else
+                    _logger.LogInformation("ST+ SlotManager blocked slot for {Contract} (openCount={Open}/{Max})",
+                                           contractId, _slotManager.OpenSlotCount, Config.MaxSlots)
+                End If
+            Next
         End Function
 
         ''' <summary>
@@ -1059,8 +1053,16 @@ Namespace TopStepTrader.UI.ViewModels
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
                     If box IsNot Nothing Then
+                        ' Set instrument label and flash border to signal new occupant
+                        Dim idx2 As Integer = Array.IndexOf(Instruments, slot.Instrument)
+                        Dim instrLabel As String = If(idx2 >= 0, InstrumentLabels(idx2), slot.Instrument)
+                        box.SlotLabel   = $"{instrLabel}  {slot.Instrument}"
+                        box.IdleMonitorText = String.Empty
                         box.HasPosition = True
                         UpdatePositionDisplay(box, slot, 0D)
+                        Task.Run(Async Function() As Task
+                                     Await box.FlashBorderAsync()
+                                 End Function)
                     End If
                 End Sub)
         End Function
@@ -1306,6 +1308,7 @@ Namespace TopStepTrader.UI.ViewModels
                         box.HasPosition     = False
                         box.PositionDisplay = String.Empty
                         box.StopPhaseLabel  = String.Empty
+                        box.SlotLabel       = String.Empty
                     End If
                 End Sub)
             _slotManager.CloseSlot(slot.SlotIndex)
