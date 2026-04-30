@@ -157,6 +157,8 @@ Namespace TopStepTrader.UI.ViewModels
         Private Shared ReadOnly Instruments As String() = _stDefaults.Select(Function(f) f.PxRootSymbol).ToArray()
         Private Shared ReadOnly InstrumentLabels As String() = _stDefaults.Select(Function(f) If(String.IsNullOrWhiteSpace(f.DisplayName), f.PxRootSymbol, f.DisplayName)).ToArray()
         Private Const BarsToFetch As Integer = 60
+        Private Const EntryStaggerMs As Integer = 5000
+        Private Const SlotUpdateStaggerMs As Integer = 5000
 
         Public ReadOnly Property WatchlistItems As New ObservableCollection(Of WatchlistRowVm)
         Private Const SyncMissThreshold As Integer = 3
@@ -465,9 +467,14 @@ Namespace TopStepTrader.UI.ViewModels
             Dim tf = MapTimeframe(_selectedTimeframe)
             Dim barCache = Await ScanWatchlistAsync(tf)
 
+            Dim isFirstSlotUpdate As Boolean = True
             For Each slot In _slotManager.Slots
                 If slot.IsOpen Then
+                    If Not isFirstSlotUpdate Then
+                        Await Task.Delay(SlotUpdateStaggerMs)
+                    End If
                     Await HandleOpenPositionAsync(slot, tf)
+                    isFirstSlotUpdate = False
                 End If
             Next
 
@@ -781,6 +788,7 @@ Namespace TopStepTrader.UI.ViewModels
                     _logger.LogInformation("ST+ SlotManager opened slot {Idx} for {Contract} {Side} ADX={Adx:F1}",
                                            opened.SlotIndex, contractId, side, adxVal)
                     Await FireEntryAsync(opened, contractId, side, stLine, CDec(closes(n)), barTime)
+                    Await Task.Delay(EntryStaggerMs)
                 Else
                     _logger.LogInformation("ST+ SlotManager blocked slot for {Contract} (openCount={Open}/{Max})",
                                            contractId, _slotManager.OpenSlotCount, Config.MaxSlots)
@@ -1308,8 +1316,8 @@ Namespace TopStepTrader.UI.ViewModels
                         box.HasPosition     = False
                         box.PositionDisplay = String.Empty
                         box.LastPositionDisplay = String.Empty
-                        box.StopPhaseLabel  = String.Empty
-                        box.SlotLabel       = String.Empty
+                        box.StopPhaseLabel = String.Empty
+                        box.SlotLabel = String.Empty
                     End If
                 End Sub)
             _slotManager.CloseSlot(slot.SlotIndex)
@@ -1322,12 +1330,12 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Sub UpdatePositionDisplay(box As SlotBoxVm, slot As PositionSlot, pnl As Decimal)
             Dim sideLbl As String = If(slot.Side = "Buy", "LONG", "SHORT")
-            Dim idx   As Integer  = Array.IndexOf(Instruments, slot.Instrument)
-            Dim label As String   = If(idx >= 0, InstrumentLabels(idx), slot.Instrument)
-            Dim entry As String   = If(slot.EntryPrice = 0D, "--", slot.EntryPrice.ToString("F2"))
-            Dim sl    As String   = If(slot.StopPrice = 0D, "--", slot.StopPrice.ToString("F2"))
-            Dim tp    As String   = If(slot.TakeProfitPrice = 0D, "flip", slot.TakeProfitPrice.ToString("F2"))
-            Dim sign  As String   = If(pnl >= 0, "+", "")
+            Dim idx As Integer = Array.IndexOf(Instruments, slot.Instrument)
+            Dim label As String = If(idx >= 0, InstrumentLabels(idx), slot.Instrument)
+            Dim entry As String = If(slot.EntryPrice = 0D, "--", slot.EntryPrice.ToString("F2"))
+            Dim sl As String = If(slot.StopPrice = 0D, "--", slot.StopPrice.ToString("F2"))
+            Dim tp As String = If(slot.TakeProfitPrice = 0D, "flip", slot.TakeProfitPrice.ToString("F2"))
+            Dim sign As String = If(pnl >= 0, "+", "")
             Dim newDisplay As String =
                 String.Format("{0}  {1}  @ {2}", sideLbl, label, entry) & Environment.NewLine &
                 String.Format("SL: {0}  TP: {1}", sl, tp) & Environment.NewLine &
