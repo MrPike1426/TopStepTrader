@@ -569,17 +569,17 @@ Namespace TopStepTrader.UI.ViewModels
                     strength = "ADX: --"
                     signalReason = "Waiting for data..."
                 ElseIf adxVal >= Config.AdxStrongThreshold Then
-                    strength = String.Format("ADX:{0:D2} Strong", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} Strong(3)", CInt(adxVal))
                     signalReason = If(signal = "BULL", "Strong uptrend — bot may open up to 3 slots.",
                                   If(signal = "BEAR", "Strong downtrend — bot may open up to 3 slots.",
                                      "Strong trend forming — waiting for direction alignment."))
                 ElseIf adxVal >= Config.AdxModerateThreshold Then
-                    strength = String.Format("ADX:{0:D2} Moderate", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} Moderate(2)", CInt(adxVal))
                     signalReason = If(signal = "BULL", "Moderate uptrend — bot may open up to 2 slots.",
                                   If(signal = "BEAR", "Moderate downtrend — bot may open up to 2 slots.",
                                      "Trending — waiting for +DI/-DI to align with SuperTrend."))
                 ElseIf adxVal >= Config.AdxWeakThreshold Then
-                    strength = String.Format("ADX:{0:D2} Active", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} Active(1)", CInt(adxVal))
                     signalReason = If(signal = "BULL", "Uptrend active — bot may open 1 slot.",
                                   If(signal = "BEAR", "Downtrend active — bot may open 1 slot.",
                                      "Trending — waiting for +DI/-DI to align with SuperTrend."))
@@ -1307,6 +1307,7 @@ Namespace TopStepTrader.UI.ViewModels
                     If box IsNot Nothing Then
                         box.HasPosition     = False
                         box.PositionDisplay = String.Empty
+                        box.LastPositionDisplay = String.Empty
                         box.StopPhaseLabel  = String.Empty
                         box.SlotLabel       = String.Empty
                     End If
@@ -1327,14 +1328,44 @@ Namespace TopStepTrader.UI.ViewModels
             Dim sl    As String   = If(slot.StopPrice = 0D, "--", slot.StopPrice.ToString("F2"))
             Dim tp    As String   = If(slot.TakeProfitPrice = 0D, "flip", slot.TakeProfitPrice.ToString("F2"))
             Dim sign  As String   = If(pnl >= 0, "+", "")
-            box.PositionDisplay =
+            Dim newDisplay As String =
                 String.Format("{0}  {1}  @ {2}", sideLbl, label, entry) & Environment.NewLine &
                 String.Format("SL: {0}  TP: {1}", sl, tp) & Environment.NewLine &
                 String.Format("Entry: {0:HH:mm}  |  P&L: {1}{2:F2}$", slot.EntryTime, sign, pnl) & Environment.NewLine &
                 slot.EntryReason
+            Dim isFirstPopulation As Boolean = String.IsNullOrEmpty(box.LastPositionDisplay)
+            Dim displayChanged As Boolean = (newDisplay <> box.LastPositionDisplay)
+            box.PositionDisplay = newDisplay
+            box.LastPositionDisplay = newDisplay
             box.PnlBrush = If(pnl >= 0, Brushes.LimeGreen, Brushes.Red)
-            box.StopPhaseLabel = slot.StopPhase.ToString()
+            box.StopPhaseLabel = PhaseLabel(slot.StopPhase, Config)
+            If displayChanged AndAlso Not isFirstPopulation Then
+                Task.Run(Async Function() As Task
+                             Await box.FlashPnlAsync()
+                         End Function)
+            End If
         End Sub
+
+        ''' <summary>Returns a human-readable phase label that explains both the phase name
+        ''' and its meaning in terms of how the stop is managed at that point.</summary>
+        Private Shared Function PhaseLabel(phase As StopPhase, cfg As SuperTrendPlusConfig) As String
+            Select Case phase
+                Case StopPhase.Initial
+                    Return String.Format("Initial  (stop tracks SuperTrend line; scale-in opens next slot at {0:F1}R)", cfg.BreakevenTriggerR)
+                Case StopPhase.Breakeven
+                    Return "Breakeven  (stop moved to entry — risk eliminated)"
+                Case StopPhase.ProfitLock
+                    Return String.Format("ProfitLock  (stop locked at entry + {0:F1}R)", cfg.ProfitLockOffsetR)
+                Case StopPhase.ProfitTrail
+                    Return "ProfitTrail  (ATR trailing stop active)"
+                Case StopPhase.Harvest
+                    Return String.Format("Harvest  (stop locked at entry + {0:F1}R)", cfg.HarvestLockR)
+                Case StopPhase.FreeRide
+                    Return "FreeRide  (stop at entry + 2R — letting it run)"
+                Case Else
+                    Return phase.ToString()
+            End Select
+        End Function
 
         Private Shared Function MapTimeframe(tf As String) As BarTimeframe
             Select Case tf

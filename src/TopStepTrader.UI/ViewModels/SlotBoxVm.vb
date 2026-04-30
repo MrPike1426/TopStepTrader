@@ -92,6 +92,28 @@ Namespace TopStepTrader.UI.ViewModels
             IsBorderFlashing = False
         End Function
 
+        ' ── P&L / SL / TP change pulse ───────────────────────────────────────
+        Private _isPnlFlashing As Boolean = False
+        ''' <summary>True for 400 ms when the P&amp;L value or SL/TP price changes — drives XAML white border pulse.</summary>
+        Public Property IsPnlFlashing As Boolean
+            Get
+                Return _isPnlFlashing
+            End Get
+            Set(value As Boolean)
+                SetProperty(_isPnlFlashing, value)
+            End Set
+        End Property
+
+        ''' <summary>Last rendered PositionDisplay string — used to detect P&amp;L/SL/TP changes.</summary>
+        Friend LastPositionDisplay As String = String.Empty
+
+        ''' <summary>400 ms white border pulse when P&amp;L or SL/TP changes.</summary>
+        Public Async Function FlashPnlAsync() As Task
+            IsPnlFlashing = True
+            Await Task.Delay(400)
+            IsPnlFlashing = False
+        End Function
+
         Private _isPaused As Boolean = False
         Public Property IsPaused As Boolean
             Get

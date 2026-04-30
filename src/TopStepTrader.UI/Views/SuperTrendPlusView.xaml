@@ -329,6 +329,10 @@
                                     <Setter Property="BorderBrush" Value="White"/>
                                     <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
+                                <DataTrigger Binding="{Binding Slot1.IsPnlFlashing}" Value="True">
+                                    <Setter Property="BorderBrush" Value="White"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
@@ -402,10 +406,10 @@
                             <StackPanel>
                                 <TextBlock Text="{Binding Slot1.PositionDisplay}"
                                            Foreground="{Binding Slot1.PnlBrush}"
-                                           FontFamily="Consolas" FontSize="11"
+                                           FontFamily="Consolas" FontSize="13"
                                            TextWrapping="Wrap"/>
                                 <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="10"
+                                           FontFamily="Consolas" FontSize="12"
                                            Foreground="{StaticResource TextSecondaryBrush}">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot1.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
@@ -425,6 +429,10 @@
                             <Setter Property="BorderThickness" Value="1"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Slot2.IsBorderFlashing}" Value="True">
+                                    <Setter Property="BorderBrush" Value="White"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Slot2.IsPnlFlashing}" Value="True">
                                     <Setter Property="BorderBrush" Value="White"/>
                                     <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
@@ -498,10 +506,10 @@
                             <StackPanel>
                                 <TextBlock Text="{Binding Slot2.PositionDisplay}"
                                            Foreground="{Binding Slot2.PnlBrush}"
-                                           FontFamily="Consolas" FontSize="11"
+                                           FontFamily="Consolas" FontSize="13"
                                            TextWrapping="Wrap"/>
                                 <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="10"
+                                           FontFamily="Consolas" FontSize="12"
                                            Foreground="{StaticResource TextSecondaryBrush}">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot2.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
@@ -521,6 +529,10 @@
                             <Setter Property="BorderThickness" Value="1"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Slot3.IsBorderFlashing}" Value="True">
+                                    <Setter Property="BorderBrush" Value="White"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding Slot3.IsPnlFlashing}" Value="True">
                                     <Setter Property="BorderBrush" Value="White"/>
                                     <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
@@ -594,10 +606,10 @@
                             <StackPanel>
                                 <TextBlock Text="{Binding Slot3.PositionDisplay}"
                                            Foreground="{Binding Slot3.PnlBrush}"
-                                           FontFamily="Consolas" FontSize="11"
+                                           FontFamily="Consolas" FontSize="13"
                                            TextWrapping="Wrap"/>
                                 <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="10"
+                                           FontFamily="Consolas" FontSize="12"
                                            Foreground="{StaticResource TextSecondaryBrush}">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot3.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
