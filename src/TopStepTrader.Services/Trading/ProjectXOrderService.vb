@@ -288,7 +288,7 @@ Namespace TopStepTrader.Services.Trading
                 ' ANY active expiry without requiring a code change on each roll.
                 ' Uses the same StartsWith pattern as FavouriteContracts.TryGetBySymbol.
                 If allMatches.Count = 0 AndAlso Not positionId.HasValue Then
-                    Dim favFb = FavouriteContracts.TryGetBySymbol(contractId)
+                    Dim favFb = FavouriteContracts.TryGetBySymbolResolved(contractId)
                     If favFb IsNot Nothing AndAlso Not String.IsNullOrEmpty(favFb.PxRootSymbol) Then
                         Dim rootPrefix = $"CON.F.US.{favFb.PxRootSymbol}."
                         allMatches = resp.Positions.Where(
@@ -587,7 +587,7 @@ Namespace TopStepTrader.Services.Trading
             contractId As String,
             Optional cancel As CancellationToken = Nothing) As Task(Of String)
 
-            Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If fav Is Nothing Then Return contractId
             Dim resolved = Await _catalog.GetResolvedContractIdAsync(fav, cancel)
             Return If(Not String.IsNullOrEmpty(resolved), resolved, contractId)

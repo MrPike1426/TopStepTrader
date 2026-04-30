@@ -628,11 +628,11 @@ Namespace TopStepTrader.UI.ViewModels
                         .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
                         .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
-                Case 6  ' Double Bubble Butt — 5-min; inner BB 1.0 SD / outer BB 2.0 SD; EUR/USD only (London+NY session)
-                    ' DBB was designed by Kathy Lien for EUR/USD on daily/4H FX charts.
-                    ' Override the dropdown selection and pin this slot to M6E (Micro EUR/USD).
+                Case 6  ' Double Bubble Butt — 5-min; inner BB 1.0 SD / outer BB 2.0 SD; FX micro (London+NY session)
+                    ' DBB was designed by Kathy Lien for FX on daily/4H charts.
+                    ' Pin this slot to M6J (Micro USD/JPY) — the remaining FX micro in the instrument universe.
                     ' Trading window 07:00–20:00 UTC covers London open through NY close.
-                    Dim eurUsdFav = FavouriteContracts.TryGetBySymbol("EURUSD")
+                    Dim eurUsdFav = FavouriteContracts.TryGetBySymbolResolved("M6J")
                     Dim dbbContractId = If(eurUsdFav IsNot Nothing, eurUsdFav.PxContractId, contractId)
                     Dim dbbTickSz = If(eurUsdFav IsNot Nothing AndAlso eurUsdFav.PxTickSize > 0D, eurUsdFav.PxTickSize, tickSz)
                     Dim dbbTickVal = If(eurUsdFav IsNot Nothing AndAlso eurUsdFav.PxTickValue > 0D, eurUsdFav.PxTickValue, tickVal)

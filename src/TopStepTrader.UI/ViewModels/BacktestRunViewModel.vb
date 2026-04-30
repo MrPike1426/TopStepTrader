@@ -1101,7 +1101,7 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         Private Function GetTickSize(contractId As String) As Decimal
-            Dim fc = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fc = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If fc IsNot Nothing Then
                 If fc.PxTickSize > 0D Then Return fc.PxTickSize
             End If
@@ -1109,7 +1109,7 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         Private Function GetPointValue(contractId As String) As Decimal
-            Dim fc = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fc = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If fc IsNot Nothing Then
                 If fc.PxPointValue > 0D Then Return fc.PxPointValue
             End If
@@ -1117,7 +1117,7 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         Private Function GetCommissionPerSide(contractId As String) As Decimal
-            Dim fc = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fc = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If fc IsNot Nothing Then Return fc.RoundTripFee / 2D
             Return 0.40D  ' fallback: $0.80 round-trip / 2
         End Function

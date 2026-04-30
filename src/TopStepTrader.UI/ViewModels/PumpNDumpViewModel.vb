@@ -564,13 +564,13 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Private Function GetTickSize(contractId As String) As Decimal
-            Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If fav Is Nothing Then Return 0.01D
             Return If(fav.PxTickSize > 0, fav.PxTickSize, 0.01D)
         End Function
 
         Private Function GetTickValue(contractId As String) As Decimal
-            Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If fav Is Nothing Then Return 0.01D
             Return If(fav.PxTickValue > 0, fav.PxTickValue, 0.01D)
         End Function

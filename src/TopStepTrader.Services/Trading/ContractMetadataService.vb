@@ -28,7 +28,7 @@ Namespace TopStepTrader.Services.Trading
             Implements IContractMetadataService.ResolveContractIdAsync
 
             ' Fast path: check FavouriteContracts first
-            Dim fav = FavouriteContracts.TryGetBySymbol(symbol)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(symbol)
             If fav IsNot Nothing Then
                 Return fav.PxContractId
             End If
@@ -50,7 +50,7 @@ Namespace TopStepTrader.Services.Trading
             Implements IContractMetadataService.GetContractAsync
 
             ' Check FavouriteContracts first
-            Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If fav IsNot Nothing Then
                 Return New Contract With {
                     .Id = fav.PxContractId,

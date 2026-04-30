@@ -726,7 +726,7 @@ Namespace TopStepTrader.UI.ViewModels
 
                 If snap Is Nothing Then Return   ' no open position — display already cleared
 
-                Dim fav = FavouriteContracts.TryGetBySymbol(_testTradeContractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
                 Dim tv = If(fav IsNot Nothing AndAlso fav.PxTickValue > 0, fav.PxTickValue, 1.25D)
                 Dim ts = If(fav IsNot Nothing AndAlso fav.PxTickSize > 0, fav.PxTickSize, 0.25D)
                 Dim units = If(snap.Units > 0D, snap.Units, snap.Amount)
@@ -829,7 +829,7 @@ Namespace TopStepTrader.UI.ViewModels
                                          _entryPrice = snap.OpenRate
                                          _entrySide = If(snap.IsBuy, OrderSide.Buy, OrderSide.Sell)
                                          If _currentSlPrice <= 0D AndAlso _pendingSlTicks > 0 Then
-                                             Dim favBracket = FavouriteContracts.TryGetBySymbol(_testTradeContractId)
+                                             Dim favBracket = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
                                              Dim tsBracket = If(favBracket IsNot Nothing AndAlso favBracket.PxTickSize > 0,
                                                        favBracket.PxTickSize, 0.25D)
                                              _currentSlPrice = If(snap.IsBuy,
@@ -848,7 +848,7 @@ Namespace TopStepTrader.UI.ViewModels
                              End If
 
                              ' DPP = (tickValue / tickSize) × contracts
-                             Dim fav = FavouriteContracts.TryGetBySymbol(_testTradeContractId)
+                             Dim fav = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
                              Dim tv = If(fav IsNot Nothing AndAlso fav.PxTickValue > 0, fav.PxTickValue, 1.25D)
                              Dim ts = If(fav IsNot Nothing AndAlso fav.PxTickSize > 0, fav.PxTickSize, 0.25D)
                              Dim units = If(snap.Units > 0D, snap.Units, snap.Amount)
@@ -969,7 +969,7 @@ Namespace TopStepTrader.UI.ViewModels
                 ' Seed initial-SL guard on first management tick
                 If _initialSlPrice <= 0D Then _initialSlPrice = _currentSlPrice
 
-                Dim fav = FavouriteContracts.TryGetBySymbol(_testTradeContractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
                 Dim tickSize As Decimal = If(fav IsNot Nothing AndAlso fav.PxTickSize > 0, fav.PxTickSize, 0.25D)
                 Dim isBuy = (_entrySide = OrderSide.Buy)
 
@@ -1086,7 +1086,7 @@ Namespace TopStepTrader.UI.ViewModels
         ''' directly in _testTradeContractId, eliminating repeated symbol→catalog lookups.
         ''' </summary>
         Private Async Function SelectOilAsync() As Task
-            Dim fav = FavouriteContracts.TryGetBySymbol("OIL")
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved("OIL")
             If fav Is Nothing Then
                 Dispatch(Sub() AddDebugMessage("⚠️ OIL not found in FavouriteContracts"))
                 Return
@@ -1205,7 +1205,7 @@ Namespace TopStepTrader.UI.ViewModels
             If Not Integer.TryParse(_testTradeAmount, contracts) OrElse contracts <= 0 Then contracts = 1
 
             ' Resolve the PX contract ID (e.g. "CON.F.US.MES.M26") from the short symbol
-            Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
             Dim pxContractId = If(fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId),
                                   fav.PxContractId, contractId)
 
@@ -1401,7 +1401,7 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
                 _livePositionId = snapshot.PositionId
 
-                Dim fav = FavouriteContracts.TryGetBySymbol(_testTradeContractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
                 Dim tickSize As Decimal = If(fav IsNot Nothing AndAlso fav.PxTickSize > 0, fav.PxTickSize, 0.25D)
                 Dim isBuy = snapshot.IsBuy
                 Dim entryPrice = If(_entryPrice > 0, _entryPrice, snapshot.OpenRate)
@@ -1520,10 +1520,10 @@ Namespace TopStepTrader.UI.ViewModels
                 TestTradeContractLongId = c.Id
                 TestTradeContractDisplay = If(Not String.IsNullOrWhiteSpace(c.FriendlyName),
                                               c.FriendlyName, c.Id)
-                fav = FavouriteContracts.TryGetBySymbol(c.Id)
+                fav = FavouriteContracts.TryGetBySymbolResolved(c.Id)
             ElseIf Not String.IsNullOrWhiteSpace(_testTradeContractId) Then
                 TestTradeContractLongId = _testTradeContractId
-                fav = FavouriteContracts.TryGetBySymbol(_testTradeContractId)
+                fav = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
                 TestTradeContractDisplay = If(fav IsNot Nothing, fav.Name, _testTradeContractId)
             End If
             ' MBT (Micro Bitcoin): 20t default is far too tight — BTC moves 500+ pts in minutes and the
@@ -1542,7 +1542,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property TickSizeHintText As String
             Get
                 If String.IsNullOrWhiteSpace(_testTradeContractId) Then Return String.Empty
-                Dim fav = FavouriteContracts.TryGetBySymbol(_testTradeContractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
                 If fav Is Nothing Then Return String.Empty
                 Return $"{fav.Name} · {fav.PxTickSize:G} pts/tick · ${fav.PxTickValue:F2}/tick"
             End Get
@@ -1564,7 +1564,7 @@ Namespace TopStepTrader.UI.ViewModels
 
             ' Match against the short symbol, the full PX contract ID, OR any same-root contract
             ' (e.g. CON.F.US.MYM.M26 when we track CON.F.US.MYM.U26 — quarterly roll mismatch).
-            Dim favMatch = FavouriteContracts.TryGetBySymbol(_testTradeContractId)
+            Dim favMatch = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
             Dim pxId = If(favMatch IsNot Nothing AndAlso Not String.IsNullOrEmpty(favMatch.PxContractId),
                           favMatch.PxContractId, _testTradeContractId)
             Dim rootPrefix = If(favMatch IsNot Nothing AndAlso Not String.IsNullOrEmpty(favMatch.PxRootSymbol),
@@ -1598,7 +1598,7 @@ Namespace TopStepTrader.UI.ViewModels
 
                 ' Seed bracket price tracking for TopStepX (SL/TP placed inline with the order).
                 If IsTopStepX AndAlso _pendingSlTicks > 0 Then
-                    Dim favBracket = FavouriteContracts.TryGetBySymbol(capturedContractId)
+                    Dim favBracket = FavouriteContracts.TryGetBySymbolResolved(capturedContractId)
                     Dim ts = If(favBracket IsNot Nothing AndAlso favBracket.PxTickSize > 0,
                                 favBracket.PxTickSize, 0.25D)
                     Dim isBuyPos = (capturedSide = OrderSide.Buy)
@@ -1743,7 +1743,7 @@ Namespace TopStepTrader.UI.ViewModels
         ''' </summary>
         Private Async Function FetchCurrentPriceAsync(cancel As CancellationToken) As Task(Of Decimal)
             Try
-                Dim fav = FavouriteContracts.TryGetBySymbol(_testTradeContractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
                 If fav Is Nothing OrElse String.IsNullOrEmpty(fav.PxContractId) Then Return 0D
                 Dim resolved = Await _catalog.GetResolvedContractIdAsync(fav, cancel)
                 Dim pxId = If(Not String.IsNullOrEmpty(resolved), resolved, fav.PxContractId)
@@ -1764,7 +1764,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private Async Function FetchFiveMinBarsAsync(count As Integer, Optional daysBack As Integer = 3) As Task(Of List(Of MarketBar))
             ' PX API: unit=2 (AggregateBarUnit.Minute), unitNumber=5 (5 minutes per bar)
 
-            Dim fav = FavouriteContracts.TryGetBySymbol(_testTradeContractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
             Dim bars As New List(Of MarketBar)
 
             Try
@@ -1952,7 +1952,7 @@ Namespace TopStepTrader.UI.ViewModels
                     Return
                 End If
 
-                Dim fav = FavouriteContracts.TryGetBySymbol(_testTradeContractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
                 Dim contractName = If(fav IsNot Nothing, fav.Name, _testTradeContractId)
                 ' Send the most recent 4 hours (last 48 × 5-min bars) to Claude Haiku
                 Dim oneHourBars = bars.TakeLast(CLAUDE_MIN_BARS).ToList()

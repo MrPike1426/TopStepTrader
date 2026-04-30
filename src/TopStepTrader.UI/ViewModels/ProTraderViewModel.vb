@@ -479,7 +479,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Function BuildStrategyDefinition(slot As ProTraderSlotVm) As StrategyDefinition
             Dim persona = _personaService.GetProfile(slot.PersonaName)
-            Dim fav = FavouriteContracts.TryGetBySymbol(slot.ContractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(slot.ContractId)
             Dim slMult = If(AtrOverrideEnabled, SlMultipleOfN, slot.SlMultiple)
             Dim tpMult = If(AtrOverrideEnabled, TpMultipleOfN, slot.TpMultiple)
 
@@ -585,7 +585,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim snapshot = Await orderService.GetLivePositionSnapshotAsync(accountId, slot.ContractId)
                 If snapshot Is Nothing Then Return
 
-                Dim fav = FavouriteContracts.TryGetBySymbol(slot.ContractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(slot.ContractId)
                 Dim tickSize As Decimal = If(fav IsNot Nothing AndAlso fav.PxTickSize > 0, fav.PxTickSize, 0.25D)
                 Dim isBuy = snapshot.IsBuy
                 Dim entryPrice = snapshot.OpenRate

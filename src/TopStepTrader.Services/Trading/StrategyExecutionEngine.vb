@@ -409,7 +409,7 @@ Namespace TopStepTrader.Services.Trading
                                  ' E.g. MBT 10 contracts: 10 × ($0.50 / 5) = $1.00 per point.
                                  _totalDollarPerPoint = If(snapshot.Units > 0D AndAlso strategy.TickSize > 0D,
                                      snapshot.Units * strategy.TickValue / strategy.TickSize, 0D)
-                                 Dim startupFav = FavouriteContracts.TryGetBySymbol(strategy.ContractId)
+                                 Dim startupFav = FavouriteContracts.TryGetBySymbolResolved(strategy.ContractId)
                                  If startupFav IsNot Nothing AndAlso Not String.IsNullOrEmpty(startupFav.PxContractId) Then
                                      SubscribeMarketQuotes(startupFav.PxContractId)
                                  End If
@@ -1904,7 +1904,7 @@ Namespace TopStepTrader.Services.Trading
                                                           Math.Max(0, orphan.PositionCount - 1))
                             _totalDollarPerPoint = If(orphan.Units > 0D AndAlso _strategy.TickSize > 0D,
                                 orphan.Units * _strategy.TickValue / _strategy.TickSize, 0D)
-                            Dim orphanFav = FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
+                            Dim orphanFav = FavouriteContracts.TryGetBySymbolResolved(_strategy.ContractId)
                             If orphanFav IsNot Nothing AndAlso Not String.IsNullOrEmpty(orphanFav.PxContractId) Then
                                 SubscribeMarketQuotes(orphanFav.PxContractId)
                             End If
@@ -2153,7 +2153,7 @@ Namespace TopStepTrader.Services.Trading
                         ' On API failure or missing key the result defaults to PROCEED so
                         ' a connectivity issue never silently blocks all trading.
                         If (_strategy.UseAiPreTradeGate AndAlso _strategy.UsePreTradeAiCheck) AndAlso _claudeService IsNot Nothing Then
-                            Dim favForAi = FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
+                            Dim favForAi = FavouriteContracts.TryGetBySymbolResolved(_strategy.ContractId)
                             Dim aiCtx As New PreTradeContext With {
                                 .ContractId = _strategy.ContractId,
                                 .ContractDescription = If(favForAi IsNot Nothing, favForAi.Name, _strategy.ContractId),
@@ -2229,7 +2229,7 @@ Namespace TopStepTrader.Services.Trading
         Private Async Function PlaceBracketOrdersAsync(side As OrderSide, lastClose As Decimal,
                                                          Optional cloudSlPrice As Decimal? = Nothing) As Task
 
-            Dim fav = FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(_strategy.ContractId)
             Dim priceUsed = lastClose
             Dim sideStr = If(side = OrderSide.Buy, "BUY", "SELL")
 
@@ -2751,7 +2751,7 @@ Namespace TopStepTrader.Services.Trading
         Private Sub OnMarketQuoteReceived(sender As Object, e As MarketQuoteEventArgs)
             If Not _positionOpen Then Return
             If _strategy Is Nothing Then Return
-            Dim fav = FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(_strategy.ContractId)
             Dim expectedId = If(fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId),
                                 fav.PxContractId, _strategy.ContractId)
             ' Primary match: exact contract ID (e.g. "CON.F.US.M6E.U26").
@@ -2899,7 +2899,7 @@ Namespace TopStepTrader.Services.Trading
         ''' (handles edge case where price reverses immediately after triggering activation).
         ''' </summary>
         Private Async Function ActivateFreeRollAsync(currentPrice As Decimal, isBuy As Boolean, ct As CancellationToken) As Task
-            Dim contract = FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
+            Dim contract = FavouriteContracts.TryGetBySymbolResolved(_strategy.ContractId)
             Dim commBuffer = If(contract IsNot Nothing, contract.GetCommissionTickBuffer(), 2)
             Dim tickSize = If(_strategy.TickSize > 0D, _strategy.TickSize, 0.01D)
 
@@ -3037,7 +3037,7 @@ Namespace TopStepTrader.Services.Trading
                 If _strategy Is Nothing Then Return
                 ' Match the SignalR full PX contract ID (e.g. "CON.F.US.MES.H26")
                 ' against the strategy's friendly symbol ("MES") via FavouriteContracts lookup.
-                Dim fav = FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(_strategy.ContractId)
                 Dim expectedId = If(fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId),
                                     fav.PxContractId, _strategy.ContractId)
                 If Not String.Equals(e.ContractId, expectedId, StringComparison.OrdinalIgnoreCase) Then Return

@@ -179,7 +179,7 @@ Namespace TopStepTrader.Services.Trading
 
             ' ── Broker resolution
             _brokerType = brokerType
-            Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If brokerType = BrokerType.TopStepX AndAlso fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId) Then
                 _effectiveContractId = fav.PxContractId
                 If fav.PxTickSize > 0 Then _tickSize = fav.PxTickSize

@@ -706,7 +706,7 @@ Namespace TopStepTrader.Services.Trading
             _pendingConfidencePct = 100
 
             Dim instrId As Integer = 0
-            Dim fav = TopStepTrader.Core.Trading.FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
+            Dim fav = TopStepTrader.Core.Trading.FavouriteContracts.TryGetBySymbolResolved(_strategy.ContractId)
             If fav Is Nothing AndAlso Not Integer.TryParse(_strategy.ContractId, instrId) Then
                 Log($"⚠️  Cannot resolve instrumentId for '{_strategy.ContractId}' — order aborted. " &
                     $"Add contract to Core.Trading.FavouriteContracts.")
@@ -950,7 +950,7 @@ Namespace TopStepTrader.Services.Trading
             _pendingConfidencePct = 100
 
             Dim instrId As Integer = 0
-            Dim fav = TopStepTrader.Core.Trading.FavouriteContracts.TryGetBySymbol(_strategy.ContractId)
+            Dim fav = TopStepTrader.Core.Trading.FavouriteContracts.TryGetBySymbolResolved(_strategy.ContractId)
             If fav Is Nothing AndAlso Not Integer.TryParse(_strategy.ContractId, instrId) Then
                 Log($"⚠️  Cannot resolve instrumentId for '{_strategy.ContractId}' — scale-in {scaleIndex}/{MaxScaleInTrades} aborted.")
                 Return

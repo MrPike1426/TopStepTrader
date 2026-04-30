@@ -1335,7 +1335,7 @@ Namespace TopStepTrader.UI.ViewModels
                 ' Deep-copy the shared template so each engine has its own independent state.
                 ' All N-multiple, ADX, leverage and scale-in fields are copied from _currentStrategy
                 ' (which was already stamped with the active profile's values by Apply*).
-                Dim favContract = FavouriteContracts.TryGetBySymbol(assetVm.ContractId)
+                Dim favContract = FavouriteContracts.TryGetBySymbolResolved(assetVm.ContractId)
                 Dim isGoldAsset = assetVm.Symbol.IndexOf("Gold", StringComparison.OrdinalIgnoreCase) >= 0 OrElse
                                   assetVm.ContractId.IndexOf("MGC", StringComparison.OrdinalIgnoreCase) >= 0
                 ' For MultiConfluence use the per-asset timeframe stored on FavouriteContract
@@ -1453,7 +1453,7 @@ Namespace TopStepTrader.UI.ViewModels
                                         Dim ingestionSvc = scope.ServiceProvider.GetRequiredService(Of IBarIngestionService)()
                                         Dim currentPrice = Await ingestionSvc.GetLatestPriceAsync(assetVm.ContractId, ct)
                                         If currentPrice > 0D Then
-                                            Dim favContract = FavouriteContracts.TryGetBySymbol(assetVm.ContractId)
+                                            Dim favContract = FavouriteContracts.TryGetBySymbolResolved(assetVm.ContractId)
                                             Dim dpp As Decimal = If(favContract IsNot Nothing,
                                                                     CDec(favContract.PxPointValue), 1D)
                                             pnl = Math.Round((currentPrice - snapshot.OpenRate) * dpp * snapshot.Amount *
@@ -1537,7 +1537,7 @@ Namespace TopStepTrader.UI.ViewModels
                     Return
                 End If
 
-                Dim fav = FavouriteContracts.TryGetBySymbol(assetVm.ContractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(assetVm.ContractId)
                 Dim tickSize As Decimal = If(fav IsNot Nothing AndAlso fav.PxTickSize > 0, fav.PxTickSize, 0.25D)
                 Dim isBuy = snapshot.IsBuy
                 Dim entryPrice = snapshot.OpenRate

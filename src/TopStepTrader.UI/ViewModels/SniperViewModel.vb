@@ -655,7 +655,7 @@ Namespace TopStepTrader.UI.ViewModels
             ' and that bar ingestion uses the right contract.
             Dim effectiveContractId As String = _contractId
             If _session.ActiveBroker = BrokerType.TopStepX Then
-                Dim fav = FavouriteContracts.TryGetBySymbol(_contractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(_contractId)
                 If fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId) Then
                     effectiveContractId = fav.PxContractId
                 End If
@@ -959,19 +959,19 @@ Namespace TopStepTrader.UI.ViewModels
 
         ''' <summary>Price units per tick for the contract.</summary>
         Private Function GetTickSize(contractId As String) As Decimal
-            Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If fav Is Nothing Then Return 0.01D
             Return If(fav.PxTickSize > 0, fav.PxTickSize, 0.01D)
         End Function
 
         Private Function GetTickValue(contractId As String) As Decimal
-            Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If fav Is Nothing Then Return 0.01D
             Return If(fav.PxTickValue > 0, fav.PxTickValue, 0.01D)
         End Function
 
         Private Shared Function GetPointValue(contractId As String) As Decimal
-            Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
             Return If(fav IsNot Nothing, fav.PxPointValue, 1.0D)
         End Function
 

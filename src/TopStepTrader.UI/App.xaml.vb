@@ -3,6 +3,7 @@ Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 Imports TopStepTrader.API.Hubs
 Imports TopStepTrader.Core.Interfaces
+Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.Services.Market
 Imports TopStepTrader.UI.Infrastructure
 Imports TopStepTrader.UI.ViewModels
@@ -52,6 +53,7 @@ Namespace TopStepTrader.UI
             ' Must complete before any strategy scan or bar fetch begins.
             Dim contractService = _host.Services.GetRequiredService(Of IContractResolutionService)()
             Await contractService.InitialiseAsync()
+            FavouriteContracts.SetResolver(contractService)
             If contractService.FailedSymbols.Count > 0 Then
                 Dim failed = String.Join(", ", contractService.FailedSymbols)
                 MessageBox.Show(

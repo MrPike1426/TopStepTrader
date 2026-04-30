@@ -8,6 +8,19 @@ Namespace TopStepTrader.Core.Trading
     ''' </summary>
     Public Class FavouriteContracts
 
+        ''' <summary>
+        ''' Ambient resolver set once at app startup by ContractResolutionService initialisation.
+        ''' When set, TryGetBySymbolResolved will return live contract IDs from the daily cache
+        ''' rather than the static fallback IDs baked into GetDefaults().
+        ''' Safe to call before SetResolver — resolver is Nothing and fallback IDs are used.
+        ''' </summary>
+        Public Shared Property Resolver As IContractResolutionService = Nothing
+
+        ''' <summary>Sets the ambient resolver. Called once during app startup.</summary>
+        Public Shared Sub SetResolver(resolver As IContractResolutionService)
+            FavouriteContracts.Resolver = resolver
+        End Sub
+
         ''' <summary>Full list of all favourite instruments with both broker specs.</summary>
         Public Shared Function GetDefaults() As List(Of FavouriteContract)
             ' CME Globex tick specs: MGC tick=0.10/$1, MCLE tick=0.01/$1, MES tick=0.25/$1.25
@@ -106,13 +119,15 @@ Namespace TopStepTrader.Core.Trading
         ''' Returns the FavouriteContract for the given root symbol with PxContractId overwritten
         ''' from the live contract cache.  Use this in all strategy code instead of TryGetBySymbol.
         ''' If the resolver is Nothing or the symbol is not yet resolved the static fallback ID is used.
+        ''' When no explicit resolver is supplied the ambient Resolver (set at startup) is used.
         ''' </summary>
         Public Shared Function TryGetBySymbolResolved(symbol As String,
-                                                       resolver As Interfaces.IContractResolutionService) As FavouriteContract
+                                                       Optional resolver As Interfaces.IContractResolutionService = Nothing) As FavouriteContract
             Dim fc = TryGetBySymbol(symbol)
             If fc Is Nothing Then Return Nothing
-            If resolver IsNot Nothing AndAlso resolver.IsResolved(fc.PxRootSymbol) Then
-                fc = fc.WithContractId(resolver.GetContractId(fc.PxRootSymbol))
+            Dim r = If(resolver, FavouriteContracts.Resolver)
+            If r IsNot Nothing AndAlso r.IsResolved(fc.PxRootSymbol) Then
+                fc = fc.WithContractId(r.GetContractId(fc.PxRootSymbol))
             End If
             Return fc
         End Function

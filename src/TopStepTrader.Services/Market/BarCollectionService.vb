@@ -131,7 +131,7 @@ Namespace TopStepTrader.Services.Market
             ' resolution used by TopStepXBarIngestionService — so that quarterly rolls are handled
             ' automatically and we never request a far-out contract that has no bar history yet.
             Dim pxContractId As String = contractId
-            Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId) Then
                 If _catalog IsNot Nothing Then
                     Dim resolved = Await _catalog.GetResolvedContractIdAsync(fav, cancel)

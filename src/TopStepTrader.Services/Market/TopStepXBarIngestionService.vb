@@ -49,7 +49,7 @@ Namespace TopStepTrader.Services.Market
             ' directly without knowing about the ProjectX naming convention.
             ' Then resolve to the active front-month via the instrument catalog so that
             ' rolled contracts (e.g. MGC.J26 → MGC.M26) continue to receive bar data.
-            Dim favContract = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim favContract = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If favContract IsNot Nothing AndAlso Not String.IsNullOrEmpty(favContract.PxContractId) Then
                 Dim resolved = Await _catalog.GetResolvedContractIdAsync(favContract, cancel)
                 If Not String.IsNullOrEmpty(resolved) Then
@@ -152,7 +152,7 @@ Namespace TopStepTrader.Services.Market
                                                  Optional maxBars As Integer = 200,
                                                  Optional cancel As CancellationToken = Nothing) As Task(Of IList(Of MarketBar)) Implements IBarIngestionService.GetBarsForMLAsync
             ' Mirror the same symbol translation as IngestAsync so the DB key matches.
-            Dim favContract = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim favContract = FavouriteContracts.TryGetBySymbolResolved(contractId)
             If favContract IsNot Nothing AndAlso Not String.IsNullOrEmpty(favContract.PxContractId) Then
                 Dim resolved = Await _catalog.GetResolvedContractIdAsync(favContract, cancel)
                 contractId = If(Not String.IsNullOrEmpty(resolved), resolved, favContract.PxContractId)
@@ -169,7 +169,7 @@ Namespace TopStepTrader.Services.Market
         Public Async Function GetLatestPriceAsync(contractId As String,
                                                    Optional cancel As CancellationToken = Nothing) As Task(Of Decimal) Implements IBarIngestionService.GetLatestPriceAsync
             Try
-                Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
                 If fav Is Nothing OrElse String.IsNullOrEmpty(fav.PxContractId) Then Return 0D
                 Dim resolved = Await _catalog.GetResolvedContractIdAsync(fav, cancel)
                 Dim pxId = If(Not String.IsNullOrEmpty(resolved), resolved, fav.PxContractId)
@@ -198,7 +198,7 @@ Namespace TopStepTrader.Services.Market
                                                barCount As Integer,
                                                Optional cancel As CancellationToken = Nothing) As Task(Of IList(Of MarketBar)) Implements IBarIngestionService.GetLiveBarsAsync
             Try
-                Dim fav = FavouriteContracts.TryGetBySymbol(contractId)
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
                 If fav Is Nothing OrElse String.IsNullOrEmpty(fav.PxContractId) Then
                     Return New List(Of MarketBar)()
                 End If
