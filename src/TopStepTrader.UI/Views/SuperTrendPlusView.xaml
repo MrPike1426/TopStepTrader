@@ -170,6 +170,7 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="16"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
@@ -221,8 +222,33 @@
                             Style="{StaticResource PrimaryButtonStyle}"
                             Padding="14,6" VerticalAlignment="Center"/>
 
+                    <!-- AI toggle -->
+                    <ToggleButton Grid.Column="11"
+                                  IsChecked="{Binding IsAiEnabled, Mode=TwoWay}"
+                                  ToolTip="Claude Haiku AI sense-check before each order. Resets to Off on restart."
+                                  Padding="10,6" VerticalAlignment="Center" Margin="8,0,0,0"
+                                  Cursor="Hand">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#x1F916;" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="AI Off"/>
+                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsAiEnabled}" Value="True">
+                                                <Setter Property="Text" Value="AI On"/>
+                                                <Setter Property="Foreground" Value="LimeGreen"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </ToggleButton>
+
                     <!-- Status label -->
-                    <Border Grid.Column="11"
+                    <Border Grid.Column="12"
                             Background="{Binding StatusBackground}"
                             CornerRadius="4" Margin="12,0,0,0"
                             Visibility="{Binding StatusVisibility}"
@@ -345,6 +371,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <!-- Header: instrument label when occupied, blank when empty -->
@@ -432,8 +459,51 @@
                                            TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot1.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
+
+                                <!-- AI mid-trade result -->
+                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
+                                        Visibility="{Binding Slot1.AiResultVisibility}"
+                                        BorderBrush="{Binding Slot1.AiVerdictBrush}" BorderThickness="1"
+                                        Background="#0D1A2E">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Slot1.AiVerdictText}"
+                                                   Foreground="{Binding Slot1.AiVerdictBrush}"
+                                                   FontWeight="Bold" FontSize="12"/>
+                                        <TextBlock Text="{Binding Slot1.AiExplanation}"
+                                                   Foreground="White" FontSize="11"
+                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                        <TextBlock FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap">
+                                            <Run Text="Action: " Foreground="{StaticResource TextSecondaryBrush}"/>
+                                            <Run Text="{Binding Slot1.AiSuggestedAction}" Foreground="Cyan"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
+
+                        <!-- AI sense-check button -->
+                        <Button Grid.Row="5" Margin="0,8,0,0" HorizontalAlignment="Stretch"
+                                Padding="6,4" FontSize="11"
+                                Visibility="{Binding Slot1.PositionVisibility}"
+                                IsEnabled="{Binding Slot1.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
+                                Command="{Binding AiCheckSlot1Command}"
+                                ToolTip="Ask Claude Haiku to sense-check this live position">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="AI Sense Check"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Slot1.IsAiChecking}" Value="True">
+                                                    <Setter Property="Text" Value="Checking&#x2026;"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
                     </Grid>
                 </Border>
 
@@ -458,6 +528,7 @@
                     </Border.Style>
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -547,8 +618,51 @@
                                            TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot2.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
+
+                                <!-- AI mid-trade result -->
+                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
+                                        Visibility="{Binding Slot2.AiResultVisibility}"
+                                        BorderBrush="{Binding Slot2.AiVerdictBrush}" BorderThickness="1"
+                                        Background="#0D1A2E">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Slot2.AiVerdictText}"
+                                                   Foreground="{Binding Slot2.AiVerdictBrush}"
+                                                   FontWeight="Bold" FontSize="12"/>
+                                        <TextBlock Text="{Binding Slot2.AiExplanation}"
+                                                   Foreground="White" FontSize="11"
+                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                        <TextBlock FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap">
+                                            <Run Text="Action: " Foreground="{StaticResource TextSecondaryBrush}"/>
+                                            <Run Text="{Binding Slot2.AiSuggestedAction}" Foreground="Cyan"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
+
+                        <!-- AI sense-check button -->
+                        <Button Grid.Row="5" Margin="0,8,0,0" HorizontalAlignment="Stretch"
+                                Padding="6,4" FontSize="11"
+                                Visibility="{Binding Slot2.PositionVisibility}"
+                                IsEnabled="{Binding Slot2.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
+                                Command="{Binding AiCheckSlot2Command}"
+                                ToolTip="Ask Claude Haiku to sense-check this live position">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="AI Sense Check"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Slot2.IsAiChecking}" Value="True">
+                                                    <Setter Property="Text" Value="Checking&#x2026;"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
                     </Grid>
                 </Border>
 
@@ -573,6 +687,7 @@
                     </Border.Style>
                     <Grid>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -662,8 +777,51 @@
                                            TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot3.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
+
+                                <!-- AI mid-trade result -->
+                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
+                                        Visibility="{Binding Slot3.AiResultVisibility}"
+                                        BorderBrush="{Binding Slot3.AiVerdictBrush}" BorderThickness="1"
+                                        Background="#0D1A2E">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Slot3.AiVerdictText}"
+                                                   Foreground="{Binding Slot3.AiVerdictBrush}"
+                                                   FontWeight="Bold" FontSize="12"/>
+                                        <TextBlock Text="{Binding Slot3.AiExplanation}"
+                                                   Foreground="White" FontSize="11"
+                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                        <TextBlock FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap">
+                                            <Run Text="Action: " Foreground="{StaticResource TextSecondaryBrush}"/>
+                                            <Run Text="{Binding Slot3.AiSuggestedAction}" Foreground="Cyan"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </Border>
+
+                        <!-- AI sense-check button -->
+                        <Button Grid.Row="5" Margin="0,8,0,0" HorizontalAlignment="Stretch"
+                                Padding="6,4" FontSize="11"
+                                Visibility="{Binding Slot3.PositionVisibility}"
+                                IsEnabled="{Binding Slot3.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
+                                Command="{Binding AiCheckSlot3Command}"
+                                ToolTip="Ask Claude Haiku to sense-check this live position">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="AI Sense Check"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Slot3.IsAiChecking}" Value="True">
+                                                    <Setter Property="Text" Value="Checking&#x2026;"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Button>
                     </Grid>
                 </Border>
 

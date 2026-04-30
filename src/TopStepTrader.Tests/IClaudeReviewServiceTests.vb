@@ -54,6 +54,13 @@ Namespace TopStepTrader.Tests
             Public Function TradeAdviceAsync(contractName As String, bars As IReadOnlyList(Of MarketBar), Optional cancel As CancellationToken = Nothing) As Task(Of (Direction As String, Rationale As String)) Implements IClaudeReviewService.TradeAdviceAsync
                 Return Task.FromResult(("BUY", "Fake trade advice — uptrend detected."))
             End Function
+
+            Public Function MidTradeCheckAsync(instrument As String, side As String, adxVal As Single, plusDi As Single, minusDi As Single,
+                                               stopPhaseLabel As String, unrealizedPnl As Decimal,
+                                               bars As IReadOnlyList(Of MarketBar),
+                                               Optional cancel As CancellationToken = Nothing) As Task(Of (Verdict As String, Explanation As String, SuggestedAction As String)) Implements IClaudeReviewService.MidTradeCheckAsync
+                Return Task.FromResult(("GREEN", "Fake mid-trade check — position healthy.", "Hold and monitor."))
+            End Function
         End Class
 
         ' ── Tests ────────────────────────────────────────────────────────────

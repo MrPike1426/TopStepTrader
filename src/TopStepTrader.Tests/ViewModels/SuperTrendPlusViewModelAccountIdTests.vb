@@ -35,6 +35,7 @@ Namespace TopStepTrader.Tests.ViewModels
                 _mockPersonaService.Object,
                 _mockAccountService.Object,
                 _mockContractResolver.Object,
+                New Mock(Of IClaudeReviewService)().Object,
                 NullLogger(Of SuperTrendPlusViewModel).Instance)
         End Function
 

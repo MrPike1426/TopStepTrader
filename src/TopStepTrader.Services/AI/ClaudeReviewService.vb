@@ -574,7 +574,135 @@ Namespace TopStepTrader.Services.AI
             End Try
         End Function
 
-        ' ── JSON DTOs ─────────────────────────────────────────────────────────────
+        ' ── Mid-Trade Sense Check ────────────────────────────────────────────────
+
+        Private Const MidTradeSystemPrompt As String =
+            "You are an experienced day trader reviewing a live futures position." & vbLf &
+            "You receive bar history and the current position state." & vbLf &
+            "Respond with EXACTLY ONE LINE in this format:" & vbLf &
+            "GREEN: <brief explanation>. Suggested action: <action>" & vbLf &
+            "or" & vbLf &
+            "AMBER: <brief explanation>. Suggested action: <action>" & vbLf &
+            "or" & vbLf &
+            "RED: <brief explanation>. Suggested action: <action>" & vbLf &
+            "GREEN = position healthy, hold. AMBER = caution, consider tightening. RED = exit recommended." & vbLf &
+            "No disclaimers. No extra lines. One line only."
+
+        ''' <summary>
+        ''' Mid-trade sense check. Sends bar history + live position state to Claude Haiku.
+        ''' Returns (Verdict=GREEN|AMBER|RED, Explanation, SuggestedAction).
+        ''' On any error defaults to (GREEN, error message, "Continue monitoring").
+        ''' </summary>
+        Public Async Function MidTradeCheckAsync(instrument As String,
+                                                  side As String,
+                                                  adxVal As Single,
+                                                  plusDi As Single,
+                                                  minusDi As Single,
+                                                  stopPhaseLabel As String,
+                                                  unrealizedPnl As Decimal,
+                                                  bars As IReadOnlyList(Of MarketBar),
+                                                  Optional cancel As CancellationToken = Nothing) As Task(Of (Verdict As String, Explanation As String, SuggestedAction As String)) Implements IClaudeReviewService.MidTradeCheckAsync
+            Dim apiKey = ResolveApiKey()
+            If String.IsNullOrWhiteSpace(apiKey) Then
+                Return ("GREEN", "Claude API key not configured — check skipped.", "Continue monitoring.")
+            End If
+
+            Dim userMessage = BuildMidTradeMessage(instrument, side, adxVal, plusDi, minusDi, stopPhaseLabel, unrealizedPnl, bars)
+
+            Try
+                Dim requestBody = New ClaudeRequest With {
+                    .Model = "claude-haiku-4-5-20251001",
+                    .MaxTokens = 120,
+                    .System = MidTradeSystemPrompt,
+                    .Messages = New List(Of ClaudeMessage) From {
+                        New ClaudeMessage With {.Role = "user", .Content = userMessage}
+                    }
+                }
+
+                Using request As New HttpRequestMessage(HttpMethod.Post, AnthropicMessagesUrl)
+                    request.Headers.Add("x-api-key", apiKey)
+                    request.Headers.Add("anthropic-version", AnthropicVersion)
+                    request.Content = JsonContent.Create(requestBody)
+
+                    Dim response = Await _http.SendAsync(request, cancel)
+                    If Not response.IsSuccessStatusCode Then
+                        Dim errorBody = Await response.Content.ReadAsStringAsync(cancel)
+                        _logger.LogWarning("MidTradeCheckAsync API error {Status}: {Body}", response.StatusCode, errorBody)
+                        Return ("GREEN", $"API error {CInt(response.StatusCode)} — defaulting to GREEN.", "Continue monitoring.")
+                    End If
+
+                    Dim result = Await response.Content.ReadFromJsonAsync(Of ClaudeResponse)(cancellationToken:=cancel)
+                    Dim text = result?.Content?.FirstOrDefault()?.Text?.Trim()
+                    If String.IsNullOrWhiteSpace(text) Then
+                        Return ("GREEN", "Empty AI response.", "Continue monitoring.")
+                    End If
+
+                    Return ParseMidTradeResponse(text)
+                End Using
+
+            Catch ex As TaskCanceledException
+                Return ("GREEN", "Request timed out.", "Continue monitoring.")
+            Catch ex As Exception
+                _logger.LogError(ex, "MidTradeCheckAsync error")
+                Return ("GREEN", $"Unexpected error: {ex.Message}", "Continue monitoring.")
+            End Try
+        End Function
+
+        Private Shared Function BuildMidTradeMessage(instrument As String,
+                                                      side As String,
+                                                      adxVal As Single,
+                                                      plusDi As Single,
+                                                      minusDi As Single,
+                                                      stopPhaseLabel As String,
+                                                      unrealizedPnl As Decimal,
+                                                      bars As IReadOnlyList(Of MarketBar)) As String
+            Dim sb As New System.Text.StringBuilder()
+            sb.AppendLine("MID-TRADE SENSE CHECK")
+            sb.AppendLine()
+            sb.AppendLine($"Instrument:   {instrument}")
+            sb.AppendLine($"Direction:    {side}")
+            sb.AppendLine($"ADX(14):      {adxVal:F1}")
+            sb.AppendLine($"+DI:          {plusDi:F1}")
+            sb.AppendLine($"-DI:          {minusDi:F1}")
+            sb.AppendLine($"Stop Phase:   {stopPhaseLabel}")
+            sb.AppendLine($"Unrealised PnL: {If(unrealizedPnl >= 0, "+", "")}${unrealizedPnl:F2}")
+            sb.AppendLine()
+            sb.AppendLine($"BAR HISTORY (last {Math.Min(bars.Count, 20)} bars, newest last):")
+            sb.AppendLine("Time (UTC)          Open      High      Low       Close     Volume")
+            Dim recent = bars.Skip(Math.Max(0, bars.Count - 20)).ToList()
+            For Each b In recent
+                sb.AppendLine($"{b.Timestamp:yyyy-MM-dd HH:mm}  {b.Open,8:F4}  {b.High,8:F4}  {b.Low,8:F4}  {b.Close,8:F4}  {b.Volume,8}")
+            Next
+            sb.AppendLine()
+            sb.AppendLine("Should this position be held (GREEN), monitored with caution (AMBER), or exited (RED)?")
+            Return sb.ToString()
+        End Function
+
+        Private Shared Function ParseMidTradeResponse(text As String) As (Verdict As String, Explanation As String, SuggestedAction As String)
+            Dim verdict As String = "GREEN"
+            If text.StartsWith("AMBER", StringComparison.OrdinalIgnoreCase) Then verdict = "AMBER"
+            If text.StartsWith("RED", StringComparison.OrdinalIgnoreCase) Then verdict = "RED"
+
+            ' Strip verdict word
+            Dim body = text
+            Dim colonIdx = text.IndexOf(":"c)
+            If colonIdx > 0 AndAlso colonIdx < 10 Then
+                body = text.Substring(colonIdx + 1).Trim()
+            End If
+
+            ' Split on "Suggested action:" if present
+            Dim actionKey = "Suggested action:"
+            Dim actionIdx = body.IndexOf(actionKey, StringComparison.OrdinalIgnoreCase)
+            If actionIdx >= 0 Then
+                Dim explanation = body.Substring(0, actionIdx).Trim().TrimEnd("."c).Trim()
+                Dim action = body.Substring(actionIdx + actionKey.Length).Trim()
+                Return (verdict, explanation, action)
+            End If
+
+            Return (verdict, body, "Continue monitoring.")
+        End Function
+
+        ' ── JSON DTOs ────────────────────────────────────────────────────────────
 
         Private Class ClaudeRequest
             <JsonPropertyName("model")>

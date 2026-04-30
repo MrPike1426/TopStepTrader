@@ -15,6 +15,14 @@ Namespace TopStepTrader.Core.Interfaces
         Function PreTradeCheckAsync(ctx As PreTradeContext, Optional cancel As CancellationToken = Nothing) As Task(Of (Proceed As Boolean, Reasoning As String))
         Function PostTradeAnalysisAsync(ctx As PostTradeContext, Optional cancel As CancellationToken = Nothing) As Task(Of PostTradeAnalysisResult)
         Function TradeAdviceAsync(contractName As String, bars As IReadOnlyList(Of MarketBar), Optional cancel As CancellationToken = Nothing) As Task(Of (Direction As String, Rationale As String))
+        ''' <summary>
+        ''' Mid-trade sense check for an open position. Sends bar history + live position data
+        ''' and returns a traffic-light verdict (GREEN/AMBER/RED), explanation, and suggested action.
+        ''' </summary>
+        Function MidTradeCheckAsync(instrument As String, side As String, adxVal As Single, plusDi As Single, minusDi As Single,
+                                    stopPhaseLabel As String, unrealizedPnl As Decimal,
+                                    bars As IReadOnlyList(Of MarketBar),
+                                    Optional cancel As CancellationToken = Nothing) As Task(Of (Verdict As String, Explanation As String, SuggestedAction As String))
     End Interface
 
 End Namespace

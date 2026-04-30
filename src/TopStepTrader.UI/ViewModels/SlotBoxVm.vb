@@ -254,6 +254,92 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── AI mid-trade sense check ─────────────────────────────────────────
+
+        Private _aiVerdict As String = String.Empty
+        ''' <summary>"GREEN", "AMBER", or "RED" — set after a mid-trade Claude check.</summary>
+        Public Property AiVerdict As String
+            Get
+                Return _aiVerdict
+            End Get
+            Set(value As String)
+                If SetProperty(_aiVerdict, value) Then
+                    NotifyPropertyChanged(NameOf(AiVerdictText))
+                    NotifyPropertyChanged(NameOf(AiVerdictBrush))
+                    NotifyPropertyChanged(NameOf(AiResultVisibility))
+                End If
+            End Set
+        End Property
+
+        Private _aiExplanation As String = String.Empty
+        ''' <summary>Short explanation returned by Claude for the mid-trade check.</summary>
+        Public Property AiExplanation As String
+            Get
+                Return _aiExplanation
+            End Get
+            Set(value As String)
+                SetProperty(_aiExplanation, value)
+            End Set
+        End Property
+
+        Private _aiSuggestedAction As String = String.Empty
+        ''' <summary>Suggested action returned by Claude for the mid-trade check.</summary>
+        Public Property AiSuggestedAction As String
+            Get
+                Return _aiSuggestedAction
+            End Get
+            Set(value As String)
+                SetProperty(_aiSuggestedAction, value)
+            End Set
+        End Property
+
+        Private _isAiChecking As Boolean = False
+        ''' <summary>True while the mid-trade AI check is in progress (drives spinner/busy state).</summary>
+        Public Property IsAiChecking As Boolean
+            Get
+                Return _isAiChecking
+            End Get
+            Set(value As Boolean)
+                SetProperty(_isAiChecking, value)
+            End Set
+        End Property
+
+        Public ReadOnly Property AiVerdictText As String
+            Get
+                Select Case _aiVerdict
+                    Case "GREEN" : Return "🟢 AI: All clear"
+                    Case "AMBER" : Return "🟡 AI: Caution"
+                    Case "RED"   : Return "🔴 AI: Exit advised"
+                    Case Else    : Return String.Empty
+                End Select
+            End Get
+        End Property
+
+        Public ReadOnly Property AiVerdictBrush As Brush
+            Get
+                Select Case _aiVerdict
+                    Case "GREEN" : Return Brushes.LimeGreen
+                    Case "AMBER" : Return New SolidColorBrush(Color.FromRgb(&HFF, &HCC, &H00))
+                    Case "RED"   : Return Brushes.Red
+                    Case Else    : Return Brushes.DimGray
+                End Select
+            End Get
+        End Property
+
+        Public ReadOnly Property AiResultVisibility As Visibility
+            Get
+                Return If(Not String.IsNullOrEmpty(_aiVerdict), Visibility.Visible, Visibility.Collapsed)
+            End Get
+        End Property
+
+        ''' <summary>Clears the AI result (called when slot is released or monitoring stops).</summary>
+        Public Sub ClearAiResult()
+            AiVerdict = String.Empty
+            AiExplanation = String.Empty
+            AiSuggestedAction = String.Empty
+            IsAiChecking = False
+        End Sub
+
     End Class
 
 End Namespace

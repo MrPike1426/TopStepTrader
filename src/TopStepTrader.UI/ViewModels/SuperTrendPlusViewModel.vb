@@ -170,6 +170,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _accountService As IAccountService
         Private ReadOnly _contractResolver As Core.Interfaces.IContractResolutionService
         Private ReadOnly _logger As ILogger(Of SuperTrendPlusViewModel)
+        Private ReadOnly _claudeService As IClaudeReviewService
 
         Private _timer As Timer
         Private ReadOnly _timerLock As New Object()
@@ -187,6 +188,22 @@ Namespace TopStepTrader.UI.ViewModels
         ''' <summary>Stores the DateTimeOffset when each instrument's slot was last released.
         ''' Re-entry is blocked until at least one full bar has elapsed.</summary>
         Private ReadOnly _reEntryCooldown As New Dictionary(Of String, DateTimeOffset)(StringComparer.OrdinalIgnoreCase)
+
+        ''' <summary>Instruments suppressed from AI pre-trade checks until the stored DateTimeOffset (15-min block on NO).</summary>
+        Private ReadOnly _aiSuppression As New Dictionary(Of String, DateTimeOffset)(StringComparer.OrdinalIgnoreCase)
+
+        ' ── AI toggle ───────────────────────────────────────────────────────────
+        Private _isAiEnabled As Boolean = False
+        ''' <summary>When True, a Claude Haiku pre-trade sense check gates every new order.
+        ''' Resets to False on each app start.</summary>
+        Public Property IsAiEnabled As Boolean
+            Get
+                Return _isAiEnabled
+            End Get
+            Set(value As Boolean)
+                SetProperty(_isAiEnabled, value)
+            End Set
+        End Property
         Public Property UseEarlyMode As Boolean
             Get
                 Return _useEarlyMode
@@ -324,12 +341,17 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public ReadOnly Property StartStopCommand As RelayCommand
 
+        Public ReadOnly Property AiCheckSlot1Command As RelayCommand
+        Public ReadOnly Property AiCheckSlot2Command As RelayCommand
+        Public ReadOnly Property AiCheckSlot3Command As RelayCommand
+
         Public Sub New(barService As IBarIngestionService,
                        orderService As IOrderService,
                        session As ITradingSessionContext,
                        personaService As IPersonaService,
                        accountService As IAccountService,
                        contractResolver As Core.Interfaces.IContractResolutionService,
+                       claudeService As IClaudeReviewService,
                        logger As ILogger(Of SuperTrendPlusViewModel))
             _barService = barService
             _orderService = orderService
@@ -337,12 +359,16 @@ Namespace TopStepTrader.UI.ViewModels
             _personaService = personaService
             _accountService = accountService
             _contractResolver = contractResolver
+            _claudeService = claudeService
             _logger = logger
             Config = New SuperTrendPlusConfig()
             _slotManager = New SlotManager(Config)
             _exitEngine = New ExitSignalEngine(
                 Microsoft.Extensions.Logging.Abstractions.NullLogger(Of ExitSignalEngine).Instance)
             StartStopCommand = New RelayCommand(AddressOf OnStartStop)
+            AiCheckSlot1Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot1))
+            AiCheckSlot2Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot2))
+            AiCheckSlot3Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot3))
 
             Slot1.Slot = _slotManager.Slots(0)
             Slot2.Slot = _slotManager.Slots(1)
@@ -1171,6 +1197,78 @@ Namespace TopStepTrader.UI.ViewModels
                                    If(tpTicks.HasValue, tpTicks.Value.ToString(), "none"),
                                    lastClose, stLine)
 
+            ' ── AI pre-trade sense check (gated by IsAiEnabled toggle) ─────────────
+            If _isAiEnabled AndAlso _claudeService IsNot Nothing Then
+                Dim isSuppressed As Boolean = False
+                SyncLock _aiSuppression
+                    Dim suppressedUntil As DateTimeOffset
+                    If _aiSuppression.TryGetValue(contractId, suppressedUntil) AndAlso
+                       DateTimeOffset.UtcNow < suppressedUntil Then
+                        isSuppressed = True
+                        _logger.LogInformation("ST+ AI pre-trade check suppressed for {Contract} until {Until:HH:mm:ss} UTC",
+                                               contractId, suppressedUntil.UtcDateTime)
+                    End If
+                End SyncLock
+
+                If Not isSuppressed Then
+                    Try
+                        Dim barsForAi As IList(Of MarketBar) = Nothing
+                        Try
+                            ' 4 hours worth of bars at the selected timeframe
+                            Dim tf2 = MapTimeframe(_selectedTimeframe)
+                            Dim tfMins As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
+                            If _selectedTimeframe.EndsWith("hr") Then tfMins *= 60
+                            Dim barsNeeded As Integer = Math.Max(30, CInt(Math.Ceiling(240.0 / tfMins)))
+                            barsForAi = Await _barService.GetLiveBarsAsync(contractId, tf2, barsNeeded)
+                        Catch
+                        End Try
+
+                        Dim ctx As New PreTradeContext With {
+                            .ContractId = contractId,
+                            .ContractDescription = contractId,
+                            .Side = side,
+                            .Price = lastClose,
+                            .AdxValue = 0F,
+                            .UtcNow = DateTimeOffset.UtcNow
+                        }
+                        Using cts = New System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8))
+                            Dim aiResult = Await _claudeService.PreTradeCheckAsync(ctx, cts.Token)
+                            If Not aiResult.Proceed Then
+                                ' NO — block this signal, suppress for 15 minutes
+                                Dim shortReason = If(aiResult.Reasoning.Length > 120,
+                                                     aiResult.Reasoning.Substring(0, 117) & "…",
+                                                     aiResult.Reasoning)
+                                _logger.LogInformation("ST+ AI VETO [{Contract}]: {Reason}", contractId, shortReason)
+                                SyncLock _aiSuppression
+                                    _aiSuppression(contractId) = DateTimeOffset.UtcNow.AddMinutes(15)
+                                End SyncLock
+                                ' Update watchlist row with the rejection reason
+                                Dim wIdx As Integer = Array.IndexOf(Instruments, contractId)
+                                If wIdx >= 0 Then
+                                    Dim wRow = WatchlistItems(wIdx)
+                                    Application.Current?.Dispatcher?.Invoke(
+                                        Sub()
+                                            wRow.SignalReason = $"🤖 AI: {shortReason}"
+                                        End Sub)
+                                End If
+                                _slotManager.CloseSlot(slot.SlotIndex)
+                                Return
+                            End If
+                        End Using
+                        ' YES — update watchlist row with green confirmation
+                        Dim wIdxOk As Integer = Array.IndexOf(Instruments, contractId)
+                        If wIdxOk >= 0 Then
+                            Application.Current?.Dispatcher?.Invoke(
+                                Sub()
+                                    WatchlistItems(wIdxOk).SignalReason = "🤖 AI Checked ✓"
+                                End Sub)
+                        End If
+                    Catch ex As Exception
+                        _logger.LogWarning(ex, "ST+ AI pre-trade check error for {Contract} — proceeding anyway", contractId)
+                    End Try
+                End If
+            End If
+
             ' Only the primary slot (SlotIndex = 0) places a bracketed order.
             ' Scale-in slots add contracts without a bracket so TopStepX does not
             ' create independent SL/TP orders that conflict with the primary bracket.
@@ -1516,6 +1614,7 @@ Namespace TopStepTrader.UI.ViewModels
                         box.StopPhaseLabel = String.Empty
                         box.SlotLabel = String.Empty
                         box.PnlBorderBrush = Brushes.Gray
+                        box.ClearAiResult()
                     End If
                 End Sub)
             _slotManager.CloseSlot(slot.SlotIndex)
@@ -1598,6 +1697,66 @@ Namespace TopStepTrader.UI.ViewModels
                 Case SlotHealth.Exiting : Return Brushes.Red
                 Case Else               : Return Brushes.LimeGreen
             End Select
+        End Function
+
+        ''' <summary>
+        ''' Runs an ad-hoc Claude Haiku mid-trade sense check for the given slot box.
+        ''' Updates <see cref="SlotBoxVm.AiVerdict"/>, <see cref="SlotBoxVm.AiExplanation"/>,
+        ''' and <see cref="SlotBoxVm.AiSuggestedAction"/> on completion.
+        ''' </summary>
+        Public Async Function RunMidTradeCheckAsync(box As SlotBoxVm) As Task
+            If _claudeService Is Nothing OrElse Not box.HasPosition OrElse box.Slot Is Nothing Then Return
+            Dim slot = box.Slot
+            If Not slot.IsOpen Then Return
+
+            Application.Current?.Dispatcher?.Invoke(Sub() box.IsAiChecking = True)
+            Try
+                Dim tf = MapTimeframe(_selectedTimeframe)
+                Dim bars As IList(Of MarketBar) = Nothing
+                Try
+                    bars = Await _barService.GetLiveBarsAsync(slot.Instrument, tf, 60)
+                Catch
+                End Try
+
+                Dim adx As Single = 0F
+                Dim pdi As Single = 0F
+                Dim mdi As Single = 0F
+                If bars IsNot Nothing AndAlso bars.Count >= 14 Then
+                    Dim dmi = TechnicalIndicators.DMI(
+                        bars.Select(Function(b) b.High).ToList(),
+                        bars.Select(Function(b) b.Low).ToList(),
+                        bars.Select(Function(b) b.Close).ToList(), period:=14)
+                    Dim n = bars.Count - 1
+                    If Not Single.IsNaN(dmi.ADX(n)) Then adx = dmi.ADX(n)
+                    If Not Single.IsNaN(dmi.PlusDI(n)) Then pdi = dmi.PlusDI(n)
+                    If Not Single.IsNaN(dmi.MinusDI(n)) Then mdi = dmi.MinusDI(n)
+                End If
+
+                Using cts = New System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10))
+                    Dim result = Await _claudeService.MidTradeCheckAsync(
+                        slot.Instrument, slot.Side, adx, pdi, mdi,
+                        PhaseLabel(slot.StopPhase, Config),
+                        slot.UnrealizedPnl,
+                        If(bars IsNot Nothing, CType(bars, IReadOnlyList(Of MarketBar)), New List(Of MarketBar)()),
+                        cts.Token)
+                    Application.Current?.Dispatcher?.Invoke(
+                        Sub()
+                            box.AiVerdict = result.Verdict
+                            box.AiExplanation = result.Explanation
+                            box.AiSuggestedAction = result.SuggestedAction
+                        End Sub)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ mid-trade AI check error for {Contract}", slot.Instrument)
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        box.AiVerdict = "GREEN"
+                        box.AiExplanation = $"Check failed: {ex.Message}"
+                        box.AiSuggestedAction = "Continue monitoring."
+                    End Sub)
+            Finally
+                Application.Current?.Dispatcher?.Invoke(Sub() box.IsAiChecking = False)
+            End Try
         End Function
 
         Public Sub Dispose() Implements IDisposable.Dispose
