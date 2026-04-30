@@ -4,7 +4,7 @@ Namespace TopStepTrader.Core.Trading
 
     ''' <summary>
     ''' Master list of TopStepX favourite instruments.
-    ''' SuperTrend+ watchlist: MES, MNQ, M2K, MYM, MGC, M6J, MCL (OIL reserve).
+    ''' SuperTrend+ watchlist: MES, MNQ, M2K, MYM, MGC, M6E, MCL (OIL reserve).
     ''' </summary>
     Public Class FavouriteContracts
 
@@ -74,11 +74,11 @@ Namespace TopStepTrader.Core.Trading
                 .RollLeadDays = 28
             })
 
-            ' M6J — Micro USD/JPY  [ProjectX symbolId: F.US.M6J; roll: quarterly H/M/U/Z; U26=Sep 2026]
-            ' Contract: 1,250,000 JPY. Tick = 0.000001 USD/JPY = $1.25. Asian session core instrument.
+            ' M6E — Micro EUR/USD  [ProjectX symbolId: F.US.M6E; roll: quarterly H/M/U/Z; U26=Sep 2026]
+            ' Contract: 12,500 EUR. Tick = 0.0001 USD/EUR = $1.25.
             ' PxMinStopDollars=$12.50: 10 ticks × $1.25 minimum
-            list.Add(New FavouriteContract("M6J", "USD/JPY", "CON.F.US.M6J.U26", 0.000001D, 1.25D, 1250000D, 0.1D, 12.5D) With {
-                .PxRootSymbol = "M6J",
+            list.Add(New FavouriteContract("M6E", "EUR/USD", "CON.F.US.M6E.U26", 0.0001D, 1.25D, 12500D, 0.1D, 12.5D) With {
+                .PxRootSymbol = "M6E",
                 .CommissionTickBuffer = 1,
                 .MultiConfluenceTimeframeMinutes = 10,
                 .RoundTripFee = 0.74D
