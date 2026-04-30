@@ -1103,12 +1103,9 @@ Namespace TopStepTrader.UI.ViewModels
                     End If
                 End If
 
+                ' Use snapshot P&L as a fallback; will be overridden below once bar close is available.
                 Dim latestPnl = snapshot.UnrealizedPnlUsd
                 slot.UnrealizedPnl = latestPnl
-                Dim boxForDisplay = BoxForSlot(slot)
-                Application.Current?.Dispatcher?.Invoke(Sub()
-                    If boxForDisplay IsNot Nothing Then UpdatePositionDisplay(boxForDisplay, slot, latestPnl)
-                End Sub)
 
                 Dim bars As IList(Of MarketBar)
                 Try
@@ -1122,6 +1119,25 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim lows   = bars.Select(Function(b) b.Low).ToList()
                 Dim closes = bars.Select(Function(b) b.Close).ToList()
                 Dim n = bars.Count - 1
+
+                ' Derive P&L locally from bar close so it always reflects a real price,
+                ' regardless of whether the broker snapshot's UnrealizedPnlUsd is populated.
+                If slot.EntryPrice <> 0D Then
+                    Dim fc3 = FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
+                    If fc3 IsNot Nothing AndAlso fc3.PxTickSize > 0D AndAlso fc3.PxTickValue > 0D Then
+                        Dim priceDiff As Decimal = If(slot.Side = "Buy",
+                            CDec(closes(n)) - slot.EntryPrice,
+                            slot.EntryPrice - CDec(closes(n)))
+                        Dim ticks As Decimal = priceDiff / fc3.PxTickSize
+                        latestPnl = Math.Round(ticks * fc3.PxTickValue * slot.Contracts, 2)
+                        slot.UnrealizedPnl = latestPnl
+                    End If
+                End If
+
+                Dim boxForDisplay = BoxForSlot(slot)
+                Application.Current?.Dispatcher?.Invoke(Sub()
+                    If boxForDisplay IsNot Nothing Then UpdatePositionDisplay(boxForDisplay, slot, latestPnl)
+                End Sub)
                 Dim st         = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
                 Dim dmiForExit = TechnicalIndicators.DMI(highs, lows, closes, period:=14)
                 Dim atr14Exit  = TechnicalIndicators.ATR(highs, lows, closes, period:=14)
