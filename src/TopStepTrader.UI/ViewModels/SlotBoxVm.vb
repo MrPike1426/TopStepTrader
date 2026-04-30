@@ -168,6 +168,46 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Private _pnlLine As String = String.Empty
+        ''' <summary>Formatted P&amp;L line, e.g. "P&amp;L: -$5.00".</summary>
+        Public Property PnlLine As String
+            Get
+                Return _pnlLine
+            End Get
+            Set(value As String)
+                SetProperty(_pnlLine, value)
+            End Set
+        End Property
+
+        Private _pnlTextBrush As Brush = Brushes.Gray
+        ''' <summary>Text colour for the P&amp;L line: green = positive, red = negative, grey = zero.</summary>
+        Public Property PnlTextBrush As Brush
+            Get
+                Return _pnlTextBrush
+            End Get
+            Set(value As Brush)
+                SetProperty(_pnlTextBrush, value)
+            End Set
+        End Property
+
+        Private _isPnlTextFlashing As Boolean = False
+        ''' <summary>True for 400 ms after a P&amp;L value change — drives yellow bold flash in XAML.</summary>
+        Public Property IsPnlTextFlashing As Boolean
+            Get
+                Return _isPnlTextFlashing
+            End Get
+            Set(value As Boolean)
+                SetProperty(_isPnlTextFlashing, value)
+            End Set
+        End Property
+
+        ''' <summary>Flash the P&amp;L text bold yellow for 400 ms.</summary>
+        Public Async Function FlashPnlTextAsync() As Task
+            IsPnlTextFlashing = True
+            Await Task.Delay(400)
+            IsPnlTextFlashing = False
+        End Function
+
         Private _pnlBrush As Brush = Brushes.White
         Public Property PnlBrush As Brush
             Get
@@ -175,6 +215,17 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
             Set(value As Brush)
                 SetProperty(_pnlBrush, value)
+            End Set
+        End Property
+
+        Private _pnlBorderBrush As Brush = Brushes.Gray
+        ''' <summary>Thick border colour for the slot card: green = positive P&amp;L, red = negative, grey = zero / no position.</summary>
+        Public Property PnlBorderBrush As Brush
+            Get
+                Return _pnlBorderBrush
+            End Get
+            Set(value As Brush)
+                SetProperty(_pnlBorderBrush, value)
             End Set
         End Property
 

@@ -96,6 +96,10 @@
                                     <TextBlock Text="&#x1F4CA;  Position Slots" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
                                     <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,6">SuperTrend+ manages up to three Position Slots per instrument. The number of slots opened is determined by trend strength. Each new slot opens on the next closed bar after the ADX band increases. No two slots open on the same bar. Slots are not opened if the trend is showing signs of deterioration.</TextBlock>
                                     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Grid.Column="0" Background="#1A2440" CornerRadius="4" Padding="8,6" Margin="0,0,4,0"><StackPanel><TextBlock Text="ADX Range" Foreground="{StaticResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/><TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11">25 - 39  (1 slot)</TextBlock><TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11">40 - 59  (up to 2 slots)</TextBlock><TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11">60+      (up to 3 slots)</TextBlock></StackPanel></Border></Grid>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,8,0,0">Trend strength is displayed in the watchlist Strength column using a coffee scale. The level also determines how many positions (contracts) the bot places when it enters a trade:</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,4,0,2"><Run Foreground="White" FontWeight="SemiBold">L1: Decaff</Run>  — ADX 25–39. Trend is active but mild. Bot places 1 position.</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2"><Run Foreground="White" FontWeight="SemiBold">L2: Latte</Run>    — ADX 40–59. Moderate trend with decent momentum. Bot places 2 positions.</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,0"><Run Foreground="White" FontWeight="SemiBold">L3: Espresso</Run> — ADX 60+. Strong, high-conviction trend. Bot places 3 positions.</TextBlock>
                                 </StackPanel>
                             </Border>
 
@@ -245,18 +249,18 @@
                     <Grid Grid.Row="0" Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="110"/>
-                            <ColumnDefinition Width="50"/>
-                            <ColumnDefinition Width="90"/>
-                            <ColumnDefinition Width="120"/>
-                            <ColumnDefinition Width="130"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Symbol"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="1" Text="Trend"     Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="2" Text="Signal"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="3" Text="Strength"  Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="4" Text="+DI / -DI" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="5" Text="What this means" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                                <ColumnDefinition Width="50"/>
+                                <ColumnDefinition Width="90"/>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Symbol"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Column="1" Text="Trend"     Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Column="2" Text="Signal"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Column="3" Text="Strength"  Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Column="4" Text="+DI / -DI" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Column="5" Text="What this means" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
                     </Grid>
 
                     <!-- rows -->
@@ -268,7 +272,7 @@
                                         <ColumnDefinition Width="110"/>
                                         <ColumnDefinition Width="50"/>
                                         <ColumnDefinition Width="90"/>
-                                        <ColumnDefinition Width="120"/>
+                                        <ColumnDefinition Width="160"/>
                                         <ColumnDefinition Width="130"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
@@ -319,19 +323,17 @@
                 <Border Grid.Column="0"
                         Opacity="{Binding Slot1.BoxOpacity}"
                         Background="{StaticResource SurfaceBrush}"
-                        CornerRadius="6" Padding="12,10">
+                        CornerRadius="6" Padding="12,10"
+                        BorderBrush="{Binding Slot1.PnlBorderBrush}"
+                        BorderThickness="3">
                     <Border.Style>
                         <Style TargetType="Border">
-                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
-                            <Setter Property="BorderThickness" Value="1"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Slot1.IsBorderFlashing}" Value="True">
                                     <Setter Property="BorderBrush" Value="White"/>
-                                    <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding Slot1.IsPnlFlashing}" Value="True">
                                     <Setter Property="BorderBrush" Value="White"/>
-                                    <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -401,16 +403,33 @@
                         <!-- Position area -->
                         <Border Grid.Row="4"
                                 Visibility="{Binding Slot1.PositionVisibility}"
-                                Background="#1A2A1A" CornerRadius="4"
+                                Background="#1A2A50" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
                             <StackPanel>
                                 <TextBlock Text="{Binding Slot1.PositionDisplay}"
-                                           Foreground="{Binding Slot1.PnlBrush}"
-                                           FontFamily="Consolas" FontSize="13"
+                                           Foreground="White"
+                                           FontFamily="Consolas" FontSize="14"
                                            TextWrapping="Wrap"/>
+                                <TextBlock FontFamily="Consolas" FontSize="14"
+                                           Margin="0,2,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{Binding Slot1.PnlTextBrush}"/>
+                                            <Setter Property="FontWeight" Value="Normal"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Slot1.IsPnlTextFlashing}" Value="True">
+                                                    <Setter Property="Foreground" Value="Yellow"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                    <Run Text="{Binding Slot1.PnlLine, Mode=OneWay}"/>
+                                </TextBlock>
                                 <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}">
+                                           FontFamily="Consolas" FontSize="13"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot1.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
                             </StackPanel>
@@ -422,19 +441,17 @@
                 <Border Grid.Column="2"
                         Opacity="{Binding Slot2.BoxOpacity}"
                         Background="{StaticResource SurfaceBrush}"
-                        CornerRadius="6" Padding="12,10">
+                        CornerRadius="6" Padding="12,10"
+                        BorderBrush="{Binding Slot2.PnlBorderBrush}"
+                        BorderThickness="3">
                     <Border.Style>
                         <Style TargetType="Border">
-                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
-                            <Setter Property="BorderThickness" Value="1"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Slot2.IsBorderFlashing}" Value="True">
                                     <Setter Property="BorderBrush" Value="White"/>
-                                    <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding Slot2.IsPnlFlashing}" Value="True">
                                     <Setter Property="BorderBrush" Value="White"/>
-                                    <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -501,16 +518,33 @@
 
                         <Border Grid.Row="4"
                                 Visibility="{Binding Slot2.PositionVisibility}"
-                                Background="#1A2A1A" CornerRadius="4"
+                                Background="#1A2A50" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
                             <StackPanel>
                                 <TextBlock Text="{Binding Slot2.PositionDisplay}"
-                                           Foreground="{Binding Slot2.PnlBrush}"
-                                           FontFamily="Consolas" FontSize="13"
+                                           Foreground="White"
+                                           FontFamily="Consolas" FontSize="14"
                                            TextWrapping="Wrap"/>
+                                <TextBlock FontFamily="Consolas" FontSize="14"
+                                           Margin="0,2,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{Binding Slot2.PnlTextBrush}"/>
+                                            <Setter Property="FontWeight" Value="Normal"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Slot2.IsPnlTextFlashing}" Value="True">
+                                                    <Setter Property="Foreground" Value="Yellow"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                    <Run Text="{Binding Slot2.PnlLine, Mode=OneWay}"/>
+                                </TextBlock>
                                 <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}">
+                                           FontFamily="Consolas" FontSize="13"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot2.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
                             </StackPanel>
@@ -522,19 +556,17 @@
                 <Border Grid.Column="4"
                         Opacity="{Binding Slot3.BoxOpacity}"
                         Background="{StaticResource SurfaceBrush}"
-                        CornerRadius="6" Padding="12,10">
+                        CornerRadius="6" Padding="12,10"
+                        BorderBrush="{Binding Slot3.PnlBorderBrush}"
+                        BorderThickness="3">
                     <Border.Style>
                         <Style TargetType="Border">
-                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
-                            <Setter Property="BorderThickness" Value="1"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding Slot3.IsBorderFlashing}" Value="True">
                                     <Setter Property="BorderBrush" Value="White"/>
-                                    <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding Slot3.IsPnlFlashing}" Value="True">
                                     <Setter Property="BorderBrush" Value="White"/>
-                                    <Setter Property="BorderThickness" Value="2"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
@@ -601,16 +633,33 @@
 
                         <Border Grid.Row="4"
                                 Visibility="{Binding Slot3.PositionVisibility}"
-                                Background="#1A2A1A" CornerRadius="4"
+                                Background="#1A2A50" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
                             <StackPanel>
                                 <TextBlock Text="{Binding Slot3.PositionDisplay}"
-                                           Foreground="{Binding Slot3.PnlBrush}"
-                                           FontFamily="Consolas" FontSize="13"
+                                           Foreground="White"
+                                           FontFamily="Consolas" FontSize="14"
                                            TextWrapping="Wrap"/>
+                                <TextBlock FontFamily="Consolas" FontSize="14"
+                                           Margin="0,2,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{Binding Slot3.PnlTextBrush}"/>
+                                            <Setter Property="FontWeight" Value="Normal"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Slot3.IsPnlTextFlashing}" Value="True">
+                                                    <Setter Property="Foreground" Value="Yellow"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                    <Run Text="{Binding Slot3.PnlLine, Mode=OneWay}"/>
+                                </TextBlock>
                                 <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}">
+                                           FontFamily="Consolas" FontSize="13"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot3.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
                             </StackPanel>

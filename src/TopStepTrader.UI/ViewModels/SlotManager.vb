@@ -110,7 +110,7 @@ Namespace TopStepTrader.UI.ViewModels
             slot.StopPrice    = stLine
             slot.EntryPrice   = 0D
             slot.TakeProfitPrice = 0D
-            slot.Contracts    = _config.ContractsPerSlot
+            slot.Contracts    = ContractsForAdx(entryAdx)
             slot.IsOpen       = True
             slot.Health       = SlotHealth.Healthy
             slot.MissCount    = 0
@@ -158,11 +158,18 @@ Namespace TopStepTrader.UI.ViewModels
             Next
         End Sub
 
+        ''' <summary>Returns the number of contracts to place based on ADX strength band.</summary>
+        Public Function ContractsForAdx(adx As Single) As Integer
+            If adx >= _config.AdxStrongThreshold Then Return Math.Min(3, _config.ContractsPerSlot * 3)
+            If adx >= _config.AdxModerateThreshold Then Return Math.Min(2, _config.ContractsPerSlot * 2)
+            Return _config.ContractsPerSlot
+        End Function
+
         Private Shared Function FormatEntryReason(adx As Single) As String
             Dim adxInt = CInt(Math.Round(adx))
-            If adx >= 60 Then Return $"ADX {adxInt} — Strong"
-            If adx >= 40 Then Return $"ADX {adxInt} — Moderate"
-            Return $"ADX {adxInt} — Active"
+            If adx >= 60 Then Return $"ADX {adxInt} — L3: Espresso"
+            If adx >= 40 Then Return $"ADX {adxInt} — L2: Latte"
+            Return $"ADX {adxInt} — L1: Decaff"
         End Function
 
     End Class
