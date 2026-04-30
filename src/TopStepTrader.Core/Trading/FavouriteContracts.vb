@@ -1,3 +1,5 @@
+Imports TopStepTrader.Core.Interfaces
+
 Namespace TopStepTrader.Core.Trading
 
     ''' <summary>
@@ -100,6 +102,21 @@ Namespace TopStepTrader.Core.Trading
                               symbol.StartsWith($"CON.F.US.{f.PxRootSymbol}.", StringComparison.OrdinalIgnoreCase))))
         End Function
 
+        ''' <summary>
+        ''' Returns the FavouriteContract for the given root symbol with PxContractId overwritten
+        ''' from the live contract cache.  Use this in all strategy code instead of TryGetBySymbol.
+        ''' If the resolver is Nothing or the symbol is not yet resolved the static fallback ID is used.
+        ''' </summary>
+        Public Shared Function TryGetBySymbolResolved(symbol As String,
+                                                       resolver As Interfaces.IContractResolutionService) As FavouriteContract
+            Dim fc = TryGetBySymbol(symbol)
+            If fc Is Nothing Then Return Nothing
+            If resolver IsNot Nothing AndAlso resolver.IsResolved(fc.PxRootSymbol) Then
+                fc = fc.WithContractId(resolver.GetContractId(fc.PxRootSymbol))
+            End If
+            Return fc
+        End Function
+
     End Class
 
     ''' <summary>
@@ -197,6 +214,26 @@ Namespace TopStepTrader.Core.Trading
             PxMinSlDistancePct = pxMinSlDistPct
             Me.PxMinStopDollars = pxMinStopDollars
         End Sub
+
+        ''' <summary>
+        ''' Returns a shallow copy of this contract with PxContractId replaced by the given live ID.
+        ''' Used by TryGetBySymbolResolved to inject the cache-resolved contract ID without
+        ''' mutating the static default list.
+        ''' </summary>
+        Public Function WithContractId(liveContractId As String) As FavouriteContract
+            Dim copy As New FavouriteContract(
+                Me.Name, Me.Name, liveContractId,
+                Me.PxTickSize, Me.PxTickValue, Me.PxPointValue,
+                Me.PxMinSlDistancePct, Me.PxMinStopDollars) With {
+                .PxRootSymbol                  = Me.PxRootSymbol,
+                .CommissionTickBuffer          = Me.CommissionTickBuffer,
+                .MultiConfluenceTimeframeMinutes = Me.MultiConfluenceTimeframeMinutes,
+                .RoundTripFee                  = Me.RoundTripFee,
+                .RollLeadDays                  = Me.RollLeadDays,
+                .IsCrypto                      = Me.IsCrypto
+            }
+            Return copy
+        End Function
 
     End Class
 

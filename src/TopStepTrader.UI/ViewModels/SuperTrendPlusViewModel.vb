@@ -162,6 +162,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _personaService As IPersonaService
         Private ReadOnly _accountService As IAccountService
+        Private ReadOnly _contractResolver As Core.Interfaces.IContractResolutionService
         Private ReadOnly _logger As ILogger(Of SuperTrendPlusViewModel)
 
         Private _timer As Timer
@@ -314,13 +315,15 @@ Namespace TopStepTrader.UI.ViewModels
                        session As ITradingSessionContext,
                        personaService As IPersonaService,
                        accountService As IAccountService,
+                       contractResolver As Core.Interfaces.IContractResolutionService,
                        logger As ILogger(Of SuperTrendPlusViewModel))
-            _barService     = barService
-            _orderService   = orderService
-            _session        = session
-            _personaService = personaService
-            _accountService = accountService
-            _logger         = logger
+            _barService       = barService
+            _orderService     = orderService
+            _session          = session
+            _personaService   = personaService
+            _accountService   = accountService
+            _contractResolver = contractResolver
+            _logger           = logger
             Config          = New SuperTrendPlusConfig()
             _slotManager    = New SlotManager(Config)
             _exitEngine     = New ExitSignalEngine(
@@ -914,7 +917,7 @@ Namespace TopStepTrader.UI.ViewModels
             End SyncLock
 
             Dim oSide As OrderSide = If(side = "Buy", OrderSide.Buy, OrderSide.Sell)
-            Dim fc As FavouriteContract = FavouriteContracts.TryGetBySymbol(contractId)
+            Dim fc As FavouriteContract = FavouriteContracts.TryGetBySymbolResolved(contractId, _contractResolver)
             Dim stopTicks As Integer? = Nothing
             Dim tpTicks As Integer? = Nothing
             If fc IsNot Nothing AndAlso fc.PxTickSize > 0D Then
@@ -1029,7 +1032,7 @@ Namespace TopStepTrader.UI.ViewModels
                 If snapshot.OpenRate <> 0D AndAlso slot.EntryPrice = 0D Then
                     slot.EntryPrice = snapshot.OpenRate
                     If slot.TakeProfitPrice = 0D Then
-                        Dim fc2 = FavouriteContracts.TryGetBySymbol(slot.Instrument)
+                        Dim fc2 = FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
                         If fc2 IsNot Nothing AndAlso fc2.PxTickSize > 0D Then
                             Dim rawDist = Math.Abs(slot.EntryPrice - slot.StopPrice)
                             Dim stopTicks2 = CInt(Math.Round(rawDist / fc2.PxTickSize))

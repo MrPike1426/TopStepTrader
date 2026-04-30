@@ -58,14 +58,14 @@ Namespace TopStepTrader.Tests.Trading
         <Fact>
         Public Sub FavouriteContracts_QuarterlyContracts_HaveRollLeadDays7()
             Dim mes = FavouriteContracts.TryGetBySymbol("SPX500")
-            Dim m6e = FavouriteContracts.TryGetBySymbol("EURUSD")
+            Dim m6j = FavouriteContracts.TryGetBySymbol("M6J")
             Dim mnq = FavouriteContracts.TryGetBySymbol("NQ")
-            Dim mbt = FavouriteContracts.TryGetBySymbol("BTC")
+            Dim m2k = FavouriteContracts.TryGetBySymbol("M2K")
 
             Assert.Equal(7, mes.RollLeadDays)
-            Assert.Equal(7, m6e.RollLeadDays)
+            Assert.Equal(7, m6j.RollLeadDays)
             Assert.Equal(7, mnq.RollLeadDays)
-            Assert.Equal(7, mbt.RollLeadDays)
+            Assert.Equal(7, m2k.RollLeadDays)
         End Sub
 
         ' ── SelectBestContract: monthly MCL (RollLeadDays = 28) ───────────────────
@@ -161,20 +161,20 @@ Namespace TopStepTrader.Tests.Trading
             Assert.Equal("CON.F.US.MES.H26", result.ContractId)
         End Sub
 
-        ' ── SelectBestContract: quarterly M6E (RollLeadDays = 7) ─────────────────
+        ' ── SelectBestContract: quarterly M6J (RollLeadDays = 7) ─────────────────
 
         <Fact>
-        Public Sub SelectBestContract_M6E_ExcludesRolledQuarter_SelectsNext()
+        Public Sub SelectBestContract_M6J_ExcludesRolledQuarter_SelectsNext()
             Dim asOf = New DateTime(2026, 3, 12)
-            Dim fav = FavouriteContracts.TryGetBySymbol("EURUSD")
+            Dim fav = FavouriteContracts.TryGetBySymbol("M6J")
             Dim candidates = {
-                MakeContract("CON.F.US.M6E.H26"),
-                MakeContract("CON.F.US.M6E.M26")
+                MakeContract("CON.F.US.M6J.H26"),
+                MakeContract("CON.F.US.M6J.M26")
             }
 
             Dim result = TopStepXInstrumentCatalog.SelectBestContract(candidates, fav, asOf)
 
-            Assert.Equal("CON.F.US.M6E.M26", result.ContractId)
+            Assert.Equal("CON.F.US.M6J.M26", result.ContractId)
         End Sub
 
         ' ── SelectBestContract: quarterly MNQ (RollLeadDays = 7) ─────────────────
@@ -193,20 +193,20 @@ Namespace TopStepTrader.Tests.Trading
             Assert.Equal("CON.F.US.MNQ.M26", result.ContractId)
         End Sub
 
-        ' ── SelectBestContract: quarterly MBT (RollLeadDays = 7) ─────────────────
+        ' ── SelectBestContract: quarterly M2K (RollLeadDays = 7) ─────────────────
 
         <Fact>
-        Public Sub SelectBestContract_MBT_ExcludesRolledQuarter_SelectsNext()
+        Public Sub SelectBestContract_M2K_ExcludesRolledQuarter_SelectsNext()
             Dim asOf = New DateTime(2026, 6, 12)
-            Dim fav = FavouriteContracts.TryGetBySymbol("BTC")
+            Dim fav = FavouriteContracts.TryGetBySymbol("M2K")
             Dim candidates = {
-                MakeContract("CON.F.US.MBT.M26"),   ' expiry June 2026 — excluded (June 12 + 7 = June 19 > June 1)
-                MakeContract("CON.F.US.MBT.U26")    ' expiry Sep 2026  — selected
+                MakeContract("CON.F.US.M2K.M26"),   ' expiry June 2026 — excluded (June 12 + 7 = June 19 > June 1)
+                MakeContract("CON.F.US.M2K.U26")    ' expiry Sep 2026  — selected
             }
 
             Dim result = TopStepXInstrumentCatalog.SelectBestContract(candidates, fav, asOf)
 
-            Assert.Equal("CON.F.US.MBT.U26", result.ContractId)
+            Assert.Equal("CON.F.US.M2K.U26", result.ContractId)
         End Sub
 
         ' ── SelectBestContract: null / empty guards ───────────────────────────────

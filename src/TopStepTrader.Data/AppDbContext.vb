@@ -23,6 +23,7 @@ Namespace TopStepTrader.Data
         Public Property AdaptiveParameters As DbSet(Of AdaptiveParametersEntity)
         Public Property BalanceHistory As DbSet(Of BalanceHistoryEntity)
         Public Property PersonaSettings As DbSet(Of PersonaSettingsEntity)
+        Public Property ContractCache As DbSet(Of ContractCacheEntity)
 
         Protected Overrides Sub OnModelCreating(modelBuilder As ModelBuilder)
             MyBase.OnModelCreating(modelBuilder)
@@ -390,7 +391,11 @@ Namespace TopStepTrader.Data
                          ""SourceTradeCount""   INTEGER NOT NULL DEFAULT 0,
                          ""CreatedAt""          TEXT    NOT NULL DEFAULT '',
                          ""UpdatedAt""          TEXT    NOT NULL DEFAULT '')",
-                    "CREATE UNIQUE INDEX IF NOT EXISTS ""UQ_AdaptiveParameters_Key"" ON ""AdaptiveParameters"" (""StrategyName"", ""PersonaName"", ""ParameterName"")"
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ""UQ_AdaptiveParameters_Key"" ON ""AdaptiveParameters"" (""StrategyName"", ""PersonaName"", ""ParameterName"")",
+                    "CREATE TABLE IF NOT EXISTS ""ContractCache"" (
+                         ""RootSymbol""    TEXT NOT NULL PRIMARY KEY,
+                         ""ContractId""   TEXT NOT NULL DEFAULT '',
+                         ""LastUpdated""  TEXT NOT NULL DEFAULT '')"
                 }
                 For Each ddl In newTableDdl
                     Using cmd = conn.CreateCommand()

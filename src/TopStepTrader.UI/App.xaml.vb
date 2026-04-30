@@ -2,6 +2,7 @@ Imports System.Windows
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 Imports TopStepTrader.API.Hubs
+Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Services.Market
 Imports TopStepTrader.UI.Infrastructure
 Imports TopStepTrader.UI.ViewModels
@@ -45,6 +46,22 @@ Namespace TopStepTrader.UI
             ' the bar-check progress window is displayed, preventing premature app shutdown.
             Dim mainWindow = _host.Services.GetRequiredService(Of MainWindow)()
             Application.Current.MainWindow = mainWindow
+
+            ' ── Contract cache initialisation ─────────────────────────────────
+            ' Resolves live contract IDs from ProjectX API (once per day; SQLite-cached).
+            ' Must complete before any strategy scan or bar fetch begins.
+            Dim contractService = _host.Services.GetRequiredService(Of IContractResolutionService)()
+            Await contractService.InitialiseAsync()
+            If contractService.FailedSymbols.Count > 0 Then
+                Dim failed = String.Join(", ", contractService.FailedSymbols)
+                MessageBox.Show(
+                    $"Contract resolution failed for: {failed}{Environment.NewLine}{Environment.NewLine}" &
+                    "Trading is disabled for these instruments until the next successful resolution." &
+                    $"{Environment.NewLine}Check your network connection and ProjectX API status.",
+                    "Contract Cache Warning",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning)
+            End If
 
             ' ── Startup bar gap check ──────────────────────────────────────────
             Await CheckAndPromptMissingBarsAsync()

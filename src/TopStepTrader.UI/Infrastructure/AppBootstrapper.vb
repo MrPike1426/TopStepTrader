@@ -4,6 +4,7 @@ Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 Imports Serilog
 Imports TopStepTrader.API
+Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.UI.Views
 Imports TopStepTrader.Data
@@ -64,6 +65,9 @@ Namespace TopStepTrader.UI.Infrastructure
 
                         ' ── WPF-specific: use IServiceScopeFactory in ViewModelLocator
                         '    so that Scoped EF Core services are resolved in a proper scope.
+
+                        ' ── Contract resolution cache (daily, SQLite-backed) ───────────
+                        services.AddSingleton(Of IContractResolutionService, ContractResolutionService)()
 
                         ' Singleton store that wires MaxEffort pin → Pro-Trader slot grid
                         services.AddSingleton(Of ProTraderSlotStore)()

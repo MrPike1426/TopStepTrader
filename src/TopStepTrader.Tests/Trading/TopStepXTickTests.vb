@@ -544,8 +544,8 @@ Namespace TopStepTrader.Tests.Trading
         End Sub
 
         <Fact>
-        Public Sub CommissionTickBuffer_M6E_Is1()
-            Dim contract = FavouriteContracts.TryGetBySymbol("EURUSD")
+        Public Sub CommissionTickBuffer_M6J_Is1()
+            Dim contract = FavouriteContracts.TryGetBySymbol("M6J")
             Assert.NotNull(contract)
             Assert.Equal(1, contract.GetCommissionTickBuffer())
         End Sub

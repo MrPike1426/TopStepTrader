@@ -15,6 +15,7 @@ Namespace TopStepTrader.Tests.ViewModels
         Private ReadOnly _mockSession As Mock(Of ITradingSessionContext)
         Private ReadOnly _mockPersonaService As Mock(Of IPersonaService)
         Private ReadOnly _mockAccountService As Mock(Of IAccountService)
+        Private ReadOnly _mockContractResolver As Mock(Of IContractResolutionService)
 
         Public Sub New()
             _mockBarService     = New Mock(Of IBarIngestionService)()
@@ -22,6 +23,7 @@ Namespace TopStepTrader.Tests.ViewModels
             _mockSession        = New Mock(Of ITradingSessionContext)()
             _mockPersonaService = New Mock(Of IPersonaService)()
             _mockAccountService = New Mock(Of IAccountService)()
+            _mockContractResolver = New Mock(Of IContractResolutionService)()
             _mockSession.Setup(Function(s) s.SelectedAccount).Returns(CType(Nothing, Account))
         End Sub
 
@@ -32,6 +34,7 @@ Namespace TopStepTrader.Tests.ViewModels
                 _mockSession.Object,
                 _mockPersonaService.Object,
                 _mockAccountService.Object,
+                _mockContractResolver.Object,
                 NullLogger(Of SuperTrendPlusViewModel).Instance)
         End Function
 
