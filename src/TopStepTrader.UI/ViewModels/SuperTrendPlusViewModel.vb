@@ -1653,14 +1653,21 @@ Namespace TopStepTrader.UI.ViewModels
                                                s.Instrument = slot.Instrument AndAlso
                                                s.SlotIndex < slot.SlotIndex)
 
+                Dim primaryEditSucceeded = False
                 If isPrimaryForEdit AndAlso slot.PositionId.HasValue AndAlso newStop <> slot.StopPrice Then
                     Dim tpArg As Decimal? = If(slot.TakeProfitPrice <> 0D, CType(slot.TakeProfitPrice, Decimal?), Nothing)
                     Try
-                        Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, newStop, tpArg)
-                        _logger.LogInformation("ST+ SL phase={Phase} trail->{Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
-                                               slot.StopPhase, newStop,
-                                               If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"),
+                        Dim editOk = Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, newStop, tpArg)
+                        If editOk Then
+                            primaryEditSucceeded = True
+                            _logger.LogInformation("ST+ SL phase={Phase} trail->{Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
+                                                   slot.StopPhase, newStop,
+                                                   If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"),
+                                                   slot.SlotIndex, slot.Instrument)
+                        Else
+                            _logger.LogWarning("ST+ EditPositionSlTpAsync returned False for [Slot {Idx}] on {Contract} — will retry next tick",
                                                slot.SlotIndex, slot.Instrument)
+                        End If
                     Catch ex As Exception
                         _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
                     End Try
@@ -1669,7 +1676,10 @@ Namespace TopStepTrader.UI.ViewModels
                                            slot.SlotIndex, slot.Instrument)
                 End If
 
-                If newStop <> slot.StopPrice Then
+                ' Only advance the in-memory stop when the broker edit was confirmed (primary slot)
+                ' or when this is a scale-in slot whose display-only stop can freely track the phase.
+                ' Keeping slot.StopPrice at its old value on API failure causes the next tick to retry.
+                If newStop <> slot.StopPrice AndAlso (Not isPrimaryForEdit OrElse primaryEditSucceeded) Then
                     slot.StopPrice = newStop
                     Dim boxForTrail = BoxForSlot(slot)
                     Application.Current?.Dispatcher?.Invoke(Sub()
