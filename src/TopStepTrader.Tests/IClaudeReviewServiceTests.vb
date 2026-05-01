@@ -149,6 +149,56 @@ Namespace TopStepTrader.Tests
             Assert.False(String.IsNullOrEmpty(reviewResult))
         End Function
 
+        ' ── BUG-39: AI veto not honoured — flip-only context and suppression ────
+
+        <Fact>
+        Public Async Function PreTradeCheckAsync_FlipOnlyContext_ProceedsWhenNotVetoed() As Task
+            ' Bug A: "None / flip only" mode should not be vetoed purely because TP=0.
+            ' Context is built with ExitStrategyDescription describing the SuperTrend exit.
+            Dim fake As New FakeClaudeReviewService With {.ForceVeto = False}
+            Dim ctx As New PreTradeContext With {
+                .ContractId = "M2K",
+                .Side = "BUY",
+                .StrategyName = "SuperTrend+ Autopilot",
+                .ExitStrategyDescription = "SuperTrend-flip exit — no fixed TP bracket; position closed when SuperTrend reverses direction. SL at SuperTrend line (42 ticks from entry). This is a valid risk-managed strategy.",
+                .SlMultiple = 0D,
+                .TpMultiple = 0D,
+                .AtrValue = 0D,
+                .UtcNow = DateTimeOffset.UtcNow
+            }
+
+            Dim result = Await fake.PreTradeCheckAsync(ctx)
+
+            Assert.True(result.Proceed)
+        End Function
+
+        <Fact>
+        Public Async Function PreTradeCheckAsync_FlipOnlyContext_VetoedWhenForced() As Task
+            ' Bug B: even with a flip-only context, a VETO must be honoured.
+            Dim fake As New FakeClaudeReviewService With {.ForceVeto = True, .VetoReason = "Session P&L deeply negative — adverse conditions."}
+            Dim ctx As New PreTradeContext With {
+                .ContractId = "M2K",
+                .Side = "BUY",
+                .StrategyName = "SuperTrend+ Autopilot",
+                .ExitStrategyDescription = "SuperTrend-flip exit — no fixed TP bracket; SL at 42 ticks.",
+                .SessionPnlUsd = -150D,
+                .SessionTradeCount = 3
+            }
+
+            Dim result = Await fake.PreTradeCheckAsync(ctx)
+
+            Assert.False(result.Proceed)
+            Assert.False(String.IsNullOrEmpty(result.Reasoning))
+        End Function
+
+        <Fact>
+        Public Sub PreTradeContext_ExitStrategyDescription_DefaultsToEmpty()
+            ' Verify the new property exists, is accessible, and defaults to String.Empty
+            ' so existing non-flip-only callers are unaffected.
+            Dim ctx As New PreTradeContext()
+            Assert.Equal(String.Empty, ctx.ExitStrategyDescription)
+        End Sub
+
     End Class
 
 End Namespace

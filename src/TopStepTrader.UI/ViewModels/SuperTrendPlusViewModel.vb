@@ -1265,65 +1265,79 @@ Namespace TopStepTrader.UI.ViewModels
                     End If
                 End SyncLock
 
-                If Not isSuppressed Then
-                    Try
-                        Dim barsForAi As IList(Of MarketBar) = Nothing
-                        Try
-                            ' 4 hours worth of bars at the selected timeframe
-                            Dim tf2 = MapTimeframe(_selectedTimeframe)
-                            Dim tfMins As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
-                            If _selectedTimeframe.EndsWith("hr") Then tfMins *= 60
-                            Dim barsNeeded As Integer = Math.Max(30, CInt(Math.Ceiling(240.0 / tfMins)))
-                            barsForAi = Await _barService.GetLiveBarsAsync(contractId, tf2, barsNeeded)
-                        Catch
-                        End Try
-
-                        Dim ctx As New PreTradeContext With {
-                            .ContractId = contractId,
-                            .ContractDescription = contractId,
-                            .Side = side,
-                            .Price = lastClose,
-                            .AdxValue = 0F,
-                            .UtcNow = DateTimeOffset.UtcNow
-                        }
-                        Using cts = New System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8))
-                            Dim aiResult = Await _claudeService.PreTradeCheckAsync(ctx, cts.Token)
-                            If Not aiResult.Proceed Then
-                                ' NO — block this signal, suppress for 15 minutes
-                                Dim shortReason = If(aiResult.Reasoning.Length > 120,
-                                                     aiResult.Reasoning.Substring(0, 117) & "…",
-                                                     aiResult.Reasoning)
-                                _logger.LogInformation("ST+ AI VETO [{Contract}]: {Reason}", contractId, shortReason)
-                                SyncLock _aiSuppression
-                                    _aiSuppression(contractId) = DateTimeOffset.UtcNow.AddMinutes(15)
-                                End SyncLock
-                                AddAiLogEntry(contractId, $"VETO — {shortReason}")
-                                ' Update watchlist row with the rejection reason
-                                Dim wIdx As Integer = Array.IndexOf(Instruments, contractId)
-                                If wIdx >= 0 Then
-                                    Dim wRow = WatchlistItems(wIdx)
-                                    Application.Current?.Dispatcher?.Invoke(
-                                        Sub()
-                                            wRow.SignalReason = $"🤖 AI: {shortReason}"
-                                        End Sub)
-                                End If
-                                _slotManager.CloseSlot(slot.SlotIndex)
-                                Return
-                            End If
-                        End Using
-                        ' YES — update watchlist row with green confirmation
-                        Dim wIdxOk As Integer = Array.IndexOf(Instruments, contractId)
-                        If wIdxOk >= 0 Then
-                            Application.Current?.Dispatcher?.Invoke(
-                                Sub()
-                                    WatchlistItems(wIdxOk).SignalReason = "🤖 AI Checked ✓"
-                                End Sub)
-                        End If
-                        AddAiLogEntry(contractId, "Pre-trade check PASSED ✓")
-                    Catch ex As Exception
-                        _logger.LogWarning(ex, "ST+ AI pre-trade check error for {Contract} — proceeding anyway", contractId)
-                    End Try
+                If isSuppressed Then
+                    ' A prior VETO suppression window is still active — block this entry.
+                    _slotManager.CloseSlot(slot.SlotIndex)
+                    Return
                 End If
+
+                Try
+                    Dim barsForAi As IList(Of MarketBar) = Nothing
+                    Try
+                        ' 4 hours worth of bars at the selected timeframe
+                        Dim tf2 = MapTimeframe(_selectedTimeframe)
+                        Dim tfMins As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
+                        If _selectedTimeframe.EndsWith("hr") Then tfMins *= 60
+                        Dim barsNeeded As Integer = Math.Max(30, CInt(Math.Ceiling(240.0 / tfMins)))
+                        barsForAi = Await _barService.GetLiveBarsAsync(contractId, tf2, barsNeeded)
+                    Catch
+                    End Try
+
+                    ' For "None / flip only" mode the exit is the SuperTrend reversal, not fixed ATR multiples.
+                    ' Describe this explicitly so the AI does not flag zero TP/SL as "no defined risk".
+                    Dim isFlipOnly As Boolean = _selectedTpMultiple = "None / flip only"
+                    Dim exitDesc As String = If(isFlipOnly,
+                        $"SuperTrend-flip exit — no fixed TP bracket; position closed when SuperTrend reverses direction. " &
+                        $"SL is placed at the current SuperTrend line ({If(stopTicks.HasValue, $"{stopTicks.Value} ticks", "distance TBD")} from entry). " &
+                        "This is a valid risk-managed strategy.",
+                        String.Empty)
+                    Dim ctx As New PreTradeContext With {
+                        .ContractId = contractId,
+                        .ContractDescription = contractId,
+                        .Side = side,
+                        .Price = lastClose,
+                        .AdxValue = 0F,
+                        .UtcNow = DateTimeOffset.UtcNow,
+                        .StrategyName = "SuperTrend+ Autopilot",
+                        .ExitStrategyDescription = exitDesc
+                    }
+                    Using cts = New System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8))
+                        Dim aiResult = Await _claudeService.PreTradeCheckAsync(ctx, cts.Token)
+                        If Not aiResult.Proceed Then
+                            ' NO — block this signal, suppress for 15 minutes
+                            Dim shortReason = If(aiResult.Reasoning.Length > 120,
+                                                 aiResult.Reasoning.Substring(0, 117) & "…",
+                                                 aiResult.Reasoning)
+                            _logger.LogInformation("ST+ AI VETO [{Contract}]: {Reason}", contractId, shortReason)
+                            SyncLock _aiSuppression
+                                _aiSuppression(contractId) = DateTimeOffset.UtcNow.AddMinutes(15)
+                            End SyncLock
+                            AddAiLogEntry(contractId, $"VETO — {shortReason}")
+                            ' Update watchlist row with the rejection reason
+                            Dim wIdx As Integer = Array.IndexOf(Instruments, contractId)
+                            If wIdx >= 0 Then
+                                Dim wRow = WatchlistItems(wIdx)
+                                Application.Current?.Dispatcher?.Invoke(
+                                    Sub()
+                                        wRow.SignalReason = $"🤖 AI: {shortReason}"
+                                    End Sub)
+                            End If
+                            _slotManager.CloseSlot(slot.SlotIndex)
+                            Return
+                        End If
+                    End Using
+                    ' YES — update watchlist row with green confirmation
+                    Dim wIdxOk As Integer = Array.IndexOf(Instruments, contractId)
+                    If wIdxOk >= 0 Then
+                        Application.Current?.Dispatcher?.Invoke(
+                            Sub()
+                                WatchlistItems(wIdxOk).SignalReason = "🤖 AI Checked ✓"
+                            End Sub)
+                    End If
+                    AddAiLogEntry(contractId, "Pre-trade check PASSED ✓")
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ AI pre-trade check error for {Contract} — proceeding anyway", contractId)
+                End Try
             End If
 
             ' Only the primary slot (SlotIndex = 0) places a bracketed order.

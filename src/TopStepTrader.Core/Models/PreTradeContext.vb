@@ -60,6 +60,12 @@ Namespace TopStepTrader.Core.Models
         Public Property TotalTradesThisSession As Integer = 0
         ''' <summary>Effective minimum confidence threshold after persona/circuit-breaker adjustments.</summary>
         Public Property EffectiveMinConfidence As Integer
+        ''' <summary>
+        ''' When the exit strategy cannot be expressed as ATR multiples (e.g. SuperTrend-flip mode),
+        ''' set this to a plain-English description of how the trade will be exited.
+        ''' When non-empty, this replaces the SL/TP multiple lines in the pre-trade AI prompt.
+        ''' </summary>
+        Public Property ExitStrategyDescription As String = String.Empty
     End Class
 
 End Namespace

@@ -344,7 +344,9 @@ Namespace TopStepTrader.Services.AI
             End If
             sb.AppendLine()
             sb.AppendLine("RISK PARAMETERS:")
-            If slDist > 0D Then
+            If Not String.IsNullOrEmpty(ctx.ExitStrategyDescription) Then
+                sb.AppendLine($"  {ctx.ExitStrategyDescription}")
+            ElseIf slDist > 0D Then
                 sb.AppendLine($"  Stop Loss:   {ctx.SlMultiple:F2} × ATR = {slDist:F4} pts from entry")
                 sb.AppendLine($"  Take Profit: {ctx.TpMultiple:F2} × ATR = {tpDist:F4} pts from entry")
             Else
