@@ -103,19 +103,21 @@ Namespace TopStepTrader.UI.ViewModels
             Dim slot = _slots.FirstOrDefault(Function(s) Not s.IsOpen)
             If slot Is Nothing Then Return Nothing
 
-            slot.Instrument   = instrument
-            slot.Side         = side
-            slot.EntryAdx     = entryAdx
-            slot.EntryBarTime = barTime
-            slot.StopPrice    = stLine
-            slot.EntryPrice   = 0D
-            slot.TakeProfitPrice = 0D
-            slot.Contracts    = ContractsForAdx(entryAdx)
-            slot.IsOpen       = True
-            slot.Health       = SlotHealth.Healthy
-            slot.MissCount    = 0
-            slot.UnrealizedPnl = 0D
-            slot.EntryReason  = FormatEntryReason(entryAdx)
+            slot.Instrument          = instrument
+            slot.Side                = side
+            slot.EntryAdx            = entryAdx
+            slot.EntryBarTime        = barTime
+            slot.StopPrice           = stLine
+            slot.EntryPrice          = 0D
+            slot.TakeProfitPrice     = 0D
+            slot.Contracts           = ContractsForAdx(entryAdx)
+            slot.IsOpen              = True
+            slot.Health              = SlotHealth.Healthy
+            slot.MissCount           = 0
+            slot.UnrealizedPnl       = 0D
+            slot.EntryReason         = FormatEntryReason(entryAdx)
+            slot.ConsecutiveExitBars = 0
+            slot.IsEntryInFlight     = True   ' cleared by FireEntryAsync on accept or reject
             Return slot
         End Function
 
@@ -139,8 +141,10 @@ Namespace TopStepTrader.UI.ViewModels
                 s.EntryTime    = DateTime.MinValue
                 s.EntryAtr     = 0D
                 s.InitialRisk  = 0D
-                s.StopPhase    = Core.Enums.StopPhase.Initial
-                s.MilestoneFlag = False
+                s.StopPhase          = Core.Enums.StopPhase.Initial
+                s.MilestoneFlag      = False
+                s.ConsecutiveExitBars = 0
+                s.IsEntryInFlight    = False
             End If
         End Sub
 

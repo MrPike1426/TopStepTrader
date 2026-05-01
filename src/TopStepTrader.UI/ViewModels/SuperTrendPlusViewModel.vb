@@ -339,6 +339,16 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Private _lastAiCheckText As String = "No check yet"
+        Public Property LastAiCheckText As String
+            Get
+                Return _lastAiCheckText
+            End Get
+            Set(value As String)
+                SetProperty(_lastAiCheckText, value)
+            End Set
+        End Property
+
         Public ReadOnly Property StartStopCommand As RelayCommand
 
         Public ReadOnly Property AiCheckSlot1Command As RelayCommand
@@ -622,7 +632,7 @@ Namespace TopStepTrader.UI.ViewModels
                                   If(signal = "BEAR", "Downtrend active — bot will open 1 position.",
                                      "Trending — waiting for +DI/-DI to align with SuperTrend."))
                 ElseIf adxVal >= 15 Then
-                    strength = String.Format("ADX:{0:D2} Weak", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} L0: Milky Tea", CInt(adxVal))
                     signalReason = "Trend is weak — watching for momentum to build before entering."
                 Else
                     strength = String.Format("ADX:{0:D2} Chop", CInt(adxVal))
@@ -822,6 +832,14 @@ Namespace TopStepTrader.UI.ViewModels
                     Exit For
                 End If
 
+                ' Guard: skip if a FireEntryAsync call for this instrument is already in-flight
+                ' (prevents duplicate market orders on the next 15-second tick while PlaceOrder awaits)
+                If _slotManager.Slots.Any(Function(s) s.IsEntryInFlight AndAlso
+                    String.Equals(s.Instrument, candidate.ContractId, StringComparison.OrdinalIgnoreCase)) Then
+                    _logger.LogInformation("ST+ [{Contract}] entry in-flight, skipping re-evaluation this tick.", candidate.ContractId)
+                    Continue For
+                End If
+
                 ' Guard: verify no live position already exists on the exchange for this instrument
                 Dim guardAccId As Long = If(_selectedAccount IsNot Nothing, _selectedAccount.Id, 0)
                 If guardAccId <> 0 Then
@@ -970,6 +988,13 @@ Namespace TopStepTrader.UI.ViewModels
 
             If bestContractId Is Nothing Then Return
 
+            ' Guard: skip if a FireEntryAsync call for this instrument is already in-flight
+            If _slotManager.Slots.Any(Function(s) s.IsEntryInFlight AndAlso
+                String.Equals(s.Instrument, bestContractId, StringComparison.OrdinalIgnoreCase)) Then
+                _logger.LogInformation("ST+ EvaluateEarlyEntry — [{Contract}] entry in-flight, skipping this tick.", bestContractId)
+                Return
+            End If
+
             ' Guard: only block true re-entries — skip when an in-memory slot already tracks
             ' this instrument (scale-in path).
             Dim hasEarlyInMemorySlot As Boolean = _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = bestContractId)
@@ -1079,11 +1104,12 @@ Namespace TopStepTrader.UI.ViewModels
                 s2.StopPrice      = stLine
                 s2.Contracts      = baseContracts
                 s2.IsOpen         = True
-                s2.Health         = Core.Enums.SlotHealth.Healthy
-                s2.MissCount      = 0
-                s2.UnrealizedPnl  = 0D
-                s2.EntryReason    = $"Onboarded (ADX {CInt(currentAdx)})"
-                s2.StopPhase      = Core.Enums.StopPhase.Initial
+                s2.Health              = Core.Enums.SlotHealth.Healthy
+                s2.MissCount           = 0
+                s2.ConsecutiveExitBars = 0
+                s2.UnrealizedPnl       = 0D
+                s2.EntryReason         = $"Onboarded (ADX {CInt(currentAdx)})"
+                s2.StopPhase           = Core.Enums.StopPhase.Initial
                 s2.AccountId      = accountId
                 s2.EntryTime      = DateTime.Now
                 s2.PositionId     = snapshot.PositionId
@@ -1294,20 +1320,23 @@ Namespace TopStepTrader.UI.ViewModels
                              (placed.Status = OrderStatus.Working OrElse placed.Status = OrderStatus.Filled)
             If Not isAccepted Then
                 _logger.LogWarning("ST+ order not accepted for {Contract}: status={Status}", contractId, placed?.Status)
-                _slotManager.CloseSlot(slot.SlotIndex)
+                _slotManager.CloseSlot(slot.SlotIndex)   ' CloseSlot resets IsEntryInFlight
                 If Not _slotManager.Slots.Any(Function(s) s.IsOpen) Then
                     SyncLock _timerLock
+
                         _timer?.Change(15000, 15000)
                     End SyncLock
                 End If
                 Return
             End If
 
+            ' Order accepted — clear in-flight flag so normal monitoring takes over
+            slot.IsEntryInFlight = False
             slot.StopPrice = stLine
             slot.EntryTime = DateTime.Now
             slot.EntryBarTime = barTime
             slot.MissCount = 0
-            slot.PositionId = placed.ExternalPositionId
+            slot.PositionId = placed.ExternalPositionId   ' may be Nothing until first monitoring tick resolves it
             slot.EntryPrice = 0D
             slot.TakeProfitPrice = 0D
             slot.StopPhase = StopPhase.Initial
@@ -1368,6 +1397,14 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
             Else
                 slot.MissCount = 0
+                ' BUG-38: PlaceOrderAsync only returns an orderId; the exchange position ID is
+                ' not available until after fill. Backfill it from the first live snapshot so
+                ' that ReleaseSlotAsync and EditPositionSlTpAsync can use the precise path.
+                If Not slot.PositionId.HasValue AndAlso snapshot.PositionId <> 0 Then
+                    slot.PositionId = snapshot.PositionId
+                    _logger.LogInformation("ST+ [Slot {Idx}] {Contract} PositionId resolved from snapshot: {PosId}",
+                                           slot.SlotIndex, slot.Instrument, slot.PositionId)
+                End If
                 If snapshot.OpenRate <> 0D AndAlso slot.EntryPrice = 0D Then
                     slot.EntryPrice = snapshot.OpenRate
                     If slot.TakeProfitPrice = 0D Then
@@ -1523,9 +1560,28 @@ Namespace TopStepTrader.UI.ViewModels
                                                             End If
                                                         End Sub)
 
-                If exitEval.ImmediateExit OrElse slot.Health = SlotHealth.Exiting Then
+                ' ── 2-bar confirmation guard ──────────────────────────────────────
+                ' An immediate E1 SuperTrend flip exits on the current bar unconditionally.
+                ' All other Exiting scores require 2 consecutive bars at Exiting health to
+                ' prevent single-bar consolidation at trend highs from triggering a close.
+                If exitEval.ImmediateExit Then
+                    ' E1 flip — close without waiting for confirmation
+                    slot.ConsecutiveExitBars = 0
                     Await ReleaseSlotAsync(slot)
                     Return
+                End If
+
+                If slot.Health = SlotHealth.Exiting Then
+                    slot.ConsecutiveExitBars += 1
+                    _logger.LogInformation("ST+ [Slot {Idx}] {Contract} exit score={Score} — consecutiveExitBars={Count}",
+                                           slot.SlotIndex, slot.Instrument, exitEval.Score, slot.ConsecutiveExitBars)
+                    If slot.ConsecutiveExitBars >= 2 Then
+                        slot.ConsecutiveExitBars = 0
+                        Await ReleaseSlotAsync(slot)
+                        Return
+                    End If
+                Else
+                    slot.ConsecutiveExitBars = 0
                 End If
 
                 ' Advance phased stop (ratchet-only).
@@ -1744,6 +1800,7 @@ Namespace TopStepTrader.UI.ViewModels
                             box.AiVerdict = result.Verdict
                             box.AiExplanation = result.Explanation
                             box.AiSuggestedAction = result.SuggestedAction
+                            LastAiCheckText = String.Format("{0:HH:mm:ss}  {1}  {2}", DateTime.Now, slot.Instrument, result.Verdict)
                         End Sub)
                 End Using
             Catch ex As Exception

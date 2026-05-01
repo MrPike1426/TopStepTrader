@@ -101,16 +101,27 @@ Namespace TopStepTrader.Services.Trading
             End If
 
             ' ── E4: DI compression (weight 2) ───────────────────────────────────
+            ' Threshold is ADX-scaled: in a strong trend (ADX 50+) the DI spread naturally
+            ' compresses without signalling reversal. A fixed floor of 10 fires on healthy
+            ' high-ADX consolidation bars. Scale the ceiling with current ADX so that
+            ' at ADX=25 the threshold is 10, at ADX=50 it is 8, at ADX=65+ it is 6.
+            ' Also require the spread to have narrowed by at least 15% in one bar to
+            ' filter noise from minor intrabar fluctuations.
             If n >= 1 Then
                 Dim pdN  = plusDIs(n)
                 Dim mdN  = minusDIs(n)
                 Dim pdN1 = plusDIs(n - 1)
                 Dim mdN1 = minusDIs(n - 1)
+                Dim adxNow = adxValues(n)
                 If Not Single.IsNaN(pdN) AndAlso Not Single.IsNaN(mdN) AndAlso
-                   Not Single.IsNaN(pdN1) AndAlso Not Single.IsNaN(mdN1) Then
+                   Not Single.IsNaN(pdN1) AndAlso Not Single.IsNaN(mdN1) AndAlso
+                   Not Single.IsNaN(adxNow) Then
                     Dim spreadN  = Math.Abs(pdN - mdN)
                     Dim spreadN1 = Math.Abs(pdN1 - mdN1)
-                    If spreadN < spreadN1 AndAlso spreadN < 10.0F Then
+                    ' ADX-scaled compression ceiling: tighter at low ADX, more generous at high ADX
+                    Dim compressionCeiling As Single = CSng(Math.Max(6.0, 12.0 - adxNow * 0.1))
+                    Dim narrowedSignificantly = spreadN1 > 0F AndAlso (spreadN1 - spreadN) / spreadN1 >= 0.15F
+                    If narrowedSignificantly AndAlso spreadN < compressionCeiling Then
                         signals.Add("E4:2")
                         eval.Score += 2
                     End If

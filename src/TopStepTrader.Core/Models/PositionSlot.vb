@@ -56,6 +56,21 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>True after a profit-milestone exit has been triggered for this slot (prevents double-firing).</summary>
         Public Property MilestoneFlag As Boolean = False
 
+        ''' <summary>
+        ''' Number of consecutive bars on which the exit engine scored Exiting health
+        ''' (score >= 6, no E1 flip). Exit only fires when this reaches 2, preventing
+        ''' single-bar consolidation at trend highs from triggering premature closure.
+        ''' Resets to zero whenever the bar scores Warning or Healthy.
+        ''' </summary>
+        Public Property ConsecutiveExitBars As Integer = 0
+
+        ''' <summary>
+        ''' True between TryOpenSlot succeeding and the FireEntryAsync completing (order
+        ''' accepted or rejected). Guards against the 15-second re-evaluation tick
+        ''' re-opening the same instrument while the first PlaceOrder call is in-flight.
+        ''' </summary>
+        Public Property IsEntryInFlight As Boolean = False
+
     End Class
 
 End Namespace
