@@ -510,10 +510,10 @@ Namespace TopStepTrader.Services.Trading
                         Dim newSlTicks = TickMath.StopTicksFromPrice(entryPrice, slRate.Value, info.TickSize)
                         Dim validatedTicks = TickMath.ClampToMinStop(newSlTicks, info.MinStopTicks)
                         If validatedTicks <> newSlTicks Then
-                            slRate = TickMath.PriceFromTicks(entryPrice, validatedTicks, info.TickSize, isBuy, isStop:=True)
-                            _logger.LogWarning("EditPositionSlTp: SL clamped {Req}→{Val} ticks for {Contract}, price={Price}",
-                                               newSlTicks, validatedTicks, pos.ContractId, slRate)
+                            _logger.LogWarning("EditPositionSlTp: SL clamped {Req}→{Val} ticks for {Contract}",
+                                               newSlTicks, validatedTicks, pos.ContractId)
                         End If
+                        slRate = TickMath.PriceFromTicks(entryPrice, validatedTicks, info.TickSize, isBuy, isStop:=True)
                         For Each slOrder In slOrders
                             Dim slMod = New PXModifyOrderRequest With {
                                 .AccountId = accountId,
