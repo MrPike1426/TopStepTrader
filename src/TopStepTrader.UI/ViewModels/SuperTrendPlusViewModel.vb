@@ -872,6 +872,17 @@ Namespace TopStepTrader.UI.ViewModels
                     Continue For
                 End If
 
+                ' Guard: skip if AI veto suppression is still active — avoids opening and immediately
+                ' closing a slot every 15 s while the cooldown window is in effect.
+                SyncLock _aiSuppression
+                    Dim aiSu As DateTimeOffset
+                    If _aiSuppression.TryGetValue(candidate.ContractId, aiSu) AndAlso DateTimeOffset.UtcNow < aiSu Then
+                        _logger.LogDebug("ST+ [{Contract}] AI suppression until {Until:HH:mm:ss} UTC — skipping",
+                                         candidate.ContractId, aiSu.UtcDateTime)
+                        Continue For
+                    End If
+                End SyncLock
+
                 ' Guard: verify no live position already exists on the exchange for this instrument
                 Dim guardAccId As Long = If(_selectedAccount IsNot Nothing, _selectedAccount.Id, 0)
                 If guardAccId <> 0 Then
@@ -1283,20 +1294,26 @@ Namespace TopStepTrader.UI.ViewModels
                     Catch
                     End Try
 
-                    ' For "None / flip only" mode the exit is the SuperTrend reversal, not fixed ATR multiples.
-                    ' Describe this explicitly so the AI does not flag zero TP/SL as "no defined risk".
                     Dim isFlipOnly As Boolean = _selectedTpMultiple = "None / flip only"
-                    Dim exitDesc As String = If(isFlipOnly,
-                        $"SuperTrend-flip exit — no fixed TP bracket; position closed when SuperTrend reverses direction. " &
-                        $"SL is placed at the current SuperTrend line ({If(stopTicks.HasValue, $"{stopTicks.Value} ticks", "distance TBD")} from entry). " &
-                        "This is a valid risk-managed strategy.",
-                        String.Empty)
+                    Dim exitDesc As String
+                    If isFlipOnly Then
+                        exitDesc = $"SuperTrend-flip exit — no fixed TP bracket; position closed when SuperTrend reverses direction. " &
+                                   $"SL is placed at the current SuperTrend line ({If(stopTicks.HasValue, $"{stopTicks.Value} ticks", "distance TBD")} from entry). " &
+                                   "This is a valid risk-managed strategy."
+                    Else
+                        ' SL = distance from entry to SuperTrend line in ticks; TP = multiple of that distance.
+                        ' Expressed as ticks because ST+ uses a fixed line distance, not ATR multiples.
+                        exitDesc = $"SuperTrend+ bracket — SL: {If(stopTicks.HasValue, $"{stopTicks.Value} ticks from entry (ST line at {stLine:F2})", "TBD")}; " &
+                                   $"TP: {If(tpTicks.HasValue, $"{tpTicks.Value} ticks ({_selectedTpMultiple} of SL distance)", "none (flip-only)")}. " &
+                                   "Brackets are valid and defined; risk is fully managed."
+                    End If
                     Dim ctx As New PreTradeContext With {
                         .ContractId = contractId,
                         .ContractDescription = contractId,
                         .Side = side,
                         .Price = lastClose,
                         .AdxValue = 0F,
+                        .TpMultiple = ParseTpMultiple(),
                         .UtcNow = DateTimeOffset.UtcNow,
                         .StrategyName = "SuperTrend+ Autopilot",
                         .ExitStrategyDescription = exitDesc
