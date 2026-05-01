@@ -52,7 +52,7 @@ Namespace TopStepTrader.Services.Trading
 
         ''' <summary>
         ''' Validates and clamps <paramref name="requestedTicks"/> to the instrument's minimum
-        ''' stop distance. Logs a warning when bumped.
+        ''' and maximum bracket distance. Logs a warning when either limit is applied.
         ''' Overridable to allow test fakes.
         ''' </summary>
         Public Overridable Async Function ClampStopTicksAsync(pxContractId As String, requestedTicks As Integer,
@@ -61,8 +61,17 @@ Namespace TopStepTrader.Services.Trading
             Dim clamped = TickMath.ClampToMinStop(requestedTicks, info.MinStopTicks)
             If clamped <> requestedTicks Then
                 _logger.LogWarning(
-                    "TopStepXInstrumentCatalog: stop bumped from {Req} → {Min} ticks for {Contract} (API min={Min})",
+                    "TopStepXInstrumentCatalog: bracket bumped {Req} → {Clamped} ticks for {Contract} (min={Min})",
                     requestedTicks, clamped, pxContractId, info.MinStopTicks)
+            End If
+            ' Cap to maximum broker limit — TopStepX silently drops brackets that exceed this,
+            ' leaving the position naked. Default of 1000 matches the known TopStepX limit.
+            Dim maxTicks = If(info.MaxStopTicks.HasValue, info.MaxStopTicks.Value, 1000)
+            If clamped > maxTicks Then
+                _logger.LogWarning(
+                    "TopStepXInstrumentCatalog: bracket CAPPED {Req} → {Max} ticks for {Contract} (TopStepX max={Max})",
+                    clamped, maxTicks, pxContractId, maxTicks)
+                clamped = maxTicks
             End If
             Return clamped
         End Function
@@ -113,7 +122,8 @@ Namespace TopStepTrader.Services.Trading
                             .TickValue = If(match.TickValue > 0, match.TickValue, local.TickValue),
                             .MinStopTicks = If(match.MinInitialMarginTicks > 0,
                                                CType(match.MinInitialMarginTicks, Integer?),
-                                               local.MinStopTicks)
+                                               local.MinStopTicks),
+                            .MaxStopTicks = local.MaxStopTicks
                         }
                     End If
                     Return match.ContractId
@@ -182,7 +192,8 @@ Namespace TopStepTrader.Services.Trading
                             .TickValue = If(c.TickValue > 0, c.TickValue, local.TickValue),
                             .MinStopTicks = If(c.MinInitialMarginTicks > 0,
                                                CType(c.MinInitialMarginTicks, Integer?),
-                                               local.MinStopTicks)
+                                               local.MinStopTicks),
+                            .MaxStopTicks = local.MaxStopTicks
                         }
                     Next
                     If skipped > 0 Then
@@ -219,7 +230,8 @@ Namespace TopStepTrader.Services.Trading
                                 .TickValue = If(match.TickValue > 0, match.TickValue, local.TickValue),
                                 .MinStopTicks = If(match.MinInitialMarginTicks > 0,
                                                    CType(match.MinInitialMarginTicks, Integer?),
-                                                   local.MinStopTicks)
+                                                   local.MinStopTicks),
+                                .MaxStopTicks = local.MaxStopTicks
                             }
                         End If
                         _logger.LogInformation(
@@ -348,7 +360,8 @@ Namespace TopStepTrader.Services.Trading
                     .DisplayName = fav.Name,
                     .TickSize = fav.PxTickSize,
                     .TickValue = fav.PxTickValue,
-                    .MinStopTicks = Nothing
+                    .MinStopTicks = Nothing,
+                    .MaxStopTicks = fav.PxMaxBracketTicks
                 }
             Next
         End Sub
@@ -387,7 +400,8 @@ Namespace TopStepTrader.Services.Trading
                     .DisplayName = fav.Name,
                     .TickSize = fav.PxTickSize,
                     .TickValue = fav.PxTickValue,
-                    .MinStopTicks = Nothing
+                    .MinStopTicks = Nothing,
+                    .MaxStopTicks = fav.PxMaxBracketTicks
                 }
             End If
             ' Last-resort fallback
@@ -396,7 +410,8 @@ Namespace TopStepTrader.Services.Trading
                 .DisplayName = pxContractId,
                 .TickSize = 0.25D,
                 .TickValue = 1.25D,
-                .MinStopTicks = Nothing
+                .MinStopTicks = Nothing,
+                .MaxStopTicks = 1000
             }
         End Function
 
@@ -415,6 +430,12 @@ Namespace TopStepTrader.Services.Trading
         ''' Nothing when the API does not provide this value.
         ''' </summary>
         Public Property MinStopTicks As Integer?
+        ''' <summary>
+        ''' Maximum bracket leg distance in ticks enforced by TopStepX.
+        ''' Nothing falls back to FavouriteContract.PxMaxBracketTicks (default 1000).
+        ''' TopStepX silently drops bracket legs that exceed this limit, leaving the entry naked.
+        ''' </summary>
+        Public Property MaxStopTicks As Integer?
     End Class
 
 End Namespace

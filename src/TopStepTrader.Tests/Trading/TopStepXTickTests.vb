@@ -310,6 +310,38 @@ Namespace TopStepTrader.Tests.Trading
             Assert.Equal(20, result)
         End Function
 
+        ' ── Max-stop clamping (BUG-40) ─────────────────────────────────────────────
+
+        <Fact>
+        Public Async Function Catalog_ClampStop_CapsToMax_WhenExceedsMax() As Task
+            ' 1200 ticks requested, max=1000 → must be capped to 1000
+            Dim catalog = New FakeCatalogWithMaxStop(maxStopTicks:=1000)
+
+            Dim result = Await catalog.ClampStopTicksAsync("CON.F.US.M2K.U26", 1200)
+
+            Assert.Equal(1000, result)
+        End Function
+
+        <Fact>
+        Public Async Function Catalog_ClampStop_NotCapped_WhenBelowMax() As Task
+            ' 800 ticks requested, max=1000 → no cap applied
+            Dim catalog = New FakeCatalogWithMaxStop(maxStopTicks:=1000)
+
+            Dim result = Await catalog.ClampStopTicksAsync("CON.F.US.M2K.U26", 800)
+
+            Assert.Equal(800, result)
+        End Function
+
+        <Fact>
+        Public Async Function Catalog_ClampStop_DefaultMax1000_WhenMaxStopTicksNotSet() As Task
+            ' When MaxStopTicks is Nothing (not set), the default of 1000 must still cap over-large values
+            Dim catalog = New FakeCatalogWithMinStop(minStopTicks:=12)   ' MaxStopTicks=Nothing
+
+            Dim result = Await catalog.ClampStopTicksAsync("CON.F.US.MYM.U26", 1500)
+
+            Assert.Equal(1000, result)
+        End Function
+
     End Class
 
     ' ── Test helpers ─────────────────────────────────────────────────────────────────
@@ -361,6 +393,29 @@ Namespace TopStepTrader.Tests.Trading
                 .TickSize = 0.25D,
                 .TickValue = 0.5D,
                 .MinStopTicks = _minStop
+            })
+        End Function
+    End Class
+
+    ''' <summary>Catalog stub that returns a fixed MaxStopTicks for all contracts (BUG-40 tests).</summary>
+    Friend Class FakeCatalogWithMaxStop
+        Inherits TopStepXInstrumentCatalog
+
+        Private ReadOnly _maxStop As Integer
+
+        Public Sub New(maxStopTicks As Integer)
+            MyBase.New(Nothing, NullLogger(Of TopStepXInstrumentCatalog).Instance)
+            _maxStop = maxStopTicks
+        End Sub
+
+        Public Overrides Function GetInfoAsync(pxContractId As String,
+                                               Optional cancel As CancellationToken = Nothing) As Task(Of InstrumentInfo)
+            Return Task.FromResult(New InstrumentInfo With {
+                .PxContractId = pxContractId,
+                .TickSize = 0.1D,
+                .TickValue = 0.5D,
+                .MinStopTicks = Nothing,
+                .MaxStopTicks = _maxStop
             })
         End Function
     End Class

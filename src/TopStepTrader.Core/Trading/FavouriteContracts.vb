@@ -217,6 +217,15 @@ Namespace TopStepTrader.Core.Trading
         ''' </summary>
         Public Property RoundTripFee As Decimal = 0.80D
 
+        ''' <summary>
+        ''' Maximum bracket leg distance in ticks enforced by TopStepX.
+        ''' SL and TP ticks are capped to this value before order submission.
+        ''' TopStepX rejects bracket legs that exceed 1,000 ticks for micro-equity instruments
+        ''' (M2K, MYM, MES, MNQ) — the entry fills but the bracket leg is silently dropped,
+        ''' leaving the position naked. Default = 1000.
+        ''' </summary>
+        Public Property PxMaxBracketTicks As Integer = 1000
+
         Public Sub New(name As String, displayName As String,
                        pxContractId As String,
                        pxTickSz As Decimal,
@@ -249,7 +258,8 @@ Namespace TopStepTrader.Core.Trading
                 .MultiConfluenceTimeframeMinutes = Me.MultiConfluenceTimeframeMinutes,
                 .RoundTripFee                  = Me.RoundTripFee,
                 .RollLeadDays                  = Me.RollLeadDays,
-                .IsCrypto                      = Me.IsCrypto
+                .IsCrypto                      = Me.IsCrypto,
+                .PxMaxBracketTicks             = Me.PxMaxBracketTicks
             }
             Return copy
         End Function

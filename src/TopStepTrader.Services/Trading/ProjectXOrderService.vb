@@ -117,15 +117,16 @@ Namespace TopStepTrader.Services.Trading
             ' ── Tick TP bracket ─────────────────────────────────────────────────────
             Dim tpBracket As PXBracketOrder = Nothing
             If order.InitialTakeProfitTicks.HasValue AndAlso order.InitialTakeProfitTicks.Value > 0 Then
+                Dim validatedTpTicks = Await _catalog.ClampStopTicksAsync(resolvedContractId, order.InitialTakeProfitTicks.Value)
                 ' Long TP is above entry → positive; short TP is below entry → negative
-                Dim signedTpTicks = If(isBuy, order.InitialTakeProfitTicks.Value, -order.InitialTakeProfitTicks.Value)
+                Dim signedTpTicks = If(isBuy, validatedTpTicks, -validatedTpTicks)
                 tpBracket = New PXBracketOrder With {
                     .Ticks = signedTpTicks,
                     .OrderType = 1   ' Limit take-profit
                 }
                 _logger.LogInformation(
-                    "TopStepX TP bracket: {Contract} ticks={Ticks} (isBuy={Buy})",
-                    resolvedContractId, signedTpTicks, isBuy)
+                    "TopStepX TP bracket: {Contract} requested={Req} validated={Val} signed={Signed} ticks (isBuy={Buy})",
+                    resolvedContractId, order.InitialTakeProfitTicks.Value, validatedTpTicks, signedTpTicks, isBuy)
             End If
 
             Dim req = New PXPlaceOrderRequest With {
@@ -156,6 +157,37 @@ Namespace TopStepTrader.Services.Trading
                     Await _orderRepo.UpdateOrderStatusAsync(order.Id, order.Status, order.ExternalOrderId)
                     _logger.LogInformation("TopStepX order accepted. orderId={Id}", resp.OrderId)
                     If OperatingSystem.IsWindows() Then System.Console.Beep(880, 200)
+
+                    ' Naked-entry guard: if we submitted an SL bracket, schedule a background check
+                    ' to confirm it was accepted by the broker. TopStepX can silently drop bracket legs
+                    ' that violate exchange risk rules (e.g. excessive tick distance), leaving the entry
+                    ' position completely unmanaged. Clamping in ClampStopTicksAsync is the primary
+                    ' defence; this is a secondary safety net for any rejection path we missed.
+                    If slBracket IsNot Nothing Then
+                        Dim verifyContractId = resolvedContractId
+                        Dim verifyAccountId = accountId
+                        Task.Run(Async Function()
+                            Try
+                                Await Task.Delay(TimeSpan.FromSeconds(7))
+                                Dim ordersResp = Await _orderClient.SearchOpenOrdersAsync(verifyAccountId)
+                                Dim hasSl = ordersResp?.Orders IsNot Nothing AndAlso
+                                            ordersResp.Orders.Any(
+                                                Function(o) String.Equals(o.ContractId, verifyContractId,
+                                                                           StringComparison.OrdinalIgnoreCase) AndAlso
+                                                            o.OrderType = 4)
+                                If Not hasSl Then
+                                    _logger.LogError(
+                                        "🚨 NAKED ENTRY: no SL bracket found for {Contract} 7s after fill — " &
+                                        "flattening position to prevent unmanaged risk.",
+                                        verifyContractId)
+                                    Await _orderClient.CloseContractAsync(verifyAccountId, verifyContractId)
+                                End If
+                            Catch ex As Exception
+                                _logger.LogWarning(ex,
+                                    "TopStepX naked-entry guard check failed for {Contract}", verifyContractId)
+                            End Try
+                        End Function)
+                    End If
                 Else
                     order.Status = OrderStatus.Rejected
                     Await _orderRepo.UpdateOrderStatusAsync(order.Id, order.Status)
