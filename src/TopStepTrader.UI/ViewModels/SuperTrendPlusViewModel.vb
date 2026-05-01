@@ -1340,11 +1340,17 @@ Namespace TopStepTrader.UI.ViewModels
                 End Try
             End If
 
-            ' Only the primary slot (SlotIndex = 0) places a bracketed order.
-            ' Scale-in slots add contracts without a bracket so TopStepX does not
-            ' create independent SL/TP orders that conflict with the primary bracket.
-            Dim isPrimary As Boolean = slot.SlotIndex = 0 OrElse
-                Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.SlotIndex < slot.SlotIndex)
+            ' Every instrument's first open slot is primary and gets brackets.
+            ' Scale-ins for the *same* instrument at a lower slot index would suppress brackets,
+            ' but TryOpenSlot already blocks a 2nd slot for the same instrument, so isPrimary is
+            ' always True in practice.  The old check used slot index alone (ignoring instrument),
+            ' which incorrectly marked M6E/M2K as scale-ins when MGC occupied slot 0 — BUG-40b.
+            Dim isPrimary As Boolean =
+                Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
+                                                        s.SlotIndex < slot.SlotIndex AndAlso
+                                                        String.Equals(s.Instrument, contractId, StringComparison.OrdinalIgnoreCase))
+            _logger.LogDebug("ST+ FireEntry {Contract} slot={Slot} isPrimary={IsPrimary} stopTicks={Stop} tpTicks={TP} side={Side}",
+                             contractId, slot.SlotIndex, isPrimary, stopTicks, tpTicks, oSide)
             Dim order As New Order With {
                 .AccountId = slot.AccountId,
                 .ContractId = contractId,
