@@ -93,7 +93,7 @@ MCL rolled from K26 to M26 on April 22. `SearchForFrontMonthAsync` used `cutoff 
 
 All open work is tracked in a **local SQLite database** — the single source of truth for index/search — plus individual markdown files for full ticket detail:
 
-- **`tools/tickets/tickets.db`** — SQLite index (single source of truth for state, priority, search). Local-only, excluded from git.
+- **`tickets/tickets.db`** — SQLite index (single source of truth for state, priority, search). Local-only, excluded from git.
 - **`tickets/<ID>.md`** — full description, problem, proposed fix, and acceptance criteria for each open ticket.
 - **`tickets/archive/<ID>.md`** — completed ticket files (moved here on close, never deleted).
 - **`Open_TICKETS.md`** / **`Closed_Tickets.md`** — obsolete; do not read or write these files.
@@ -104,25 +104,25 @@ All files are local-only and excluded from the GitHub remote via `.gitignore`.
 
 ```bash
 # List open tickets (sorted P0→P3 then by ID)
-python tools/tickets/tickets.py list
+python tickets/tickets.py list
 
 # Show a ticket (DB row + markdown content)
-python tools/tickets/tickets.py show BUG-17
+python tickets/tickets.py show BUG-17
 
 # Create a new ticket
-python tools/tickets/tickets.py new BUG P1 "Short title" --category Bugs --size S --source UAT
+python tickets/tickets.py new BUG P1 "Short title" --category Bugs --size S --source UAT
 
 # Close a ticket (moves markdown to archive, updates DB)
-python tools/tickets/tickets.py close BUG-17 --resolution "Fixed by removing stale cache."
+python tickets/tickets.py close BUG-17 --resolution "Fixed by removing stale cache."
 
 # Full-text search
-python tools/tickets/tickets.py search "stale contract"
+python tickets/tickets.py search "stale contract"
 
 # Stats
-python tools/tickets/tickets.py stats
+python tickets/tickets.py stats
 ```
 
-See `tools/tickets/README.md` for full usage.
+See `tickets/README.md` for full usage.
 
 ### Priority Tags
 
@@ -188,7 +188,7 @@ Log/repro: <paste relevant output>
 
 ### Creating a New Ticket
 
-1. Run `python tools/tickets/tickets.py new <PREFIX> <PRIORITY> "<TITLE>" [--category C] [--size S] [--source SRC]`.
+1. Run `python tickets/tickets.py new <PREFIX> <PRIORITY> "<TITLE>" [--category C] [--size S] [--source SRC]`.
    - The CLI determines the next ID automatically and creates `tickets/[ID].md`.
    - A DB row is inserted with `state=Open`.
 2. Edit `tickets/[ID].md` to fill in **Problem**, **Proposed Fix**, and **Acceptance Criteria**.
@@ -196,7 +196,7 @@ Log/repro: <paste relevant output>
 ### Completing a Ticket
 
 1. Verify build passes and all tests pass.
-2. Run `python tools/tickets/tickets.py close [ID] --resolution "<one-line summary>"`.
+2. Run `python tickets/tickets.py close [ID] --resolution "<one-line summary>"`.
    - This moves `tickets/[ID].md` → `tickets/archive/[ID].md` and updates the DB (`state=Closed`).
 3. **Commit, push, and pull** — stage all changes and push to origin:
    ```bash
@@ -213,7 +213,7 @@ Log/repro: <paste relevant output>
 Execute [ID]
 ```
 
-Claude loads `python tools/tickets/tickets.py show [ID]` + the referenced source files, implements the change, runs self-verification (build + tests), and closes the ticket via the CLI as described above.
+Claude loads `python tickets/tickets.py show [ID]` + the referenced source files, implements the change, runs self-verification (build + tests), and closes the ticket via the CLI as described above.
 
 ---
 
@@ -264,8 +264,8 @@ chore(BUG-12): mark ticket resolved in Open_TICKETS.md
 ### Per-Ticket Procedure (automated)
 
 1. Read `CLAUDE.md` (this file).
-2. Pick the **highest-priority open ticket** by running `python tools/tickets/tickets.py list` (lowest P-number, then lowest ID), or use the ticket explicitly requested.
-3. Run `python tools/tickets/tickets.py show [ID]` and read all files listed under `**Files:**`.
+2. Pick the **highest-priority open ticket** by running `python tickets/tickets.py list` (lowest P-number, then lowest ID), or use the ticket explicitly requested.
+3. Run `python tickets/tickets.py show [ID]` and read all files listed under `**Files:**`.
 4. Implement the fix following the code style and conventions in this file.
 5. Run self-verification:
    ```bash
@@ -281,7 +281,7 @@ chore(BUG-12): mark ticket resolved in Open_TICKETS.md
    ```
 7. Close the ticket via CLI:
    ```bash
-   python tools/tickets/tickets.py close [ID] --resolution "<one-line summary>"
+   python tickets/tickets.py close [ID] --resolution "<one-line summary>"
    git add -A
    git commit -m "chore(ID): close ticket"
    git push origin clean-start

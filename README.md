@@ -16,6 +16,7 @@ A WPF desktop application for live and simulated trading on **TopStepX (CME Micr
    - [Pump-n-Dump](#4-pump-n-dump-)
    - [CryptoJoe](#5-cryptojoe-)
    - [Backtest](#6-backtest-)
+   - [SuperTrend+ Autopilot](#7-supertrend-autopilot-)
    - [Order Book](#8-order-book-)
    - [Test Trade](#9-test-trade-)
    - [API Keys](#10-api-keys-)
@@ -356,6 +357,109 @@ Win-rate and Sharpe ranges on the cards are reference figures from historical re
 
 ---
 
+### 7. SuperTrend+ Autopilot 📈
+
+**Purpose:** Multi-asset automated trading engine driven by the SuperTrend indicator, ADX trend-strength, and Directional Indicators. Monitors up to all instruments in `FavouriteContracts` simultaneously, manages up to three concurrent position slots (one trade per instrument at a time), and advances each open position through a six-phase stop management system.
+
+#### How It Works
+
+1. User selects account, bar timeframe (5min / 15min / 1hr), entry mode (Confirmed or Early), TP multiple, and SuperTrend ATR multiplier.
+2. Click **Start Monitoring** to begin a 15-second polling loop across all watchlist instruments.
+3. For each bar close the engine computes SuperTrend, ADX(14), +DI, and −DI. A signal fires when all three gates pass: SuperTrend direction, DI confirmation (+DI > −DI for long), and ADX ≥ minimum threshold (default 25).
+4. When a signal qualifies, the engine allocates an idle slot and places a market order with a bracket stop-loss at the SuperTrend line and (optionally) a take-profit at the configured R multiple.
+5. Every monitoring tick the open slot is updated: the SuperTrend stop ratchets in the trade direction, and the degradation scorer evaluates seven exit signals. When the scorer breaches the exit threshold the position is closed.
+6. If the Claude AI toggle is enabled, a `PreTradeCheckAsync` call to Claude Haiku gates each order. A VETO suppresses the instrument for 15 minutes.
+
+#### Entry Modes
+
+| Mode | Description |
+|---|---|
+| **Confirmed** | Signal must align on a fully closed bar — fewer false entries, slightly later timing |
+| **Early (Multi-Signal)** | Multiple DI/ADX conditions evaluated mid-bar for earlier entries on fast-moving instruments |
+
+#### Position Slots
+
+Slots are allocated based on ADX band (trend strength):
+
+| ADX Range | Max open slots | Coffee Level |
+|---|---|---|
+| 25–39 | 1 | ☕ L1 Decaff |
+| 40–59 | 2 | ☕☕ L2 Latte |
+| 60+ | 3 | ☕☕☕ L3 Espresso |
+
+A new slot only opens on the next bar after ADX rises into the next band. No two slots open on the same bar. Slots are blocked when degradation is Amber (warning) or higher.
+
+#### Six-Phase Stop Management
+
+Each open slot advances through phases as profit grows. R = initial risk distance (entry price minus stop at entry).
+
+| Phase | Profit threshold | Stop level |
+|---|---|---|
+| Initial | < 0.5R | SuperTrend line (ratchets with each bar) |
+| Breakeven | ≥ 0.5R | Exact entry price |
+| ProfitLock | ≥ 1R | Entry + 0.3R |
+| ProfitTrail | ≥ 1.5R | ATR-based trailing stop |
+| Harvest | ≥ 2R | Locked at entry + 1.5R |
+| FreeRide | ≥ 3R | Locked at entry + 2R |
+
+The stop never retreats.
+
+#### Seven Degradation Signals
+
+Scored each bar. Combined score at or above the exit threshold triggers immediate close.
+
+| Signal | Condition | Weight |
+|---|---|---|
+| E1 SuperTrend Flip | Trend reversed | 8 (immediate exit) |
+| E2 Momentum Slowing | Price converging toward ST line over 3 bars | 3 |
+| E3 ADX Declining | Trend strength fading from entry ADX | 2 |
+| E4 DI Compression | +DI / −DI spread narrowing | 2 |
+| E5 DI Crossover | DI lines crossing — leading reversal signal | 4 |
+| E6 Rejection Bar | Price rejected at extension — large wick | 2 |
+| E7 ATR Contraction | ATR < 75% of entry ATR — momentum fading | 1 |
+
+Amber (warning) = score building, no new slots opened. Red (exiting) = exit triggered.
+
+#### Watchlist Panel
+
+The top panel shows all monitored instruments with live trend arrow, signal state, ADX strength (coffee scale), +DI/−DI values, and a plain-language explanation of the current signal.
+
+#### Slot Boxes
+
+Three slot boxes (Slot 1 / 2 / 3) show:
+- Instrument, direction, and entry time
+- Live P&L (flashes white on change)
+- Entry price, stop loss, take profit, and current stop phase (in gold)
+- Idle monitoring status when no position is open
+- Per-slot **AI Sense Check** button (manual mid-trade Claude Haiku review)
+- AI verdict panel (PROCEED / CAUTION / VETO with explanation)
+
+#### AI Check History
+
+A scrolling log below the slot boxes records every AI pre-trade and mid-trade check with timestamp, instrument, and colour-coded verdict (green = proceed, yellow = caution, red = veto).
+
+#### Key Controls
+
+| Control | Description |
+|---|---|
+| Account | TopStepX account selector |
+| Timeframe | Bar resolution for SuperTrend/ADX computation (5min, 15min, 1hr) |
+| Confirmed / Early | Entry mode toggle |
+| TP | Take-profit multiple of initial risk R (or "None / flip only") |
+| ST× | SuperTrend ATR multiplier (2.0 / 2.5 / 3.0) |
+| Start / Stop Monitoring | Starts or stops the 15-second monitoring loop |
+| AI On / Off | Enables Claude Haiku pre-trade gate (resets to Off on restart) |
+| AI Sense Check (per slot) | Manually triggers a mid-trade AI review for that slot |
+
+#### Notes
+
+- On start, the engine scans open broker positions and onboards any live positions that match a watchlist instrument into the appropriate slot (orphan recovery).
+- Re-entry cooldown: after a slot closes, the instrument is blocked from re-entering until at least one full bar has elapsed.
+- AI VETO suppresses the instrument from new checks for 15 minutes to avoid repeatedly calling the API on a blocked setup.
+- Scale-in: when a slot advances to ADX L2, the engine adds +1 contract; at L3 it adds +2 contracts on top of the initial position.
+
+---
+
 ### 8. Order Book 📋
 
 **Purpose:** Manual order management. View open and today's filled orders, place new market orders, and cancel existing working orders.
@@ -465,6 +569,11 @@ Win-rate and Sharpe ranges on the cards are reference figures from historical re
 | `SniperExecutionEngine` | `Services/Trading` | Sniper engine (3-EMA Cascade + pyramiding) |
 | `CryptoStrategyExecutionEngine` | `Services/Trading` | CryptoJoe per-asset engine (MBT, GMET) |
 | `PumpNDumpExecutionEngine` | `Services/Trading` | 3-bar scalping engine |
+| `SuperTrendPlusViewModel` | `UI/ViewModels` | SuperTrend+ Autopilot — multi-asset monitoring, slot allocation, stop phasing, AI gate |
+| `SlotManager` | `UI/ViewModels` | Manages the three concurrent position slots; enforces ADX-band open/close rules |
+| `ExitSignalEngine` | `Services/Trading` | Evaluates seven degradation signals per bar and returns a scored exit decision |
+| `PositionSlot` | `Core/Models` | Plain state object for a single open slot (entry, SL, TP, health, stop phase) |
+| `SuperTrendPlusConfig` | `Core/Settings` | All configurable thresholds (ADX bands, stop-phase R multiples, degradation weights) |
 | `BacktestService` | `Services` | Runs historical strategy simulations |
 | `BarIngestionWorker` | `Services` | Background worker that polls and persists bar data to SQLite |
 | `TokenRefreshWorker` | `Services` | Proactively refreshes the ProjectX JWT token before expiry |
