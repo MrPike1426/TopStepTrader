@@ -1,0 +1,12 @@
+﻿# TopStepTrader Diagnostic Log
+# Session   : F7FB2402
+# Contract  : CON.F.US.MES.U26
+# Strategy  : Multi-Confluence Engine
+# Started   : 2026-04-29T07:27:41.1574849+00:00
+# Format    : JSONL — one JSON object per line; skip lines starting with '#'
+# EventTypes: TRADE | REJECT | NO_SIGNAL
+# Key fields: trade_id (TRADE records written complete on close with outcome)
+#             noise_check.is_sl_inside_noise=true → SL inside bar noise (Bad Settings)
+#             noise_check.effective_slippage_ratio → Spread/SL (>1 = spread > stop!)
+# JSON policy: snake_case keys; null nested sections omitted (WhenWritingNull)
+# Session closed: 2026-04-29T07:39:34.5371672+00:00 | Duration: 11.9 min | Total entries: 0
