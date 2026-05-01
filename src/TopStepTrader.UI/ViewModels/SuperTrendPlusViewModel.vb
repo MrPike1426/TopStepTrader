@@ -1165,9 +1165,6 @@ Namespace TopStepTrader.UI.ViewModels
                 Application.Current?.Dispatcher?.Invoke(
                     Sub()
                         If box IsNot Nothing Then
-                            Dim idx2 As Integer = Array.IndexOf(Instruments, contractId)
-                            Dim instrLabel As String = If(idx2 >= 0, InstrumentLabels(idx2), contractId)
-                            box.SlotLabel      = $"{instrLabel}  {contractId}"
                             box.IdleMonitorText = String.Empty
                             box.HasPosition    = True
                             UpdatePositionDisplay(box, s2, 0D)
@@ -1364,9 +1361,6 @@ Namespace TopStepTrader.UI.ViewModels
                 Sub()
                     If box IsNot Nothing Then
                         ' Set instrument label and flash border to signal new occupant
-                        Dim idx2 As Integer = Array.IndexOf(Instruments, slot.Instrument)
-                        Dim instrLabel As String = If(idx2 >= 0, InstrumentLabels(idx2), slot.Instrument)
-                        box.SlotLabel = $"{instrLabel}  {slot.Instrument}"
                         box.IdleMonitorText = String.Empty
                         box.HasPosition = True
                         UpdatePositionDisplay(box, slot, 0D)
@@ -1688,10 +1682,10 @@ Namespace TopStepTrader.UI.ViewModels
             Dim entry As String = If(slot.EntryPrice = 0D, "--", slot.EntryPrice.ToString("F2"))
             Dim sl As String = If(slot.StopPrice = 0D, "--", slot.StopPrice.ToString("F2"))
             Dim tp As String = If(slot.TakeProfitPrice = 0D, "flip", slot.TakeProfitPrice.ToString("F2"))
+            Dim entryTimeStr As String = If(slot.EntryTime = DateTime.MinValue, "--", slot.EntryTime.ToString("HH:mm:ss"))
+            box.SlotLabel = ($"{label}  {slot.Instrument} — {sideLbl} @ {entryTimeStr}").ToUpper()
             Dim newDisplay As String =
-                String.Format("{0}  {1}  @ {2}", sideLbl, label, entry) & Environment.NewLine &
-                String.Format("SL: {0}  TP: {1}", sl, tp) & Environment.NewLine &
-                String.Format("Entry: {0:HH:mm}", slot.EntryTime) & Environment.NewLine &
+                String.Format("SP: {0}  |  SL: {1}  |  TP: {2}", entry, sl, tp) & Environment.NewLine &
                 slot.EntryReason
             Dim sign As String = If(pnl > 0D, "+", If(pnl < 0D, "-", ""))
             Dim absAmount As String = Math.Abs(pnl).ToString("F2")

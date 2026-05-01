@@ -10,38 +10,38 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="24,20,24,8">
 
-            <TextBlock Text="&#x1F4C8;  SuperTrend+"
-                       Style="{StaticResource PageTitleStyle}"/>
+            <!-- ── Page title + How-It-Works toggle on same row ── -->
+            <Grid Margin="0,0,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-            <!-- â”€â”€ How it works panel (collapsible) â”€â”€ -->
-            <Border Background="{StaticResource SurfaceBrush}"
-                    CornerRadius="6" Margin="0,8,0,0"
-                    BorderBrush="#3A5A8A" BorderThickness="1">
-                <StackPanel>
+                <TextBlock Grid.Column="0"
+                           Text="&#x1F4C8;  SuperTrend+"
+                           Style="{StaticResource PageTitleStyle}"
+                           VerticalAlignment="Center"/>
 
-                    <!-- Toggle header -->
+                <Border Grid.Column="2"
+                        Background="{StaticResource SurfaceBrush}"
+                        CornerRadius="6"
+                        BorderBrush="#3A5A8A" BorderThickness="1"
+                        VerticalAlignment="Center">
                     <ToggleButton x:Name="HowItWorksToggle"
                                   IsChecked="{Binding IsHowItWorksExpanded, Mode=TwoWay}"
                                   Background="Transparent"
                                   BorderThickness="0"
                                   Cursor="Hand"
-                                  Padding="14,10"
+                                  Padding="12,6"
                                   HorizontalContentAlignment="Stretch">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                <TextBlock Text="&#x1F4A1;" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock Text="How does SuperTrend+ Autopilot work?"
-                                           Foreground="{StaticResource AccentBrush}"
-                                           FontSize="13" FontWeight="SemiBold"
-                                           VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <TextBlock Grid.Column="1"
-                                       VerticalAlignment="Center"
-                                       FontSize="11"
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#x1F4A1;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="How does SuperTrend+ Autopilot work?"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       FontSize="12" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock VerticalAlignment="Center" FontSize="11"
                                        Foreground="{StaticResource TextSecondaryBrush}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -54,22 +54,28 @@
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
-                        </Grid>
+                        </StackPanel>
                     </ToggleButton>
+                </Border>
+            </Grid>
 
-                    <!-- Collapsible body -->
-                    <Border Padding="16,4,16,14">
-                        <Border.Style>
-                            <Style TargetType="Border">
+            <!-- How-It-Works collapsible body -->
+            <Border Margin="0,6,0,0"
+                    Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6"
+                    BorderBrush="#3A5A8A" BorderThickness="1">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsChecked, ElementName=HowItWorksToggle}" Value="True">
                                 <Setter Property="Visibility" Value="Visible"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsChecked, ElementName=HowItWorksToggle}" Value="False">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Border.Style>
-                        <StackPanel>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Border Padding="16,4,16,14">
+                    <StackPanel>
 
                             <!-- Monitoring -->
                             <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
@@ -148,117 +154,150 @@
                                 </StackPanel>
                             </Border>
 
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
+                    </StackPanel>
+                </Border>
             </Border>
-
-            <!-- â”€â”€ Header row â”€â”€ -->
+            <!-- ── Header: row 1 = selectors, row 2 = start/stop, AI, AI summary ── -->
             <Border Background="{StaticResource SurfaceBrush}"
                     CornerRadius="6" Padding="14,10" Margin="0,8,0,0"
                     BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,2">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
+                <StackPanel>
 
-                    <!-- Account selector -->
-                    <ComboBox Grid.Column="0"
-                              ItemsSource="{Binding Accounts}"
-                              SelectedItem="{Binding SelectedAccount}"
-                              DisplayMemberPath="DisplayName"
-                              Width="160" VerticalAlignment="Center"/>
+                    <!-- Row 1: Account, Timeframe, Entry Mode, TP, ST -->
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
 
-                    <!-- Timeframe selector -->
-                    <ComboBox Grid.Column="2"
-                              ItemsSource="{Binding Timeframes}"
-                              SelectedItem="{Binding SelectedTimeframe}"
-                              Width="90" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="0"
+                                  ItemsSource="{Binding Accounts}"
+                                  SelectedItem="{Binding SelectedAccount}"
+                                  DisplayMemberPath="DisplayName"
+                                  Width="160" VerticalAlignment="Center"/>
 
-                    <!-- Entry Mode toggle -->
-                    <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                        <RadioButton Content="Confirmed"
-                                     IsChecked="{Binding UseEarlyMode, Converter={StaticResource BoolInverseConverter}}"
-                                     Foreground="White" FontSize="11" Margin="0,0,8,0"/>
-                        <RadioButton Content="Early (Multi-Signal)"
-                                     IsChecked="{Binding UseEarlyMode}"
-                                     Foreground="Gold" FontSize="11" Margin="0,0,12,0"/>
-                    </StackPanel>
+                        <ComboBox Grid.Column="2"
+                                  ItemsSource="{Binding Timeframes}"
+                                  SelectedItem="{Binding SelectedTimeframe}"
+                                  Width="90" VerticalAlignment="Center"/>
 
-                    <!-- TP Multiple selector -->
-                    <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="TP:" Foreground="{StaticResource TextSecondaryBrush}"
-                                   FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                        <ComboBox ItemsSource="{Binding TpMultiples}"
-                                  SelectedItem="{Binding SelectedTpMultiple}"
-                                  Width="Auto" MinWidth="60" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <!-- ST Multiplier selector -->
-                    <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="ST&#xD7;:" Foreground="{StaticResource TextSecondaryBrush}"
-                                   FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                        <ComboBox ItemsSource="{Binding StMultipliers}"
-                                  SelectedItem="{Binding StMultiplier}"
-                                  Width="60" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <!-- Start / Stop button -->
-                    <Button Grid.Column="10"
-                            Content="{Binding StartStopLabel}"
-                            Command="{Binding StartStopCommand}"
-                            Style="{StaticResource PrimaryButtonStyle}"
-                            Padding="14,6" VerticalAlignment="Center"/>
-
-                    <!-- AI toggle -->
-                    <ToggleButton Grid.Column="11"
-                                  IsChecked="{Binding IsAiEnabled, Mode=TwoWay}"
-                                  ToolTip="Claude Haiku AI sense-check before each order. Resets to Off on restart."
-                                  Padding="10,6" VerticalAlignment="Center" Margin="8,0,0,0"
-                                  Cursor="Hand">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#x1F916;" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                            <TextBlock VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text" Value="AI Off"/>
-                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsAiEnabled}" Value="True">
-                                                <Setter Property="Text" Value="AI On"/>
-                                                <Setter Property="Foreground" Value="LimeGreen"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                            <RadioButton Content="Confirmed"
+                                         IsChecked="{Binding UseEarlyMode, Converter={StaticResource BoolInverseConverter}}"
+                                         Foreground="White" FontSize="11" Margin="0,0,8,0"/>
+                            <RadioButton Content="Early (Multi-Signal)"
+                                         IsChecked="{Binding UseEarlyMode}"
+                                         Foreground="Gold" FontSize="11" Margin="0,0,0,0"/>
                         </StackPanel>
-                    </ToggleButton>
 
-                    <!-- Status label -->
-                    <Border Grid.Column="12"
-                            Background="{Binding StatusBackground}"
-                            CornerRadius="4" Margin="12,0,0,0"
-                            Visibility="{Binding StatusVisibility}"
-                            VerticalAlignment="Center" Padding="8,4">
-                        <TextBlock x:Name="StatusLabel"
-                                   Text="{Binding StatusText}"
-                                   Foreground="White" FontSize="12"
-                                   VerticalAlignment="Center"/>
-                    </Border>
-                </Grid>
+                        <!-- TP Multiple -->
+                        <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="TP:" Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <ComboBox ItemsSource="{Binding TpMultiples}"
+                                      SelectedItem="{Binding SelectedTpMultiple}"
+                                      Width="Auto" MinWidth="60" VerticalAlignment="Center"
+                                      ToolTip="Take-Profit multiple. The bot places a TP order at this multiple of initial risk (R). E.g. 2× means TP is twice the distance of your stop. 'None / flip only' means the position exits only on a SuperTrend flip or degradation signal.">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" MaxWidth="140"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+
+                        <!-- ST Multiplier -->
+                        <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="ST&#xD7;:" Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <ComboBox ItemsSource="{Binding StMultipliers}"
+                                      SelectedItem="{Binding StMultiplier}"
+                                      Width="60" VerticalAlignment="Center"
+                                      ToolTip="SuperTrend ATR multiplier. A higher value makes the SuperTrend band wider, resulting in fewer but more reliable signals and a larger initial stop. Lower values give tighter, more responsive signals but increase the chance of whipsaws."/>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Row 2: Start/Stop, AI toggle, AI summary, status -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Start / Stop button -->
+                        <Button Grid.Column="0"
+                                Content="{Binding StartStopLabel}"
+                                Command="{Binding StartStopCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Padding="14,6" VerticalAlignment="Center"/>
+
+                        <!-- AI On/Off toggle -->
+                        <ToggleButton Grid.Column="2"
+                                      IsChecked="{Binding IsAiEnabled, Mode=TwoWay}"
+                                      ToolTip="Claude Haiku AI sense-check before each order. Resets to Off on restart."
+                                      Padding="10,6" VerticalAlignment="Center"
+                                      Cursor="Hand"
+                                      Background="#1565C0" BorderBrush="#1976D2" BorderThickness="1">
+                            <ToggleButton.Style>
+                                <Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+                                    <Setter Property="Background" Value="#1565C0"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter Property="Background" Value="#1976D2"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ToggleButton.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F916;" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
+                                <TextBlock VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="White">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="AI Off"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsAiEnabled}" Value="True">
+                                                    <Setter Property="Text" Value="AI On"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </ToggleButton>
+
+                        <!-- Last AI summary label -->
+                        <TextBlock Grid.Column="4"
+                                   Text="{Binding LastAiCheckText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="11" TextWrapping="Wrap"
+                                   VerticalAlignment="Center" Margin="4,0,0,0"/>
+
+                        <!-- Status badge -->
+                        <Border Grid.Column="5"
+                                Background="{Binding StatusBackground}"
+                                CornerRadius="4" Margin="8,0,0,0"
+                                Visibility="{Binding StatusVisibility}"
+                                VerticalAlignment="Center" Padding="8,4">
+                            <TextBlock x:Name="StatusLabel"
+                                       Text="{Binding StatusText}"
+                                       Foreground="White" FontSize="12"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                    </Grid>
+
+                </StackPanel>
             </Border>
 
             <!-- â”€â”€ Watchlist panel â”€â”€ -->
@@ -345,6 +384,16 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
+            <!-- ── Three slot boxes ── -->
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
                 <!-- Slot 1 box -->
                 <Border Grid.Column="0"
                         Opacity="{Binding Slot1.BoxOpacity}"
@@ -374,19 +423,45 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <!-- Header: instrument label when occupied, blank when empty -->
+                        <!-- Header: instrument + direction + entry time, P&L right-aligned -->
                         <Grid Grid.Row="0" Margin="0,0,0,6">
-                            <TextBlock Text="{Binding Slot1.SlotLabel}"
-                                       FontWeight="Bold" Foreground="White" FontSize="13"/>
-                            <TextBlock Text="&#x23F8; Paused"
-                                       Visibility="{Binding Slot1.PausedBadgeVisibility}"
-                                       Foreground="Orange" FontSize="11"
-                                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Slot1.SlotLabel}"
+                                       FontWeight="Bold" Foreground="White" FontSize="12"
+                                       TextWrapping="Wrap"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                <TextBlock Text="&#x23F8; Paused"
+                                           Visibility="{Binding Slot1.PausedBadgeVisibility}"
+                                           Foreground="Orange" FontSize="11"
+                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <!-- P&L inline with header when position is open -->
+                                <TextBlock Visibility="{Binding Slot1.PositionVisibility}"
+                                           FontFamily="Consolas" FontSize="13" FontWeight="SemiBold"
+                                           VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{Binding Slot1.PnlTextBrush}"/>
+                                            <Setter Property="FontWeight" Value="Normal"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Slot1.IsPnlTextFlashing}" Value="True">
+                                                    <Setter Property="Foreground" Value="Yellow"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                    <Run Text="{Binding Slot1.PnlLine, Mode=OneWay}"/>
+                                </TextBlock>
+                            </StackPanel>
                         </Grid>
 
                         <Separator Grid.Row="1" Margin="0,0,0,6"/>
 
-                        <!-- Symbol rows -->
+                        <!-- Symbol rows (ADX + signal watchlist) -->
                         <ItemsControl Grid.Row="2" ItemsSource="{Binding Slot1.Symbols}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -427,7 +502,7 @@
                             </TextBlock>
                         </Border>
 
-                        <!-- Position area -->
+                        <!-- Position area: SP/SL/TP, entry reason, phase -->
                         <Border Grid.Row="4"
                                 Visibility="{Binding Slot1.PositionVisibility}"
                                 Background="#1A2A50" CornerRadius="4"
@@ -435,26 +510,10 @@
                             <StackPanel>
                                 <TextBlock Text="{Binding Slot1.PositionDisplay}"
                                            Foreground="White"
-                                           FontFamily="Consolas" FontSize="14"
+                                           FontFamily="Consolas" FontSize="12"
                                            TextWrapping="Wrap"/>
-                                <TextBlock FontFamily="Consolas" FontSize="14"
-                                           Margin="0,2,0,0">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{Binding Slot1.PnlTextBrush}"/>
-                                            <Setter Property="FontWeight" Value="Normal"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Slot1.IsPnlTextFlashing}" Value="True">
-                                                    <Setter Property="Foreground" Value="Yellow"/>
-                                                    <Setter Property="FontWeight" Value="Bold"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                    <Run Text="{Binding Slot1.PnlLine, Mode=OneWay}"/>
-                                </TextBlock>
                                 <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="13"
+                                           FontFamily="Consolas" FontSize="12"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot1.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
@@ -481,19 +540,21 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- AI sense-check button -->
+                        <!-- AI sense-check button (blue theme) -->
                         <Button Grid.Row="5" Margin="0,8,0,0" HorizontalAlignment="Stretch"
                                 Padding="6,4" FontSize="11"
                                 Visibility="{Binding Slot1.PositionVisibility}"
                                 IsEnabled="{Binding Slot1.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
                                 Command="{Binding AiCheckSlot1Command}"
-                                ToolTip="Ask Claude Haiku to sense-check this live position">
+                                ToolTip="Ask Claude Haiku to sense-check this live position"
+                                Background="#1565C0" BorderBrush="#1976D2" Foreground="White">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <TextBlock VerticalAlignment="Center">
+                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
+                                <TextBlock VerticalAlignment="Center" Foreground="White">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Text" Value="AI Sense Check"/>
+                                            <Setter Property="Foreground" Value="White"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Slot1.IsAiChecking}" Value="True">
                                                     <Setter Property="Text" Value="Checking&#x2026;"/>
@@ -536,17 +597,45 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
+                        <!-- Header: instrument + direction + entry time, P&L right-aligned -->
                         <Grid Grid.Row="0" Margin="0,0,0,6">
-                            <TextBlock Text="{Binding Slot2.SlotLabel}"
-                                       FontWeight="Bold" Foreground="White" FontSize="13"/>
-                            <TextBlock Text="&#x23F8; Paused"
-                                       Visibility="{Binding Slot2.PausedBadgeVisibility}"
-                                       Foreground="Orange" FontSize="11"
-                                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Slot2.SlotLabel}"
+                                       FontWeight="Bold" Foreground="White" FontSize="12"
+                                       TextWrapping="Wrap"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                <TextBlock Text="&#x23F8; Paused"
+                                           Visibility="{Binding Slot2.PausedBadgeVisibility}"
+                                           Foreground="Orange" FontSize="11"
+                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <!-- P&L inline with header when position is open -->
+                                <TextBlock Visibility="{Binding Slot2.PositionVisibility}"
+                                           FontFamily="Consolas" FontSize="13" FontWeight="SemiBold"
+                                           VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{Binding Slot2.PnlTextBrush}"/>
+                                            <Setter Property="FontWeight" Value="Normal"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Slot2.IsPnlTextFlashing}" Value="True">
+                                                    <Setter Property="Foreground" Value="Yellow"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                    <Run Text="{Binding Slot2.PnlLine, Mode=OneWay}"/>
+                                </TextBlock>
+                            </StackPanel>
                         </Grid>
 
                         <Separator Grid.Row="1" Margin="0,0,0,6"/>
 
+                        <!-- Symbol rows (ADX + signal watchlist) -->
                         <ItemsControl Grid.Row="2" ItemsSource="{Binding Slot2.Symbols}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -565,7 +654,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <!-- Idle monitoring text -->
+                        <!-- Idle monitoring text (shown when no position is open) -->
                         <Border Grid.Row="3"
                                 Visibility="{Binding Slot2.IdleVisibility}"
                                 Padding="0,6,0,0">
@@ -587,6 +676,7 @@
                             </TextBlock>
                         </Border>
 
+                        <!-- Position area: SP/SL/TP, entry reason, phase -->
                         <Border Grid.Row="4"
                                 Visibility="{Binding Slot2.PositionVisibility}"
                                 Background="#1A2A50" CornerRadius="4"
@@ -594,26 +684,10 @@
                             <StackPanel>
                                 <TextBlock Text="{Binding Slot2.PositionDisplay}"
                                            Foreground="White"
-                                           FontFamily="Consolas" FontSize="14"
+                                           FontFamily="Consolas" FontSize="12"
                                            TextWrapping="Wrap"/>
-                                <TextBlock FontFamily="Consolas" FontSize="14"
-                                           Margin="0,2,0,0">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{Binding Slot2.PnlTextBrush}"/>
-                                            <Setter Property="FontWeight" Value="Normal"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Slot2.IsPnlTextFlashing}" Value="True">
-                                                    <Setter Property="Foreground" Value="Yellow"/>
-                                                    <Setter Property="FontWeight" Value="Bold"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                    <Run Text="{Binding Slot2.PnlLine, Mode=OneWay}"/>
-                                </TextBlock>
                                 <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="13"
+                                           FontFamily="Consolas" FontSize="12"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot2.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
@@ -640,19 +714,21 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- AI sense-check button -->
+                        <!-- AI sense-check button (blue theme) -->
                         <Button Grid.Row="5" Margin="0,8,0,0" HorizontalAlignment="Stretch"
                                 Padding="6,4" FontSize="11"
                                 Visibility="{Binding Slot2.PositionVisibility}"
                                 IsEnabled="{Binding Slot2.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
                                 Command="{Binding AiCheckSlot2Command}"
-                                ToolTip="Ask Claude Haiku to sense-check this live position">
+                                ToolTip="Ask Claude Haiku to sense-check this live position"
+                                Background="#1565C0" BorderBrush="#1976D2" Foreground="White">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <TextBlock VerticalAlignment="Center">
+                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
+                                <TextBlock VerticalAlignment="Center" Foreground="White">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Text" Value="AI Sense Check"/>
+                                            <Setter Property="Foreground" Value="White"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Slot2.IsAiChecking}" Value="True">
                                                     <Setter Property="Text" Value="Checking&#x2026;"/>
@@ -695,17 +771,45 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
+                        <!-- Header: instrument + direction + entry time, P&L right-aligned -->
                         <Grid Grid.Row="0" Margin="0,0,0,6">
-                            <TextBlock Text="{Binding Slot3.SlotLabel}"
-                                       FontWeight="Bold" Foreground="White" FontSize="13"/>
-                            <TextBlock Text="&#x23F8; Paused"
-                                       Visibility="{Binding Slot3.PausedBadgeVisibility}"
-                                       Foreground="Orange" FontSize="11"
-                                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Slot3.SlotLabel}"
+                                       FontWeight="Bold" Foreground="White" FontSize="12"
+                                       TextWrapping="Wrap"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                                <TextBlock Text="&#x23F8; Paused"
+                                           Visibility="{Binding Slot3.PausedBadgeVisibility}"
+                                           Foreground="Orange" FontSize="11"
+                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <!-- P&L inline with header when position is open -->
+                                <TextBlock Visibility="{Binding Slot3.PositionVisibility}"
+                                           FontFamily="Consolas" FontSize="13" FontWeight="SemiBold"
+                                           VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{Binding Slot3.PnlTextBrush}"/>
+                                            <Setter Property="FontWeight" Value="Normal"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Slot3.IsPnlTextFlashing}" Value="True">
+                                                    <Setter Property="Foreground" Value="Yellow"/>
+                                                    <Setter Property="FontWeight" Value="Bold"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                    <Run Text="{Binding Slot3.PnlLine, Mode=OneWay}"/>
+                                </TextBlock>
+                            </StackPanel>
                         </Grid>
 
                         <Separator Grid.Row="1" Margin="0,0,0,6"/>
 
+                        <!-- Symbol rows (ADX + signal watchlist) -->
                         <ItemsControl Grid.Row="2" ItemsSource="{Binding Slot3.Symbols}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -724,7 +828,7 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <!-- Idle monitoring text -->
+                        <!-- Idle monitoring text (shown when no position is open) -->
                         <Border Grid.Row="3"
                                 Visibility="{Binding Slot3.IdleVisibility}"
                                 Padding="0,6,0,0">
@@ -746,6 +850,7 @@
                             </TextBlock>
                         </Border>
 
+                        <!-- Position area: SP/SL/TP, entry reason, phase -->
                         <Border Grid.Row="4"
                                 Visibility="{Binding Slot3.PositionVisibility}"
                                 Background="#1A2A50" CornerRadius="4"
@@ -753,26 +858,10 @@
                             <StackPanel>
                                 <TextBlock Text="{Binding Slot3.PositionDisplay}"
                                            Foreground="White"
-                                           FontFamily="Consolas" FontSize="14"
+                                           FontFamily="Consolas" FontSize="12"
                                            TextWrapping="Wrap"/>
-                                <TextBlock FontFamily="Consolas" FontSize="14"
-                                           Margin="0,2,0,0">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{Binding Slot3.PnlTextBrush}"/>
-                                            <Setter Property="FontWeight" Value="Normal"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Slot3.IsPnlTextFlashing}" Value="True">
-                                                    <Setter Property="Foreground" Value="Yellow"/>
-                                                    <Setter Property="FontWeight" Value="Bold"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                    <Run Text="{Binding Slot3.PnlLine, Mode=OneWay}"/>
-                                </TextBlock>
                                 <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="13"
+                                           FontFamily="Consolas" FontSize="12"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot3.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
@@ -799,19 +888,21 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- AI sense-check button -->
+                        <!-- AI sense-check button (blue theme) -->
                         <Button Grid.Row="5" Margin="0,8,0,0" HorizontalAlignment="Stretch"
                                 Padding="6,4" FontSize="11"
                                 Visibility="{Binding Slot3.PositionVisibility}"
                                 IsEnabled="{Binding Slot3.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
                                 Command="{Binding AiCheckSlot3Command}"
-                                ToolTip="Ask Claude Haiku to sense-check this live position">
+                                ToolTip="Ask Claude Haiku to sense-check this live position"
+                                Background="#1565C0" BorderBrush="#1976D2" Foreground="White">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <TextBlock VerticalAlignment="Center">
+                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
+                                <TextBlock VerticalAlignment="Center" Foreground="White">
                                     <TextBlock.Style>
                                         <Style TargetType="TextBlock">
                                             <Setter Property="Text" Value="AI Sense Check"/>
+                                            <Setter Property="Foreground" Value="White"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding Slot3.IsAiChecking}" Value="True">
                                                     <Setter Property="Text" Value="Checking&#x2026;"/>
@@ -825,6 +916,7 @@
                     </Grid>
                 </Border>
 
+            </Grid>
             </Grid>
 
         </StackPanel>
