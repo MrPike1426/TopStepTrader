@@ -247,15 +247,34 @@
                         <ToggleButton Grid.Column="2"
                                       IsChecked="{Binding IsAiEnabled, Mode=TwoWay}"
                                       ToolTip="Claude Haiku AI sense-check before each order. Resets to Off on restart."
-                                      Padding="10,6" VerticalAlignment="Center"
-                                      Cursor="Hand"
-                                      Background="#1565C0" BorderBrush="#1976D2" BorderThickness="1">
+                                      Padding="10,6" VerticalAlignment="Center">
                             <ToggleButton.Style>
-                                <Style TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
-                                    <Setter Property="Background" Value="#1565C0"/>
+                                <Style TargetType="ToggleButton">
+                                    <Setter Property="Background"   Value="#1565C0"/>
+                                    <Setter Property="BorderBrush"  Value="#1976D2"/>
+                                    <Setter Property="Foreground"   Value="White"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="Cursor"       Value="Hand"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="3"
+                                                        Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
                                     <Style.Triggers>
                                         <Trigger Property="IsChecked" Value="True">
-                                            <Setter Property="Background" Value="#1976D2"/>
+                                            <Setter Property="Background"  Value="#C62828"/>
+                                            <Setter Property="BorderBrush" Value="#E53935"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Opacity" Value="0.85"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
@@ -373,16 +392,6 @@
                     </ItemsControl>
                 </Grid>
             </Border>
-
-            <!-- â”€â”€ Three persona boxes â”€â”€ -->
-            <Grid Margin="0,12,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
 
             <!-- ── Three slot boxes ── -->
             <Grid Margin="0,12,0,0">
@@ -546,8 +555,39 @@
                                 Visibility="{Binding Slot1.PositionVisibility}"
                                 IsEnabled="{Binding Slot1.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
                                 Command="{Binding AiCheckSlot1Command}"
-                                ToolTip="Ask Claude Haiku to sense-check this live position"
-                                Background="#1565C0" BorderBrush="#1976D2" Foreground="White">
+                                ToolTip="Ask Claude Haiku to sense-check this live position">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Background"  Value="#1565C0"/>
+                                    <Setter Property="BorderBrush" Value="#1976D2"/>
+                                    <Setter Property="Foreground"  Value="White"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="Cursor"      Value="Hand"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="3"
+                                                        Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background"  Value="#2E7D32"/>
+                                            <Setter Property="BorderBrush" Value="#388E3C"/>
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding Slot1.IsAiChecking}" Value="True">
+                                            <Setter Property="Background"  Value="#F57C00"/>
+                                            <Setter Property="BorderBrush" Value="#FF9800"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
                                 <TextBlock VerticalAlignment="Center" Foreground="White">
@@ -720,8 +760,39 @@
                                 Visibility="{Binding Slot2.PositionVisibility}"
                                 IsEnabled="{Binding Slot2.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
                                 Command="{Binding AiCheckSlot2Command}"
-                                ToolTip="Ask Claude Haiku to sense-check this live position"
-                                Background="#1565C0" BorderBrush="#1976D2" Foreground="White">
+                                ToolTip="Ask Claude Haiku to sense-check this live position">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Background"  Value="#1565C0"/>
+                                    <Setter Property="BorderBrush" Value="#1976D2"/>
+                                    <Setter Property="Foreground"  Value="White"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="Cursor"      Value="Hand"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="3"
+                                                        Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background"  Value="#2E7D32"/>
+                                            <Setter Property="BorderBrush" Value="#388E3C"/>
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding Slot2.IsAiChecking}" Value="True">
+                                            <Setter Property="Background"  Value="#F57C00"/>
+                                            <Setter Property="BorderBrush" Value="#FF9800"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
                                 <TextBlock VerticalAlignment="Center" Foreground="White">
@@ -894,8 +965,39 @@
                                 Visibility="{Binding Slot3.PositionVisibility}"
                                 IsEnabled="{Binding Slot3.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
                                 Command="{Binding AiCheckSlot3Command}"
-                                ToolTip="Ask Claude Haiku to sense-check this live position"
-                                Background="#1565C0" BorderBrush="#1976D2" Foreground="White">
+                                ToolTip="Ask Claude Haiku to sense-check this live position">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Setter Property="Background"  Value="#1565C0"/>
+                                    <Setter Property="BorderBrush" Value="#1976D2"/>
+                                    <Setter Property="Foreground"  Value="White"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="Cursor"      Value="Hand"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="3"
+                                                        Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background"  Value="#2E7D32"/>
+                                            <Setter Property="BorderBrush" Value="#388E3C"/>
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding Slot3.IsAiChecking}" Value="True">
+                                            <Setter Property="Background"  Value="#F57C00"/>
+                                            <Setter Property="BorderBrush" Value="#FF9800"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
                                 <TextBlock VerticalAlignment="Center" Foreground="White">
@@ -917,7 +1019,44 @@
                 </Border>
 
             </Grid>
-            </Grid>
+
+            <!-- ── AI Check History Log ── -->
+            <Border Margin="0,14,0,0"
+                    Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" BorderBrush="#1565C0" BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition MaxHeight="200"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+                    <Border Grid.Row="0" Background="#0D47A1" CornerRadius="5,5,0,0" Padding="10,6">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="White"/>
+                            <TextBlock Text="AI Check History" Foreground="White" FontSize="12"
+                                       FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Scrolling log -->
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding AiHistoryLog}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="#263238" BorderThickness="0,0,0,1" Padding="10,5">
+                                        <TextBlock Foreground="{Binding EntryColour}"
+                                                   FontFamily="Consolas" FontSize="11"
+                                                   Text="{Binding Display}"
+                                                   TextWrapping="Wrap"/>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
 
         </StackPanel>
     </ScrollViewer>

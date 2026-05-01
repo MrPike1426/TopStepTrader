@@ -16,6 +16,26 @@ Imports TopStepTrader.UI.ViewModels.Base
 
 Namespace TopStepTrader.UI.ViewModels
 
+    ''' <summary>One entry in the AI check history log.</summary>
+    Public Class AiLogEntryVm
+        Public Property Timestamp As String
+        Public Property Indicator As String
+        Public Property CheckResult As String
+        Public ReadOnly Property Display As String
+            Get
+                Return $"{Timestamp}  —  {Indicator}  —  {CheckResult}"
+            End Get
+        End Property
+        Public ReadOnly Property EntryColour As String
+            Get
+                Dim v = CheckResult.ToUpperInvariant()
+                If v.Contains("VETO") OrElse v.Contains("RED") OrElse v.Contains("BLOCK") Then Return "#EF9A9A"
+                If v.Contains("YELLOW") OrElse v.Contains("CAUTION") OrElse v.Contains("WARN") Then Return "#FFF176"
+                Return "#A5D6A7"
+            End Get
+        End Property
+    End Class
+
     Public Class WatchlistRowVm
         Inherits ViewModelBase
 
@@ -348,6 +368,18 @@ Namespace TopStepTrader.UI.ViewModels
                 SetProperty(_lastAiCheckText, value)
             End Set
         End Property
+
+        ''' <summary>Scrolling history of all AI checks, newest first.</summary>
+        Public ReadOnly Property AiHistoryLog As New ObservableCollection(Of AiLogEntryVm)()
+
+        Private Sub AddAiLogEntry(indicator As String, checkResult As String)
+            Dim entry As New AiLogEntryVm With {
+                .Timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                .Indicator = indicator,
+                .CheckResult = checkResult
+            }
+            Application.Current?.Dispatcher?.Invoke(Sub() AiHistoryLog.Insert(0, entry))
+        End Sub
 
         Public ReadOnly Property StartStopCommand As RelayCommand
 
@@ -1265,6 +1297,7 @@ Namespace TopStepTrader.UI.ViewModels
                                 SyncLock _aiSuppression
                                     _aiSuppression(contractId) = DateTimeOffset.UtcNow.AddMinutes(15)
                                 End SyncLock
+                                AddAiLogEntry(contractId, $"VETO — {shortReason}")
                                 ' Update watchlist row with the rejection reason
                                 Dim wIdx As Integer = Array.IndexOf(Instruments, contractId)
                                 If wIdx >= 0 Then
@@ -1286,6 +1319,7 @@ Namespace TopStepTrader.UI.ViewModels
                                     WatchlistItems(wIdxOk).SignalReason = "🤖 AI Checked ✓"
                                 End Sub)
                         End If
+                        AddAiLogEntry(contractId, "Pre-trade check PASSED ✓")
                     Catch ex As Exception
                         _logger.LogWarning(ex, "ST+ AI pre-trade check error for {Contract} — proceeding anyway", contractId)
                     End Try
@@ -1796,6 +1830,7 @@ Namespace TopStepTrader.UI.ViewModels
                             box.AiSuggestedAction = result.SuggestedAction
                             LastAiCheckText = String.Format("{0:HH:mm:ss}  {1}  {2}", DateTime.Now, slot.Instrument, result.Verdict)
                         End Sub)
+                    AddAiLogEntry(slot.Instrument, $"Mid-trade: {result.Verdict} — {result.SuggestedAction}")
                 End Using
             Catch ex As Exception
                 _logger.LogWarning(ex, "ST+ mid-trade AI check error for {Contract}", slot.Instrument)
