@@ -195,6 +195,9 @@ Namespace TopStepTrader.UI.ViewModels
         Private _timer As Timer
         Private ReadOnly _timerLock As New Object()
         Private _disposed As Boolean = False
+        Private _isTicking As Integer = 0
+        Private _allMarketsClosed As Boolean = False
+        Private _lastScanUtc As DateTime = DateTime.MinValue
 
         Private ReadOnly _approachHistory As New Dictionary(Of String, ApproachState)
         Private ReadOnly _prevStDirByInstrument As New Dictionary(Of String, Single)()
@@ -520,23 +523,36 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Private Sub TimerCallback(state As Object)
+            If Interlocked.CompareExchange(_isTicking, 1, 0) <> 0 Then
+                _logger.LogWarning("ST+ tick skipped — previous tick still running")
+                Return
+            End If
             Try
                 Task.Run(Async Function() As Task
                              Await DoTickAsync()
-                         End Function).Wait()
+                         End Function).GetAwaiter().GetResult()
             Catch ex As Exception
                 _logger.LogWarning(ex, "ST+ DoTickAsync error on timer tick")
                 Application.Current?.Dispatcher?.Invoke(
                     Sub()
                         StatusText = String.Format("Error: {0}", ex.Message)
                     End Sub)
+            Finally
+                Interlocked.Exchange(_isTicking, 0)
             End Try
         End Sub
 
         Private Async Function DoTickAsync() As Task
             _releasedThisTick = False
             Dim tf = MapTimeframe(_selectedTimeframe)
-            Dim barCache = Await ScanWatchlistAsync(tf)
+
+            Dim barCache As Dictionary(Of Integer, IList(Of MarketBar))
+            If _allMarketsClosed AndAlso (DateTime.UtcNow - _lastScanUtc).TotalSeconds < 60 Then
+                barCache = New Dictionary(Of Integer, IList(Of MarketBar))()
+            Else
+                _lastScanUtc = DateTime.UtcNow
+                barCache = Await ScanWatchlistAsync(tf)
+            End If
 
             Await ReconcileOpenPositionsAsync(barCache)
 
@@ -581,6 +597,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Async Function ScanWatchlistAsync(tf As BarTimeframe) As Task(Of Dictionary(Of Integer, IList(Of MarketBar)))
             Dim cache As New Dictionary(Of Integer, IList(Of MarketBar))
+            Dim anyFreshBar As Boolean = False
             For i = 0 To Instruments.Length - 1
                 Dim contractId = Instruments(i)
                 Dim wRow = WatchlistItems(i)
@@ -611,6 +628,22 @@ Namespace TopStepTrader.UI.ViewModels
                                            contractId, bars.Count)
                     Continue For
                 End If
+
+                Dim staleAgeMins = (DateTime.UtcNow - bars.Last().Timestamp).TotalMinutes
+                If staleAgeMins > tfMinutesScan * 3 Then
+                    _logger.LogInformation("ST+ ScanWatchlist [{Contract}] STALE — last bar {Age:F0} min ago (threshold={Threshold}min)",
+                                           contractId, staleAgeMins, tfMinutesScan * 3)
+                    Application.Current?.Dispatcher?.Invoke(
+                        Sub()
+                            wRow.Signal = "closed"
+                            wRow.Arrow = "–"
+                            wRow.RowColor = Brushes.Gray
+                            wRow.SignalReason = String.Format("Market closed — last bar {0:F0} min ago", staleAgeMins)
+                        End Sub)
+                    Continue For
+                End If
+
+                anyFreshBar = True
                 cache(i) = bars
                 _logger.LogInformation("ST+ ScanWatchlist [{Contract}] cached {Count} bars.", contractId, bars.Count)
 
@@ -715,6 +748,7 @@ Namespace TopStepTrader.UI.ViewModels
                         wRow.DiDisplay = diStr
                     End Sub)
             Next
+            _allMarketsClosed = Not anyFreshBar
             Return cache
         End Function
 
