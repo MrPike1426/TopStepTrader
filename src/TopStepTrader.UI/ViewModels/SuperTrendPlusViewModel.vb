@@ -180,6 +180,10 @@ Namespace TopStepTrader.UI.ViewModels
         Private Const EntryStaggerMs As Integer = 5000
         Private Const SlotUpdateStaggerMs As Integer = 5000
 
+        ' TopStepX session-close window: entries suppressed, scan skipped.
+        Private Shared ReadOnly SessionCloseTime As TimeSpan = TimeSpan.FromHours(21).Add(TimeSpan.FromMinutes(10))
+        Private Shared ReadOnly SessionResumeTime As TimeSpan = TimeSpan.FromHours(22)
+
         Public ReadOnly Property WatchlistItems As New ObservableCollection(Of WatchlistRowVm)
         Private Const SyncMissThreshold As Integer = 3
 
@@ -546,8 +550,15 @@ Namespace TopStepTrader.UI.ViewModels
             _releasedThisTick = False
             Dim tf = MapTimeframe(_selectedTimeframe)
 
+            Dim nowUtcTod = DateTime.UtcNow.TimeOfDay
+            Dim inCloseWindow = nowUtcTod >= SessionCloseTime AndAlso nowUtcTod < SessionResumeTime
+
             Dim barCache As Dictionary(Of Integer, IList(Of MarketBar))
-            If _allMarketsClosed AndAlso (DateTime.UtcNow - _lastScanUtc).TotalSeconds < 60 Then
+            If inCloseWindow Then
+                ' Skip watchlist scan during the session-close window — TopStepX handles position
+                ' closure on the platform side. Reconciliation still runs to clear slot state.
+                barCache = New Dictionary(Of Integer, IList(Of MarketBar))()
+            ElseIf _allMarketsClosed AndAlso (DateTime.UtcNow - _lastScanUtc).TotalSeconds < 60 Then
                 barCache = New Dictionary(Of Integer, IList(Of MarketBar))()
             Else
                 _lastScanUtc = DateTime.UtcNow
@@ -566,6 +577,15 @@ Namespace TopStepTrader.UI.ViewModels
                     isFirstSlotUpdate = False
                 End If
             Next
+
+            If inCloseWindow Then
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        StatusText = "Session closed (21:10 UTC)"
+                        StatusBackground = New SolidColorBrush(Color.FromRgb(&H69, &H69, &H69))
+                    End Sub)
+                Return
+            End If
 
             ' Do not attempt new entries in the same tick that a position was released.
             ' This prevents rapid-fire re-entry when SL fires and snapshot disappears.
@@ -1590,57 +1610,6 @@ Namespace TopStepTrader.UI.ViewModels
                 ' Set InitialRisk once EntryPrice is confirmed (after first snapshot)
                 If slot.InitialRisk = 0D AndAlso slot.EntryPrice <> 0D AndAlso slot.StopPrice <> 0D Then
                     slot.InitialRisk = Math.Abs(slot.EntryPrice - slot.StopPrice)
-                End If
-
-                ' ── Profit-milestone partial exits ────────────────────────────────
-                ' At 2R: reduce Slot 2 (index 1) to 0 contracts via partial close.
-                ' At 3R: reduce Slot 1 (index 0) to 0 contracts via partial close.
-                ' Slot 0 continues as a free-ride until E1 or phase exit.
-                ' Use currentClose (15s bar) so milestones trigger promptly rather than
-                ' waiting up to one full strategy-TF bar period for closes(n) to update.
-                If slot.InitialRisk > 0D AndAlso slot.EntryPrice <> 0D Then
-                    Dim profit = If(slot.Side = "Buy",
-                                    currentClose - slot.EntryPrice,
-                                    slot.EntryPrice - currentClose)
-                    Dim R = slot.InitialRisk
-                    ' 2R milestone: partial-close Slot 2 (index 1)
-                    If profit >= 2D * R AndAlso slot.SlotIndex = 1 AndAlso Not slot.MilestoneFlag Then
-                        slot.MilestoneFlag = True
-                        Dim ok = Await _orderService.PartialCloseContractAsync(
-                            slot.AccountId, slot.Instrument, slot.Contracts)
-                        If ok Then
-                            _logger.LogInformation(
-                                "ST+ Milestone 2R: partial-closed Slot {Idx} ({Size} contracts) on {Contract}",
-                                slot.SlotIndex, slot.Contracts, slot.Instrument)
-                        Else
-                            _logger.LogWarning(
-                                "ST+ Milestone 2R: partial close failed for Slot {Idx} on {Contract} — falling back to full close",
-                                slot.SlotIndex, slot.Instrument)
-                            Await ReleaseSlotAsync(slot)
-                            Return
-                        End If
-                        Await ReleaseSlotAsync(slot)
-                        Return
-                    End If
-                    ' 3R milestone: partial-close Slot 1 (index 0)
-                    If profit >= 3D * R AndAlso slot.SlotIndex = 0 AndAlso Not slot.MilestoneFlag Then
-                        slot.MilestoneFlag = True
-                        Dim ok = Await _orderService.PartialCloseContractAsync(
-                            slot.AccountId, slot.Instrument, slot.Contracts)
-                        If ok Then
-                            _logger.LogInformation(
-                                "ST+ Milestone 3R: partial-closed Slot {Idx} ({Size} contracts) on {Contract}",
-                                slot.SlotIndex, slot.Contracts, slot.Instrument)
-                        Else
-                            _logger.LogWarning(
-                                "ST+ Milestone 3R: partial close failed for Slot {Idx} on {Contract} — falling back to full close",
-                                slot.SlotIndex, slot.Instrument)
-                            Await ReleaseSlotAsync(slot)
-                            Return
-                        End If
-                        Await ReleaseSlotAsync(slot)
-                        Return
-                    End If
                 End If
 
                 ' Composite exit signal evaluation

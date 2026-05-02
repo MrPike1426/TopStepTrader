@@ -53,9 +53,6 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>Current phased stop phase. Only advances forward.</summary>
         Public Property StopPhase As StopPhase = StopPhase.Initial
 
-        ''' <summary>True after a profit-milestone exit has been triggered for this slot (prevents double-firing).</summary>
-        Public Property MilestoneFlag As Boolean = False
-
         ''' <summary>
         ''' Number of consecutive bars on which the exit engine scored Exiting health
         ''' (score >= 6, no E1 flip). Exit only fires when this reaches 2, preventing

@@ -343,7 +343,8 @@ Namespace TopStepTrader.Services.Trading
             ElseIf profit >= config.ProfitTrailTriggerR * R Then
                 If phase < StopPhase.ProfitTrail Then phase = StopPhase.ProfitTrail
                 If currentAtr > 0D Then
-                    Dim trailStop = If(isLng, currentPrice - currentAtr, currentPrice + currentAtr)
+                    Dim trailDist = config.TrailAtrMultiple * currentAtr
+                    Dim trailStop = If(isLng, currentPrice - trailDist, currentPrice + trailDist)
                     newStop = If(isLng, Math.Max(newStop, trailStop), Math.Min(newStop, trailStop))
                 End If
 

@@ -40,6 +40,9 @@ Namespace TopStepTrader.Core.Settings
         ''' <summary>Amount above entry (in R) the stop is locked at the ProfitLock phase. Default 0.3R.</summary>
         Public Property ProfitLockOffsetR As Decimal = 0.3D
 
+        ''' <summary>ATR multiplier for the trailing stop during the ProfitTrail phase. Default 2.0.</summary>
+        Public Property TrailAtrMultiple As Decimal = 2.0D
+
         ''' <summary>Profit (in R) at which the ATR trailing stop activates. Default 1.5R.</summary>
         Public Property ProfitTrailTriggerR As Decimal = 1.5D
 
