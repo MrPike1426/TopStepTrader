@@ -58,6 +58,20 @@ Namespace TopStepTrader.Core.Settings
         ''' <summary>Amount above entry (in R) the stop is locked at the FreeRide phase. Default 2R.</summary>
         Public Property FreeRideLockR As Decimal = 2.0D
 
+        ' ── Degradation score thresholds ─────────────────────────────────────────
+        ''' <summary>
+        ''' Score at or above which slot health becomes Warning (Amber) — no new slots opened.
+        ''' Max weighted score across all nine signals is E1:8 + E2:3 + E3:2 + E4:2 + E5:4 + E6:2 + E7:1 + E8:2 + E9:3 = 27.
+        ''' Default 3.
+        ''' </summary>
+        Public Property WarningScoreThreshold As Integer = 3
+
+        ''' <summary>
+        ''' Score at or above which slot health becomes Exiting (Red) — position closes on next bar
+        ''' (or immediately if E1 SuperTrend flip fired).  Default 6.
+        ''' </summary>
+        Public Property ExitingScoreThreshold As Integer = 6
+
     End Class
 
 End Namespace

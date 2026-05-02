@@ -128,15 +128,17 @@
                             <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
                                 <StackPanel>
                                     <TextBlock Text="&#x26A0;&#xFE0F;  Intelligent Exit - Degradation Signals" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,6">SuperTrend+ monitors seven degradation signals every bar. Each signal contributes a score. When the combined score reaches a threshold, the slot exits.</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">SuperTrend Flip - Trend has reversed - immediate exit</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Momentum Slowing - Price converging toward ST line over 3 bars</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">ADX Declining - Trend strength fading from entry level</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">DI Compression - Buying/selling pressure equalising</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">DI Crossover - Leading indicator of direction change</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">Rejection Bar - Price rejected at extension - wick signal</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">ATR Contraction - Volatility driving the move is fading</TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,6,0,0"><Run Foreground="Gold" FontWeight="SemiBold">Amber (Warning)</Run> = degradation building, no new slots. <Run Foreground="OrangeRed" FontWeight="SemiBold">Red (Exiting)</Run> = exit triggered.</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,6">SuperTrend+ monitors nine degradation signals every bar. Each signal contributes a weighted score. When the combined score reaches a threshold, the slot exits.</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E1 (8pts) SuperTrend Flip — Trend has reversed — immediate exit</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E2 (3pts) Momentum Slowing — Price converging toward ST line over 3 bars at rate &gt; 0.5×ATR</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E3 (2pts) ADX Declining — ADX falling for 2 bars and 10+ points below entry ADX</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E4 (2pts) DI Compression — DI spread narrowed ≥15% in one bar to below ADX-scaled ceiling</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E5 (4pts) DI Crossover — +DI/-DI crossed against trade direction this bar</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E6 (2pts) Rejection Bar — Upper/lower wick &gt; 2× body and close past bar midpoint</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E7 (1pt)  ATR Contraction — ATR falling for 2 bars and below 80% of entry ATR</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E8 (2pts) VWAP Cross — Price crossed below VWAP (long) or above VWAP (short)</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E9 (3pts) RSI Hidden Divergence — Price making higher high but RSI lower (long); or lower low but RSI higher (short)</TextBlock>
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,6,0,0"><Run Foreground="Gold" FontWeight="SemiBold">Amber (Warning, score 3–5)</Run> = degradation building, no new slots. <Run Foreground="OrangeRed" FontWeight="SemiBold">Red (Exiting, score 6+)</Run> = exit triggered on next closed bar.</TextBlock>
                                 </StackPanel>
                             </Border>
 
