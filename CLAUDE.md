@@ -41,7 +41,7 @@ dotnet build --no-restore -v q
 dotnet test --no-build -v q
 ```
 
-**Expected output:** `558 passed` (as of 2026-04-29). If the count changes after adding new tests, update this number. One pre-existing failure exists — flag it explicitly rather than silently ignoring it.
+**Expected output:** `568 passed` (as of 2026-05-02). If the count changes after adding new tests, update this number. Six pre-existing failures exist (M6J instrument tests ×3, `TryOpenSlot_Adx45_NextBar_OpensSlot2`, `TryOpenSlot_Adx65_ThirdBar_OpensSlot3`, `ViewModel_HasThreeSlotBoxes_WithCorrectLabels`) — flag any new failure explicitly rather than silently ignoring it.
 
 **Rules:**
 - Never leave the project in a broken build state.
