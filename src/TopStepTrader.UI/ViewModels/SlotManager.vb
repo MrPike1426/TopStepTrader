@@ -111,6 +111,7 @@ Namespace TopStepTrader.UI.ViewModels
             slot.EntryPrice          = 0D
             slot.TakeProfitPrice     = 0D
             slot.Contracts           = ContractsForAdx(entryAdx)
+            slot.LastAdxBand         = BandForAdx(entryAdx)
             slot.IsOpen              = True
             slot.Health              = SlotHealth.Healthy
             slot.MissCount           = 0
@@ -118,6 +119,7 @@ Namespace TopStepTrader.UI.ViewModels
             slot.EntryReason         = FormatEntryReason(entryAdx)
             slot.ConsecutiveExitBars = 0
             slot.IsEntryInFlight     = True   ' cleared by FireEntryAsync on accept or reject
+            slot.IsEarlyModeEntry    = False
             Return slot
         End Function
 
@@ -144,6 +146,8 @@ Namespace TopStepTrader.UI.ViewModels
                 s.StopPhase          = Core.Enums.StopPhase.Initial
                 s.ConsecutiveExitBars = 0
                 s.IsEntryInFlight    = False
+                s.IsEarlyModeEntry   = False
+                s.LastAdxBand        = 0
             End If
         End Sub
 
@@ -160,6 +164,14 @@ Namespace TopStepTrader.UI.ViewModels
                 CloseSlot(i)
             Next
         End Sub
+
+        ''' <summary>Returns the ADX band (0/1/2/3) for a given ADX value.</summary>
+        Public Function BandForAdx(adx As Single) As Integer
+            If adx >= _config.AdxStrongThreshold Then Return 3
+            If adx >= _config.AdxModerateThreshold Then Return 2
+            If adx >= _config.AdxWeakThreshold Then Return 1
+            Return 0
+        End Function
 
         ''' <summary>Returns the number of contracts to place based on ADX strength band.</summary>
         Public Function ContractsForAdx(adx As Single) As Integer

@@ -149,6 +149,79 @@ Namespace TopStepTrader.Tests.ViewModels
             Assert.Equal(0, sm.OpenSlotCount)
         End Sub
 
+        ' ── BUG-49: IsEarlyModeEntry ─────────────────────────────────────────
+
+        <Fact>
+        Public Sub TryOpenSlot_Normal_DoesNotSetEarlyMode()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 25.0F, Bar1, 65.0D, 65.5D)
+            Assert.False(slot.IsEarlyModeEntry)
+        End Sub
+
+        <Fact>
+        Public Sub CloseSlot_ResetsIsEarlyModeEntry()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 25.0F, Bar1, 65.0D, 65.5D)
+            slot.IsEarlyModeEntry = True
+            sm.CloseSlot(slot.SlotIndex)
+            Assert.False(sm.Slots(slot.SlotIndex).IsEarlyModeEntry)
+        End Sub
+
+        ' ── STRAT-31: LastAdxBand and BandForAdx ─────────────────────────────
+
+        <Fact>
+        Public Sub BandForAdx_BelowWeak_Returns0()
+            Dim sm = New SlotManager(MakeConfig())
+            Assert.Equal(0, sm.BandForAdx(24.9F))
+        End Sub
+
+        <Fact>
+        Public Sub BandForAdx_AtWeak_Returns1()
+            Dim sm = New SlotManager(MakeConfig())
+            Assert.Equal(1, sm.BandForAdx(25.0F))
+        End Sub
+
+        <Fact>
+        Public Sub BandForAdx_AtModerate_Returns2()
+            Dim sm = New SlotManager(MakeConfig())
+            Assert.Equal(2, sm.BandForAdx(40.0F))
+        End Sub
+
+        <Fact>
+        Public Sub BandForAdx_AtStrong_Returns3()
+            Dim sm = New SlotManager(MakeConfig())
+            Assert.Equal(3, sm.BandForAdx(60.0F))
+        End Sub
+
+        <Fact>
+        Public Sub TryOpenSlot_Adx25_SetsLastAdxBand1()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 25.0F, Bar1, 65.0D, 65.5D)
+            Assert.Equal(1, slot.LastAdxBand)
+        End Sub
+
+        <Fact>
+        Public Sub TryOpenSlot_Adx45_SetsLastAdxBand2()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 45.0F, Bar1, 65.0D, 65.5D)
+            Assert.Equal(2, slot.LastAdxBand)
+        End Sub
+
+        <Fact>
+        Public Sub TryOpenSlot_Adx65_SetsLastAdxBand3()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 65.0F, Bar1, 65.0D, 65.5D)
+            Assert.Equal(3, slot.LastAdxBand)
+        End Sub
+
+        <Fact>
+        Public Sub CloseSlot_ResetsLastAdxBand()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 65.0F, Bar1, 65.0D, 65.5D)
+            sm.CloseSlot(slot.SlotIndex)
+            Assert.Equal(0, sm.Slots(slot.SlotIndex).LastAdxBand)
+        End Sub
+
     End Class
 
 End Namespace

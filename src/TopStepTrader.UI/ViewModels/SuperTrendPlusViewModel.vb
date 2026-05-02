@@ -1113,6 +1113,7 @@ Namespace TopStepTrader.UI.ViewModels
 
             Dim opened = _slotManager.TryOpenSlot(bestContractId, bestSide, bestAdxVal, bestBarTime, bestStLine, bestLastClose)
             If opened IsNot Nothing Then
+                opened.IsEarlyModeEntry = True   ' E1 suppressed until ST confirms (BUG-49)
                 Await FireEntryAsync(opened, bestContractId, bestSide, bestStLine, bestLastClose, bestBarTime)
             End If
         End Function
@@ -1496,6 +1497,45 @@ Namespace TopStepTrader.UI.ViewModels
                 End Sub)
         End Function
 
+        ''' <summary>
+        ''' Places a naked market order to add contracts to an open slot when ADX rises to a higher band.
+        ''' No bracket is sent — the primary slot's existing bracket covers the aggregate position.
+        ''' </summary>
+        Private Async Function ScaleInSlotAsync(slot As PositionSlot, addContracts As Integer) As Task
+            _logger.LogInformation("ST+ [Slot {Idx}] Scale-in +{Add} for {Contract} (total will be {Total})",
+                                   slot.SlotIndex, addContracts, slot.Instrument, slot.Contracts + addContracts)
+            Dim order As New Order With {
+                .AccountId              = slot.AccountId,
+                .ContractId             = slot.Instrument,
+                .Side                   = If(slot.Side = "Buy", OrderSide.Buy, OrderSide.Sell),
+                .Quantity               = addContracts,
+                .OrderType              = OrderType.Market,
+                .InitialStopTicks       = Nothing,
+                .InitialTakeProfitTicks = Nothing
+            }
+            Try
+                Dim placed = Await _orderService.PlaceOrderAsync(order)
+                Dim ok = placed IsNot Nothing AndAlso
+                         (placed.Status = OrderStatus.Working OrElse placed.Status = OrderStatus.Filled)
+                If ok Then
+                    slot.Contracts += addContracts
+                    _logger.LogInformation("ST+ [Slot {Idx}] Scale-in accepted — contracts now {Total}",
+                                           slot.SlotIndex, slot.Contracts)
+                    Dim latestPnl = slot.UnrealizedPnl
+                    Dim box = BoxForSlot(slot)
+                    Application.Current?.Dispatcher?.Invoke(Sub()
+                        If box IsNot Nothing Then UpdatePositionDisplay(box, slot, latestPnl)
+                    End Sub)
+                Else
+                    _logger.LogWarning("ST+ [Slot {Idx}] Scale-in rejected for {Contract}: status={Status}",
+                                       slot.SlotIndex, slot.Instrument, placed?.Status)
+                End If
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ [Slot {Idx}] ScaleInSlotAsync failed for {Contract}",
+                                   slot.SlotIndex, slot.Instrument)
+            End Try
+        End Function
+
         Private Async Function HandleOpenPositionAsync(slot As PositionSlot, tf As BarTimeframe) As Task
             If slot.AccountId = 0 AndAlso _session.SelectedAccount IsNot Nothing Then
                 slot.AccountId = _session.SelectedAccount.Id
@@ -1600,6 +1640,16 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim atr14Exit = TechnicalIndicators.ATR(highs, lows, closes, period:=14)
                 Dim stLine = CDec(st.Line(n))
 
+                ' BUG-49: Clear early-mode grace once ST direction confirms the slot's side.
+                ' Check and clear BEFORE the E1 evaluation so that confirmation and E1 fire on the same bar.
+                If slot.IsEarlyModeEntry Then
+                    Dim stDirN = st.Direction(n)
+                    If (slot.Side = "Buy" AndAlso stDirN > 0) OrElse (slot.Side = "Sell" AndAlso stDirN < 0) Then
+                        slot.IsEarlyModeEntry = False
+                        _logger.LogInformation("ST+ [Slot {Idx}] Early entry confirmed — E1 now active", slot.SlotIndex)
+                    End If
+                End If
+
                 ' Compute VWAP from bar volumes (anchored at start of cached series)
                 Dim volumes = bars.Select(Function(b) b.Volume).ToList()
                 Dim vwapExit = TechnicalIndicators.VWAP(highs, lows, closes, volumes)
@@ -1610,6 +1660,20 @@ Namespace TopStepTrader.UI.ViewModels
                 ' Set InitialRisk once EntryPrice is confirmed (after first snapshot)
                 If slot.InitialRisk = 0D AndAlso slot.EntryPrice <> 0D AndAlso slot.StopPrice <> 0D Then
                     slot.InitialRisk = Math.Abs(slot.EntryPrice - slot.StopPrice)
+                End If
+
+                ' STRAT-31: Scale in as ADX strengthens from a lower to a higher band.
+                ' Skip during early-mode grace (position not yet ST-confirmed) and before entry fills.
+                If Not slot.IsEarlyModeEntry AndAlso slot.EntryPrice <> 0D Then
+                    Dim adxNow = dmiForExit.ADX(n)
+                    If Not Single.IsNaN(adxNow) Then
+                        Dim currentBand = _slotManager.BandForAdx(adxNow)
+                        If currentBand > slot.LastAdxBand AndAlso slot.Contracts < 3 Then
+                            Dim addContracts = Math.Min(currentBand - slot.LastAdxBand, 3 - slot.Contracts)
+                            Await ScaleInSlotAsync(slot, addContracts)
+                        End If
+                        slot.LastAdxBand = Math.Max(slot.LastAdxBand, currentBand)
+                    End If
                 End If
 
                 ' Composite exit signal evaluation
@@ -1633,10 +1697,17 @@ Namespace TopStepTrader.UI.ViewModels
                 ' All other Exiting scores require 2 consecutive bars at Exiting health to
                 ' prevent single-bar consolidation at trend highs from triggering a close.
                 If exitEval.ImmediateExit Then
-                    ' E1 flip — close without waiting for confirmation
-                    slot.ConsecutiveExitBars = 0
-                    Await ReleaseSlotAsync(slot)
-                    Return
+                    If slot.IsEarlyModeEntry Then
+                        ' BUG-49: E1 suppressed — early-mode entry awaiting ST confirmation.
+                        ' The SL bracket at the ST line handles downside protection during the grace period.
+                        _logger.LogInformation("ST+ [Slot {Idx}] E1 suppressed (early-mode grace) for {Contract}",
+                                               slot.SlotIndex, slot.Instrument)
+                    Else
+                        ' E1 flip — close without waiting for confirmation
+                        slot.ConsecutiveExitBars = 0
+                        Await ReleaseSlotAsync(slot)
+                        Return
+                    End If
                 End If
 
                 If slot.Health = SlotHealth.Exiting Then

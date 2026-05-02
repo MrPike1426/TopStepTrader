@@ -68,6 +68,20 @@ Namespace TopStepTrader.Core.Models
         ''' </summary>
         Public Property IsEntryInFlight As Boolean = False
 
+        ''' <summary>
+        ''' Set True when this slot was opened via early-mode entry (before closed-bar ST flip confirmation).
+        ''' While True, E1 (SuperTrend flip) is suppressed — the SL bracket handles protection.
+        ''' Cleared once ST direction confirms the slot's side; E1 then resumes normal operation.
+        ''' </summary>
+        Public Property IsEarlyModeEntry As Boolean = False
+
+        ''' <summary>
+        ''' ADX band (0/1/2/3) at the time this slot was opened. Ratchets upward as ADX strengthens;
+        ''' never decreases. Used by the scale-in logic to detect when ADX crosses into a higher band
+        ''' and additional contracts should be added to the position.
+        ''' </summary>
+        Public Property LastAdxBand As Integer = 0
+
     End Class
 
 End Namespace
