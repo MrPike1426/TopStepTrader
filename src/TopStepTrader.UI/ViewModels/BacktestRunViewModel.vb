@@ -596,6 +596,7 @@ Namespace TopStepTrader.UI.ViewModels
             AvailableStrategies.Add("Naked Trader")
             AvailableStrategies.Add("Double Bubble Butt")
             AvailableStrategies.Add("Opening Range Breakout")
+            AvailableStrategies.Add("SuperTrend+")
 
             AvailableIntervals.Add("1 min")
             AvailableIntervals.Add("5 min")
@@ -918,6 +919,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Case "Naked Trader"            : strategyCondition = StrategyConditionType.NakedTrader
                 Case "Double Bubble Butt"      : strategyCondition = StrategyConditionType.DoubleBubbleButt
                 Case "Opening Range Breakout"  : strategyCondition = StrategyConditionType.OpeningRangeBreakout
+                Case "SuperTrend+"             : strategyCondition = StrategyConditionType.SuperTrendPlus
                 Case Else                      : strategyCondition = StrategyConditionType.EmaRsiWeightedScore
             End Select
 

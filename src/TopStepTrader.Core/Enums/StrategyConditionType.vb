@@ -119,6 +119,15 @@ Namespace TopStepTrader.Core.Enums
         ''' Best used on 5min / 15min bars across liquid micro-futures instruments.
         ''' </summary>
         SuperTrendAdx = 21
+
+        ''' <summary>
+        ''' SuperTrend+ (Autopilot backtest): SuperTrend(10, 3.0) + ADX(14) + DI cross.
+        ''' Entry identical to SuperTrendAdx.  Stop trails the SuperTrend line each bar
+        ''' (advances up for longs, down for shorts).  TP = initial risk × TpMultiple.
+        ''' Exit on SuperTrend flip (E1) or TP hit.
+        ''' Mirrors the live SuperTrend+ Autopilot engine for historical validation.
+        ''' </summary>
+        SuperTrendPlus = 22
     End Enum
 
 End Namespace

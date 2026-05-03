@@ -78,6 +78,13 @@ Namespace TopStepTrader.Core.Models
         ''' </summary>
         Public Property StDirectionSeries As Single()
 
+        ''' <summary>
+        ''' SuperTrend(10, 3.0) price line series.
+        ''' Acts as support below price in an up-trend and resistance above price in a down-trend.
+        ''' Used by SuperTrendPlus to trail the stop to the ST line each bar.
+        ''' </summary>
+        Public Property StLineSeries As Single()
+
     End Class
 
 End Namespace

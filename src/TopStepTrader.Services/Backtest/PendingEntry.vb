@@ -13,6 +13,7 @@ Namespace TopStepTrader.Services.Backtest
         Public Property IsScaleIn As Boolean
         Public Property StopDelta As Decimal    ' ATR-relative entry→SL distance
         Public Property TpDelta As Decimal      ' ATR-relative entry→TP distance
+        Public Property AbsoluteSlPrice As Decimal  ' Indicator-anchored SL (e.g. SuperTrend line); 0 = not used
         ' Indicator-channel exits (strategy-specific; 0 = not set for this strategy)
         Public Property DbbInner As Decimal     ' DoubleBubbleButt inner-band exit
         Public Property DbbIsLong As Boolean

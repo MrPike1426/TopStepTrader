@@ -182,7 +182,8 @@ Namespace TopStepTrader.Services.Backtest
             Dim dynEnabled = config.UseAtrMode OrElse
                              config.TrailingStopEnabled OrElse
                              config.BreakEvenOnHalfTpEnabled OrElse
-                             config.ExtendTpEnabled
+                             config.ExtendTpEnabled OrElse
+                             config.StrategyCondition = StrategyConditionType.SuperTrendPlus
             Dim dynStop As Decimal = 0D
             Dim dynTp As Decimal = 0D
             Dim dynStopDelta As Decimal = 0D
@@ -277,8 +278,9 @@ Namespace TopStepTrader.Services.Backtest
                                 .SignalConfidence = pending.Confidence
                             }
                             openLegs.Add(newLeg)
-                            ' Record ST direction at entry for flip-exit tracking (STRAT-32)
-                            If config.StrategyCondition = StrategyConditionType.SuperTrendAdx AndAlso
+                            ' Record ST direction at entry for flip-exit tracking (STRAT-32 / FEAT-35)
+                            If (config.StrategyCondition = StrategyConditionType.SuperTrendAdx OrElse
+                                config.StrategyCondition = StrategyConditionType.SuperTrendPlus) AndAlso
                                Not pending.IsScaleIn AndAlso
                                indicators.StDirectionSeries IsNot Nothing AndAlso i > 0 Then
                                 stAdxEntryDir = indicators.StDirectionSeries(i - 1)
@@ -295,6 +297,13 @@ Namespace TopStepTrader.Services.Backtest
                                         mcOpenSlPrice = dynStop : mcOpenTpPrice = dynTp
                                         mcIsLong = isBuyFill
                                     End If
+                                ElseIf config.StrategyCondition = StrategyConditionType.SuperTrendPlus AndAlso
+                                       pending.AbsoluteSlPrice > 0D Then
+                                    ' SuperTrend line as initial SL; TP is initial-risk × TpMultiple
+                                    dynStop = pending.AbsoluteSlPrice
+                                    dynStopDelta = Math.Abs(fillPrice - dynStop)
+                                    dynTpDelta = pending.TpDelta
+                                    dynTp = If(isBuyFill, fillPrice + dynTpDelta, fillPrice - dynTpDelta)
                                 End If
                             End If
                             ' Indicator-channel exits (set at signal time; independent of fill price)
@@ -377,11 +386,12 @@ Namespace TopStepTrader.Services.Backtest
                         End If
                     End If
 
-                    ' ── SuperTrendAdx flip exit (STRAT-32) ──────────────────────────────
+                    ' ── SuperTrendAdx / SuperTrendPlus flip exit (STRAT-32 / FEAT-35) ────
                     ' Exit when SuperTrend direction reverses relative to the entry direction.
                     ' Flip exit price = bar.Close of the flip bar (ST direction changes on close).
                     If exitReason Is Nothing AndAlso
-                       config.StrategyCondition = StrategyConditionType.SuperTrendAdx AndAlso
+                       (config.StrategyCondition = StrategyConditionType.SuperTrendAdx OrElse
+                        config.StrategyCondition = StrategyConditionType.SuperTrendPlus) AndAlso
                        stAdxEntryDir <> 0.0F AndAlso
                        indicators.StDirectionSeries IsNot Nothing Then
                         Dim curStDir = indicators.StDirectionSeries(i)
@@ -445,14 +455,31 @@ Namespace TopStepTrader.Services.Backtest
                         ' ready for the NEXT bar's exit check.  Must run AFTER all exit checks
                         ' so it never raises dynTp before CheckExit has had a chance to test it.
                         If dynEnabled AndAlso dynStopDelta > 0D Then
-                            BacktestMetrics.UpdateDynamicExits(
-                                openLegs(0), bar, config,
-                                dynStopDelta, dynTpDelta,
-                                dynStop, dynTp)
-                            ' Keep strategy-specific price-level variables in sync.
-                            If config.StrategyCondition = StrategyConditionType.MultiConfluence Then
-                                mcOpenSlPrice = dynStop
-                                mcOpenTpPrice = dynTp
+                            If config.StrategyCondition <> StrategyConditionType.SuperTrendPlus Then
+                                BacktestMetrics.UpdateDynamicExits(
+                                    openLegs(0), bar, config,
+                                    dynStopDelta, dynTpDelta,
+                                    dynStop, dynTp)
+                                ' Keep strategy-specific price-level variables in sync.
+                                If config.StrategyCondition = StrategyConditionType.MultiConfluence Then
+                                    mcOpenSlPrice = dynStop
+                                    mcOpenTpPrice = dynTp
+                                End If
+                            Else
+                                ' SuperTrendPlus: advance stop to current SuperTrend line each bar.
+                                ' For longs the ST line rises as price advances; take max to ratchet up.
+                                ' For shorts the ST line falls; take min to ratchet down.
+                                If indicators.StLineSeries IsNot Nothing Then
+                                    Dim curStLine = indicators.StLineSeries(i)
+                                    If Not Single.IsNaN(curStLine) AndAlso curStLine > 0.0F Then
+                                        Dim stLineD = CDec(curStLine)
+                                        If openLegs(0).Side = “Buy” Then
+                                            If stLineD > dynStop Then dynStop = stLineD
+                                        Else
+                                            If stLineD < dynStop Then dynStop = stLineD
+                                        End If
+                                    End If
+                                End If
                             End If
                         End If
                     End If
@@ -506,6 +533,7 @@ Namespace TopStepTrader.Services.Backtest
                             .Confidence = signal.Confidence,
                             .StopDelta = signal.StopDelta,
                             .TpDelta = signal.TpDelta,
+                            .AbsoluteSlPrice = signal.AbsoluteSlPrice,
                             .IsPartialSignal = signal.IsPartialSignal
                         }
                         ' Indicator-channel exit level — strategy-specific pending field
@@ -782,6 +810,22 @@ Namespace TopStepTrader.Services.Backtest
                 stAdxAdxSeries = dmiSt.ADX
             End If
 
+            ' -- SuperTrendPlus (FEAT-35): SuperTrend(10,3.0) Line + Direction + DMI/ADX(14)
+            Dim stPlusLineSeries As Single() = Nothing
+            Dim stPlusDirectionSeries As Single() = Nothing
+            Dim stPlusPlusDI As Single() = Nothing
+            Dim stPlusMinusDI As Single() = Nothing
+            Dim stPlusAdxSeries As Single() = Nothing
+            If config.StrategyCondition = StrategyConditionType.SuperTrendPlus Then
+                Dim stPlusResult = TechnicalIndicators.SuperTrend(allHighs, allLows, allCloses, period:=10, multiplier:=3.0)
+                stPlusLineSeries = stPlusResult.Line
+                stPlusDirectionSeries = stPlusResult.Direction
+                Dim dmiStPlus = TechnicalIndicators.DMI(allHighs, allLows, allCloses)
+                stPlusPlusDI = dmiStPlus.PlusDI
+                stPlusMinusDI = dmiStPlus.MinusDI
+                stPlusAdxSeries = dmiStPlus.ADX
+            End If
+
             ' -- Opening Range Breakout: ATR(14), VolMa20
             Dim orbVolMa20 As Single() = Nothing
             Dim orbAtr14 As Single() = Nothing
@@ -898,6 +942,12 @@ Namespace TopStepTrader.Services.Backtest
                     indicators.PlusDi = stAdxPlusDI
                     indicators.MinusDi = stAdxMinusDI
                     indicators.Adx = stAdxAdxSeries
+                Case StrategyConditionType.SuperTrendPlus
+                    indicators.StLineSeries = stPlusLineSeries
+                    indicators.StDirectionSeries = stPlusDirectionSeries
+                    indicators.PlusDi = stPlusPlusDI
+                    indicators.MinusDi = stPlusMinusDI
+                    indicators.Adx = stPlusAdxSeries
                 Case StrategyConditionType.EmaRsiWeightedScore
                     Dim emaRsiPeriod = If(config.IndicatorPeriod > 0, config.IndicatorPeriod, 14)
                     indicators.Rsi = If(emaRsiPeriod = 14, rsi14Series, TechnicalIndicators.RSI(allCloses, emaRsiPeriod))

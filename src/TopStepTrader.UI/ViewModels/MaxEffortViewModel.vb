@@ -235,7 +235,8 @@ Namespace TopStepTrader.UI.ViewModels
                 ("LULT Divergence",    StrategyConditionType.LultDivergence),
                 ("Double Bubble Butt", StrategyConditionType.DoubleBubbleButt),
                 ("ORB",                StrategyConditionType.OpeningRangeBreakout),
-                ("VWAP Mean Reversion", StrategyConditionType.VwapMeanReversion)
+                ("VWAP Mean Reversion", StrategyConditionType.VwapMeanReversion),
+                ("SuperTrend+",        StrategyConditionType.SuperTrendPlus)
             }
 
             Dim timeframes = New (BarTimeframe, String)() {
