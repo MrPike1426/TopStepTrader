@@ -138,9 +138,18 @@ Namespace TopStepTrader.UI.Infrastructure
                     SeedBalanceHistory(db)
                 End Using
             Catch ex As Exception
-                ' Surface the error without crashing — app can still start if DB creation fails
                 System.Diagnostics.Trace.TraceError(
                     "Database initialisation failed: {0}", ex.Message)
+            End Try
+
+            Try
+                Using scope = host.Services.CreateScope()
+                    Dim tradeDb = scope.ServiceProvider.GetRequiredService(Of Data.TradeHistoryDbContext)()
+                    tradeDb.Database.EnsureCreated()
+                End Using
+            Catch ex As Exception
+                System.Diagnostics.Trace.TraceError(
+                    "TradeHistory database initialisation failed: {0}", ex.Message)
             End Try
 
             ' ── ML model manager ────────────────────────────────────────────────

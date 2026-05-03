@@ -9,6 +9,7 @@ Imports TopStepTrader.Services.Backtest
 Imports TopStepTrader.Services.Diagnostics
 Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.Personas
+Imports TopStepTrader.Services.Trades
 Imports TopStepTrader.Services.Trading
 
 Namespace TopStepTrader.Services
@@ -73,6 +74,9 @@ Namespace TopStepTrader.Services
 
             ' ── Backtest
             services.AddScoped(Of IBacktestService, BacktestEngine)()
+
+            ' ── Trade history recording (Singleton — called from Transient VMs)
+            services.AddSingleton(Of ITradeRecordService, TradeRecordService)()
 
             ' ── Background workers
             services.AddSingleton(Of BarIngestionWorker)()

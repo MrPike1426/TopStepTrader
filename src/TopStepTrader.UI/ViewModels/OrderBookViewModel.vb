@@ -1,69 +1,66 @@
 Imports System.Collections.ObjectModel
 Imports System.Windows
 Imports TopStepTrader.Core.Enums
-Imports TopStepTrader.Core.Events
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.UI.ViewModels.Base
 
 Namespace TopStepTrader.UI.ViewModels
 
-    ''' <summary>
-    ''' Open orders, order history, and place-new-order form.
-    ''' </summary>
+    ''' <summary>View-model for the Trade History tab (redesigned Orders tab).</summary>
     Public Class OrderBookViewModel
         Inherits ViewModelBase
 
-        Private ReadOnly _orderService As IOrderService
+        Private Const MaxRows As Integer = 100
+
+        Private ReadOnly _tradeService As ITradeRecordService
         Private ReadOnly _accountService As IAccountService
 
-        Private _accountId As Long = 0
+        Public ReadOnly Property TradeRows As New ObservableCollection(Of TradeRowVm)()
 
-        ' ── Bindable properties ──────────────────────────────────────────────
+        ' ── Filter properties ─────────────────────────────────────────────
 
-        Public ReadOnly Property OpenOrders As New ObservableCollection(Of OrderRowVm)()
-        Public ReadOnly Property FilledOrders As New ObservableCollection(Of OrderRowVm)()
-
-        Private _selectedOrder As OrderRowVm
-        Public Property SelectedOrder As OrderRowVm
+        Private _symbolFilter As String = String.Empty
+        Public Property SymbolFilter As String
             Get
-                Return _selectedOrder
-            End Get
-            Set(value As OrderRowVm)
-                SetProperty(_selectedOrder, value)
-            End Set
-        End Property
-
-        ' Place-order form fields
-        Private _newContractId As String = ""
-        Public Property NewContractId As String
-            Get
-                Return _newContractId
+                Return _symbolFilter
             End Get
             Set(value As String)
-                SetProperty(_newContractId, value)
+                SetProperty(_symbolFilter, value)
             End Set
         End Property
 
-        Private _newQuantity As String = "1"
-        Public Property NewQuantity As String
+        Private _strategyFilter As String = String.Empty
+        Public Property StrategyFilter As String
             Get
-                Return _newQuantity
+                Return _strategyFilter
             End Get
             Set(value As String)
-                SetProperty(_newQuantity, value)
+                SetProperty(_strategyFilter, value)
             End Set
         End Property
 
-        Private _selectedSide As OrderSide = OrderSide.Buy
-        Public Property SelectedSide As OrderSide
+        Private _personaFilter As String = String.Empty
+        Public Property PersonaFilter As String
             Get
-                Return _selectedSide
+                Return _personaFilter
             End Get
-            Set(value As OrderSide)
-                SetProperty(_selectedSide, value)
+            Set(value As String)
+                SetProperty(_personaFilter, value)
             End Set
         End Property
+
+        Private _selectedPnLFilter As String = "All"
+        Public Property SelectedPnLFilter As String
+            Get
+                Return _selectedPnLFilter
+            End Get
+            Set(value As String)
+                SetProperty(_selectedPnLFilter, value)
+            End Set
+        End Property
+
+        Public ReadOnly Property PnLFilterOptions As String() = {"All", "Winners", "Losers"}
 
         Private _statusText As String = "Ready"
         Public Property StatusText As String
@@ -75,129 +72,69 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Public ReadOnly Property OrderSides As OrderSide() = {OrderSide.Buy, OrderSide.Sell}
+        ' ── Commands ─────────────────────────────────────────────────────
 
-        ' ── Commands ─────────────────────────────────────────────────────────
-
-        Public ReadOnly Property PlaceBuyCommand As RelayCommand
-        Public ReadOnly Property PlaceSellCommand As RelayCommand
-        Public ReadOnly Property CancelOrderCommand As RelayCommand
         Public ReadOnly Property RefreshCommand As RelayCommand
+        Public ReadOnly Property ApplyFilterCommand As RelayCommand
 
-        ' ── Constructor ──────────────────────────────────────────────────────
+        ' ── Constructor ──────────────────────────────────────────────────
 
-        Public Sub New(orderService As IOrderService, accountService As IAccountService)
-            _orderService = orderService
+        Public Sub New(tradeService As ITradeRecordService, accountService As IAccountService)
+            _tradeService = tradeService
             _accountService = accountService
-
-            PlaceBuyCommand = New RelayCommand(Sub() ExecutePlaceOrder(OrderSide.Buy))
-            PlaceSellCommand = New RelayCommand(Sub() ExecutePlaceOrder(OrderSide.Sell))
-            CancelOrderCommand = New RelayCommand(AddressOf ExecuteCancelOrder,
-                                                  Function() _selectedOrder IsNot Nothing)
-            RefreshCommand = New RelayCommand(AddressOf LoadOrders)
-
-            AddHandler _orderService.OrderFilled, AddressOf OnOrderFilled
-            AddHandler _orderService.OrderRejected, AddressOf OnOrderRejected
+            RefreshCommand = New RelayCommand(AddressOf LoadData)
+            ApplyFilterCommand = New RelayCommand(AddressOf LoadData)
         End Sub
 
         Public Sub LoadDataAsync()
-            Task.Run(AddressOf LoadAccountThenOrders)
+            Task.Run(AddressOf LoadDataWithRecovery)
         End Sub
 
-        Private Async Function LoadAccountThenOrders() As Task
+        Private Async Function LoadDataWithRecovery() As Task
+            ' Attempt crash recovery first (no-op if no open records)
             Try
                 Dim accounts = Await _accountService.GetActiveAccountsAsync()
-                Dim first = accounts.FirstOrDefault()
-                If first IsNot Nothing Then _accountId = first.Id
-                LoadOrders()
-            Catch ex As Exception
-                Dispatch(Sub() StatusText = $"Account error: {ex.Message}")
+                Dim acct = accounts.FirstOrDefault()
+                If acct IsNot Nothing Then
+                    Await _tradeService.RecoverOpenTradesAsync(acct.Id)
+                End If
+            Catch
+                ' Non-fatal — proceed to load regardless
             End Try
+            LoadData()
         End Function
 
-        Private Sub LoadOrders()
-            If _accountId = 0 Then Return
+        Private Sub LoadData()
             Task.Run(Async Function()
                          Try
-                             Dim open = Await _orderService.GetOpenOrdersAsync(_accountId)
-                             Dim filled = Await _orderService.GetOrderHistoryAsync(
-                                 _accountId, DateTime.Today, DateTime.Now)
+                             Dim pnlEnum As PnLFilterType = PnLFilterType.All
+                             Select Case _selectedPnLFilter
+                                 Case "Winners" : pnlEnum = PnLFilterType.Winners
+                                 Case "Losers"  : pnlEnum = PnLFilterType.Losers
+                             End Select
+
+                             Dim filter As New TradeFilter With {
+                                 .Symbol = If(_symbolFilter?.Trim() = "All", String.Empty, _symbolFilter?.Trim()),
+                                 .Strategy = If(_strategyFilter?.Trim() = "All", String.Empty, _strategyFilter?.Trim()),
+                                 .Persona = If(_personaFilter?.Trim() = "All", String.Empty, _personaFilter?.Trim()),
+                                 .PnLFilter = pnlEnum
+                             }
+
+                             Dim trades = Await _tradeService.GetRecentTradesAsync(MaxRows, filter)
+
                              Dispatch(Sub()
-                                          OpenOrders.Clear()
-                                          For Each o In open
-                                              OpenOrders.Add(New OrderRowVm(o))
+                                          TradeRows.Clear()
+                                          For Each t In trades
+                                              TradeRows.Add(New TradeRowVm(t))
                                           Next
-                                          FilledOrders.Clear()
-                                          For Each o In filled.Where(Function(x) x.Status = OrderStatus.Filled)
-                                              FilledOrders.Add(New OrderRowVm(o))
-                                          Next
-                                          StatusText = $"{OpenOrders.Count} open  |  {FilledOrders.Count} filled today"
+                                          Dim openCount = trades.Where(Function(t) t.IsOpen).Count()
+                                          StatusText = $"{trades.Count} trade(s) loaded" &
+                                                       If(openCount > 0, $" · {openCount} open", String.Empty)
                                       End Sub)
                          Catch ex As Exception
-                             Dispatch(Sub() StatusText = $"Error: {ex.Message}")
+                             Dispatch(Sub() StatusText = $"Error loading trades: {ex.Message}")
                          End Try
                      End Function)
-        End Sub
-
-        Private Sub ExecutePlaceOrder(side As OrderSide)
-            Dim contractId = _newContractId.Trim()
-            Dim qty As Integer
-            If String.IsNullOrEmpty(contractId) Then
-                StatusText = "Invalid Contract ID" : Return
-            End If
-            If Not Integer.TryParse(_newQuantity.Trim(), qty) OrElse qty <= 0 Then
-                StatusText = "Invalid quantity" : Return
-            End If
-
-            Dim order As New Order With {
-                .AccountId = _accountId,
-                .ContractId = contractId,
-                .Side = side,
-                .OrderType = OrderType.Market,
-                .Quantity = qty,
-                .Status = OrderStatus.Pending,
-                .PlacedAt = DateTimeOffset.UtcNow
-            }
-
-            Task.Run(Async Function()
-                         Try
-                             Dispatch(Sub() StatusText = "Placing order...")
-                             Dim placed = Await _orderService.PlaceOrderAsync(order)
-                             Dispatch(Sub()
-                                          StatusText = $"Order {placed.Id} placed ({side})"
-                                          LoadOrders()
-                                      End Sub)
-                         Catch ex As Exception
-                             Dispatch(Sub() StatusText = $"Place error: {ex.Message}")
-                         End Try
-                     End Function)
-        End Sub
-
-        Private Sub ExecuteCancelOrder(param As Object)
-            If _selectedOrder Is Nothing Then Return
-            Dim orderId = _selectedOrder.OrderId
-            Task.Run(Async Function()
-                         Try
-                             Dim ok = Await _orderService.CancelOrderAsync(orderId)
-                             Dispatch(Sub()
-                                          StatusText = If(ok, $"Order {orderId} cancelled", "Cancel failed")
-                                          LoadOrders()
-                                      End Sub)
-                         Catch ex As Exception
-                             Dispatch(Sub() StatusText = $"Cancel error: {ex.Message}")
-                         End Try
-                     End Function)
-        End Sub
-
-        Private Sub OnOrderFilled(sender As Object, e As OrderFilledEventArgs)
-            Dispatch(Sub()
-                         StatusText = $"Order {e.Order.Id} FILLED @ {e.Order.FillPrice:F2}"
-                         LoadOrders()
-                     End Sub)
-        End Sub
-
-        Private Sub OnOrderRejected(sender As Object, e As OrderRejectedEventArgs)
-            Dispatch(Sub() StatusText = $"Order {e.Order.Id} REJECTED: {e.Reason}")
         End Sub
 
         Private Sub Dispatch(action As Action)
@@ -208,35 +145,89 @@ Namespace TopStepTrader.UI.ViewModels
 
     End Class
 
-    ''' <summary>View-friendly wrapper around Order.</summary>
-    Public Class OrderRowVm
-        Public Property OrderId As Long
-        Public Property ContractId As String
-        Public Property Side As String
-        Public Property Qty As Integer
-        Public Property Status As String
-        Public Property Price As String
-        Public Property PlacedAt As String
-        Public Property FilledAt As String
-        Public Property FillPrice As String
+    ''' <summary>View-friendly row for a single live trade record.</summary>
+    Public Class TradeRowVm
 
-        Public ReadOnly Property SideColor As String
+        Public Property Id As String
+        Public Property Symbol As String
+        Public Property Direction As String
+        Public Property Sizes As String
+        Public Property Leverage As String
+        Public Property Strategy As String
+        Public Property Persona As String
+        Public Property EntryTime As String
+        Public Property ExitTime As String
+        Public Property Duration As String
+        Public Property EntryPrice As String
+        Public Property ExitPrice As String
+        Public Property PnLDisplay As String
+        Public Property PnLRaw As Decimal
+        Public Property Commission As String
+        Public Property Fees As String
+        Public Property ExitReason As String
+        Public Property IsOpen As Boolean
+        Public Property IsRecovered As Boolean
+
+        Public ReadOnly Property PnLColor As String
             Get
-                Return If(Side = "Buy", "BuyBrush", "SellBrush")
+                If IsOpen Then Return "#AAAAAA"
+                Return If(PnLRaw > 0D, "#4CAF50", If(PnLRaw < 0D, "#EF5350", "#AAAAAA"))
             End Get
         End Property
 
-        Public Sub New(o As Order)
-            OrderId = o.Id
-            ContractId = o.ContractId
-            Side = o.Side.ToString()
-            Qty = o.Quantity
-            Status = o.Status.ToString()
-            Price = If(o.LimitPrice.HasValue, o.LimitPrice.Value.ToString("F2"), "Market")
-            PlacedAt = o.PlacedAt.LocalDateTime.ToString("HH:mm:ss")
-            FilledAt = If(o.FilledAt.HasValue, o.FilledAt.Value.LocalDateTime.ToString("HH:mm:ss"), "—")
-            FillPrice = If(o.FillPrice.HasValue, o.FillPrice.Value.ToString("F2"), "—")
+        Public ReadOnly Property DirectionColor As String
+            Get
+                Return If(Direction = "Long", "#4CAF50", "#EF5350")
+            End Get
+        End Property
+
+        Public ReadOnly Property RowOpacity As String
+            Get
+                Return If(IsOpen, "0.7", "1.0")
+            End Get
+        End Property
+
+        Public Sub New(t As LiveTradeRecord)
+            ' ID: prefer TopStepX Trade ID, fall back to entry order ID
+            Dim rawId = If(t.TopStepXTradeId.HasValue, t.TopStepXTradeId.Value, t.EntryOrderId)
+            Id = If(rawId > 0, rawId.ToString(), "—")
+
+            Symbol = t.Symbol
+            Direction = t.Direction
+            Sizes = t.Sizes.ToString()
+            Leverage = $"{t.MaxScaleIns}×"
+            Strategy = t.StrategyName
+            Persona = t.Persona
+            EntryTime = t.EntryTime.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss")
+            ExitTime = If(t.ExitTime.HasValue, t.ExitTime.Value.LocalDateTime.ToString("HH:mm:ss"), If(t.IsOpen, "Open", "—"))
+            Duration = FormatDuration(t.EntryTime, t.ExitTime)
+            EntryPrice = If(t.EntryPrice <> 0D, t.EntryPrice.ToString("F4"), "—")
+            ExitPrice = If(t.ExitPrice.HasValue, t.ExitPrice.Value.ToString("F4"), If(t.IsOpen, "Live", "—"))
+
+            PnLRaw = If(t.PnL.HasValue, t.PnL.Value, 0D)
+            If t.IsOpen Then
+                PnLDisplay = "…"
+            ElseIf t.PnL.HasValue Then
+                PnLDisplay = $"{If(t.PnL.Value >= 0D, "+", "")}${t.PnL.Value:F2}"
+            Else
+                PnLDisplay = "—"
+            End If
+
+            Commission = $"-${t.CommissionUsd:F2}"
+            Fees = $"-${t.FeesUsd:F2}"
+            ExitReason = t.ExitReason
+            IsOpen = t.IsOpen
+            IsRecovered = t.IsRecoveredFromCrash
         End Sub
+
+        Private Shared Function FormatDuration(entry As DateTimeOffset, exitTime As DateTimeOffset?) As String
+            If Not exitTime.HasValue Then Return "—"
+            Dim span = exitTime.Value - entry
+            If span.TotalHours >= 1 Then Return $"{CInt(Math.Floor(span.TotalHours))}h {span.Minutes:D2}m"
+            If span.TotalMinutes >= 1 Then Return $"{CInt(Math.Floor(span.TotalMinutes))}m {span.Seconds:D2}s"
+            Return $"{CInt(Math.Floor(span.TotalSeconds))}s"
+        End Function
+
     End Class
 
 End Namespace

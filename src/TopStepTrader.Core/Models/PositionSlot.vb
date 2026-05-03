@@ -85,6 +85,12 @@ Namespace TopStepTrader.Core.Models
         ''' </summary>
         Public Property LastAdxBand As Integer = 0
 
+        ''' <summary>TopStepX broker order ID for the entry fill (from PXPlaceOrderResponse.OrderId). Used to resolve the Trades panel ID.</summary>
+        Public Property EntryOrderId As Long?
+
+        ''' <summary>Row ID in LiveTradeRecords (TradeHistory.db). 0 = not yet persisted.</summary>
+        Public Property TradeRecordId As Long = 0
+
     End Class
 
 End Namespace

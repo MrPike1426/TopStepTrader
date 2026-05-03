@@ -37,6 +37,15 @@ Namespace TopStepTrader.Data
             services.AddScoped(Of ITradeLifespanRepository, TradeLifespanRepository)()
             services.AddScoped(Of IAdaptiveParametersRepository, AdaptiveParametersRepository)()
 
+            ' ── Trade history (separate TradeHistory.db) ──────────────────────
+            Dim tradeDbPath = $"Data Source={Path.Combine(AppContext.BaseDirectory, "TradeHistory.db")}"
+            services.AddDbContext(Of TradeHistoryDbContext)(
+                Sub(opts)
+                    opts.UseSqlite(tradeDbPath)
+                    opts.EnableSensitiveDataLogging(False)
+                End Sub)
+            services.AddScoped(Of ILiveTradeRecordRepository, LiveTradeRecordRepository)()
+
         End Sub
 
     End Module

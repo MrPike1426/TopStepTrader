@@ -77,11 +77,12 @@ Namespace TopStepTrader.Core.Trading
             ' M6E — Micro EUR/USD  [ProjectX symbolId: F.US.M6E; roll: quarterly H/M/U/Z; U26=Sep 2026]
             ' Contract: 12,500 EUR. Tick = 0.0001 USD/EUR = $1.25.
             ' PxMinStopDollars=$12.50: 10 ticks × $1.25 minimum
+            ' RoundTripFee=$0.52: exchange/NFA fees per round-trip per contract (TopStepX Trades panel confirmed)
             list.Add(New FavouriteContract("M6E", "EUR/USD", "CON.F.US.M6E.U26", 0.0001D, 1.25D, 12500D, 0.1D, 12.5D) With {
                 .PxRootSymbol = "M6E",
                 .CommissionTickBuffer = 1,
                 .MultiConfluenceTimeframeMinutes = 10,
-                .RoundTripFee = 0.74D
+                .RoundTripFee = 0.52D
             })
 
             ' OIL — MCLE (Micro WTI Crude Oil)  [ProjectX symbolId: F.US.MCLE; roll: monthly; M26=Jun 2026 front-month]

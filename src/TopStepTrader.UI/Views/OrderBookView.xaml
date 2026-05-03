@@ -6,132 +6,227 @@
              mc:Ignorable="d"
              Background="{StaticResource BackgroundBrush}">
 
-    <Grid Margin="24,20">
+    <Grid Margin="24,20,24,8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="16"/>
+            <RowDefinition Height="12"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="16"/>
+            <RowDefinition Height="10"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="16"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="8"/>
-            <RowDefinition Height="180"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Title + Status -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock Text="📋  Orders" Style="{StaticResource PageTitleStyle}" Margin="0"/>
-            <Button Content="↻ Refresh"
+        <!-- ── Header row ── -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="📋  Trade History"
+                       Style="{StaticResource PageTitleStyle}"
+                       VerticalAlignment="Center"/>
+            <Button Grid.Column="1"
+                    Content="↻  Refresh"
                     Command="{Binding RefreshCommand}"
-                    Style="{StaticResource SecondaryButtonStyle}"
-                    Margin="16,0,0,0" Padding="10,4" FontSize="11"/>
-            <TextBlock Text="{Binding StatusText}"
-                       VerticalAlignment="Center"
-                       Foreground="{StaticResource TextSecondaryBrush}"
-                       Margin="16,0,0,0" FontSize="12"/>
-        </StackPanel>
-
-        <!-- Place Order panel -->
-        <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}"
-                CornerRadius="6" Padding="16,14">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="120"/>
-                    <ColumnDefinition Width="16"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="80"/>
-                    <ColumnDefinition Width="16"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Grid.Column="0" Text="Contract:" VerticalAlignment="Center"
-                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
-                <TextBox Grid.Column="1"
-                         Text="{Binding NewContractId, UpdateSourceTrigger=PropertyChanged}"
-                         VerticalAlignment="Center"/>
-
-                <TextBlock Grid.Column="3" Text="Qty:" VerticalAlignment="Center"
-                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,8,0"/>
-                <TextBox Grid.Column="4"
-                         Text="{Binding NewQuantity, UpdateSourceTrigger=PropertyChanged}"
-                         VerticalAlignment="Center"/>
-
-                <StackPanel Grid.Column="6" Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="▲  BUY"
-                            Command="{Binding PlaceBuyCommand}"
-                            Style="{StaticResource BuyButtonStyle}"
-                            Width="100" Margin="0,0,8,0"/>
-                    <Button Content="▼  SELL"
-                            Command="{Binding PlaceSellCommand}"
-                            Style="{StaticResource SellButtonStyle}"
-                            Width="100" Margin="0,0,8,0"/>
-                    <Button Content="Cancel Selected"
-                            Command="{Binding CancelOrderCommand}"
-                            Style="{StaticResource DangerButtonStyle}"
-                            Padding="12,8"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <!-- Open Orders -->
-        <Grid Grid.Row="4">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="8"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <TextBlock Grid.Row="0" Text="OPEN ORDERS" Style="{StaticResource SectionHeadingStyle}"/>
-            <DataGrid Grid.Row="2"
-                      ItemsSource="{Binding OpenOrders}"
-                      SelectedItem="{Binding SelectedOrder}"
-                      IsReadOnly="True">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="ID"        Binding="{Binding OrderId}"   Width="70"/>
-                    <DataGridTextColumn Header="Contract"  Binding="{Binding ContractId}" Width="80"/>
-                    <DataGridTemplateColumn Header="Side"  Width="70">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Side}"
-                                           Foreground="{Binding SideColor, Converter={StaticResource BrushKeyConverter}}"
-                                           FontWeight="Bold" VerticalAlignment="Center" Padding="4,0"/>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Qty"       Binding="{Binding Qty}"       Width="50"/>
-                    <DataGridTextColumn Header="Type"      Binding="{Binding Price}"     Width="80"/>
-                    <DataGridTextColumn Header="Status"    Binding="{Binding Status}"    Width="90"/>
-                    <DataGridTextColumn Header="Placed"    Binding="{Binding PlacedAt}"  Width="*"/>
-                </DataGrid.Columns>
-            </DataGrid>
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Padding="14,6"
+                    VerticalAlignment="Center"/>
         </Grid>
 
-        <!-- Section heading -->
-        <TextBlock Grid.Row="6" Text="TODAY'S FILLED ORDERS" Style="{StaticResource SectionHeadingStyle}"/>
+        <!-- ── Filter bar ── -->
+        <Border Grid.Row="2"
+                Background="{StaticResource SurfaceBrush}"
+                CornerRadius="6"
+                BorderBrush="#2A3A5A" BorderThickness="1"
+                Padding="12,8">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
 
-        <!-- Filled Orders -->
-        <DataGrid Grid.Row="8"
-                  ItemsSource="{Binding FilledOrders}"
-                  IsReadOnly="True">
+                <TextBlock Text="Symbol:" Foreground="#8899BB" FontSize="12"
+                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox Text="{Binding SymbolFilter, UpdateSourceTrigger=PropertyChanged}"
+                         Width="70" Height="26" Margin="0,0,16,0"
+                         Background="#1A2A3A" Foreground="White" BorderBrush="#2A4A6A"
+                         Padding="4,2" FontSize="12" VerticalContentAlignment="Center"
+                         ToolTip="e.g. /M6E — leave blank for all"/>
+
+                <TextBlock Text="Strategy:" Foreground="#8899BB" FontSize="12"
+                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox Text="{Binding StrategyFilter, UpdateSourceTrigger=PropertyChanged}"
+                         Width="110" Height="26" Margin="0,0,16,0"
+                         Background="#1A2A3A" Foreground="White" BorderBrush="#2A4A6A"
+                         Padding="4,2" FontSize="12" VerticalContentAlignment="Center"
+                         ToolTip="e.g. SuperTrend+ — leave blank for all"/>
+
+                <TextBlock Text="Persona:" Foreground="#8899BB" FontSize="12"
+                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox Text="{Binding PersonaFilter, UpdateSourceTrigger=PropertyChanged}"
+                         Width="70" Height="26" Margin="0,0,16,0"
+                         Background="#1A2A3A" Foreground="White" BorderBrush="#2A4A6A"
+                         Padding="4,2" FontSize="12" VerticalContentAlignment="Center"
+                         ToolTip="Lewis, Damian or Joe — leave blank for all"/>
+
+                <TextBlock Text="P&amp;L:" Foreground="#8899BB" FontSize="12"
+                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <ComboBox ItemsSource="{Binding PnLFilterOptions}"
+                          SelectedItem="{Binding SelectedPnLFilter}"
+                          Width="80" Height="26" Margin="0,0,16,0"
+                          Background="#1A2A3A" Foreground="White" BorderBrush="#2A4A6A"
+                          FontSize="12"/>
+
+                <Button Content="Apply"
+                        Command="{Binding ApplyFilterCommand}"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Padding="10,4" FontSize="12" Height="26"/>
+
+            </StackPanel>
+        </Border>
+
+        <!-- ── Trade grid ── -->
+        <DataGrid Grid.Row="4"
+                  ItemsSource="{Binding TradeRows}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserReorderColumns="True"
+                  CanUserSortColumns="True"
+                  CanUserResizeColumns="True"
+                  SelectionMode="Single"
+                  Background="#0D1B2A"
+                  Foreground="White"
+                  BorderBrush="#1E2E42"
+                  BorderThickness="1"
+                  GridLinesVisibility="Horizontal"
+                  HorizontalGridLinesBrush="#1E2E42"
+                  RowBackground="#0D1B2A"
+                  AlternatingRowBackground="#0F1F30"
+                  HeadersVisibility="Column"
+                  FontSize="12"
+                  RowHeight="26"
+                  ColumnHeaderHeight="30"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                  ScrollViewer.VerticalScrollBarVisibility="Auto">
+
+            <DataGrid.ColumnHeaderStyle>
+                <Style TargetType="DataGridColumnHeader">
+                    <Setter Property="Background" Value="#1A2A3A"/>
+                    <Setter Property="Foreground" Value="#8899BB"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                    <Setter Property="FontSize" Value="11"/>
+                    <Setter Property="Padding" Value="8,4"/>
+                    <Setter Property="BorderBrush" Value="#2A3A5A"/>
+                    <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                </Style>
+            </DataGrid.ColumnHeaderStyle>
+
+            <DataGrid.CellStyle>
+                <Style TargetType="DataGridCell">
+                    <Setter Property="Padding" Value="8,2"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="VerticalContentAlignment" Value="Center"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#1E3A5A"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.CellStyle>
+
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Setter Property="Opacity" Value="{Binding RowOpacity}"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#162540"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
+
             <DataGrid.Columns>
-                <DataGridTextColumn Header="ID"         Binding="{Binding OrderId}"   Width="70"/>
-                <DataGridTextColumn Header="Contract"   Binding="{Binding ContractId}" Width="80"/>
-                <DataGridTemplateColumn Header="Side"   Width="70">
+
+                <!-- ID -->
+                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="105" SortMemberPath="Id"/>
+
+                <!-- Symbol -->
+                <DataGridTemplateColumn Header="Symbol" Width="65" SortMemberPath="Symbol">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding Side}"
-                                       Foreground="{Binding SideColor, Converter={StaticResource BrushKeyConverter}}"
-                                       FontWeight="Bold" VerticalAlignment="Center" Padding="4,0"/>
+                            <TextBlock Text="{Binding Symbol}"
+                                       Foreground="White" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" Padding="8,0"/>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="Qty"        Binding="{Binding Qty}"       Width="50"/>
-                <DataGridTextColumn Header="Fill Price" Binding="{Binding FillPrice}" Width="90"/>
-                <DataGridTextColumn Header="Placed"     Binding="{Binding PlacedAt}"  Width="90"/>
-                <DataGridTextColumn Header="Filled"     Binding="{Binding FilledAt}"  Width="*"/>
+
+                <!-- Direction -->
+                <DataGridTemplateColumn Header="Dir" Width="55" SortMemberPath="Direction">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Direction}"
+                                       Foreground="{Binding DirectionColor}"
+                                       FontWeight="Bold"
+                                       VerticalAlignment="Center" Padding="8,0"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Sizes -->
+                <DataGridTextColumn Header="Size" Binding="{Binding Sizes}" Width="45" SortMemberPath="Sizes"/>
+
+                <!-- Leverage (MaxScaleIns) -->
+                <DataGridTextColumn Header="Leverage" Binding="{Binding Leverage}" Width="65"/>
+
+                <!-- Strategy -->
+                <DataGridTextColumn Header="Strategy" Binding="{Binding Strategy}" Width="110" SortMemberPath="Strategy"/>
+
+                <!-- Persona -->
+                <DataGridTextColumn Header="Persona" Binding="{Binding Persona}" Width="70" SortMemberPath="Persona"/>
+
+                <!-- Entry Time -->
+                <DataGridTextColumn Header="Entry Time" Binding="{Binding EntryTime}" Width="145" SortMemberPath="EntryTime"/>
+
+                <!-- Exit Time -->
+                <DataGridTextColumn Header="Exit Time" Binding="{Binding ExitTime}" Width="80" SortMemberPath="ExitTime"/>
+
+                <!-- Duration -->
+                <DataGridTextColumn Header="Duration" Binding="{Binding Duration}" Width="75"/>
+
+                <!-- Entry Price -->
+                <DataGridTextColumn Header="Entry Px" Binding="{Binding EntryPrice}" Width="80"/>
+
+                <!-- Exit Price -->
+                <DataGridTextColumn Header="Exit Px" Binding="{Binding ExitPrice}" Width="80"/>
+
+                <!-- P&L -->
+                <DataGridTemplateColumn Header="P&amp;L" Width="80" SortMemberPath="PnLRaw" CanUserSort="True">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding PnLDisplay}"
+                                       Foreground="{Binding PnLColor}"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center" Padding="8,0"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Commission -->
+                <DataGridTextColumn Header="Commission" Binding="{Binding Commission}" Width="85"/>
+
+                <!-- Fees -->
+                <DataGridTextColumn Header="Fees" Binding="{Binding Fees}" Width="60"/>
+
+                <!-- Exit Reason -->
+                <DataGridTextColumn Header="Exit" Binding="{Binding ExitReason}" Width="110"/>
+
             </DataGrid.Columns>
         </DataGrid>
+
+        <!-- ── Status bar ── -->
+        <TextBlock Grid.Row="6"
+                   Text="{Binding StatusText}"
+                   Foreground="#5A6A8A" FontSize="11"
+                   HorizontalAlignment="Left" VerticalAlignment="Center"/>
 
     </Grid>
 </UserControl>

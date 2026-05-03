@@ -197,6 +197,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _logger As ILogger(Of SuperTrendPlusViewModel)
         Private ReadOnly _claudeService As IClaudeReviewService
         Private ReadOnly _configRepo As SuperTrendPlusConfigRepository
+        Private ReadOnly _tradeRecordService As Core.Interfaces.ITradeRecordService
 
         Private _timer As Timer
         Private ReadOnly _timerLock As New Object()
@@ -442,6 +443,7 @@ Namespace TopStepTrader.UI.ViewModels
                        contractResolver As Core.Interfaces.IContractResolutionService,
                        claudeService As IClaudeReviewService,
                        logger As ILogger(Of SuperTrendPlusViewModel),
+                       tradeRecordService As Core.Interfaces.ITradeRecordService,
                        Optional configRepo As SuperTrendPlusConfigRepository = Nothing)
             _barService = barService
             _orderService = orderService
@@ -451,6 +453,7 @@ Namespace TopStepTrader.UI.ViewModels
             _contractResolver = contractResolver
             _claudeService = claudeService
             _logger = logger
+            _tradeRecordService = tradeRecordService
             _configRepo = configRepo
             Config = New SuperTrendPlusConfig()
             _slotManager = New SlotManager(Config)
@@ -1563,11 +1566,41 @@ Namespace TopStepTrader.UI.ViewModels
             slot.EntryBarTime = barTime
             slot.MissCount = 0
             slot.PositionId = placed.ExternalPositionId   ' may be Nothing until first monitoring tick resolves it
+            slot.EntryOrderId = placed.ExternalOrderId
             slot.EntryPrice = 0D
             slot.TakeProfitPrice = 0D
             slot.StopPhase = StopPhase.Initial
             slot.InitialRisk = 0D  ' computed once EntryPrice is confirmed
             slot.EntryAtr = 0D  ' set from bar data below
+
+            ' Persist opening trade record to TradeHistory.db
+            Task.Run(Async Function()
+                         Try
+                             Dim fcRec = FavouriteContracts.TryGetBySymbolResolved(contractId, _contractResolver)
+                             Dim persona = _personaService.GetProfile(_activePersona)
+                             Dim commission = 0.5D * slot.Contracts
+                             Dim fees = If(fcRec IsNot Nothing, fcRec.RoundTripFee * slot.Contracts, 0.8D * slot.Contracts)
+                             Dim displaySymbol = If(fcRec IsNot Nothing, "/" & fcRec.Name, contractId)
+                             Dim rec As New Core.Models.LiveTradeRecord With {
+                                 .EntryOrderId = If(slot.EntryOrderId.HasValue, slot.EntryOrderId.Value, 0),
+                                 .ContractId = contractId,
+                                 .Symbol = displaySymbol,
+                                 .Direction = If(side = "Buy", "Long", "Short"),
+                                 .Sizes = slot.Contracts,
+                                 .MaxScaleIns = If(persona IsNot Nothing, persona.MaxScaleIns, 1),
+                                 .StrategyName = "SuperTrend+",
+                                 .Persona = _activePersona,
+                                 .EntryTime = DateTimeOffset.UtcNow,
+                                 .EntryPrice = 0D,
+                                 .CommissionUsd = commission,
+                                 .FeesUsd = fees,
+                                 .IsOpen = True
+                             }
+                             slot.TradeRecordId = Await _tradeRecordService.OpenTradeAsync(rec)
+                         Catch ex As Exception
+                             _logger.LogWarning(ex, "ST+ [Slot {Idx}] failed to open trade record for {Contract}", slot.SlotIndex, contractId)
+                         End Try
+                     End Function)
 
             ' Capture entry ATR from the bars that were used to fire the entry
             Try
@@ -1654,7 +1687,7 @@ Namespace TopStepTrader.UI.ViewModels
             If snapshot Is Nothing Then
                 slot.MissCount += 1
                 If slot.MissCount >= SyncMissThreshold Then
-                    Await ReleaseSlotAsync(slot)
+                    Await ReleaseSlotAsync(slot, "Closed by Broker")
                     Return
                 End If
             Else
@@ -1669,6 +1702,9 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
                 If snapshot.OpenRate <> 0D AndAlso slot.EntryPrice = 0D Then
                     slot.EntryPrice = snapshot.OpenRate
+                    If slot.TradeRecordId > 0 Then
+                        Task.Run(Function() _tradeRecordService.UpdateEntryPriceAsync(slot.TradeRecordId, snapshot.OpenRate))
+                    End If
                 End If
 
                 ' Use snapshot P&L as a fallback; will be overridden below once bar close is available.
@@ -1798,7 +1834,7 @@ Namespace TopStepTrader.UI.ViewModels
                     Else
                         ' E1 flip — close without waiting for confirmation
                         slot.ConsecutiveExitBars = 0
-                        Await ReleaseSlotAsync(slot)
+                        Await ReleaseSlotAsync(slot, "ST Flip")
                         Return
                     End If
                 End If
@@ -1809,7 +1845,7 @@ Namespace TopStepTrader.UI.ViewModels
                                            slot.SlotIndex, slot.Instrument, exitEval.Score, slot.ConsecutiveExitBars)
                     If slot.ConsecutiveExitBars >= 2 Then
                         slot.ConsecutiveExitBars = 0
-                        Await ReleaseSlotAsync(slot)
+                        Await ReleaseSlotAsync(slot, "Exit Signal")
                         Return
                     End If
                 Else
@@ -1873,7 +1909,30 @@ Namespace TopStepTrader.UI.ViewModels
             End If
         End Function
 
-        Private Async Function ReleaseSlotAsync(slot As PositionSlot) As Task
+        Private Async Function ReleaseSlotAsync(slot As PositionSlot,
+                                                  Optional exitReason As String = "Signal") As Task
+            ' ── Persist close record before flattening (while slot data is still valid) ──
+            If slot.TradeRecordId > 0 Then
+                Try
+                    Dim exitPx As Decimal = 0D
+                    If slot.EntryPrice <> 0D Then
+                        Dim fcExit = FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
+                        If fcExit IsNot Nothing AndAlso fcExit.PxTickSize > 0D Then
+                            Dim ticks = slot.UnrealizedPnl / (fcExit.PxTickValue * slot.Contracts)
+                            Dim direction = If(slot.Side = "Buy", 1D, -1D)
+                            exitPx = Math.Round(slot.EntryPrice + direction * ticks * fcExit.PxTickSize, 6)
+                        End If
+                    End If
+                    Await _tradeRecordService.CloseTradeAsync(slot.TradeRecordId,
+                                                              DateTimeOffset.UtcNow,
+                                                              exitPx,
+                                                              slot.UnrealizedPnl,
+                                                              exitReason)
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ [Slot {Idx}] failed to close trade record {Id}", slot.SlotIndex, slot.TradeRecordId)
+                End Try
+            End If
+
             ' ── Close the live position on TopStepX before forgetting the slot ──
             ' Without this, the real position stays open on the exchange while the
             ' slot clears in-memory, causing EvaluateSlotEntriesAsync to re-enter the

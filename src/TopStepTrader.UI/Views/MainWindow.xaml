@@ -26,14 +26,22 @@
                            Margin="16,0,16,24" TextWrapping="Wrap"/>
 
                 <Button Content="📊  Dashboard"    Tag="Dashboard"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
-                <Button Content="🐙  Hydra"        Tag="Hydra"       Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
-                <Button Content="🐕  Bassett"      Tag="AssetBassett" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                <Button Content="📈  SuperTrend+" Tag="SuperTrendPlus" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="🎯  Sniper"       Tag="Sniper"      Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="💥  Pump-n-Dump" Tag="PumpNDump"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
-                <Button Content="📈  SuperTrend+" Tag="SuperTrendPlus" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="☕  CryptoJoe"    Tag="CryptoJoe"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}" Visibility="Collapsed"/>
                 <Button Content="🔬  Backtest"     Tag="Backtest"    Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="📋  Orders"       Tag="Orders"      Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+
+                <!-- Archive Section Separator -->
+                <Border Margin="16,16,16,8" Height="1" Background="{StaticResource BorderBrush}" Opacity="0.4"/>
+                <TextBlock Text="  ARCHIVE"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           FontSize="10" FontWeight="SemiBold"
+                           Margin="16,4,16,8" Opacity="0.55"/>
+
+                <Button Content="🐙  Hydra"        Tag="Hydra"       Click="NavButton_Click" Style="{StaticResource NavButtonStyle}" Opacity="0.6"/>
+                <Button Content="🐕  Bassett"      Tag="AssetBassett" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}" Opacity="0.6"/>
 
                 <!-- Config Section Separator -->
                 <Border Margin="16,16,16,8" Height="1" Background="{StaticResource BorderBrush}" Opacity="0.4"/>
