@@ -994,6 +994,16 @@ Namespace TopStepTrader.UI.ViewModels
                     End If
                 End If
 
+                ' Monday morning 1H SuperTrend gate (FEAT-37)
+                If isFavourable AndAlso Config.MondayMorningHtfFilterEnabled AndAlso IsMonMorningGateActive() Then
+                    Dim htfAligned = Await Is1HourSuperTrendAlignedAsync(contractId, isLong)
+                    If Not htfAligned Then
+                        _logger.LogInformation(
+                            "ST+ [{Contract}] Monday morning HTF gate — 1H ST disagrees, blocking entry.", contractId)
+                        isFavourable = False
+                    End If
+                End If
+
                 _logger.LogInformation(
                     "ST+ [{Contract}] stDir={StDir} ADX={Adx:F1} +DI={PlusDI:F1} -DI={MinusDI:F1} " &
                     "isLong={IsLong} isShort={IsShort} isFlip={IsFlip} isActive={IsActive} isFavourable={IsFav}",
@@ -1086,6 +1096,35 @@ Namespace TopStepTrader.UI.ViewModels
                                            candidate.ContractId, _slotManager.OpenSlotCount, Config.MaxSlots)
                 End If
             Next
+        End Function
+
+        ''' <summary>Returns True if the current UK local time is Monday before 08:00 (BST-aware).</summary>
+        Private Shared Function IsMonMorningGateActive() As Boolean
+            Dim ukTz = TimeZoneInfo.FindSystemTimeZoneById("GMT Standard Time")
+            Dim ukNow = TimeZoneInfo.ConvertTimeFromUtc(DateTimeOffset.UtcNow.UtcDateTime, ukTz)
+            Return ukNow.DayOfWeek = DayOfWeek.Monday AndAlso ukNow.Hour < 8
+        End Function
+
+        ''' <summary>
+        ''' Fetches 1H bars for <paramref name="contractId"/> and checks whether the last
+        ''' completed 1H SuperTrend direction matches <paramref name="isLong"/>.
+        ''' Returns True (allow entry) when data is insufficient or the direction agrees.
+        ''' </summary>
+        Private Async Function Is1HourSuperTrendAlignedAsync(contractId As String, isLong As Boolean) As Task(Of Boolean)
+            Try
+                Dim bars1H = Await _barService.GetLiveBarsAsync(contractId, BarTimeframe.OneHour, 50)
+                If bars1H Is Nothing OrElse bars1H.Count < 10 Then Return True
+                Dim highs  = bars1H.Select(Function(b) b.High).ToList()
+                Dim lows   = bars1H.Select(Function(b) b.Low).ToList()
+                Dim closes = bars1H.Select(Function(b) b.Close).ToList()
+                Dim st1H   = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
+                Dim dir    = st1H.Direction(bars1H.Count - 1)
+                If Single.IsNaN(dir) OrElse dir = 0.0F Then Return True
+                Return If(isLong, dir > 0, dir < 0)
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ Monday morning 1H check failed for {Contract} — allowing entry", contractId)
+                Return True
+            End Try
         End Function
 
         ''' <summary>

@@ -67,6 +67,14 @@ Namespace TopStepTrader.Core.Settings
         ' After any slot exit (degradation or SL), re-entry on the same instrument is blocked for
         ' exactly one full bar at the selected timeframe (e.g. 60 min on 1hr, 5 min on 5min).
 
+        ' ── Monday morning higher-timeframe gate (FEAT-37) ───────────────────────────────────
+        ''' <summary>
+        ''' When True, entries on Monday before 08:00 UK local time (BST-aware) require the
+        ''' 1-hour SuperTrend direction to agree with the signal direction.
+        ''' Filters gap-driven phantom trends from the Sunday-open thin-liquidity window.
+        ''' </summary>
+        Public Property MondayMorningHtfFilterEnabled As Boolean = True
+
     End Class
 
 End Namespace

@@ -17,7 +17,7 @@ A WPF desktop application for live and simulated trading on **TopStepX (CME Micr
    - [CryptoJoe](#5-cryptojoe-)
    - [Backtest](#6-backtest-)
    - [SuperTrend+ Autopilot](#7-supertrend-autopilot-)
-   - [Order Book](#8-order-book-)
+   - [Trade History](#8-trade-history-)
    - [Test Trade](#9-test-trade-)
    - [API Keys](#10-api-keys-)
 5. [Services Reference](#services-reference)
@@ -404,19 +404,21 @@ Each open slot advances through phases as profit grows. R = initial risk distanc
 
 The stop never retreats.
 
-#### Seven Degradation Signals
+#### Nine Degradation Signals
 
 Scored each bar. Combined score at or above the exit threshold triggers immediate close.
 
 | Signal | Condition | Weight |
 |---|---|---|
 | E1 SuperTrend Flip | Trend reversed | 8 (immediate exit) |
-| E2 Momentum Slowing | Price converging toward ST line over 3 bars | 3 |
+| E2 Momentum Slowing | Price converging toward ST line over 3 bars | 2 |
 | E3 ADX Declining | Trend strength fading from entry ADX | 2 |
 | E4 DI Compression | +DI / −DI spread narrowing | 2 |
 | E5 DI Crossover | DI lines crossing — leading reversal signal | 4 |
 | E6 Rejection Bar | Price rejected at extension — large wick | 2 |
-| E7 ATR Contraction | ATR < 75% of entry ATR — momentum fading | 1 |
+| E7 ATR Contraction | ATR < 80% of entry ATR — momentum fading | 1 |
+| E8 VWAP Cross | Price crosses below/above session-anchored VWAP | 2 |
+| E9 RSI Hidden Divergence | Price higher high but RSI lower high (14-period, 3–5 bar window) | 3 |
 
 Amber (warning) = score building, no new slots opened. Red (exiting) = exit triggered.
 
@@ -455,30 +457,62 @@ A scrolling log below the slot boxes records every AI pre-trade and mid-trade ch
 
 - On start, the engine scans open broker positions and onboards any live positions that match a watchlist instrument into the appropriate slot (orphan recovery).
 - Re-entry cooldown: after a slot closes, the instrument is blocked from re-entering until at least one full bar has elapsed.
+- **Monday morning HTF gate (FEAT-37):** On Monday before 08:00 UK local time (BST-aware), a new entry is only allowed if the 1-hour SuperTrend direction agrees with the signal direction. This filters gap-driven phantom trends caused by thin liquidity and price gaps from the Sunday open. The gate degrades gracefully — if 1H bar data is unavailable, the entry is allowed. Controlled by `SuperTrendPlusConfig.MondayMorningHtfFilterEnabled` (default `True`). The same filter is applied in the backtest engine using pre-computed 1H ST direction series.
 - AI VETO suppresses the instrument from new checks for 15 minutes to avoid repeatedly calling the API on a blocked setup.
 - Scale-in: when a slot advances to ADX L2, the engine adds +1 contract; at L3 it adds +2 contracts on top of the initial position.
 
 ---
 
-### 8. Order Book 📋
+### 8. Trade History 📋
 
-**Purpose:** Manual order management. View open and today's filled orders, place new market orders, and cancel existing working orders.
+**Purpose:** Scrollable log of every trade placed by the strategy engines. Mirrors the TopStepX Trades panel with full trade lifecycle data (entry, exit, P&L, commission, fees). Read-only — order placement is not available here (use Test Trade for manual orders).
 
 #### How It Works
 
-1. On load, fetches the active account's open orders and today's filled orders.
-2. Open orders grid shows pending/working orders with contract, side (Buy = blue, Sell = red), quantity, status, and placement time.
-3. Filled orders grid shows today's completed trades with fill price and time.
-4. To place a new order: enter contract ID, quantity, select side, click "Place Buy" or "Place Sell".
-5. Orders are always market type — no price entry.
-6. To cancel a working order: select it in the grid, click "Cancel Order".
-7. Refresh button manually reloads both grids.
+1. On load the view recovers any open records from the previous session: it queries the last 48 hours of fills from TopStepX and closes any unresolved `IsOpen` records, computing P&L from the actual exit fill.
+2. After recovery, the last 100 trades are loaded and displayed, newest first.
+3. Trades are written to the database in real time as engines open and close positions — the Refresh button reloads the grid with the latest data.
+4. Filters can be applied at any time; click **Apply** to reload with the active filter set.
+
+#### Filter Bar
+
+| Filter | Input | Behaviour |
+|---|---|---|
+| Symbol | Text box | Match by instrument name (e.g. `/M6E`, `MGC`) — blank = all |
+| Strategy | Text box | Match by strategy name (e.g. `SuperTrend+`) — blank = all |
+| Persona | Text box | Match by persona (`Lewis`, `Damian`, or `Joe`) — blank = all |
+| P&L | Dropdown | `All` / `Winners` (P&L > 0) / `Losers` (P&L ≤ 0) |
+
+#### Trade Grid Columns
+
+| Column | Source | Notes |
+|---|---|---|
+| ID | TopStepX Trade ID (fill ID) | Falls back to entry order ID until resolved |
+| Symbol | Instrument name | e.g. `/M6E` |
+| Dir | Long / Short | Coloured green / red |
+| Size | Contract count | |
+| Leverage | `MaxScaleIns` from persona | 1× = Lewis, 2× = Damian, 3× = Joe |
+| Strategy | Engine strategy name | e.g. `SuperTrend+` |
+| Persona | Active persona at entry | |
+| Entry Time | UTC → local | Full date + time |
+| Exit Time | UTC → local | Time only (or "Open" / "—") |
+| Duration | Elapsed from entry to exit | Formatted as Xh Xm / Xm Xs / Xs |
+| Entry Px | Fill price | Back-corrected from broker snapshot when available |
+| Exit Px | Derived from P&L and tick math | "Live" while open |
+| P&L | Realised profit/loss in USD | Green (profit) / red (loss) / grey (open) |
+| Commission | TopStepX commission | $0.50 × contracts |
+| Fees | Exchange + NFA fees | `FavouriteContracts.RoundTripFee` × contracts |
+| Exit | Reason the trade closed | e.g. `ST Flip`, `Exit Signal`, `Recovered` |
+
+#### Crash Recovery
+
+On every app startup, `TradeRecordService.RecoverOpenTradesAsync` scans `TradeHistory.db` for any records still marked `IsOpen = True`. For each one it queries the TopStepX `/api/Trade/search` endpoint for fills in the last 48 hours, finds the exit fill (opposite side, timestamp after entry), computes realised P&L from `FavouriteContracts.PxPointValue`, and closes the record with `ExitReason = "Recovered"`.
 
 #### Notes
 
-- Filled orders are filtered to **today only** (from midnight to now).
-- Account is auto-selected from the first available active account (follows Dashboard selection).
-- No limit order support — manual order placement is market-only.
+- The grid is populated exclusively by strategy engines — no manual order entry.
+- Open trades are shown at 70% opacity with `"…"` in the P&L column and `"Live"` in the Exit Price column.
+- The status bar at the bottom shows the total trade count and number of open positions.
 
 ---
 
@@ -570,10 +604,11 @@ A scrolling log below the slot boxes records every AI pre-trade and mid-trade ch
 | `CryptoStrategyExecutionEngine` | `Services/Trading` | CryptoJoe per-asset engine (MBT, GMET) |
 | `PumpNDumpExecutionEngine` | `Services/Trading` | 3-bar scalping engine |
 | `SuperTrendPlusViewModel` | `UI/ViewModels` | SuperTrend+ Autopilot — multi-asset monitoring, slot allocation, stop phasing, AI gate |
-| `SlotManager` | `UI/ViewModels` | Manages the three concurrent position slots; enforces ADX-band open/close rules |
-| `ExitSignalEngine` | `Services/Trading` | Evaluates seven degradation signals per bar and returns a scored exit decision |
-| `PositionSlot` | `Core/Models` | Plain state object for a single open slot (entry, SL, TP, health, stop phase) |
+| `SlotManager` | `Core/Trading` | Manages the three concurrent position slots; enforces ADX-band open/close rules |
+| `ExitSignalEngine` | `Services/Trading` | Evaluates nine degradation signals per bar and returns a scored exit decision |
+| `PositionSlot` | `Core/Trading` | Plain state object for a single open slot (entry, SL, TP, health, stop phase) |
 | `SuperTrendPlusConfig` | `Core/Settings` | All configurable thresholds (ADX bands, stop-phase R multiples, degradation weights) |
+| `TradeRecordService` | `Services/Trades` | Records every engine-placed trade to `TradeHistory.db`; resolves TopStepX trade IDs and performs crash recovery on startup |
 | `BacktestService` | `Services` | Runs historical strategy simulations |
 | `BarIngestionWorker` | `Services` | Background worker that polls and persists bar data to SQLite |
 | `TokenRefreshWorker` | `Services` | Proactively refreshes the ProjectX JWT token before expiry |

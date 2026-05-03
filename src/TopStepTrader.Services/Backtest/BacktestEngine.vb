@@ -523,6 +523,22 @@ Namespace TopStepTrader.Services.Backtest
                     signal = provider.Evaluate(bar, indicators, config, i)
                 End If
 
+                ' Monday morning 1H SuperTrend gate (FEAT-37)
+                If signal IsNot Nothing AndAlso signal.Side IsNot Nothing AndAlso
+                   indicators.HtfStDirectionSeries IsNot Nothing Then
+                    Dim ukTz = TimeZoneInfo.FindSystemTimeZoneById("GMT Standard Time")
+                    Dim ukBarTime = TimeZoneInfo.ConvertTimeFromUtc(bar.Timestamp.UtcDateTime, ukTz)
+                    If ukBarTime.DayOfWeek = DayOfWeek.Monday AndAlso ukBarTime.Hour < 8 Then
+                        Dim htfDir = indicators.HtfStDirectionSeries(i)
+                        If Not Single.IsNaN(htfDir) AndAlso htfDir <> 0.0F Then
+                            Dim signalIsLong = signal.Side = "Buy"
+                            If (signalIsLong AndAlso htfDir < 0) OrElse (Not signalIsLong AndAlso htfDir > 0) Then
+                                signal = Nothing
+                            End If
+                        End If
+                    End If
+                End If
+
                 ' â”€â”€ Map SignalResult to pending entry state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 If signal IsNot Nothing AndAlso signal.Side IsNot Nothing Then
                     If openLegs.Count = 0 Then
@@ -969,7 +985,65 @@ Namespace TopStepTrader.Services.Backtest
                     indicators.Atr = universalAtr14
             End Select
 
+            ' -- Universal: 1H HTF SuperTrend direction for Monday morning gate (FEAT-37)
+            indicators.HtfStDirectionSeries = ComputeHtfStDirectionSeries(filteredBars)
+
             Return indicators
+        End Function
+
+        ''' <summary>
+        ''' Aggregates chart-timeframe bars into 1-hour OHLC buckets, computes SuperTrend(10, 3.0),
+        ''' and returns an array (same length as <paramref name="bars"/>) where each element is the
+        ''' direction of the last *completed* 1H bar before the corresponding chart bar.
+        ''' NaN when insufficient 1H history exists for the warm-up period.
+        ''' Used by the Monday morning HTF gate (FEAT-37).
+        ''' </summary>
+        Private Shared Function ComputeHtfStDirectionSeries(bars As IReadOnlyList(Of MarketBar)) As Single()
+            Dim result(bars.Count - 1) As Single
+            For i = 0 To result.Length - 1
+                result(i) = Single.NaN
+            Next
+
+            If bars.Count < 12 Then Return result
+
+            ' Group into 1H UTC buckets (floor each bar timestamp to the hour)
+            Dim buckets = bars.GroupBy(
+                Function(b) New DateTime(b.Timestamp.UtcDateTime.Year,
+                                        b.Timestamp.UtcDateTime.Month,
+                                        b.Timestamp.UtcDateTime.Day,
+                                        b.Timestamp.UtcDateTime.Hour, 0, 0, DateTimeKind.Utc)) _
+                          .OrderBy(Function(g) g.Key) _
+                          .ToList()
+
+            If buckets.Count < 12 Then Return result
+
+            Dim h1Times As New List(Of DateTime)(buckets.Count)
+            Dim h1Highs As New List(Of Decimal)(buckets.Count)
+            Dim h1Lows As New List(Of Decimal)(buckets.Count)
+            Dim h1Closes As New List(Of Decimal)(buckets.Count)
+            For Each bucket In buckets
+                h1Times.Add(bucket.Key)
+                h1Highs.Add(bucket.Max(Function(b) b.High))
+                h1Lows.Add(bucket.Min(Function(b) b.Low))
+                h1Closes.Add(bucket.OrderBy(Function(b) b.Timestamp).Last().Close)
+            Next
+
+            Dim st1H = TechnicalIndicators.SuperTrend(h1Highs, h1Lows, h1Closes, period:=10, multiplier:=3.0)
+
+            For i = 0 To bars.Count - 1
+                ' Current UTC hour start for this bar
+                Dim barHourStart = New DateTime(bars(i).Timestamp.UtcDateTime.Year,
+                                               bars(i).Timestamp.UtcDateTime.Month,
+                                               bars(i).Timestamp.UtcDateTime.Day,
+                                               bars(i).Timestamp.UtcDateTime.Hour, 0, 0, DateTimeKind.Utc)
+                ' Last completed 1H bucket is the one whose key < barHourStart
+                Dim htfIdx = h1Times.FindLastIndex(Function(t) t < barHourStart)
+                If htfIdx >= 10 Then
+                    result(i) = st1H.Direction(htfIdx)
+                End If
+            Next
+
+            Return result
         End Function
 
         End Class

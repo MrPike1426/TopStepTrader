@@ -85,6 +85,14 @@ Namespace TopStepTrader.Core.Models
         ''' </summary>
         Public Property StLineSeries As Single()
 
+        ''' <summary>
+        ''' 1-hour SuperTrend(10, 3.0) direction mapped to each chart-timeframe bar.
+        ''' Each element is the direction of the last completed 1H bar before the corresponding bar.
+        ''' +1 = uptrend, -1 = downtrend, NaN = warm-up or insufficient data.
+        ''' Used by the Monday morning HTF gate (FEAT-37).
+        ''' </summary>
+        Public Property HtfStDirectionSeries As Single()
+
     End Class
 
 End Namespace
