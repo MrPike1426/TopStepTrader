@@ -449,6 +449,22 @@ Namespace TopStepTrader.Data
             Finally
                 If mustClose6 Then conn.Close()
             End Try
+
+            ' ── FEAT-36: SuperTrend+ persona column ──────────────────────────────
+            Dim mustClose7 = (conn.State <> ConnectionState.Open)
+            If mustClose7 Then conn.Open()
+            Try
+                Try
+                    Using cmd = conn.CreateCommand()
+                        cmd.CommandText = "ALTER TABLE ""SuperTrendPlusConfig"" ADD COLUMN ""ActivePersona"" TEXT NOT NULL DEFAULT 'Damian'"
+                        cmd.ExecuteNonQuery()
+                    End Using
+                Catch ex As Exception
+                    If Not ex.Message.Contains("duplicate column") Then Throw
+                End Try
+            Finally
+                If mustClose7 Then conn.Close()
+            End Try
         End Sub
 
     End Class

@@ -173,11 +173,11 @@ Namespace TopStepTrader.UI.ViewModels
             Return 0
         End Function
 
-        ''' <summary>Returns the number of contracts to place based on ADX strength band.</summary>
+        ''' <summary>Returns the number of contracts to place based on ADX strength band (fixed: Decaff=1, Latte=2, Espresso=3).</summary>
         Public Function ContractsForAdx(adx As Single) As Integer
-            If adx >= _config.AdxStrongThreshold Then Return Math.Min(3, _config.ContractsPerSlot * 3)
-            If adx >= _config.AdxModerateThreshold Then Return Math.Min(2, _config.ContractsPerSlot * 2)
-            Return _config.ContractsPerSlot
+            If adx >= _config.AdxStrongThreshold Then Return 3
+            If adx >= _config.AdxModerateThreshold Then Return 2
+            Return 1
         End Function
 
         Private Shared Function FormatEntryReason(adx As Single) As String

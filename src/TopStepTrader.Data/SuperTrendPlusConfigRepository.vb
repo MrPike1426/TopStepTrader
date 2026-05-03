@@ -27,11 +27,9 @@ Namespace TopStepTrader.Data
                 entity.Id = 1
                 _db.SuperTrendPlusConfig.Add(entity)
             Else
-                existing.SelectedTpMultiple    = entity.SelectedTpMultiple
-                existing.StMultiplier          = entity.StMultiplier
+                existing.ActivePersona         = entity.ActivePersona
                 existing.SelectedTimeframe     = entity.SelectedTimeframe
                 existing.MaxSlots              = entity.MaxSlots
-                existing.ContractsPerSlot      = entity.ContractsPerSlot
                 existing.AdxWeakThreshold      = entity.AdxWeakThreshold
                 existing.AdxModerateThreshold  = entity.AdxModerateThreshold
                 existing.AdxStrongThreshold    = entity.AdxStrongThreshold

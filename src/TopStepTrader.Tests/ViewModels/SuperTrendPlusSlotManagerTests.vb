@@ -17,7 +17,6 @@ Namespace TopStepTrader.Tests.ViewModels
         Private Shared Function MakeConfig() As SuperTrendPlusConfig
             Return New SuperTrendPlusConfig With {
                 .MaxSlots             = 3,
-                .ContractsPerSlot     = 1,
                 .AdxWeakThreshold     = 25.0F,
                 .AdxModerateThreshold = 40.0F,
                 .AdxStrongThreshold   = 60.0F

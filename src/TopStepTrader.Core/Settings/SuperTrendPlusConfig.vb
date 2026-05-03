@@ -2,29 +2,30 @@ Namespace TopStepTrader.Core.Settings
 
     ''' <summary>
     ''' Unified configuration for SuperTrend+ Autopilot.
-    ''' Replaces the three per-persona profile settings (Joe/Damian/Lewis).
+    ''' Persona (Lewis/Damian/Joe) drives entry ADX gate and SuperTrend multiplier.
+    ''' Contract sizing is ADX-band driven (Decaff=1, Latte=2, Espresso=3).
     ''' </summary>
     Public Class SuperTrendPlusConfig
 
-        ''' <summary>Maximum concurrent position slots per instrument.</summary>
+        ''' <summary>Maximum concurrent position slots (default 3, reserved for future expansion).</summary>
         Public Property MaxSlots As Integer = 3
 
-        ''' <summary>Contracts opened per slot entry.</summary>
-        Public Property ContractsPerSlot As Integer = 1
+        ''' <summary>Active persona: "Lewis", "Damian", or "Joe".</summary>
+        Public Property ActivePersona As String = "Damian"
 
-        ''' <summary>Minimum ADX required to open any slot.</summary>
+        ''' <summary>Minimum ADX required to open any slot (set from persona).</summary>
+        Public Property MinEntryAdx As Single = 30.0F
+
+        ''' <summary>ADX lower band boundary — Decaff starts here (fixed).</summary>
         Public Property AdxWeakThreshold As Single = 25.0F
 
-        ''' <summary>ADX required to open slot 2 (index 1).</summary>
+        ''' <summary>ADX at which the bot places 2 contracts — Latte band (fixed).</summary>
         Public Property AdxModerateThreshold As Single = 40.0F
 
-        ''' <summary>ADX required to open slot 3 (index 2).</summary>
+        ''' <summary>ADX at which the bot places 3 contracts — Espresso band (fixed).</summary>
         Public Property AdxStrongThreshold As Single = 60.0F
 
-        ''' <summary>Reward:risk ratio for take-profit calculation.</summary>
-        Public Property TpMultiple As Decimal = 2.0D
-
-        ''' <summary>SuperTrend ATR multiplier.</summary>
+        ''' <summary>SuperTrend ATR multiplier (set from persona: Lewis=3.5, Damian=3.0, Joe=2.5).</summary>
         Public Property StMultiplier As Double = 3.0
 
         ''' <summary>Chart timeframe label shown in the UI (e.g. "5min").</summary>
@@ -59,35 +60,12 @@ Namespace TopStepTrader.Core.Settings
         Public Property FreeRideLockR As Decimal = 2.0D
 
         ' ── Degradation score thresholds ─────────────────────────────────────────
-        ''' <summary>
-        ''' Score at or above which slot health becomes Warning (Amber) — no new slots opened.
-        ''' Max weighted score across all nine signals is E1:8 + E2:3 + E3:2 + E4:2 + E5:4 + E6:2 + E7:1 + E8:2 + E9:3 = 27.
-        ''' Default 3.
-        ''' </summary>
         Public Property WarningScoreThreshold As Integer = 3
-
-        ''' <summary>
-        ''' Score at or above which slot health becomes Exiting (Red) — position closes on next bar
-        ''' (or immediately if E1 SuperTrend flip fired).  Default 6.
-        ''' </summary>
         Public Property ExitingScoreThreshold As Integer = 6
 
         ' ── Re-entry cooldown policy (STRAT-33) ──────────────────────────────────
         ' After any slot exit (degradation or SL), re-entry on the same instrument is blocked for
         ' exactly one full bar at the selected timeframe (e.g. 60 min on 1hr, 5 min on 5min).
-        '
-        ' Three options were evaluated:
-        '   1. One-bar cooldown (CHOSEN) — the next bar's entry gate (ST direction + ADX band +
-        '      DI alignment) re-validates all conditions from scratch; no extra state needed.
-        '      On the 1hr timeframe a 60-minute gap is a meaningful consolidation window.
-        '   2. Higher ADX for re-entry after E3 exit — adds per-exit-reason state that must
-        '      survive across bar boundaries; complexity without proven benefit.
-        '   3. Session-lock — too conservative; misses valid trend resumptions after a brief
-        '      pullback that clears the degradation signals.
-        '
-        ' Enforcement: SuperTrendPlusViewModel._reEntryCooldown records DateTimeOffset.UtcNow on
-        ' ReleaseSlotAsync; EvaluateSlotEntriesAsync skips the instrument while
-        ' UtcNow < cooldownTimestamp + barMinutes.
 
     End Class
 

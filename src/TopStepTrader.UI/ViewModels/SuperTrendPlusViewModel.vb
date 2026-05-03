@@ -277,44 +277,86 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public ReadOnly Property Timeframes As String() = {"5min", "15min", "1hr"}
 
-        Public ReadOnly Property TpMultiples As String() = {"None / flip only", "1.5×", "2×", "2.5×", "3×"}
+        ' ── Persona selection ───────────────────────────────────────────────────
+        ' Lewis=risk-averse (MinADX 40, ST×3.5, RR 0.75)
+        ' Damian=balanced  (MinADX 30, ST×3.0, RR 1.5)
+        ' Joe=reward-seeking (MinADX 20, ST×2.5, RR 2.0)
+        Private _activePersona As String = "Damian"
+        Private _stMultiplier As Double = 3.0
 
-        Private _selectedTpMultiple As String = "2×"
-        Public Property SelectedTpMultiple As String
+        Public Property ActivePersona As String
             Get
-                Return _selectedTpMultiple
+                Return _activePersona
             End Get
             Set(value As String)
-                If SetProperty(_selectedTpMultiple, value) Then
+                If SetProperty(_activePersona, value) Then
+                    ApplyPersonaConfig()
+                    NotifyPropertyChanged(NameOf(IsLewisSelected))
+                    NotifyPropertyChanged(NameOf(IsDamianSelected))
+                    NotifyPropertyChanged(NameOf(IsJoeSelected))
                     SaveConfigFireAndForget()
                 End If
             End Set
         End Property
 
-        Public ReadOnly Property StMultipliers As Double() = {2.0, 2.5, 3.0}
-
-        Private _stMultiplier As Double = 3.0
-        Public Property StMultiplier As Double
+        Public ReadOnly Property IsLewisSelected As Boolean
             Get
-                Return _stMultiplier
+                Return _activePersona = "Lewis"
             End Get
-            Set(value As Double)
-                If SetProperty(_stMultiplier, value) Then
-                    Config.StMultiplier = value
-                    SaveConfigFireAndForget()
-                End If
-            End Set
         End Property
 
-        Private Function ParseTpMultiple() As Decimal
-            Select Case _selectedTpMultiple
-                Case "1.5×" : Return 1.5D
-                Case "2×" : Return 2D
-                Case "2.5×" : Return 2.5D
-                Case "3×" : Return 3D
-                Case Else : Return 0D
+        Public ReadOnly Property IsDamianSelected As Boolean
+            Get
+                Return _activePersona = "Damian"
+            End Get
+        End Property
+
+        Public ReadOnly Property IsJoeSelected As Boolean
+            Get
+                Return _activePersona = "Joe"
+            End Get
+        End Property
+
+        ''' <summary>Minimum entry ADX for the active persona.</summary>
+        Public ReadOnly Property PersonaMinAdx As Single
+            Get
+                Select Case _activePersona
+                    Case "Lewis" : Return 40.0F
+                    Case "Joe"   : Return 20.0F
+                    Case Else    : Return 30.0F  ' Damian default
+                End Select
+            End Get
+        End Property
+
+        ''' <summary>R:R ratio target for the active persona (visual milestone).</summary>
+        Public ReadOnly Property PersonaRrRatio As Decimal
+            Get
+                Select Case _activePersona
+                    Case "Lewis" : Return 0.75D
+                    Case "Joe"   : Return 2.0D
+                    Case Else    : Return 1.5D  ' Damian default
+                End Select
+            End Get
+        End Property
+
+        Public ReadOnly Property SelectLewisCommand As RelayCommand
+        Public ReadOnly Property SelectDamianCommand As RelayCommand
+        Public ReadOnly Property SelectJoeCommand As RelayCommand
+
+        Private Sub ApplyPersonaConfig()
+            Select Case _activePersona
+                Case "Lewis"
+                    _stMultiplier = 3.5
+                    Config.MinEntryAdx = 40.0F
+                Case "Joe"
+                    _stMultiplier = 2.5
+                    Config.MinEntryAdx = 20.0F
+                Case Else
+                    _stMultiplier = 3.0
+                    Config.MinEntryAdx = 30.0F
             End Select
-        End Function
+            Config.StMultiplier = _stMultiplier
+        End Sub
 
         Private _selectedTimeframe As String = "15min"
         Public Property SelectedTimeframe As String
@@ -374,16 +416,6 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _lastAiCheckText As String = "No check yet"
-        Public Property LastAiCheckText As String
-            Get
-                Return _lastAiCheckText
-            End Get
-            Set(value As String)
-                SetProperty(_lastAiCheckText, value)
-            End Set
-        End Property
-
         ''' <summary>Scrolling history of all AI checks, newest first.</summary>
         Public ReadOnly Property AiHistoryLog As New ObservableCollection(Of AiLogEntryVm)()
 
@@ -424,10 +456,14 @@ Namespace TopStepTrader.UI.ViewModels
             _slotManager = New SlotManager(Config)
             _exitEngine = New ExitSignalEngine(
                 Microsoft.Extensions.Logging.Abstractions.NullLogger(Of ExitSignalEngine).Instance)
-            StartStopCommand = New RelayCommand(AddressOf OnStartStop)
+            StartStopCommand    = New RelayCommand(AddressOf OnStartStop)
             AiCheckSlot1Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot1))
             AiCheckSlot2Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot2))
             AiCheckSlot3Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot3))
+            SelectLewisCommand  = New RelayCommand(Sub() ActivePersona = "Lewis")
+            SelectDamianCommand = New RelayCommand(Sub() ActivePersona = "Damian")
+            SelectJoeCommand    = New RelayCommand(Sub() ActivePersona = "Joe")
+            ApplyPersonaConfig()
 
             Slot1.Slot = _slotManager.Slots(0)
             Slot2.Slot = _slotManager.Slots(1)
@@ -496,21 +532,23 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Private Sub ApplyConfigEntity(entity As Data.Entities.SuperTrendPlusConfigEntity)
-            ' UI selections — update backing fields directly to avoid triggering save during load
-            _selectedTpMultiple = entity.SelectedTpMultiple
-            _stMultiplier = entity.StMultiplier
+            ' Update backing fields directly to avoid triggering save during load
+            _activePersona = If(String.IsNullOrWhiteSpace(entity.ActivePersona), "Damian", entity.ActivePersona)
             _selectedTimeframe = entity.SelectedTimeframe
-            NotifyPropertyChanged(NameOf(SelectedTpMultiple))
-            NotifyPropertyChanged(NameOf(StMultiplier))
+            NotifyPropertyChanged(NameOf(ActivePersona))
+            NotifyPropertyChanged(NameOf(IsLewisSelected))
+            NotifyPropertyChanged(NameOf(IsDamianSelected))
+            NotifyPropertyChanged(NameOf(IsJoeSelected))
+            NotifyPropertyChanged(NameOf(PersonaMinAdx))
+            NotifyPropertyChanged(NameOf(PersonaRrRatio))
             NotifyPropertyChanged(NameOf(SelectedTimeframe))
+            ApplyPersonaConfig()
 
             ' Config POCO properties
             Config.MaxSlots              = entity.MaxSlots
-            Config.ContractsPerSlot      = entity.ContractsPerSlot
             Config.AdxWeakThreshold      = entity.AdxWeakThreshold
             Config.AdxModerateThreshold  = entity.AdxModerateThreshold
             Config.AdxStrongThreshold    = entity.AdxStrongThreshold
-            Config.StMultiplier          = entity.StMultiplier
             Config.BreakevenTriggerR     = entity.BreakevenTriggerR
             Config.ProfitLockTriggerR    = entity.ProfitLockTriggerR
             Config.ProfitLockOffsetR     = entity.ProfitLockOffsetR
@@ -526,11 +564,9 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Function BuildConfigEntity() As Data.Entities.SuperTrendPlusConfigEntity
             Return New Data.Entities.SuperTrendPlusConfigEntity With {
-                .SelectedTpMultiple    = _selectedTpMultiple,
-                .StMultiplier          = _stMultiplier,
+                .ActivePersona         = _activePersona,
                 .SelectedTimeframe     = _selectedTimeframe,
                 .MaxSlots              = Config.MaxSlots,
-                .ContractsPerSlot      = Config.ContractsPerSlot,
                 .AdxWeakThreshold      = Config.AdxWeakThreshold,
                 .AdxModerateThreshold  = Config.AdxModerateThreshold,
                 .AdxStrongThreshold    = Config.AdxStrongThreshold,
@@ -937,7 +973,7 @@ Namespace TopStepTrader.UI.ViewModels
 
                 Dim isLong As Boolean = stDir > 0 AndAlso Not Single.IsNaN(adxVal) AndAlso plusDi > minusDi
                 Dim isShort As Boolean = stDir < 0 AndAlso Not Single.IsNaN(adxVal) AndAlso minusDi > plusDi
-                Dim isActive As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= Config.AdxWeakThreshold
+                Dim isActive As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= PersonaMinAdx
                 Dim isFavourable As Boolean = (isLong OrElse isShort) AndAlso (isFlip OrElse isActive)
 
                 ' Re-entry cooldown: skip if released within the last bar duration
@@ -1381,7 +1417,6 @@ Namespace TopStepTrader.UI.ViewModels
             Dim oSide As OrderSide = If(side = "Buy", OrderSide.Buy, OrderSide.Sell)
             Dim fc As FavouriteContract = FavouriteContracts.TryGetBySymbolResolved(contractId, _contractResolver)
             Dim stopTicks As Integer? = Nothing
-            Dim tpTicks As Integer? = Nothing
             If fc IsNot Nothing AndAlso fc.PxTickSize > 0D Then
                 Dim rawDist As Decimal = Math.Abs(lastClose - stLine)
                 Dim rawTicks As Integer = CInt(Math.Round(rawDist / fc.PxTickSize))
@@ -1390,14 +1425,9 @@ Namespace TopStepTrader.UI.ViewModels
                     minTicks = CInt(Math.Ceiling(fc.PxMinStopDollars / fc.PxTickValue))
                 End If
                 stopTicks = Math.Max(rawTicks, minTicks)
-                Dim tpMult As Decimal = ParseTpMultiple()
-                If tpMult > 0D Then
-                    tpTicks = CInt(Math.Round(stopTicks.Value * tpMult))
-                End If
             End If
-            _logger.LogInformation("ST+ bracket for {Contract}: SL={SL} ticks, TP={TP} ticks (lastClose={Close}, stLine={St})",
+            _logger.LogInformation("ST+ bracket for {Contract}: SL={SL} ticks (flip-only; no hard TP) lastClose={Close}, stLine={St}",
                                    contractId, If(stopTicks.HasValue, stopTicks.Value.ToString(), "none"),
-                                   If(tpTicks.HasValue, tpTicks.Value.ToString(), "none"),
                                    lastClose, stLine)
 
             ' ── AI pre-trade sense check (gated by IsAiEnabled toggle) ─────────────
@@ -1431,26 +1461,17 @@ Namespace TopStepTrader.UI.ViewModels
                     Catch
                     End Try
 
-                    Dim isFlipOnly As Boolean = _selectedTpMultiple = "None / flip only"
-                    Dim exitDesc As String
-                    If isFlipOnly Then
-                        exitDesc = $"SuperTrend-flip exit — no fixed TP bracket; position closed when SuperTrend reverses direction. " &
-                                   $"SL is placed at the current SuperTrend line ({If(stopTicks.HasValue, $"{stopTicks.Value} ticks", "distance TBD")} from entry). " &
-                                   "This is a valid risk-managed strategy."
-                    Else
-                        ' SL = distance from entry to SuperTrend line in ticks; TP = multiple of that distance.
-                        ' Expressed as ticks because ST+ uses a fixed line distance, not ATR multiples.
-                        exitDesc = $"SuperTrend+ bracket — SL: {If(stopTicks.HasValue, $"{stopTicks.Value} ticks from entry (ST line at {stLine:F2})", "TBD")}; " &
-                                   $"TP: {If(tpTicks.HasValue, $"{tpTicks.Value} ticks ({_selectedTpMultiple} of SL distance)", "none (flip-only)")}. " &
-                                   "Brackets are valid and defined; risk is fully managed."
-                    End If
+                    Dim exitDesc As String = $"SuperTrend+ flip-only exit — no hard TP bracket. " &
+                                             $"SL placed at SuperTrend line ({If(stopTicks.HasValue, $"{stopTicks.Value} ticks", "TBD")} from entry at {stLine:F2}). " &
+                                             $"Persona: {_activePersona} (RR target {PersonaRrRatio:F2}R, MinADX {PersonaMinAdx:F0}). " &
+                                             "Position managed via phased stop ratcheting and 9-signal degradation monitor."
                     Dim ctx As New PreTradeContext With {
                         .ContractId = contractId,
                         .ContractDescription = contractId,
                         .Side = side,
                         .Price = lastClose,
                         .AdxValue = 0F,
-                        .TpMultiple = ParseTpMultiple(),
+                        .TpMultiple = 0D,
                         .UtcNow = DateTimeOffset.UtcNow,
                         .StrategyName = "SuperTrend+ Autopilot",
                         .ExitStrategyDescription = exitDesc
@@ -1503,8 +1524,8 @@ Namespace TopStepTrader.UI.ViewModels
                 Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
                                                         s.SlotIndex < slot.SlotIndex AndAlso
                                                         String.Equals(s.Instrument, contractId, StringComparison.OrdinalIgnoreCase))
-            _logger.LogDebug("ST+ FireEntry {Contract} slot={Slot} isPrimary={IsPrimary} stopTicks={Stop} tpTicks={TP} side={Side}",
-                             contractId, slot.SlotIndex, isPrimary, stopTicks, tpTicks, oSide)
+            _logger.LogDebug("ST+ FireEntry {Contract} slot={Slot} isPrimary={IsPrimary} stopTicks={Stop} side={Side}",
+                             contractId, slot.SlotIndex, isPrimary, stopTicks, oSide)
             Dim order As New Order With {
                 .AccountId = slot.AccountId,
                 .ContractId = contractId,
@@ -1512,7 +1533,7 @@ Namespace TopStepTrader.UI.ViewModels
                 .Quantity = slot.Contracts,
                 .OrderType = OrderType.Market,
                 .InitialStopTicks = If(isPrimary, stopTicks, Nothing),
-                .InitialTakeProfitTicks = If(isPrimary, tpTicks, Nothing)
+                .InitialTakeProfitTicks = Nothing
             }
             Dim placed As Order = Nothing
             Try
@@ -1648,20 +1669,6 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
                 If snapshot.OpenRate <> 0D AndAlso slot.EntryPrice = 0D Then
                     slot.EntryPrice = snapshot.OpenRate
-                    If slot.TakeProfitPrice = 0D Then
-                        Dim fc2 = FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
-                        If fc2 IsNot Nothing AndAlso fc2.PxTickSize > 0D Then
-                            Dim rawDist = Math.Abs(slot.EntryPrice - slot.StopPrice)
-                            Dim stopTicks2 = CInt(Math.Round(rawDist / fc2.PxTickSize))
-                            Dim tpMult2 = ParseTpMultiple()
-                            If tpMult2 > 0D Then
-                                Dim tpTicks2 = CInt(Math.Round(CDec(stopTicks2) * tpMult2))
-                                slot.TakeProfitPrice = If(slot.Side = "Buy",
-                                    slot.EntryPrice + tpTicks2 * fc2.PxTickSize,
-                                    slot.EntryPrice - tpTicks2 * fc2.PxTickSize)
-                            End If
-                        End If
-                    End If
                 End If
 
                 ' Use snapshot P&L as a fallback; will be overridden below once bar close is available.
@@ -2031,9 +2038,8 @@ Namespace TopStepTrader.UI.ViewModels
                             box.AiVerdict = result.Verdict
                             box.AiExplanation = result.Explanation
                             box.AiSuggestedAction = result.SuggestedAction
-                            LastAiCheckText = String.Format("{0:HH:mm:ss}  {1}  {2}", DateTime.Now, slot.Instrument, result.Verdict)
+                            AddAiLogEntry(slot.Instrument, $"Mid-trade: {result.Verdict} — {result.SuggestedAction}")
                         End Sub)
-                    AddAiLogEntry(slot.Instrument, $"Mid-trade: {result.Verdict} — {result.SuggestedAction}")
                 End Using
             Catch ex As Exception
                 _logger.LogWarning(ex, "ST+ mid-trade AI check error for {Contract}", slot.Instrument)

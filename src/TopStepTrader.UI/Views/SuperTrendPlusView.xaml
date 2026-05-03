@@ -147,12 +147,10 @@
                                 <StackPanel>
                                     <TextBlock Text="&#x2699;&#xFE0F;  Configuration" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
                                     <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,4">All settings are controlled from the configuration panel:</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Maximum slots (1-3)</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Contracts per slot</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  ADX thresholds for each slot band</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Take profit multiple (reward:risk)</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  SuperTrend multiplier</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,0">&#x2022;  Chart timeframe</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Persona (Lewis / Damian / Joe) — sets entry ADX gate, SuperTrend multiplier, and RR target</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Chart timeframe (5min / 15min / 1hr)</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Entry mode (Confirmed / Early multi-signal)</TextBlock>
+                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,0">&#x2022;  AI pre-trade sense-check (on/off)</TextBlock>
                                 </StackPanel>
                             </Border>
 
@@ -165,13 +163,9 @@
                     BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,2">
                 <StackPanel>
 
-                    <!-- Row 1: Account, Timeframe, Entry Mode, TP, ST -->
+                    <!-- Row 1: Account, Timeframe, Entry Mode -->
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="16"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="16"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="16"/>
                             <ColumnDefinition Width="Auto"/>
@@ -199,54 +193,98 @@
                                          IsChecked="{Binding UseEarlyMode}"
                                          Foreground="Gold" FontSize="11" Margin="0,0,0,0"/>
                         </StackPanel>
-
-                        <!-- TP Multiple -->
-                        <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="TP:" Foreground="{StaticResource TextSecondaryBrush}"
-                                       FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                            <ComboBox ItemsSource="{Binding TpMultiples}"
-                                      SelectedItem="{Binding SelectedTpMultiple}"
-                                      Width="Auto" MinWidth="60" VerticalAlignment="Center"
-                                      ToolTip="Take-Profit multiple. The bot places a TP order at this multiple of initial risk (R). E.g. 2× means TP is twice the distance of your stop. 'None / flip only' means the position exits only on a SuperTrend flip or degradation signal.">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" MaxWidth="140"/>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                        </StackPanel>
-
-                        <!-- ST Multiplier -->
-                        <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="ST&#xD7;:" Foreground="{StaticResource TextSecondaryBrush}"
-                                       FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                            <ComboBox ItemsSource="{Binding StMultipliers}"
-                                      SelectedItem="{Binding StMultiplier}"
-                                      Width="60" VerticalAlignment="Center"
-                                      ToolTip="SuperTrend ATR multiplier. A higher value makes the SuperTrend band wider, resulting in fewer but more reliable signals and a larger initial stop. Lower values give tighter, more responsive signals but increase the chance of whipsaws."/>
-                        </StackPanel>
                     </Grid>
 
-                    <!-- Row 2: Start/Stop, AI toggle, AI summary, status -->
+                    <!-- Row 2: Persona buttons, AI toggle, Start/Stop, status -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="12"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Start / Stop button -->
+                        <!-- Lewis persona button -->
                         <Button Grid.Column="0"
-                                Content="{Binding StartStopLabel}"
-                                Command="{Binding StartStopCommand}"
-                                Style="{StaticResource PrimaryButtonStyle}"
-                                Padding="14,6" VerticalAlignment="Center"/>
+                                Content="Lewis"
+                                Command="{Binding SelectLewisCommand}"
+                                Padding="12,6" VerticalAlignment="Center"
+                                ToolTip="Risk-averse: MinADX 40, ST×3.5, RR 0.75">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                    <Setter Property="Background" Value="#2A3A5A"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="#3A5A8A"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsLewisSelected}" Value="True">
+                                            <Setter Property="Background" Value="#1565C0"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="BorderBrush" Value="#42A5F5"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+
+                        <!-- Damian persona button -->
+                        <Button Grid.Column="2"
+                                Content="Damian"
+                                Command="{Binding SelectDamianCommand}"
+                                Padding="12,6" VerticalAlignment="Center"
+                                ToolTip="Balanced: MinADX 30, ST×3.0, RR 1.5">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                    <Setter Property="Background" Value="#2A3A5A"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="#3A5A8A"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsDamianSelected}" Value="True">
+                                            <Setter Property="Background" Value="#1565C0"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="BorderBrush" Value="#42A5F5"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+
+                        <!-- Joe persona button -->
+                        <Button Grid.Column="4"
+                                Content="Joe"
+                                Command="{Binding SelectJoeCommand}"
+                                Padding="12,6" VerticalAlignment="Center"
+                                ToolTip="Reward-seeking: MinADX 20, ST×2.5, RR 2.0">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                    <Setter Property="Background" Value="#2A3A5A"/>
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="BorderBrush" Value="#3A5A8A"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsJoeSelected}" Value="True">
+                                            <Setter Property="Background" Value="#1565C0"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="BorderBrush" Value="#42A5F5"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
 
                         <!-- AI On/Off toggle -->
-                        <ToggleButton Grid.Column="2"
+                        <ToggleButton Grid.Column="6"
                                       IsChecked="{Binding IsAiEnabled, Mode=TwoWay}"
                                       ToolTip="Claude Haiku AI sense-check before each order. Resets to Off on restart."
                                       Padding="10,6" VerticalAlignment="Center">
@@ -298,15 +336,15 @@
                             </StackPanel>
                         </ToggleButton>
 
-                        <!-- Last AI summary label -->
-                        <TextBlock Grid.Column="4"
-                                   Text="{Binding LastAiCheckText}"
-                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                   FontSize="11" TextWrapping="Wrap"
-                                   VerticalAlignment="Center" Margin="4,0,0,0"/>
+                        <!-- Start / Stop button -->
+                        <Button Grid.Column="8"
+                                Content="{Binding StartStopLabel}"
+                                Command="{Binding StartStopCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Padding="14,6" VerticalAlignment="Center"/>
 
                         <!-- Status badge -->
-                        <Border Grid.Column="5"
+                        <Border Grid.Column="10"
                                 Background="{Binding StatusBackground}"
                                 CornerRadius="4" Margin="8,0,0,0"
                                 Visibility="{Binding StatusVisibility}"

@@ -5,7 +5,6 @@ Namespace TopStepTrader.Data.Entities
 
     ''' <summary>
     ''' Singleton row (id=1) persisting SuperTrend+ Autopilot configuration across restarts.
-    ''' Stores both the SuperTrendPlusConfig POCO properties and the ViewModel UI selections.
     ''' </summary>
     <Table("SuperTrendPlusConfig")>
     Public Class SuperTrendPlusConfigEntity
@@ -14,14 +13,12 @@ Namespace TopStepTrader.Data.Entities
         <DatabaseGenerated(DatabaseGeneratedOption.None)>
         Public Property Id As Integer = 1
 
-        ' ── ViewModel UI dropdown selections ───────────────────────────────
-        Public Property SelectedTpMultiple As String = "2×"
-        Public Property StMultiplier As Double = 3.0
+        ' ── Persona + timeframe ───────────────────────────────────��─────────
+        Public Property ActivePersona As String = "Damian"
         Public Property SelectedTimeframe As String = "15min"
 
-        ' ── Slot / instrument settings ──────────────────────────────────────
+        ' ── Slot settings ────────────────────────────��───────────────────────
         Public Property MaxSlots As Integer = 3
-        Public Property ContractsPerSlot As Integer = 1
 
         ' ── ADX entry thresholds ────────────────────────────────────────────
         Public Property AdxWeakThreshold As Single = 25.0F
