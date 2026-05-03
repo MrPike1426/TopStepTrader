@@ -1,5 +1,6 @@
 Imports Microsoft.Extensions.DependencyInjection
 Imports TopStepTrader.Core.Interfaces
+Imports TopStepTrader.Data
 Imports TopStepTrader.Data.Repositories
 Imports TopStepTrader.Services.AI
 Imports TopStepTrader.Services.Auth
@@ -21,6 +22,7 @@ Namespace TopStepTrader.Services
             ' BarRepository, SignalRepository, OrderRepository registered by AddDataServices()
             ' BacktestRepository not yet registered there — add it here as Scoped
             services.AddScoped(Of BacktestRepository)()
+            services.AddScoped(Of SuperTrendPlusConfigRepository)()
 
             ' ── API key store — Singleton: one file-backed store for the session lifetime
             services.AddSingleton(Of IApiKeyStore, ApiKeyStore)()

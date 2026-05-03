@@ -10,6 +10,7 @@ Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.ML.Features
+Imports TopStepTrader.Data
 Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.Trading
 Imports TopStepTrader.UI.ViewModels.Base
@@ -195,6 +196,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _contractResolver As Core.Interfaces.IContractResolutionService
         Private ReadOnly _logger As ILogger(Of SuperTrendPlusViewModel)
         Private ReadOnly _claudeService As IClaudeReviewService
+        Private ReadOnly _configRepo As SuperTrendPlusConfigRepository
 
         Private _timer As Timer
         Private ReadOnly _timerLock As New Object()
@@ -283,7 +285,9 @@ Namespace TopStepTrader.UI.ViewModels
                 Return _selectedTpMultiple
             End Get
             Set(value As String)
-                SetProperty(_selectedTpMultiple, value)
+                If SetProperty(_selectedTpMultiple, value) Then
+                    SaveConfigFireAndForget()
+                End If
             End Set
         End Property
 
@@ -295,7 +299,10 @@ Namespace TopStepTrader.UI.ViewModels
                 Return _stMultiplier
             End Get
             Set(value As Double)
-                SetProperty(_stMultiplier, value)
+                If SetProperty(_stMultiplier, value) Then
+                    Config.StMultiplier = value
+                    SaveConfigFireAndForget()
+                End If
             End Set
         End Property
 
@@ -317,6 +324,7 @@ Namespace TopStepTrader.UI.ViewModels
             Set(value As String)
                 If SetProperty(_selectedTimeframe, value) Then
                     NotifyPropertyChanged(NameOf(StatusText))
+                    SaveConfigFireAndForget()
                 End If
             End Set
         End Property
@@ -401,7 +409,8 @@ Namespace TopStepTrader.UI.ViewModels
                        accountService As IAccountService,
                        contractResolver As Core.Interfaces.IContractResolutionService,
                        claudeService As IClaudeReviewService,
-                       logger As ILogger(Of SuperTrendPlusViewModel))
+                       logger As ILogger(Of SuperTrendPlusViewModel),
+                       Optional configRepo As SuperTrendPlusConfigRepository = Nothing)
             _barService = barService
             _orderService = orderService
             _session = session
@@ -410,6 +419,7 @@ Namespace TopStepTrader.UI.ViewModels
             _contractResolver = contractResolver
             _claudeService = claudeService
             _logger = logger
+            _configRepo = configRepo
             Config = New SuperTrendPlusConfig()
             _slotManager = New SlotManager(Config)
             _exitEngine = New ExitSignalEngine(
@@ -453,6 +463,14 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Public Async Sub LoadDataAsync()
+            If _configRepo IsNot Nothing Then
+                Try
+                    Dim entity = Await _configRepo.LoadAsync()
+                    Application.Current?.Dispatcher?.Invoke(Sub() ApplyConfigEntity(entity))
+                Catch
+                End Try
+            End If
+
             Try
                 Dim accountList = Await _accountService.GetActiveAccountsAsync()
                 Application.Current?.Dispatcher?.Invoke(
@@ -475,6 +493,70 @@ Namespace TopStepTrader.UI.ViewModels
                     End Sub)
             Catch
             End Try
+        End Sub
+
+        Private Sub ApplyConfigEntity(entity As Data.Entities.SuperTrendPlusConfigEntity)
+            ' UI selections — update backing fields directly to avoid triggering save during load
+            _selectedTpMultiple = entity.SelectedTpMultiple
+            _stMultiplier = entity.StMultiplier
+            _selectedTimeframe = entity.SelectedTimeframe
+            NotifyPropertyChanged(NameOf(SelectedTpMultiple))
+            NotifyPropertyChanged(NameOf(StMultiplier))
+            NotifyPropertyChanged(NameOf(SelectedTimeframe))
+
+            ' Config POCO properties
+            Config.MaxSlots              = entity.MaxSlots
+            Config.ContractsPerSlot      = entity.ContractsPerSlot
+            Config.AdxWeakThreshold      = entity.AdxWeakThreshold
+            Config.AdxModerateThreshold  = entity.AdxModerateThreshold
+            Config.AdxStrongThreshold    = entity.AdxStrongThreshold
+            Config.StMultiplier          = entity.StMultiplier
+            Config.BreakevenTriggerR     = entity.BreakevenTriggerR
+            Config.ProfitLockTriggerR    = entity.ProfitLockTriggerR
+            Config.ProfitLockOffsetR     = entity.ProfitLockOffsetR
+            Config.TrailAtrMultiple      = entity.TrailAtrMultiple
+            Config.ProfitTrailTriggerR   = entity.ProfitTrailTriggerR
+            Config.HarvestTriggerR       = entity.HarvestTriggerR
+            Config.HarvestLockR          = entity.HarvestLockR
+            Config.FreeRideTriggerR      = entity.FreeRideTriggerR
+            Config.FreeRideLockR         = entity.FreeRideLockR
+            Config.WarningScoreThreshold = entity.WarningScoreThreshold
+            Config.ExitingScoreThreshold = entity.ExitingScoreThreshold
+        End Sub
+
+        Private Function BuildConfigEntity() As Data.Entities.SuperTrendPlusConfigEntity
+            Return New Data.Entities.SuperTrendPlusConfigEntity With {
+                .SelectedTpMultiple    = _selectedTpMultiple,
+                .StMultiplier          = _stMultiplier,
+                .SelectedTimeframe     = _selectedTimeframe,
+                .MaxSlots              = Config.MaxSlots,
+                .ContractsPerSlot      = Config.ContractsPerSlot,
+                .AdxWeakThreshold      = Config.AdxWeakThreshold,
+                .AdxModerateThreshold  = Config.AdxModerateThreshold,
+                .AdxStrongThreshold    = Config.AdxStrongThreshold,
+                .BreakevenTriggerR     = Config.BreakevenTriggerR,
+                .ProfitLockTriggerR    = Config.ProfitLockTriggerR,
+                .ProfitLockOffsetR     = Config.ProfitLockOffsetR,
+                .TrailAtrMultiple      = Config.TrailAtrMultiple,
+                .ProfitTrailTriggerR   = Config.ProfitTrailTriggerR,
+                .HarvestTriggerR       = Config.HarvestTriggerR,
+                .HarvestLockR          = Config.HarvestLockR,
+                .FreeRideTriggerR      = Config.FreeRideTriggerR,
+                .FreeRideLockR         = Config.FreeRideLockR,
+                .WarningScoreThreshold = Config.WarningScoreThreshold,
+                .ExitingScoreThreshold = Config.ExitingScoreThreshold
+            }
+        End Function
+
+        Private Sub SaveConfigFireAndForget()
+            If _configRepo Is Nothing Then Return
+            Dim entity = BuildConfigEntity()
+            Task.Run(Async Function()
+                         Try
+                             Await _configRepo.SaveAsync(entity)
+                         Catch
+                         End Try
+                     End Function)
         End Sub
 
         Private Sub StartMonitoring()

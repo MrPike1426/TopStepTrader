@@ -24,6 +24,7 @@ Namespace TopStepTrader.Data
         Public Property BalanceHistory As DbSet(Of BalanceHistoryEntity)
         Public Property PersonaSettings As DbSet(Of PersonaSettingsEntity)
         Public Property ContractCache As DbSet(Of ContractCacheEntity)
+        Public Property SuperTrendPlusConfig As DbSet(Of SuperTrendPlusConfigEntity)
 
         Protected Overrides Sub OnModelCreating(modelBuilder As ModelBuilder)
             MyBase.OnModelCreating(modelBuilder)
@@ -94,6 +95,11 @@ Namespace TopStepTrader.Data
                 .HasIndex(Function(p) p.Name) _
                 .IsUnique() _
                 .HasDatabaseName("UQ_PersonaSettings_Name")
+
+            ' SuperTrendPlusConfig — singleton row (id=1), no auto-increment
+            modelBuilder.Entity(Of SuperTrendPlusConfigEntity)() _
+                .ToTable("SuperTrendPlusConfig") _
+                .HasKey(Function(c) c.Id)
 
         End Sub
 
@@ -405,6 +411,43 @@ Namespace TopStepTrader.Data
                 Next
             Finally
                 If mustClose5 Then conn.Close()
+            End Try
+
+            ' ── FEAT-34: SuperTrend+ config persistence ──────────────────────────
+            Dim mustClose6 = (conn.State <> ConnectionState.Open)
+            If mustClose6 Then conn.Open()
+            Try
+                Dim stpDdl = New String() {
+                    "CREATE TABLE IF NOT EXISTS ""SuperTrendPlusConfig"" (
+                         ""Id""                     INTEGER NOT NULL PRIMARY KEY,
+                         ""SelectedTpMultiple""      TEXT    NOT NULL DEFAULT '2×',
+                         ""StMultiplier""            REAL    NOT NULL DEFAULT 3.0,
+                         ""SelectedTimeframe""       TEXT    NOT NULL DEFAULT '15min',
+                         ""MaxSlots""                INTEGER NOT NULL DEFAULT 3,
+                         ""ContractsPerSlot""        INTEGER NOT NULL DEFAULT 1,
+                         ""AdxWeakThreshold""        REAL    NOT NULL DEFAULT 25.0,
+                         ""AdxModerateThreshold""    REAL    NOT NULL DEFAULT 40.0,
+                         ""AdxStrongThreshold""      REAL    NOT NULL DEFAULT 60.0,
+                         ""BreakevenTriggerR""       TEXT    NOT NULL DEFAULT '0.5',
+                         ""ProfitLockTriggerR""      TEXT    NOT NULL DEFAULT '1.0',
+                         ""ProfitLockOffsetR""       TEXT    NOT NULL DEFAULT '0.3',
+                         ""TrailAtrMultiple""        TEXT    NOT NULL DEFAULT '2.0',
+                         ""ProfitTrailTriggerR""     TEXT    NOT NULL DEFAULT '1.5',
+                         ""HarvestTriggerR""         TEXT    NOT NULL DEFAULT '2.0',
+                         ""HarvestLockR""            TEXT    NOT NULL DEFAULT '1.5',
+                         ""FreeRideTriggerR""        TEXT    NOT NULL DEFAULT '3.0',
+                         ""FreeRideLockR""           TEXT    NOT NULL DEFAULT '2.0',
+                         ""WarningScoreThreshold""   INTEGER NOT NULL DEFAULT 3,
+                         ""ExitingScoreThreshold""   INTEGER NOT NULL DEFAULT 6)"
+                }
+                For Each ddl In stpDdl
+                    Using cmd = conn.CreateCommand()
+                        cmd.CommandText = ddl
+                        cmd.ExecuteNonQuery()
+                    End Using
+                Next
+            Finally
+                If mustClose6 Then conn.Close()
             End Try
         End Sub
 
