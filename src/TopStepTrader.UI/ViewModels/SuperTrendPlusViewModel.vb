@@ -1717,6 +1717,10 @@ Namespace TopStepTrader.UI.ViewModels
                         Dim ticks As Decimal = priceDiff / fc3.PxTickSize
                         latestPnl = Math.Round(ticks * fc3.PxTickValue * slot.Contracts, 2)
                         slot.UnrealizedPnl = latestPnl
+                        If slot.InitialRiskDollars = 0D AndAlso slot.InitialRisk <> 0D Then
+                            Dim riskTicks = slot.InitialRisk / fc3.PxTickSize
+                            slot.InitialRiskDollars = Math.Round(riskTicks * fc3.PxTickValue * slot.Contracts, 2)
+                        End If
                     End If
                 End If
 
@@ -1908,6 +1912,8 @@ Namespace TopStepTrader.UI.ViewModels
                         box.StopPhaseLabel = String.Empty
                         box.SlotLabel = String.Empty
                         box.PnlBorderBrush = Brushes.Gray
+                        box.IsRrAchieved = False
+                        box.TargetPnlLine = String.Empty
                         box.ClearAiResult()
                     End If
                 End Sub)
@@ -1944,6 +1950,14 @@ Namespace TopStepTrader.UI.ViewModels
             box.PnlBrush = Brushes.White
             box.PnlBorderBrush = If(pnl > 0D, Brushes.LimeGreen, If(pnl < 0D, Brushes.Red, Brushes.Gray))
             box.StopPhaseLabel = PhaseLabel(slot.StopPhase, Config)
+            Dim targetPnl As Decimal = 0D
+            If slot.InitialRiskDollars > 0D Then
+                targetPnl = Math.Round(slot.InitialRiskDollars * PersonaRrRatio, 2)
+                box.TargetPnlLine = String.Format("Target: ${0:F2}", targetPnl)
+            Else
+                box.TargetPnlLine = String.Empty
+            End If
+            box.IsRrAchieved = (targetPnl > 0D AndAlso pnl >= targetPnl)
             If pnlChanged AndAlso Not isFirstPopulation Then
                 Task.Run(Async Function() As Task
                              Await box.FlashPnlTextAsync()

@@ -50,6 +50,9 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>Initial risk in price — |entry - stop| at the moment of entry confirmation.</summary>
         Public Property InitialRisk As Decimal
 
+        ''' <summary>Dollar value of 1R — InitialRisk converted to USD once entry and stop are both confirmed.</summary>
+        Public Property InitialRiskDollars As Decimal
+
         ''' <summary>Current phased stop phase. Only advances forward.</summary>
         Public Property StopPhase As StopPhase = StopPhase.Initial
 

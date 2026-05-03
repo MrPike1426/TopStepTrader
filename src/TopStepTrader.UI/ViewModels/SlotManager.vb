@@ -142,7 +142,8 @@ Namespace TopStepTrader.UI.ViewModels
                 s.EntryReason  = String.Empty
                 s.EntryTime    = DateTime.MinValue
                 s.EntryAtr     = 0D
-                s.InitialRisk  = 0D
+                s.InitialRisk        = 0D
+                s.InitialRiskDollars = 0D
                 s.StopPhase          = Core.Enums.StopPhase.Initial
                 s.ConsecutiveExitBars = 0
                 s.IsEntryInFlight    = False

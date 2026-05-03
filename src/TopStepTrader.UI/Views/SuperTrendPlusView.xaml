@@ -74,85 +74,268 @@
                         </Style.Triggers>
                     </Style>
                 </Border.Style>
-                <Border Padding="16,4,16,14">
+                <Border Padding="16,6,16,16">
                     <StackPanel>
 
-                            <!-- Monitoring -->
-                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
-                                <StackPanel>
-                                    <TextBlock Text="&#x1F4E1;  Monitoring" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">SuperTrend+ scans your watchlist instruments every 15 seconds on the selected timeframe. For each instrument it computes the SuperTrend indicator, ADX (Average Directional Index), and the Directional Indicators (+DI and -DI) to assess trend direction and strength.</TextBlock>
+                        <!-- ── Personas ── -->
+                        <Border Background="#16213A" CornerRadius="6" Padding="14,10" Margin="0,4,0,8">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="&#x1F464;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="Trading Personas" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Text="  —  choose before starting" Foreground="#607080" FontSize="11" VerticalAlignment="Center"/>
                                 </StackPanel>
-                            </Border>
 
-                            <!-- Signal Detection -->
-                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
-                                <StackPanel>
-                                    <TextBlock Text="&#x1F50D;  Signal Detection" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,4">A trade signal is generated when:</TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  The SuperTrend line is bullish (price above) or bearish (price below)</TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  The Directional Indicators confirm the direction (+DI &gt; -DI for long, -DI &gt; +DI for short)</TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,0">&#x2022;  ADX is at or above the minimum threshold (default: 25), indicating an active trend</TextBlock>
-                                </StackPanel>
-                            </Border>
+                                <!-- Three persona cards -->
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="8"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
 
-                            <!-- Position Slots -->
-                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
-                                <StackPanel>
-                                    <TextBlock Text="&#x1F4CA;  Position Slots" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,6">SuperTrend+ manages up to three Position Slots per instrument. The number of slots opened is determined by trend strength. Each new slot opens on the next closed bar after the ADX band increases. No two slots open on the same bar. Slots are not opened if the trend is showing signs of deterioration.</TextBlock>
-                                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Grid.Column="0" Background="#1A2440" CornerRadius="4" Padding="8,6" Margin="0,0,4,0"><StackPanel><TextBlock Text="ADX Range" Foreground="{StaticResource AccentBrush}" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,3"/><TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11">25 - 39  (1 slot)</TextBlock><TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11">40 - 59  (up to 2 slots)</TextBlock><TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11">60+      (up to 3 slots)</TextBlock></StackPanel></Border></Grid>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,8,0,0">Trend strength is displayed in the watchlist Strength column using a coffee scale. The level also determines how many positions (contracts) the bot places when it enters a trade:</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,4,0,2"><Run Foreground="White" FontWeight="SemiBold">L1: Decaff</Run>  — ADX 25–39. Trend is active but mild. Bot places 1 position.</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2"><Run Foreground="White" FontWeight="SemiBold">L2: Latte</Run>    — ADX 40–59. Moderate trend with decent momentum. Bot places 2 positions.</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,0"><Run Foreground="White" FontWeight="SemiBold">L3: Espresso</Run> — ADX 60+. Strong, high-conviction trend. Bot places 3 positions.</TextBlock>
-                                </StackPanel>
-                            </Border>
+                                    <!-- Lewis -->
+                                    <Border Grid.Column="0" Background="#0D1B2E" CornerRadius="5" Padding="10,8"
+                                            BorderBrush="#1565C0" BorderThickness="1,3,1,1">
+                                        <StackPanel>
+                                            <TextBlock Text="Lewis" Foreground="#42A5F5" FontSize="12" FontWeight="Bold" Margin="0,0,0,4"/>
+                                            <TextBlock Text="Risk-Averse" Foreground="#90CAF9" FontSize="10" Margin="0,0,0,6"/>
+                                            <TextBlock Foreground="#8090A0" FontSize="10" LineHeight="16">
+                                                <Run Foreground="White" FontWeight="SemiBold">Min ADX</Run>  40+&#xA;<Run Foreground="White" FontWeight="SemiBold">ST mult</Run>    3.5×&#xA;<Run Foreground="White" FontWeight="SemiBold">RR target</Run>  0.75&#xA;<Run Foreground="White" FontWeight="SemiBold">Entries</Run>    Latte / Espresso
+                                            </TextBlock>
+                                            <Border Background="#0A1520" CornerRadius="3" Padding="6,4" Margin="0,6,0,0">
+                                                <TextBlock TextWrapping="Wrap" Foreground="#607080" FontSize="10" LineHeight="15">Fewer, higher-conviction entries. Tight selectivity with capital preservation as the primary goal.</TextBlock>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
 
-                            <!-- Trade Management - Stop Phases -->
-                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
-                                <StackPanel>
-                                    <TextBlock Text="&#x1F6E1;&#xFE0F;  Trade Management - Stop Phases" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,6">Each open slot advances through six stop phases as profit grows. The stop never retreats. R = initial risk (entry price minus stop at entry).</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">Initial:</Run>     Entry → 0.5R profit  |  Stop: SuperTrend line (ratchets with trend)</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">Breakeven:</Run>   0.5R profit  |  Stop: Exact entry price (risk eliminated)</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">ProfitLock:</Run>  1R profit    |  Stop: Entry + 0.3R (partial profit banked)</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">ProfitTrail:</Run> 1.5R profit  |  Stop: ATR-based trailing stop (rides the move)</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">Harvest:</Run>     2R profit    |  Stop: Locked at entry + 1.5R</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17"><Run Foreground="White" FontWeight="SemiBold">FreeRide:</Run>    3R profit    |  Stop: Locked at entry + 2R (let it run)</TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,6,0,0">All thresholds are configurable in <Run Foreground="{StaticResource AccentBrush}">SuperTrendPlusConfig</Run>.</TextBlock>
-                                </StackPanel>
-                            </Border>
+                                    <!-- Damian -->
+                                    <Border Grid.Column="2" Background="#0D1B2E" CornerRadius="5" Padding="10,8"
+                                            BorderBrush="#2E7D32" BorderThickness="1,3,1,1">
+                                        <StackPanel>
+                                            <TextBlock Text="Damian" Foreground="#66BB6A" FontSize="12" FontWeight="Bold" Margin="0,0,0,4"/>
+                                            <TextBlock Text="Balanced  (default)" Foreground="#A5D6A7" FontSize="10" Margin="0,0,0,6"/>
+                                            <TextBlock Foreground="#8090A0" FontSize="10" LineHeight="16">
+                                                <Run Foreground="White" FontWeight="SemiBold">Min ADX</Run>  30+&#xA;<Run Foreground="White" FontWeight="SemiBold">ST mult</Run>    3.0×&#xA;<Run Foreground="White" FontWeight="SemiBold">RR target</Run>  1.5&#xA;<Run Foreground="White" FontWeight="SemiBold">Entries</Run>    All bands ≥ 30
+                                            </TextBlock>
+                                            <Border Background="#0A1520" CornerRadius="3" Padding="6,4" Margin="0,6,0,0">
+                                                <TextBlock TextWrapping="Wrap" Foreground="#607080" FontSize="10" LineHeight="15">Balanced mix of frequency and quality. Momentum and continuation setups across all trend bands.</TextBlock>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
 
-                            <!-- Intelligent Exit - Degradation Signals -->
-                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,8">
-                                <StackPanel>
-                                    <TextBlock Text="&#x26A0;&#xFE0F;  Intelligent Exit - Degradation Signals" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,6">SuperTrend+ monitors nine degradation signals every bar. Each signal contributes a weighted score. When the combined score reaches a threshold, the slot exits.</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E1 (8pts) SuperTrend Flip — Trend has reversed — immediate exit</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E2 (3pts) Momentum Slowing — Price converging toward ST line over 3 bars at rate &gt; 0.5×ATR</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E3 (2pts) ADX Declining — ADX falling for 2 bars and 10+ points below entry ADX</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E4 (2pts) DI Compression — DI spread narrowed ≥15% in one bar to below ADX-scaled ceiling</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E5 (4pts) DI Crossover — +DI/-DI crossed against trade direction this bar</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E6 (2pts) Rejection Bar — Upper/lower wick &gt; 2× body and close past bar midpoint</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E7 (1pt)  ATR Contraction — ATR falling for 2 bars and below 80% of entry ATR</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E8 (2pts) VWAP Cross — Price crossed below VWAP (long) or above VWAP (short)</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17">E9 (3pts) RSI Hidden Divergence — Price making higher high but RSI lower (long); or lower low but RSI higher (short)</TextBlock>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,6,0,0"><Run Foreground="Gold" FontWeight="SemiBold">Amber (Warning, score 3–5)</Run> = degradation building, no new slots. <Run Foreground="OrangeRed" FontWeight="SemiBold">Red (Exiting, score 6+)</Run> = exit triggered on next closed bar.</TextBlock>
-                                </StackPanel>
-                            </Border>
+                                    <!-- Joe -->
+                                    <Border Grid.Column="4" Background="#0D1B2E" CornerRadius="5" Padding="10,8"
+                                            BorderBrush="#E65100" BorderThickness="1,3,1,1">
+                                        <StackPanel>
+                                            <TextBlock Text="Joe" Foreground="#FFA726" FontSize="12" FontWeight="Bold" Margin="0,0,0,4"/>
+                                            <TextBlock Text="Reward-Seeking" Foreground="#FFCC80" FontSize="10" Margin="0,0,0,6"/>
+                                            <TextBlock Foreground="#8090A0" FontSize="10" LineHeight="16">
+                                                <Run Foreground="White" FontWeight="SemiBold">Min ADX</Run>  20+&#xA;<Run Foreground="White" FontWeight="SemiBold">ST mult</Run>    2.5×&#xA;<Run Foreground="White" FontWeight="SemiBold">RR target</Run>  2.0&#xA;<Run Foreground="White" FontWeight="SemiBold">Entries</Run>    All bands ≥ 20
+                                            </TextBlock>
+                                            <Border Background="#0A1520" CornerRadius="3" Padding="6,4" Margin="0,6,0,0">
+                                                <TextBlock TextWrapping="Wrap" Foreground="#607080" FontSize="10" LineHeight="15">Higher frequency, wider signals. Accepts more losses in exchange for larger winners. Precise entries critical.</TextBlock>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
 
-                            <!-- Configuration -->
-                            <Border Background="#16213A" CornerRadius="5" Padding="12,8" Margin="0,0,0,0">
-                                <StackPanel>
-                                    <TextBlock Text="&#x2699;&#xFE0F;  Configuration" Foreground="White" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="0,0,0,4">All settings are controlled from the configuration panel:</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Persona (Lewis / Damian / Joe) — sets entry ADX gate, SuperTrend multiplier, and RR target</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Chart timeframe (5min / 15min / 1hr)</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,2">&#x2022;  Entry mode (Confirmed / Early multi-signal)</TextBlock>
-                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" LineHeight="17" Margin="8,0,0,0">&#x2022;  AI pre-trade sense-check (on/off)</TextBlock>
+                                <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#607080" FontSize="10" LineHeight="15">
+                                    <Run Foreground="#FFD54F" FontWeight="SemiBold">RR Target</Run> is a visual milestone only — no hard take-profit bracket is placed. The position runs until the trend weakens, managed entirely by the phased stop system. When the RR target is reached the slot title turns gold.
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── Monitoring ── -->
+                        <Border Background="#16213A" CornerRadius="6" Padding="14,10" Margin="0,0,0,8">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="&#x1F4E1;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="Monitoring" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
                                 </StackPanel>
-                            </Border>
+                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="11" LineHeight="17">Every 15 seconds SuperTrend+ scans all watchlist instruments on the selected timeframe. For each it computes the SuperTrend line, ADX, and Directional Indicators (+DI / -DI) to classify trend direction and strength. The watchlist updates live; the three slot boxes track any open positions.</TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── Signal Detection ── -->
+                        <Border Background="#16213A" CornerRadius="6" Padding="14,10" Margin="0,0,0,8">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="&#x1F50D;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="Signal Detection" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="11" LineHeight="17" Margin="0,0,0,6">A trade signal qualifies when all three conditions are met:</TextBlock>
+                                <Border Background="#1A2440" CornerRadius="4" Padding="10,8" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Foreground="#8090A0" FontSize="11" LineHeight="18" Margin="0,0,0,2">
+                                            <Run Foreground="#42A5F5" FontWeight="SemiBold">&#x2460;  SuperTrend direction</Run>  — price above ST line (long) or below (short)
+                                        </TextBlock>
+                                        <TextBlock Foreground="#8090A0" FontSize="11" LineHeight="18" Margin="0,0,0,2">
+                                            <Run Foreground="#42A5F5" FontWeight="SemiBold">&#x2461;  DI alignment</Run>  — +DI &gt; −DI confirms long; −DI &gt; +DI confirms short
+                                        </TextBlock>
+                                        <TextBlock Foreground="#8090A0" FontSize="11" LineHeight="18">
+                                            <Run Foreground="#42A5F5" FontWeight="SemiBold">&#x2462;  ADX gate</Run>  — ADX at or above the active persona's minimum (Lewis 40 / Damian 30 / Joe 20)
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock TextWrapping="Wrap" Foreground="#607080" FontSize="10" LineHeight="15">In <Run Foreground="Gold" FontWeight="SemiBold">Early</Run> mode a fourth trigger is checked: multi-timeframe reversal anticipation (5min + 15min + 1hr alignment). In <Run Foreground="White" FontWeight="SemiBold">Confirmed</Run> mode only the bar-close signal is used.</TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── ADX Bands &amp; Contract Sizing ── -->
+                        <Border Background="#16213A" CornerRadius="6" Padding="14,10" Margin="0,0,0,8">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="&#x2615;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="ADX Bands &amp; Contract Sizing" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="11" LineHeight="17" Margin="0,0,0,8">The ADX value at entry determines how many contracts the bot places. Bands are fixed regardless of persona — the persona only controls which bands are reachable via its ADX gate.</TextBlock>
+
+                                <!-- Band cards -->
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="6"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Grid.Column="0" Background="#1A2440" CornerRadius="4" Padding="10,8" BorderBrush="#2A3A5A" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="L1  Decaff" Foreground="#90CAF9" FontSize="11" FontWeight="Bold" Margin="0,0,0,3"/>
+                                            <TextBlock Text="ADX 25 – 39" Foreground="#607080" FontSize="10" Margin="0,0,0,5"/>
+                                            <Border Background="#0D1520" CornerRadius="3" Padding="8,5">
+                                                <TextBlock Text="1 contract" Foreground="White" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock Text="Mild trend. Damian and Joe may enter here." Foreground="#607080" FontSize="10" LineHeight="14" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Grid.Column="2" Background="#1A2440" CornerRadius="4" Padding="10,8" BorderBrush="#1565C0" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="L2  Latte" Foreground="#42A5F5" FontSize="11" FontWeight="Bold" Margin="0,0,0,3"/>
+                                            <TextBlock Text="ADX 40 – 59" Foreground="#607080" FontSize="10" Margin="0,0,0,5"/>
+                                            <Border Background="#0D1520" CornerRadius="3" Padding="8,5">
+                                                <TextBlock Text="2 contracts" Foreground="White" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock Text="Solid momentum. All personas may enter here." Foreground="#607080" FontSize="10" LineHeight="14" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Border Grid.Column="4" Background="#1A2440" CornerRadius="4" Padding="10,8" BorderBrush="#E65100" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="L3  Espresso" Foreground="#FFA726" FontSize="11" FontWeight="Bold" Margin="0,0,0,3"/>
+                                            <TextBlock Text="ADX 60+" Foreground="#607080" FontSize="10" Margin="0,0,0,5"/>
+                                            <Border Background="#0D1520" CornerRadius="3" Padding="8,5">
+                                                <TextBlock Text="3 contracts" Foreground="White" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock Text="High-conviction trend. All personas size up here." Foreground="#607080" FontSize="10" LineHeight="14" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+
+                                <TextBlock TextWrapping="Wrap" Foreground="#607080" FontSize="10" LineHeight="15">Up to <Run Foreground="White" FontWeight="SemiBold">3 concurrent slots</Run> can be open across different instruments simultaneously. If ADX rises while a position is open, the bot scale-ins +1 contract to match the new band. If ADX falls mid-trade, exit management handles the position — contracts are never automatically reduced.</TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── Stop Phases ── -->
+                        <Border Background="#16213A" CornerRadius="6" Padding="14,10" Margin="0,0,0,8">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="Trade Management — Stop Phases" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="11" LineHeight="17" Margin="0,0,0,8">
+                                    There is <Run Foreground="White" FontWeight="SemiBold">no hard take-profit order</Run>. Every position is managed by a ratcheting stop that advances through six phases as profit grows. The stop never moves back.  <Run Foreground="#90CAF9">R = initial risk (entry price − stop at entry).</Run>
+                                </TextBlock>
+
+                                <!-- Phase timeline -->
+                                <Border Background="#1A2440" CornerRadius="4" Padding="10,8">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,4">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Phase" Foreground="#42A5F5" FontSize="10" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="1" Text="Trigger" Foreground="#42A5F5" FontSize="10" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="2" Text="Stop moves to…" Foreground="#42A5F5" FontSize="10" FontWeight="SemiBold"/>
+                                        </Grid>
+                                        <Rectangle Height="1" Fill="#2A3A5A" Margin="0,0,0,4"/>
+                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Initial"      Foreground="#8090A0" FontSize="10"/>
+                                            <TextBlock Grid.Column="1" Text="Entry"        Foreground="#607080" FontSize="10"/>
+                                            <TextBlock Grid.Column="2" Text="SuperTrend line (follows trend)"  Foreground="#8090A0" FontSize="10"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Breakeven"   Foreground="#A5D6A7" FontSize="10"/>
+                                            <TextBlock Grid.Column="1" Text="0.5R profit" Foreground="#607080" FontSize="10"/>
+                                            <TextBlock Grid.Column="2" Text="Exact entry price — risk eliminated"  Foreground="#8090A0" FontSize="10"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="ProfitLock"  Foreground="#66BB6A" FontSize="10"/>
+                                            <TextBlock Grid.Column="1" Text="1R profit"   Foreground="#607080" FontSize="10"/>
+                                            <TextBlock Grid.Column="2" Text="Entry + 0.3R — partial profit banked"  Foreground="#8090A0" FontSize="10"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="ProfitTrail" Foreground="#FFD54F" FontSize="10"/>
+                                            <TextBlock Grid.Column="1" Text="1.5R profit" Foreground="#607080" FontSize="10"/>
+                                            <TextBlock Grid.Column="2" Text="ATR-based trailing stop — rides the move"  Foreground="#8090A0" FontSize="10"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Harvest"     Foreground="#FFA726" FontSize="10"/>
+                                            <TextBlock Grid.Column="1" Text="2R profit"   Foreground="#607080" FontSize="10"/>
+                                            <TextBlock Grid.Column="2" Text="Entry + 1.5R — locked in"  Foreground="#8090A0" FontSize="10"/>
+                                        </Grid>
+                                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="FreeRide" Foreground="Gold" FontSize="10" FontWeight="Bold"/>
+                                            <TextBlock Grid.Column="1" Text="3R profit"   Foreground="#607080" FontSize="10"/>
+                                            <TextBlock Grid.Column="2" Text="Entry + 2R — house money, let it run"  Foreground="#8090A0" FontSize="10"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="#607080" FontSize="10" LineHeight="15">
+                                    <Run Foreground="#FFD54F" FontWeight="SemiBold">Gold title bar</Run> lights up on a slot when the position P&amp;L reaches the active persona's RR target — the trade is now in extra profit. The stop phases continue advancing automatically until exit.
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ── Degradation Signals ── -->
+                        <Border Background="#16213A" CornerRadius="6" Padding="14,10" Margin="0,0,0,0">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="&#x26A0;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="Gold"/>
+                                    <TextBlock Text="Intelligent Exit — Degradation Signals" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="11" LineHeight="17" Margin="0,0,0,6">Nine signals are scored every bar. When the combined score crosses a threshold the slot health changes colour and an exit is triggered.</TextBlock>
+
+                                <Border Background="#1A2440" CornerRadius="4" Padding="10,8" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Foreground="#EF9A9A" FontSize="10" LineHeight="17">E1  <Run FontWeight="SemiBold">(8 pts)</Run>  SuperTrend Flip — trend reversed — immediate exit</TextBlock>
+                                        <TextBlock Foreground="#8090A0" FontSize="10" LineHeight="17">E2  <Run FontWeight="SemiBold">(3 pts)</Run>  Momentum Slowing — price converging toward ST line &gt; 0.5×ATR over 3 bars</TextBlock>
+                                        <TextBlock Foreground="#8090A0" FontSize="10" LineHeight="17">E3  <Run FontWeight="SemiBold">(2 pts)</Run>  ADX Declining — ADX falling for 2 bars and 10+ pts below entry ADX</TextBlock>
+                                        <TextBlock Foreground="#8090A0" FontSize="10" LineHeight="17">E4  <Run FontWeight="SemiBold">(2 pts)</Run>  DI Compression — DI spread narrowed ≥15% in one bar</TextBlock>
+                                        <TextBlock Foreground="#FFCC80" FontSize="10" LineHeight="17">E5  <Run FontWeight="SemiBold">(4 pts)</Run>  DI Crossover — +DI/−DI crossed against trade direction</TextBlock>
+                                        <TextBlock Foreground="#8090A0" FontSize="10" LineHeight="17">E6  <Run FontWeight="SemiBold">(2 pts)</Run>  Rejection Bar — wick &gt; 2× body, close past bar midpoint</TextBlock>
+                                        <TextBlock Foreground="#8090A0" FontSize="10" LineHeight="17">E7  <Run FontWeight="SemiBold">(1 pt)</Run>   ATR Contraction — ATR falling for 2 bars and below 80% of entry ATR</TextBlock>
+                                        <TextBlock Foreground="#8090A0" FontSize="10" LineHeight="17">E8  <Run FontWeight="SemiBold">(2 pts)</Run>  VWAP Cross — price crossed VWAP against trade direction</TextBlock>
+                                        <TextBlock Foreground="#8090A0" FontSize="10" LineHeight="17">E9  <Run FontWeight="SemiBold">(3 pts)</Run>  RSI Hidden Divergence — price / RSI diverging against the trade</TextBlock>
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Background="#2D2000" CornerRadius="3" Padding="8,4" Margin="0,0,8,0">
+                                        <TextBlock Foreground="Gold" FontSize="10" FontWeight="SemiBold">&#x25CF;  Score 3–5  Warning</TextBlock>
+                                    </Border>
+                                    <TextBlock Foreground="#607080" FontSize="10" VerticalAlignment="Center" Margin="0,0,12,0">Degradation building — no new slots open</TextBlock>
+                                    <Border Background="#2D0A00" CornerRadius="3" Padding="8,4">
+                                        <TextBlock Foreground="OrangeRed" FontSize="10" FontWeight="SemiBold">&#x25CF;  Score 6+  Exiting</TextBlock>
+                                    </Border>
+                                    <TextBlock Foreground="#607080" FontSize="10" VerticalAlignment="Center" Margin="8,0,0,0">Exit on next closed bar</TextBlock>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
 
                     </StackPanel>
                 </Border>
@@ -472,6 +655,12 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
+                        <!-- Gold title bar background — lights up when RR target is reached -->
+                        <Border Grid.Row="0"
+                                Margin="-12,-10,-12,6"
+                                Background="{Binding Slot1.TitleBarBackground}"
+                                CornerRadius="6,6,0,0"/>
+
                         <!-- Header: instrument + direction + entry time, P&L right-aligned -->
                         <Grid Grid.Row="0" Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
@@ -567,6 +756,22 @@
                                            TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot1.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
+
+                                <!-- Target P&L (shown from position open) -->
+                                <TextBlock Margin="0,2,0,0"
+                                           Text="{Binding Slot1.TargetPnlLine, Mode=OneWay}"
+                                           Visibility="{Binding Slot1.TargetPnlVisibility}"
+                                           Foreground="#FFD700"
+                                           FontFamily="Consolas" FontSize="12"/>
+
+                                <!-- RR Achieved milestone badge -->
+                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
+                                        Visibility="{Binding Slot1.RrAchievedVisibility}"
+                                        Background="#2B2000" BorderBrush="#FFD700" BorderThickness="1">
+                                    <TextBlock Text="&#x1F3C6; RR Achieved. Boom!!"
+                                               Foreground="#FFD700" FontWeight="Bold" FontSize="12"
+                                               HorizontalAlignment="Center"/>
+                                </Border>
 
                                 <!-- AI mid-trade result -->
                                 <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
@@ -677,6 +882,12 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
+                        <!-- Gold title bar background — lights up when RR target is reached -->
+                        <Border Grid.Row="0"
+                                Margin="-12,-10,-12,6"
+                                Background="{Binding Slot2.TitleBarBackground}"
+                                CornerRadius="6,6,0,0"/>
+
                         <!-- Header: instrument + direction + entry time, P&L right-aligned -->
                         <Grid Grid.Row="0" Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
@@ -772,6 +983,22 @@
                                            TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot2.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
+
+                                <!-- Target P&L (shown from position open) -->
+                                <TextBlock Margin="0,2,0,0"
+                                           Text="{Binding Slot2.TargetPnlLine, Mode=OneWay}"
+                                           Visibility="{Binding Slot2.TargetPnlVisibility}"
+                                           Foreground="#FFD700"
+                                           FontFamily="Consolas" FontSize="12"/>
+
+                                <!-- RR Achieved milestone badge -->
+                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
+                                        Visibility="{Binding Slot2.RrAchievedVisibility}"
+                                        Background="#2B2000" BorderBrush="#FFD700" BorderThickness="1">
+                                    <TextBlock Text="&#x1F3C6; RR Achieved. Boom!!"
+                                               Foreground="#FFD700" FontWeight="Bold" FontSize="12"
+                                               HorizontalAlignment="Center"/>
+                                </Border>
 
                                 <!-- AI mid-trade result -->
                                 <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
@@ -882,6 +1109,12 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
+                        <!-- Gold title bar background — lights up when RR target is reached -->
+                        <Border Grid.Row="0"
+                                Margin="-12,-10,-12,6"
+                                Background="{Binding Slot3.TitleBarBackground}"
+                                CornerRadius="6,6,0,0"/>
+
                         <!-- Header: instrument + direction + entry time, P&L right-aligned -->
                         <Grid Grid.Row="0" Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
@@ -977,6 +1210,22 @@
                                            TextWrapping="Wrap">
                                     <Run Text="Phase: "/><Run Text="{Binding Slot3.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
                                 </TextBlock>
+
+                                <!-- Target P&L (shown from position open) -->
+                                <TextBlock Margin="0,2,0,0"
+                                           Text="{Binding Slot3.TargetPnlLine, Mode=OneWay}"
+                                           Visibility="{Binding Slot3.TargetPnlVisibility}"
+                                           Foreground="#FFD700"
+                                           FontFamily="Consolas" FontSize="12"/>
+
+                                <!-- RR Achieved milestone badge -->
+                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
+                                        Visibility="{Binding Slot3.RrAchievedVisibility}"
+                                        Background="#2B2000" BorderBrush="#FFD700" BorderThickness="1">
+                                    <TextBlock Text="&#x1F3C6; RR Achieved. Boom!!"
+                                               Foreground="#FFD700" FontWeight="Bold" FontSize="12"
+                                               HorizontalAlignment="Center"/>
+                                </Border>
 
                                 <!-- AI mid-trade result -->
                                 <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"

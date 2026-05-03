@@ -332,6 +332,54 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        ' ── RR Achieved milestone ────────────────────────────────────────────────
+        Private _isRrAchieved As Boolean = False
+        ''' <summary>True when position P&amp;L has reached the persona's RR target.</summary>
+        Public Property IsRrAchieved As Boolean
+            Get
+                Return _isRrAchieved
+            End Get
+            Set(value As Boolean)
+                If SetProperty(_isRrAchieved, value) Then
+                    NotifyPropertyChanged(NameOf(TitleBarBackground))
+                    NotifyPropertyChanged(NameOf(RrAchievedVisibility))
+                End If
+            End Set
+        End Property
+
+        Public ReadOnly Property TitleBarBackground As Brush
+            Get
+                Return If(_isRrAchieved,
+                          New SolidColorBrush(Color.FromRgb(&HB8, &H86, &H0B)),
+                          Brushes.Transparent)
+            End Get
+        End Property
+
+        Public ReadOnly Property RrAchievedVisibility As Visibility
+            Get
+                Return If(_isRrAchieved, Visibility.Visible, Visibility.Collapsed)
+            End Get
+        End Property
+
+        Private _targetPnlLine As String = String.Empty
+        ''' <summary>Formatted target line, e.g. "Target: $56.25" — shown from position open.</summary>
+        Public Property TargetPnlLine As String
+            Get
+                Return _targetPnlLine
+            End Get
+            Set(value As String)
+                If SetProperty(_targetPnlLine, value) Then
+                    NotifyPropertyChanged(NameOf(TargetPnlVisibility))
+                End If
+            End Set
+        End Property
+
+        Public ReadOnly Property TargetPnlVisibility As Visibility
+            Get
+                Return If(Not String.IsNullOrEmpty(_targetPnlLine), Visibility.Visible, Visibility.Collapsed)
+            End Get
+        End Property
+
         ''' <summary>Clears the AI result (called when slot is released or monitoring stops).</summary>
         Public Sub ClearAiResult()
             AiVerdict = String.Empty
