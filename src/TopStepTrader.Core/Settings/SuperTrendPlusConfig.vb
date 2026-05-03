@@ -72,6 +72,23 @@ Namespace TopStepTrader.Core.Settings
         ''' </summary>
         Public Property ExitingScoreThreshold As Integer = 6
 
+        ' ── Re-entry cooldown policy (STRAT-33) ──────────────────────────────────
+        ' After any slot exit (degradation or SL), re-entry on the same instrument is blocked for
+        ' exactly one full bar at the selected timeframe (e.g. 60 min on 1hr, 5 min on 5min).
+        '
+        ' Three options were evaluated:
+        '   1. One-bar cooldown (CHOSEN) — the next bar's entry gate (ST direction + ADX band +
+        '      DI alignment) re-validates all conditions from scratch; no extra state needed.
+        '      On the 1hr timeframe a 60-minute gap is a meaningful consolidation window.
+        '   2. Higher ADX for re-entry after E3 exit — adds per-exit-reason state that must
+        '      survive across bar boundaries; complexity without proven benefit.
+        '   3. Session-lock — too conservative; misses valid trend resumptions after a brief
+        '      pullback that clears the degradation signals.
+        '
+        ' Enforcement: SuperTrendPlusViewModel._reEntryCooldown records DateTimeOffset.UtcNow on
+        ' ReleaseSlotAsync; EvaluateSlotEntriesAsync skips the instrument while
+        ' UtcNow < cooldownTimestamp + barMinutes.
+
     End Class
 
 End Namespace

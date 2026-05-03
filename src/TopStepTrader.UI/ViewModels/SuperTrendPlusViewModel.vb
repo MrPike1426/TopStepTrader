@@ -1868,7 +1868,7 @@ Namespace TopStepTrader.UI.ViewModels
             ' slot clears in-memory, causing EvaluateSlotEntriesAsync to re-enter the
             ' same instrument on the next tick (BUG-35).
             _releasedThisTick = True  ' block same-tick re-entry
-            ' Record cooldown: re-entry on this instrument is blocked for at least one full bar
+            ' One-bar cooldown (see SuperTrendPlusConfig re-entry cooldown policy comment).
             If Not String.IsNullOrEmpty(slot.Instrument) Then
                 _reEntryCooldown(slot.Instrument) = DateTimeOffset.UtcNow
             End If
