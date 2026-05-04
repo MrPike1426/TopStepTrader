@@ -1,11 +1,13 @@
 Imports Microsoft.Extensions.DependencyInjection
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Data
+Imports TopStepTrader.Data.Debug
 Imports TopStepTrader.Data.Repositories
 Imports TopStepTrader.Services.AI
 Imports TopStepTrader.Services.Auth
 Imports TopStepTrader.Services.Background
 Imports TopStepTrader.Services.Backtest
+Imports TopStepTrader.Services.Debug
 Imports TopStepTrader.Services.Diagnostics
 Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.Personas
@@ -77,6 +79,10 @@ Namespace TopStepTrader.Services
 
             ' ── Trade history recording (Singleton — called from Transient VMs)
             services.AddSingleton(Of ITradeRecordService, TradeRecordService)()
+
+            ' ── Debug trade capture (FEAT-39) — Singleton; background Channel consumer
+            services.AddSingleton(Of DebugTradeDbContext)()
+            services.AddSingleton(Of IDebugTradeCaptureService, DebugTradeCaptureService)()
 
             ' ── Background workers
             services.AddSingleton(Of BarIngestionWorker)()

@@ -31,6 +31,8 @@ BinanceAPIKey.txt
 *.userosscache
 *.sln.docstates
 [Dd]ebug/
+# Allow source-code subdirectories literally named Debug (FEAT-39 debug capture layer)
+!src/**/Debug/
 [Rr]elease/
 x64/
 x86/

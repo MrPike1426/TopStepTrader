@@ -13,6 +13,8 @@ Imports TopStepTrader.ML.Features
 Imports TopStepTrader.Data
 Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.Trading
+Imports System.Text.Json
+Imports TopStepTrader.Core.Models.Debug
 Imports TopStepTrader.UI.ViewModels.Base
 
 Namespace TopStepTrader.UI.ViewModels
@@ -198,6 +200,12 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _claudeService As IClaudeReviewService
         Private ReadOnly _configRepo As SuperTrendPlusConfigRepository
         Private ReadOnly _tradeRecordService As Core.Interfaces.ITradeRecordService
+        Private ReadOnly _debugCapture As Core.Interfaces.IDebugTradeCaptureService
+
+        ' ── Debug capture state (per-trade tracking, keyed by DebugTradeId) ────
+        Private ReadOnly _debugMfe As New Dictionary(Of String, Decimal)()
+        Private ReadOnly _debugMae As New Dictionary(Of String, Decimal)()
+        Private ReadOnly _lastBarTimestampByTradeId As New Dictionary(Of String, DateTimeOffset)()
 
         Private _timer As Timer
         Private ReadOnly _timerLock As New Object()
@@ -232,6 +240,21 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
             Set(value As Boolean)
                 SetProperty(_isAiEnabled, value)
+            End Set
+        End Property
+
+        ' ── Debug capture toggle (FEAT-39) ──────────────────────────────────────
+        Private _isDebugCaptureEnabled As Boolean = False
+        ''' <summary>When True, every ST+ trade is recorded to debug_trades.db.
+        ''' Default False; NOT persisted across restarts.</summary>
+        Public Property IsDebugCaptureEnabled As Boolean
+            Get
+                Return _isDebugCaptureEnabled
+            End Get
+            Set(value As Boolean)
+                If SetProperty(_isDebugCaptureEnabled, value) Then
+                    If _debugCapture IsNot Nothing Then _debugCapture.IsEnabled = value
+                End If
             End Set
         End Property
         Public Property UseEarlyMode As Boolean
@@ -444,7 +467,8 @@ Namespace TopStepTrader.UI.ViewModels
                        claudeService As IClaudeReviewService,
                        logger As ILogger(Of SuperTrendPlusViewModel),
                        tradeRecordService As Core.Interfaces.ITradeRecordService,
-                       Optional configRepo As SuperTrendPlusConfigRepository = Nothing)
+                       Optional configRepo As SuperTrendPlusConfigRepository = Nothing,
+                       Optional debugCapture As Core.Interfaces.IDebugTradeCaptureService = Nothing)
             _barService = barService
             _orderService = orderService
             _session = session
@@ -455,6 +479,7 @@ Namespace TopStepTrader.UI.ViewModels
             _logger = logger
             _tradeRecordService = tradeRecordService
             _configRepo = configRepo
+            _debugCapture = debugCapture
             Config = New SuperTrendPlusConfig()
             _slotManager = New SlotManager(Config)
             _exitEngine = New ExitSignalEngine(
@@ -483,6 +508,7 @@ Namespace TopStepTrader.UI.ViewModels
                     box.Symbols.Add(New SymbolRowVm() With {.Symbol = InstrumentLabels(i)})
                 Next
             Next
+            AddHandler _session.AutoExecutionChanged, AddressOf OnAutoExecutionChanged
         End Sub
 
         Private Function AllSlotBoxes() As SlotBoxVm()
@@ -533,6 +559,30 @@ Namespace TopStepTrader.UI.ViewModels
             Catch
             End Try
         End Sub
+
+        Private Sub OnAutoExecutionChanged(sender As Object, e As EventArgs)
+            Task.Run(AddressOf RefreshAccountsAsync)
+        End Sub
+
+        Private Async Function RefreshAccountsAsync() As Task
+            Try
+                Dim accountList = Await _accountService.GetActiveAccountsAsync()
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        Accounts.Clear()
+                        For Each a In accountList
+                            Accounts.Add(a)
+                        Next
+                        If Accounts.Count > 0 Then
+                            Dim preferred = Accounts.FirstOrDefault(
+                                Function(a) a.Name IsNot Nothing AndAlso
+                                            a.Name.StartsWith("PRAC", StringComparison.OrdinalIgnoreCase))
+                            SelectedAccount = If(preferred, Accounts(0))
+                        End If
+                    End Sub)
+            Catch
+            End Try
+        End Function
 
         Private Sub ApplyConfigEntity(entity As Data.Entities.SuperTrendPlusConfigEntity)
             ' Update backing fields directly to avoid triggering save during load
@@ -838,10 +888,10 @@ Namespace TopStepTrader.UI.ViewModels
                                   If(signal = "BEAR", "Downtrend active — bot will open 1 position.",
                                      "Trending — waiting for +DI/-DI to align with SuperTrend."))
                 ElseIf adxVal >= 15 Then
-                    strength = String.Format("ADX:{0:D2} L0: Milky Tea", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} L0: Mellow Birds", CInt(adxVal))
                     signalReason = "Trend is weak — watching for momentum to build before entering."
                 Else
-                    strength = String.Format("ADX:{0:D2} Chop", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} Cat Piss", CInt(adxVal))
                     signalReason = "Market is choppy with no clear trend — standing aside to avoid false signals."
                 End If
 
@@ -1357,6 +1407,7 @@ Namespace TopStepTrader.UI.ViewModels
                 s2.Instrument     = contractId
                 s2.Side           = side
                 s2.EntryAdx       = currentAdx
+                s2.CurrentAdx     = currentAdx
                 s2.EntryBarTime   = snapshot.OpenedAtUtc
                 s2.EntryPrice     = snapshot.OpenRate
                 s2.StopPrice      = stLine
@@ -1453,6 +1504,25 @@ Namespace TopStepTrader.UI.ViewModels
             End If
             slot.AccountId = accountId
 
+            ' Guard: abort if the live price has already crossed the ST line before the order fills.
+            ' The signal bar may have closed with price on the correct side, but a gap open (e.g. 09:30 ET)
+            ' can push the market through the ST line before the market order executes.
+            Try
+                Dim guardBars = Await _barService.GetLiveBarsAsync(contractId, BarTimeframe.FifteenSecond, 3)
+                If guardBars IsNot Nothing AndAlso guardBars.Count > 0 Then
+                    Dim livePrice = CDec(guardBars(guardBars.Count - 1).Close)
+                    Dim isSell = String.Equals(side, "Sell", StringComparison.OrdinalIgnoreCase)
+                    If (isSell AndAlso livePrice > stLine) OrElse (Not isSell AndAlso livePrice < stLine) Then
+                        _logger.LogWarning("ST+ [{Contract}] entry aborted — live price {Live:F2} crossed ST line {St:F2} before fill",
+                                           contractId, livePrice, stLine)
+                        _slotManager.CloseSlot(slot.SlotIndex)
+                        Return
+                    End If
+                End If
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ [{Contract}] live-price guard fetch failed — proceeding with entry", contractId)
+            End Try
+
             ' Keep the 15-second scan interval — do NOT accelerate to 2 s here.
             ' Accelerating caused rapid-fire re-entries when a bracket filled quickly.
 
@@ -1473,6 +1543,8 @@ Namespace TopStepTrader.UI.ViewModels
                                    lastClose, stLine)
 
             ' ── AI pre-trade sense check (gated by IsAiEnabled toggle) ─────────────
+            Dim capturedAiResult As String = Nothing
+            Dim capturedAiReason As String = Nothing
             If _isAiEnabled AndAlso _claudeService IsNot Nothing Then
                 Dim isSuppressed As Boolean = False
                 SyncLock _aiSuppression
@@ -1542,7 +1614,6 @@ Namespace TopStepTrader.UI.ViewModels
                             _slotManager.CloseSlot(slot.SlotIndex)
                             Return
                         End If
-                    End Using
                     ' YES — update watchlist row with green confirmation
                     Dim wIdxOk As Integer = Array.IndexOf(Instruments, contractId)
                     If wIdxOk >= 0 Then
@@ -1552,6 +1623,11 @@ Namespace TopStepTrader.UI.ViewModels
                             End Sub)
                     End If
                     AddAiLogEntry(contractId, "Pre-trade check PASSED ✓")
+                    capturedAiResult = "PASSED"
+                    capturedAiReason = If(aiResult.Reasoning.Length > 500,
+                                         aiResult.Reasoning.Substring(0, 497) & "...",
+                                         aiResult.Reasoning)
+                    End Using
                 Catch ex As Exception
                     _logger.LogWarning(ex, "ST+ AI pre-trade check error for {Contract} — proceeding anyway", contractId)
                 End Try
@@ -1603,6 +1679,36 @@ Namespace TopStepTrader.UI.ViewModels
             slot.StopPrice = stLine
             slot.EntryTime = DateTime.Now
             slot.EntryBarTime = barTime
+
+            ' ── Debug Capture: begin trade record (FEAT-39) ──────────────────────
+            If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing Then
+                Dim newTradeId = Guid.NewGuid().ToString("D")
+                slot.DebugTradeId = newTradeId
+                Dim configJson As String = String.Empty
+                Try
+                    configJson = JsonSerializer.Serialize(Config)
+                Catch
+                End Try
+                Dim header As New DebugTradeRecord With {
+                    .TradeId = newTradeId,
+                    .SlotIndex = slot.SlotIndex,
+                    .Persona = _activePersona,
+                    .Instrument = contractId,
+                    .TimeFrame = _selectedTimeframe,
+                    .EntryMode = If(_useEarlyMode, "Preemptive", "BarClose"),
+                    .Direction = If(side = "Buy", "Long", "Short"),
+                    .EntryPrice = CDec(lastClose),
+                    .EntryTime = DateTime.UtcNow.ToString("O"),
+                    .InitialSL = stLine,
+                    .InitialTP = 0D,
+                    .ContractCount = slot.Contracts,
+                    .SuperTrendConfigJson = configJson,
+                    .AiCheckResult = capturedAiResult,
+                    .AiCheckReason = capturedAiReason,
+                    .CreatedAt = DateTime.UtcNow.ToString("O")
+                }
+                _debugCapture.BeginTrade(header)
+            End If
             slot.MissCount = 0
             slot.PositionId = placed.ExternalPositionId   ' may be Nothing until first monitoring tick resolves it
             slot.EntryOrderId = placed.ExternalOrderId
@@ -1629,6 +1735,7 @@ Namespace TopStepTrader.UI.ViewModels
                                  .MaxScaleIns = If(persona IsNot Nothing, persona.MaxScaleIns, 1),
                                  .StrategyName = "SuperTrend+",
                                  .Persona = _activePersona,
+                                 .Timeframe = _selectedTimeframe,
                                  .EntryTime = DateTimeOffset.UtcNow,
                                  .EntryPrice = 0D,
                                  .CommissionUsd = commission,
@@ -1696,6 +1803,17 @@ Namespace TopStepTrader.UI.ViewModels
                     slot.Contracts += addContracts
                     _logger.LogInformation("ST+ [Slot {Idx}] Scale-in accepted — contracts now {Total}",
                                            slot.SlotIndex, slot.Contracts)
+                    If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
+                       Not String.IsNullOrEmpty(slot.DebugTradeId) Then
+                        Dim fillSnap As New DebugSnapshotRecord With {
+                            .TradeId = slot.DebugTradeId,
+                            .Timestamp = DateTime.UtcNow.ToString("O"),
+                            .EventType = "PartialFill",
+                            .CurrentSL = slot.StopPrice,
+                            .Notes = $"+{addContracts} contracts (total {slot.Contracts})"
+                        }
+                        _debugCapture.RecordSnapshot(fillSnap)
+                    End If
                     Dim latestPnl = slot.UnrealizedPnl
                     Dim box = BoxForSlot(slot)
                     Application.Current?.Dispatcher?.Invoke(Sub()
@@ -1741,6 +1859,18 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
                 If snapshot.OpenRate <> 0D AndAlso slot.EntryPrice = 0D Then
                     slot.EntryPrice = snapshot.OpenRate
+                    ' One-time sync: the initial bracket SL is placed using lastClose-based ticks,
+                    ' which diverges from the true fill price when a gap open occurs.  Drive the
+                    ' broker SL to the correct ST-line value stored at entry time.
+                    If slot.PositionId.HasValue AndAlso slot.StopPrice <> 0D Then
+                        Try
+                            Dim syncOk = Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, slot.StopPrice, Nothing)
+                            _logger.LogInformation("ST+ [Slot {Idx}] initial SL sync → {Stop:F2} ok={Ok}",
+                                                   slot.SlotIndex, slot.StopPrice, syncOk)
+                        Catch ex As Exception
+                            _logger.LogWarning(ex, "ST+ [Slot {Idx}] initial SL sync failed for {Contract}", slot.SlotIndex, slot.Instrument)
+                        End Try
+                    End If
                     If slot.TradeRecordId > 0 Then
                         Task.Run(Function() _tradeRecordService.UpdateEntryPriceAsync(slot.TradeRecordId, snapshot.OpenRate))
                     End If
@@ -1763,12 +1893,12 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim closes = bars.Select(Function(b) b.Close).ToList()
                 Dim n = bars.Count - 1
 
-                ' Fetch a small 15-second bar series to obtain the freshest available price
-                ' for P&L display. The strategy-timeframe bars above can be up to one full bar
-                ' period stale (e.g. 15 minutes for the default 15-min TF), causing the displayed
-                ' P&L to lag behind the broker by a large margin. The 15s bars update every 15
-                ' seconds, so the display error is at most ~1 tick of noise. Indicator and stop
-                ' management calculations still use the strategy-timeframe `closes` series below.
+                ' Fetch a small 15-second bar series to obtain the freshest available price.
+                ' The strategy-timeframe bars above can be up to one full bar period stale
+                ' (e.g. 15 minutes for the default 15-min TF). currentClose is used for both
+                ' P&L display and the phased stop ratchet (BUG-51), so intra-bar price spikes
+                ' that peak and retrace within one strategy bar can still advance the stop.
+                ' Indicator calculations (ST line, DMI, ATR) still use the strategy-TF closes.
                 Dim currentClose As Decimal = CDec(closes(n))  ' fallback to strategy-TF close
                 Try
                     Dim tickBars = Await _barService.GetLiveBarsAsync(slot.Instrument, BarTimeframe.FifteenSecond, 10)
@@ -1830,10 +1960,13 @@ Namespace TopStepTrader.UI.ViewModels
                     slot.InitialRisk = Math.Abs(slot.EntryPrice - slot.StopPrice)
                 End If
 
+                ' Always refresh current ADX for live display (independent of entry confirmation).
+                Dim adxNow = dmiForExit.ADX(n)
+                If Not Single.IsNaN(adxNow) Then slot.CurrentAdx = adxNow
+
                 ' STRAT-31: Scale in as ADX strengthens from a lower to a higher band.
                 ' Skip during early-mode grace (position not yet ST-confirmed) and before entry fills.
                 If Not slot.IsEarlyModeEntry AndAlso slot.EntryPrice <> 0D Then
-                    Dim adxNow = dmiForExit.ADX(n)
                     If Not Single.IsNaN(adxNow) Then
                         Dim currentBand = _slotManager.BandForAdx(adxNow)
                         If currentBand > slot.LastAdxBand AndAlso slot.Contracts < 3 Then
@@ -1859,6 +1992,20 @@ Namespace TopStepTrader.UI.ViewModels
                                                                 boxForHealth.HealthBrush = HealthBrushFor(slot.Health)
                                                             End If
                                                         End Sub)
+
+                ' ── Debug Capture: Heartbeat (and BarClose when new bar detected) ─
+                If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
+                   Not String.IsNullOrEmpty(slot.DebugTradeId) Then
+                    Dim atrVal As Single = If(n < atr14Exit.Length AndAlso Not Single.IsNaN(atr14Exit(n)), atr14Exit(n), 0F)
+                    RecordDebugSnapshot(slot, currentClose, latestPnl, bars(n), stLine, st.Direction(n), atrVal, "Heartbeat")
+                    Dim lastBarTs As DateTimeOffset
+                    Dim isNewBar = (Not _lastBarTimestampByTradeId.TryGetValue(slot.DebugTradeId, lastBarTs)) OrElse
+                                   bars(n).Timestamp <> lastBarTs
+                    _lastBarTimestampByTradeId(slot.DebugTradeId) = bars(n).Timestamp
+                    If isNewBar Then
+                        RecordDebugSnapshot(slot, currentClose, latestPnl, bars(n), stLine, st.Direction(n), atrVal, "BarClose")
+                    End If
+                End If
 
                 ' ── 2-bar confirmation guard ──────────────────────────────────────
                 ' An immediate E1 SuperTrend flip exits on the current bar unconditionally.
@@ -1891,59 +2038,78 @@ Namespace TopStepTrader.UI.ViewModels
                     slot.ConsecutiveExitBars = 0
                 End If
 
-                ' Advance phased stop (ratchet-only).
-                ' Only the primary slot — the lowest-indexed open slot for this instrument —
-                ' is allowed to call EditPositionSlTpAsync.  Scale-in slots update their
-                ' local state and display but do NOT touch the exchange bracket, because
-                ' all slots share the same underlying TopStepX position and racing edits
-                ' would use different InitialRisk baselines and could widen the stop.
-                '
-                ' SuperTrend+ uses a 6-phase configurable ladder via ComputePhasedStop overload.
-                ' This overwrites the generic phased-stop produced by ExitSignalEngine.Evaluate
-                ' and keeps the logic isolated to this strategy only.
-                Dim stLineForPhase = If(Not Single.IsNaN(st.Line(n)), CDec(st.Line(n)), slot.StopPrice)
-                Dim atrForPhase = If(n < atr14Exit.Length AndAlso Not Single.IsNaN(atr14Exit(n)), CDec(atr14Exit(n)), 0D)
-                Dim stPhasedResult = _exitEngine.ComputePhasedStop(slot, CDec(closes(n)), stLineForPhase, atrForPhase, Config)
-                Dim newStop = stPhasedResult.NewStop
-                slot.StopPhase = stPhasedResult.Phase
+                ' BUG-50: Skip phased stop entirely during early-mode grace.
+                ' ST has not yet confirmed direction, so stLine is on the wrong side of entry
+                ' (e.g. bullish support below a short entry). ComputePhasedStop would produce a
+                ' stop below entry that TopStepX rejects silently, freezing the SL.
+                ' The bracket SL already protects downside during this period.
+                If Not slot.IsEarlyModeEntry Then
+                    ' Advance phased stop (ratchet-only).
+                    ' Only the primary slot — the lowest-indexed open slot for this instrument —
+                    ' is allowed to call EditPositionSlTpAsync.  Scale-in slots update their
+                    ' local state and display but do NOT touch the exchange bracket, because
+                    ' all slots share the same underlying TopStepX position and racing edits
+                    ' would use different InitialRisk baselines and could widen the stop.
+                    '
+                    ' SuperTrend+ uses a 6-phase configurable ladder via ComputePhasedStop overload.
+                    ' This overwrites the generic phased-stop produced by ExitSignalEngine.Evaluate
+                    ' and keeps the logic isolated to this strategy only.
+                    Dim stLineForPhase = If(Not Single.IsNaN(st.Line(n)), CDec(st.Line(n)), slot.StopPrice)
+                    Dim atrForPhase = If(n < atr14Exit.Length AndAlso Not Single.IsNaN(atr14Exit(n)), CDec(atr14Exit(n)), 0D)
+                    Dim oldStopPhase = slot.StopPhase
+                    Dim stPhasedResult = _exitEngine.ComputePhasedStop(slot, currentClose, stLineForPhase, atrForPhase, Config)
+                    Dim newStop = stPhasedResult.NewStop
+                    slot.StopPhase = stPhasedResult.Phase
 
-                Dim isPrimaryForEdit As Boolean =
-                    Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
-                                               s.Instrument = slot.Instrument AndAlso
-                                               s.SlotIndex < slot.SlotIndex)
+                    Dim isPrimaryForEdit As Boolean =
+                        Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
+                                                   s.Instrument = slot.Instrument AndAlso
+                                                   s.SlotIndex < slot.SlotIndex)
 
-                Dim primaryEditSucceeded = False
-                If isPrimaryForEdit AndAlso slot.PositionId.HasValue AndAlso newStop <> slot.StopPrice Then
-                    Dim tpArg As Decimal? = If(slot.TakeProfitPrice <> 0D, CType(slot.TakeProfitPrice, Decimal?), Nothing)
-                    Try
-                        Dim editOk = Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, newStop, tpArg)
-                        If editOk Then
-                            primaryEditSucceeded = True
-                            _logger.LogInformation("ST+ SL phase={Phase} trail->{Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
-                                                   slot.StopPhase, newStop,
-                                                   If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"),
+                    Dim primaryEditSucceeded = False
+                    If isPrimaryForEdit AndAlso slot.PositionId.HasValue AndAlso newStop <> slot.StopPrice Then
+                        Dim tpArg As Decimal? = If(slot.TakeProfitPrice <> 0D, CType(slot.TakeProfitPrice, Decimal?), Nothing)
+                        Try
+                            Dim editOk = Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, newStop, tpArg)
+                            If editOk Then
+                                primaryEditSucceeded = True
+                                If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
+                                   Not String.IsNullOrEmpty(slot.DebugTradeId) Then
+                                    Dim slSnap As New DebugSnapshotRecord With {
+                                        .TradeId = slot.DebugTradeId,
+                                        .Timestamp = DateTime.UtcNow.ToString("O"),
+                                        .EventType = "SlAdjust",
+                                        .CurrentSL = newStop,
+                                        .Notes = $"{oldStopPhase}->{slot.StopPhase}"
+                                    }
+                                    _debugCapture.RecordSnapshot(slSnap)
+                                End If
+                                _logger.LogInformation("ST+ SL phase={Phase} trail->{Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
+                                                       slot.StopPhase, newStop,
+                                                       If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"),
+                                                       slot.SlotIndex, slot.Instrument)
+                            Else
+                                _logger.LogWarning("ST+ EditPositionSlTpAsync returned False for [Slot {Idx}] on {Contract} — will retry next tick",
                                                    slot.SlotIndex, slot.Instrument)
-                        Else
-                            _logger.LogWarning("ST+ EditPositionSlTpAsync returned False for [Slot {Idx}] on {Contract} — will retry next tick",
+                            End If
+                        Catch ex As Exception
+                            _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
+                        End Try
+                    ElseIf Not isPrimaryForEdit Then
+                        _logger.LogInformation("ST+ SL ratchet deferred for scale-in [Slot {Idx}] on {Contract} — primary slot owns bracket",
                                                slot.SlotIndex, slot.Instrument)
-                        End If
-                    Catch ex As Exception
-                        _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
-                    End Try
-                ElseIf Not isPrimaryForEdit Then
-                    _logger.LogInformation("ST+ SL ratchet deferred for scale-in [Slot {Idx}] on {Contract} — primary slot owns bracket",
-                                           slot.SlotIndex, slot.Instrument)
-                End If
+                    End If
 
-                ' Only advance the in-memory stop when the broker edit was confirmed (primary slot)
-                ' or when this is a scale-in slot whose display-only stop can freely track the phase.
-                ' Keeping slot.StopPrice at its old value on API failure causes the next tick to retry.
-                If newStop <> slot.StopPrice AndAlso (Not isPrimaryForEdit OrElse primaryEditSucceeded) Then
-                    slot.StopPrice = newStop
-                    Dim boxForTrail = BoxForSlot(slot)
-                    Application.Current?.Dispatcher?.Invoke(Sub()
-                                                                If boxForTrail IsNot Nothing Then UpdatePositionDisplay(boxForTrail, slot, latestPnl)
-                                                            End Sub)
+                    ' Only advance the in-memory stop when the broker edit was confirmed (primary slot)
+                    ' or when this is a scale-in slot whose display-only stop can freely track the phase.
+                    ' Keeping slot.StopPrice at its old value on API failure causes the next tick to retry.
+                    If newStop <> slot.StopPrice AndAlso (Not isPrimaryForEdit OrElse primaryEditSucceeded) Then
+                        slot.StopPrice = newStop
+                        Dim boxForTrail = BoxForSlot(slot)
+                        Application.Current?.Dispatcher?.Invoke(Sub()
+                                                                    If boxForTrail IsNot Nothing Then UpdatePositionDisplay(boxForTrail, slot, latestPnl)
+                                                                End Sub)
+                    End If
                 End If
             End If
         End Function
@@ -2015,6 +2181,24 @@ Namespace TopStepTrader.UI.ViewModels
                         box.ClearAiResult()
                     End If
                 End Sub)
+            ' ── Debug Capture: Exit snapshot + EndTrade (FEAT-39) ───────────────
+            If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
+               Not String.IsNullOrEmpty(slot.DebugTradeId) Then
+                Dim exitSnap As New DebugSnapshotRecord With {
+                    .TradeId = slot.DebugTradeId,
+                    .Timestamp = DateTime.UtcNow.ToString("O"),
+                    .EventType = "Exit",
+                    .CurrentSL = slot.StopPrice,
+                    .UnrealizedPnLDollars = slot.UnrealizedPnl,
+                    .Notes = exitReason
+                }
+                _debugCapture.RecordSnapshot(exitSnap)
+                _debugCapture.EndTrade(slot.DebugTradeId, DateTime.UtcNow)
+                _debugMfe.Remove(slot.DebugTradeId)
+                _debugMae.Remove(slot.DebugTradeId)
+                _lastBarTimestampByTradeId.Remove(slot.DebugTradeId)
+            End If
+
             _slotManager.CloseSlot(slot.SlotIndex)
             If Not _slotManager.Slots.Any(Function(s) s.IsOpen) Then
                 SyncLock _timerLock
@@ -2029,12 +2213,9 @@ Namespace TopStepTrader.UI.ViewModels
             Dim label As String = If(idx >= 0, InstrumentLabels(idx), slot.Instrument)
             Dim entry As String = If(slot.EntryPrice = 0D, "--", slot.EntryPrice.ToString("F2"))
             Dim sl As String = If(slot.StopPrice = 0D, "--", slot.StopPrice.ToString("F2"))
-            Dim tp As String = If(slot.TakeProfitPrice = 0D, "flip", slot.TakeProfitPrice.ToString("F2"))
             Dim entryTimeStr As String = If(slot.EntryTime = DateTime.MinValue, "--", slot.EntryTime.ToString("HH:mm:ss"))
             box.SlotLabel = ($"{label}  {slot.Instrument} — {sideLbl} @ {entryTimeStr}").ToUpper()
-            Dim newDisplay As String =
-                String.Format("SP: {0}  |  SL: {1}  |  TP: {2}", entry, sl, tp) & Environment.NewLine &
-                slot.EntryReason
+            Dim newDisplay As String = String.Format("Entry SP: {0}  |  Live SL: {1}", entry, sl)
             Dim sign As String = If(pnl > 0D, "+", If(pnl < 0D, "-", ""))
             Dim absAmount As String = Math.Abs(pnl).ToString("F2")
             Dim newPnlLine As String = String.Format("P&L: {0}${1}", sign, absAmount)
@@ -2048,10 +2229,13 @@ Namespace TopStepTrader.UI.ViewModels
             box.PnlBrush = Brushes.White
             box.PnlBorderBrush = If(pnl > 0D, Brushes.LimeGreen, If(pnl < 0D, Brushes.Red, Brushes.Gray))
             box.StopPhaseLabel = PhaseLabel(slot.StopPhase, Config)
+            Dim adxStr As String = If(slot.CurrentAdx > 0F, String.Format("  |  Live ADX: {0:F2}", slot.CurrentAdx), String.Empty)
             Dim targetPnl As Decimal = 0D
             If slot.InitialRiskDollars > 0D Then
                 targetPnl = Math.Round(slot.InitialRiskDollars * PersonaRrRatio, 2)
-                box.TargetPnlLine = String.Format("Target: ${0:F2}", targetPnl)
+                box.TargetPnlLine = String.Format("Target: ${0:F2}{1}", targetPnl, adxStr)
+            ElseIf slot.CurrentAdx > 0F Then
+                box.TargetPnlLine = String.Format("Live ADX: {0:F2}", slot.CurrentAdx)
             Else
                 box.TargetPnlLine = String.Empty
             End If
@@ -2073,17 +2257,17 @@ Namespace TopStepTrader.UI.ViewModels
         Private Shared Function PhaseLabel(phase As StopPhase, cfg As SuperTrendPlusConfig) As String
             Select Case phase
                 Case StopPhase.Initial
-                    Return String.Format("Initial  (stop tracks SuperTrend line; scale-in opens next slot at {0:F1}R)", cfg.BreakevenTriggerR)
+                    Return String.Format("Initial: SL on SuperTrend line - targeting {0:F1}R", cfg.BreakevenTriggerR)
                 Case StopPhase.Breakeven
-                    Return "Breakeven  (stop moved to entry — risk eliminated)"
+                    Return "Breakeven: Stops to entry."
                 Case StopPhase.ProfitLock
-                    Return String.Format("ProfitLock  (stop locked at entry + {0:F1}R)", cfg.ProfitLockOffsetR)
+                    Return String.Format("ProfitLock: Stop at entry + {0:F1}R.", cfg.ProfitLockOffsetR)
                 Case StopPhase.ProfitTrail
-                    Return "ProfitTrail  (ATR trailing stop active)"
+                    Return "ProfitTrail: ATR trailing stop - riding the move."
                 Case StopPhase.Harvest
-                    Return String.Format("Harvest  (stop locked at entry + {0:F1}R)", cfg.HarvestLockR)
+                    Return String.Format("Harvest: Stop locked at entry + {0:F1}R.", cfg.HarvestLockR)
                 Case StopPhase.FreeRide
-                    Return "FreeRide  (stop at entry + 2R — letting it run)"
+                    Return "FreeRide: Stop at entry + 2R - letting it run."
                 Case Else
                     Return phase.ToString()
             End Select
@@ -2152,6 +2336,16 @@ Namespace TopStepTrader.UI.ViewModels
                             box.AiSuggestedAction = result.SuggestedAction
                             AddAiLogEntry(slot.Instrument, $"Mid-trade: {result.Verdict} — {result.SuggestedAction}")
                         End Sub)
+                    If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
+                       Not String.IsNullOrEmpty(slot.DebugTradeId) Then
+                        Dim aiSnap As New DebugSnapshotRecord With {
+                            .TradeId = slot.DebugTradeId,
+                            .Timestamp = DateTime.UtcNow.ToString("O"),
+                            .EventType = "AiCheck",
+                            .Notes = $"Mid-trade: {result.Verdict} — {result.SuggestedAction}"
+                        }
+                        _debugCapture.RecordSnapshot(aiSnap)
+                    End If
                 End Using
             Catch ex As Exception
                 _logger.LogWarning(ex, "ST+ mid-trade AI check error for {Contract}", slot.Instrument)
@@ -2165,6 +2359,70 @@ Namespace TopStepTrader.UI.ViewModels
                 Application.Current?.Dispatcher?.Invoke(Sub() box.IsAiChecking = False)
             End Try
         End Function
+
+        ''' <summary>
+        ''' Builds and queues a debug snapshot. Updates MFE/MAE running maxima.
+        ''' No-op when debug capture is disabled or slot has no DebugTradeId.
+        ''' </summary>
+        Private Sub RecordDebugSnapshot(slot As PositionSlot,
+                                         currentClose As Decimal,
+                                         latestPnlUsd As Decimal,
+                                         lastBar As MarketBar,
+                                         stLine As Decimal,
+                                         stDir As Single,
+                                         atrVal As Single,
+                                         eventType As String,
+                                         Optional notes As String = Nothing)
+            Dim tid = slot.DebugTradeId
+
+            Dim mfe As Decimal
+            Dim mae As Decimal
+            If _debugMfe.TryGetValue(tid, mfe) Then
+                If slot.Side = "Buy" Then
+                    mfe = Math.Max(mfe, currentClose)
+                    mae = Math.Min(_debugMae(tid), currentClose)
+                Else
+                    mfe = Math.Min(mfe, currentClose)
+                    mae = Math.Max(_debugMae(tid), currentClose)
+                End If
+            Else
+                mfe = currentClose
+                mae = currentClose
+            End If
+            _debugMfe(tid) = mfe
+            _debugMae(tid) = mae
+
+            Dim pnlTicks As Nullable(Of Decimal) = Nothing
+            If slot.EntryPrice <> 0D Then
+                Dim fc = Core.Trading.FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
+                If fc IsNot Nothing AndAlso fc.PxTickSize > 0D Then
+                    Dim priceDiff = If(slot.Side = "Buy", currentClose - slot.EntryPrice, slot.EntryPrice - currentClose)
+                    pnlTicks = Math.Round(priceDiff / fc.PxTickSize, 2)
+                End If
+            End If
+
+            Dim snap As New DebugSnapshotRecord With {
+                .TradeId = tid,
+                .Timestamp = DateTime.UtcNow.ToString("O"),
+                .EventType = eventType,
+                .LastPrice = currentClose,
+                .CurrentSL = slot.StopPrice,
+                .CurrentTP = If(slot.TakeProfitPrice <> 0D, CType(slot.TakeProfitPrice, Nullable(Of Decimal)), Nothing),
+                .UnrealizedPnLTicks = pnlTicks,
+                .UnrealizedPnLDollars = latestPnlUsd,
+                .Mfe = mfe,
+                .Mae = mae,
+                .BarOpen = lastBar.Open,
+                .BarHigh = lastBar.High,
+                .BarLow = lastBar.Low,
+                .BarClose = lastBar.Close,
+                .SuperTrendValue = If(Not Single.IsNaN(CSng(stLine)), CType(stLine, Nullable(Of Decimal)), Nothing),
+                .SuperTrendDirection = If(stDir > 0, "Up", If(stDir < 0, "Down", Nothing)),
+                .Atr = If(Not Single.IsNaN(atrVal), CType(CDec(atrVal), Nullable(Of Decimal)), Nothing),
+                .Notes = notes
+            }
+            _debugCapture.RecordSnapshot(snap)
+        End Sub
 
         Public Sub Dispose() Implements IDisposable.Dispose
             If Not _disposed Then

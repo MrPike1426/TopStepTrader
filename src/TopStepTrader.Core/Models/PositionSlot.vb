@@ -91,6 +91,12 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>Row ID in LiveTradeRecords (TradeHistory.db). 0 = not yet persisted.</summary>
         Public Property TradeRecordId As Long = 0
 
+        ''' <summary>Most recent ADX value from the 15-second monitoring tick. Updated live; 0 until first tick.</summary>
+        Public Property CurrentAdx As Single = 0F
+
+        ''' <summary>FEAT-39: GUID linking this slot to its DebugTrades row while debug capture is on. Nothing when capture disabled.</summary>
+        Public Property DebugTradeId As String
+
     End Class
 
 End Namespace

@@ -12,6 +12,8 @@ Imports TopStepTrader.Data.Entities
 Imports TopStepTrader.ML
 Imports TopStepTrader.ML.Prediction
 Imports TopStepTrader.Services
+Imports TopStepTrader.Data.Debug
+Imports TopStepTrader.Services.Debug
 Imports TopStepTrader.Services.Trading
 Imports TopStepTrader.UI.ViewModels
 
@@ -65,6 +67,9 @@ Namespace TopStepTrader.UI.Infrastructure
 
                         ' ── WPF-specific: use IServiceScopeFactory in ViewModelLocator
                         '    so that Scoped EF Core services are resolved in a proper scope.
+
+                        ' ── User preferences (persisted to LocalApplicationData) ──────
+                        services.AddSingleton(Of IUserPreferencesService, UserPreferencesService)()
 
                         ' ── Contract resolution cache (daily, SQLite-backed) ───────────
                         services.AddSingleton(Of IContractResolutionService, ContractResolutionService)()
@@ -146,10 +151,28 @@ Namespace TopStepTrader.UI.Infrastructure
                 Using scope = host.Services.CreateScope()
                     Dim tradeDb = scope.ServiceProvider.GetRequiredService(Of Data.TradeHistoryDbContext)()
                     tradeDb.Database.EnsureCreated()
+                    tradeDb.EnsureSchemaCurrent()
                 End Using
             Catch ex As Exception
                 System.Diagnostics.Trace.TraceError(
                     "TradeHistory database initialisation failed: {0}", ex.Message)
+            End Try
+
+            ' ── Apply persisted user preferences ────────────────────────────────
+            Try
+                Dim userPrefs = host.Services.GetRequiredService(Of IUserPreferencesService)()
+                Dim session = host.Services.GetRequiredService(Of ITradingSessionContext)()
+                session.SetAutoExecution(userPrefs.AutoExecutionEnabled)
+            Catch ex As Exception
+                System.Diagnostics.Trace.TraceWarning("Could not apply user preferences: {0}", ex.Message)
+            End Try
+
+            ' ── Debug trade capture schema ───────────────────────────────────────
+            Try
+                Dim debugDb = host.Services.GetRequiredService(Of DebugTradeDbContext)()
+                debugDb.EnsureSchemaAsync().GetAwaiter().GetResult()
+            Catch ex As Exception
+                System.Diagnostics.Trace.TraceWarning("Debug capture schema init failed: {0}", ex.Message)
             End Try
 
             ' ── ML model manager ────────────────────────────────────────────────

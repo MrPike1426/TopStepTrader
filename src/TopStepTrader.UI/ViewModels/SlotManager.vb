@@ -149,6 +149,7 @@ Namespace TopStepTrader.UI.ViewModels
                 s.IsEntryInFlight    = False
                 s.IsEarlyModeEntry   = False
                 s.LastAdxBand        = 0
+                s.DebugTradeId       = Nothing
             End If
         End Sub
 

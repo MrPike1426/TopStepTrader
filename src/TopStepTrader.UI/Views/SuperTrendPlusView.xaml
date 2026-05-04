@@ -380,6 +380,11 @@
                                          IsChecked="{Binding UseEarlyMode}"
                                          Foreground="Gold" FontSize="12" Margin="0,0,0,0"
                                          ToolTip="Enter before bar close using multi-timeframe reversal anticipation (5min + 15min + 1hr alignment). Higher reward potential but more exposure to mid-bar noise."/>
+                            <Border Width="1" Background="#3A5A8A" Margin="12,2,12,2"/>
+                            <CheckBox Content="🐞 Debug Capture"
+                                      IsChecked="{Binding IsDebugCaptureEnabled, Mode=TwoWay}"
+                                      Foreground="#FFB74D" FontSize="12" VerticalAlignment="Center"
+                                      ToolTip="Records every 15-second tick + SL/AI/exit events for each open trade to debug_trades.db. Default OFF."/>
                         </StackPanel>
                     </Grid>
 
@@ -745,29 +750,27 @@
                             </TextBlock>
                         </Border>
 
-                        <!-- Position area: SP/SL/TP, entry reason, phase -->
+                        <!-- Position area: entry price / SL / target / phase -->
                         <Border Grid.Row="4"
                                 Visibility="{Binding Slot1.PositionVisibility}"
                                 Background="#1A2A50" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
                             <StackPanel>
+                                <!-- Row 2: Entry Price and Current SL -->
                                 <TextBlock Text="{Binding Slot1.PositionDisplay}"
                                            Foreground="White"
                                            FontFamily="Consolas" FontSize="12"
                                            TextWrapping="Wrap"/>
-                                <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           TextWrapping="Wrap">
-                                    <Run Text="Phase: "/><Run Text="{Binding Slot1.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
-                                </TextBlock>
-
-                                <!-- Target P&L (shown from position open) -->
-                                <TextBlock Margin="0,2,0,0"
-                                           Text="{Binding Slot1.TargetPnlLine, Mode=OneWay}"
+                                <!-- Phase label -->
+                                <TextBlock Text="{Binding Slot1.StopPhaseLabel}"
+                                           Foreground="#80B0FF" FontFamily="Consolas" FontSize="11"
+                                           Margin="0,2,0,0"/>
+                                <!-- Row 3: Target P&L and live ADX -->
+                                <TextBlock Text="{Binding Slot1.TargetPnlLine, Mode=OneWay}"
                                            Visibility="{Binding Slot1.TargetPnlVisibility}"
-                                           Foreground="#FFD700"
-                                           FontFamily="Consolas" FontSize="12"/>
+                                           Foreground="ForestGreen"
+                                           FontFamily="Consolas" FontSize="12"
+                                           Margin="0,2,0,0"/>
 
                                 <!-- RR Achieved milestone badge -->
                                 <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
@@ -972,29 +975,27 @@
                             </TextBlock>
                         </Border>
 
-                        <!-- Position area: SP/SL/TP, entry reason, phase -->
+                        <!-- Position area: entry price / SL / target / phase -->
                         <Border Grid.Row="4"
                                 Visibility="{Binding Slot2.PositionVisibility}"
                                 Background="#1A2A50" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
                             <StackPanel>
+                                <!-- Row 2: Entry Price and Current SL -->
                                 <TextBlock Text="{Binding Slot2.PositionDisplay}"
                                            Foreground="White"
                                            FontFamily="Consolas" FontSize="12"
                                            TextWrapping="Wrap"/>
-                                <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           TextWrapping="Wrap">
-                                    <Run Text="Phase: "/><Run Text="{Binding Slot2.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
-                                </TextBlock>
-
-                                <!-- Target P&L (shown from position open) -->
-                                <TextBlock Margin="0,2,0,0"
-                                           Text="{Binding Slot2.TargetPnlLine, Mode=OneWay}"
+                                <!-- Phase label -->
+                                <TextBlock Text="{Binding Slot2.StopPhaseLabel}"
+                                           Foreground="#80B0FF" FontFamily="Consolas" FontSize="11"
+                                           Margin="0,2,0,0"/>
+                                <!-- Row 3: Target P&L and live ADX -->
+                                <TextBlock Text="{Binding Slot2.TargetPnlLine, Mode=OneWay}"
                                            Visibility="{Binding Slot2.TargetPnlVisibility}"
-                                           Foreground="#FFD700"
-                                           FontFamily="Consolas" FontSize="12"/>
+                                           Foreground="ForestGreen"
+                                           FontFamily="Consolas" FontSize="12"
+                                           Margin="0,2,0,0"/>
 
                                 <!-- RR Achieved milestone badge -->
                                 <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
@@ -1199,29 +1200,27 @@
                             </TextBlock>
                         </Border>
 
-                        <!-- Position area: SP/SL/TP, entry reason, phase -->
+                        <!-- Position area: entry price / SL / target / phase -->
                         <Border Grid.Row="4"
                                 Visibility="{Binding Slot3.PositionVisibility}"
                                 Background="#1A2A50" CornerRadius="4"
                                 Padding="8,6" Margin="0,8,0,0">
                             <StackPanel>
+                                <!-- Row 2: Entry Price and Current SL -->
                                 <TextBlock Text="{Binding Slot3.PositionDisplay}"
                                            Foreground="White"
                                            FontFamily="Consolas" FontSize="12"
                                            TextWrapping="Wrap"/>
-                                <TextBlock Margin="0,4,0,0"
-                                           FontFamily="Consolas" FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
-                                           TextWrapping="Wrap">
-                                    <Run Text="Phase: "/><Run Text="{Binding Slot3.StopPhaseLabel, Mode=OneWay}" Foreground="Gold"/>
-                                </TextBlock>
-
-                                <!-- Target P&L (shown from position open) -->
-                                <TextBlock Margin="0,2,0,0"
-                                           Text="{Binding Slot3.TargetPnlLine, Mode=OneWay}"
+                                <!-- Phase label -->
+                                <TextBlock Text="{Binding Slot3.StopPhaseLabel}"
+                                           Foreground="#80B0FF" FontFamily="Consolas" FontSize="11"
+                                           Margin="0,2,0,0"/>
+                                <!-- Row 3: Target P&L and live ADX -->
+                                <TextBlock Text="{Binding Slot3.TargetPnlLine, Mode=OneWay}"
                                            Visibility="{Binding Slot3.TargetPnlVisibility}"
-                                           Foreground="#FFD700"
-                                           FontFamily="Consolas" FontSize="12"/>
+                                           Foreground="ForestGreen"
+                                           FontFamily="Consolas" FontSize="12"
+                                           Margin="0,2,0,0"/>
 
                                 <!-- RR Achieved milestone badge -->
                                 <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
