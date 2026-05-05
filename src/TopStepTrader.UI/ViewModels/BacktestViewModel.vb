@@ -7,11 +7,12 @@ Namespace TopStepTrader.UI.ViewModels
 
     ''' <summary>
     ''' Shell ViewModel for the Backtest page.
-    ''' Owns the four sub-VMs (one per tab).
+    ''' Owns the five sub-VMs (one per tab).
     '''   • RunVm          — Tab 1 (Run Backtest)         [BacktestRunViewModel]
-    '''   • MaxEffortVm    — Tab 2 (Maximum Effort!)      [MaxEffortViewModel]
-    '''   • PinnedVm       — Tab 3 (Pinned Results)       [PinnedResultsViewModel]
-    '''   • PreviousRunsVm — Tab 4 (Previous Runs)        [PreviousRunsViewModel]
+    '''   • StPlusVm       — Tab 2 (SuperTrend+)          [SuperTrendPlusBacktestViewModel]
+    '''   • MaxEffortVm    — Tab 3 (Maximum Effort!)      [MaxEffortViewModel]
+    '''   • PinnedVm       — Tab 4 (Pinned Results)       [PinnedResultsViewModel]
+    '''   • PreviousRunsVm — Tab 5 (Previous Runs)        [PreviousRunsViewModel]
     ''' </summary>
     Public Class BacktestViewModel
         Inherits ViewModelBase
@@ -19,6 +20,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         ' ── Sub-VMs ───────────────────────────────────────────────────────────
         Public ReadOnly Property RunVm As BacktestRunViewModel
+        Public ReadOnly Property StPlusVm As SuperTrendPlusBacktestViewModel
         Public ReadOnly Property MaxEffortVm As MaxEffortViewModel
         Public ReadOnly Property PinnedVm As PinnedResultsViewModel
         Public ReadOnly Property PreviousRunsVm As PreviousRunsViewModel
@@ -35,11 +37,13 @@ Namespace TopStepTrader.UI.ViewModels
                        slotStore As ProTraderSlotStore)
 
             ' Create sub-VMs in dependency order:
-            '   PinnedVm first (owns PinnedResults collection)
+            '   PinnedVm first (owns PinnedResults — shared with StPlusVm and MaxEffortVm)
+            '   StPlusVm next (Tab 2 — pins into PinnedVm.PinnedResults)
             '   RunVm next (Tab 1)
-            '   MaxEffortVm last (references both PinnedVm.PinnedResults and RunVm)
+            '   MaxEffortVm next (references both PinnedVm.PinnedResults and RunVm)
             '   PreviousRunsVm last (independent of the others)
             PinnedVm       = New PinnedResultsViewModel()
+            StPlusVm       = New SuperTrendPlusBacktestViewModel(backtestService, barCollectionService, personaService, PinnedVm.PinnedResults)
             RunVm          = New BacktestRunViewModel(backtestService, barCollectionService, session, personaService)
             MaxEffortVm    = New MaxEffortViewModel(backtestService, barCollectionService, claudeReviewService,
                                                     session, personaService, PinnedVm.PinnedResults, RunVm, slotStore)

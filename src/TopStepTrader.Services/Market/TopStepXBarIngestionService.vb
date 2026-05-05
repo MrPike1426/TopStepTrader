@@ -208,14 +208,16 @@ Namespace TopStepTrader.Services.Market
                 Dim unitNumber = TimeframeToUnitNumber(timeframe)
                 ' Request a window long enough to get barCount completed bars.
                 ' 15-second bars: barCount × 15 s + 60 min safety margin.
-                ' The +60 min (increased from +5 min) accounts for practice-account data gaps,
-                ' CME maintenance windows, and session-break periods where no new 15s bars are
-                ' produced for up to ~45 min.  Without the wider window the startTime would sit
-                ' right at the edge of the last active period and the API would return bars
-                ' that are immediately stale, causing every MC tile to declare market closed.
+                ' Intraday bars: barCount × tfMinutes + 3-day calendar buffer.
+                ' The 3-day buffer (4320 min) bridges the 48-hour weekend gap so that
+                ' on Sunday-night market open the window reaches back into Friday's
+                ' session and returns enough bars for indicator warmup (≥ 15 required).
+                ' Without it, only ~7 Friday bars fall in the window and every instrument
+                ' skips due to the 15-bar minimum, leaving the watchlist blank all Sunday
+                ' night and into Monday morning.
                 Dim lookbackMinutes = If(timeframe = BarTimeframe.FifteenSecond,
                                         Math.Ceiling(barCount * 15.0 / 60.0) + 60,
-                                        barCount * CDbl(_strategy_TimeframeMinutesForLiveBar(timeframe)) + 5)
+                                        barCount * CDbl(_strategy_TimeframeMinutesForLiveBar(timeframe)) + (3 * 24 * 60))
                 Dim response = Await _pxHistoryClient.RetrieveBarsAsync(
                     pxId, unit:=unit, unitNumber:=unitNumber, limit:=barCount,
                     live:=False,

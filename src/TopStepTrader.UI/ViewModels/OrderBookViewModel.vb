@@ -155,6 +155,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public Property Leverage As String
         Public Property Strategy As String
         Public Property Persona As String
+        Public Property Timeframe As String
         Public Property EntryTime As String
         Public Property ExitTime As String
         Public Property Duration As String
@@ -198,6 +199,7 @@ Namespace TopStepTrader.UI.ViewModels
             Leverage = $"{t.MaxScaleIns}×"
             Strategy = t.StrategyName
             Persona = t.Persona
+            Timeframe = If(t.Timeframe = String.Empty, "—", t.Timeframe)
             EntryTime = t.EntryTime.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss")
             ExitTime = If(t.ExitTime.HasValue, t.ExitTime.Value.LocalDateTime.ToString("HH:mm:ss"), If(t.IsOpen, "Open", "—"))
             Duration = FormatDuration(t.EntryTime, t.ExitTime)

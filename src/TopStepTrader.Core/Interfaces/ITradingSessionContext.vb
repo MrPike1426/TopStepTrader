@@ -21,6 +21,15 @@ Namespace TopStepTrader.Core.Interfaces
 
         ''' <summary>Raised whenever SelectedAccount changes (fired on the calling thread).</summary>
         Event AccountChanged As EventHandler(Of Account)
+
+        ''' <summary>Whether autonomous order execution is enabled. False = practice accounts only.</summary>
+        ReadOnly Property AutoExecutionEnabled As Boolean
+
+        ''' <summary>Update the AutoExecutionEnabled flag. Raises AutoExecutionChanged.</summary>
+        Sub SetAutoExecution(enabled As Boolean)
+
+        ''' <summary>Raised when AutoExecutionEnabled changes so all ViewModels can refresh their account lists.</summary>
+        Event AutoExecutionChanged As EventHandler
     End Interface
 
 End Namespace

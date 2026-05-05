@@ -18,7 +18,16 @@ Short version:
    - Run `python tickets/tickets.py close <ID> --resolution "<summary>"`
      (this moves the markdown to `tickets/archive/<ID>.md` and updates the SQLite DB)
    - Verify it no longer appears in `python tickets/tickets.py list`
-5. **Commit, push, and pull** — stage everything, commit with `git add -A && git commit -m "<ticket-id>: <short description>"`, push with `git push origin HEAD`, then `git pull`. Never mark a ticket done without completing this step.
+5. **Commit, push, and pull** — stage everything, commit with the typed format `git add -A && git commit -m "<type>(<ID>): <short description>"` (e.g. `fix(BUG-12): increase fetchCount to 80`), push with `git push origin HEAD`, then `git pull`. Never mark a ticket done without completing this step.
+
+   | Type | When |
+   |---|---|
+   | `fix` | Bug fix (BUG-XX) |
+   | `feat` | New feature / strategy change (FEAT-XX, STRAT-XX) |
+   | `test` | Test coverage (TEST-XX) |
+   | `refactor` | Code quality / architecture (QUAL-XX, ARCH-XX) |
+   | `obs` | Observability / logging (OBS-XX) |
+   | `chore` | Tracker / documentation update only |
 
 Never reference `REFACTOR_TRACKER.md`, `Open_TICKETS.md`, or `Closed_Tickets.md` — ticket state is managed exclusively via the SQLite DB in `tickets/tickets.db` and the CLI.
 Never close a ticket without first confirming the build and tests pass.

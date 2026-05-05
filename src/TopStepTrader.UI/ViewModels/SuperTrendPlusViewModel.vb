@@ -2003,7 +2003,8 @@ Namespace TopStepTrader.UI.ViewModels
                                    bars(n).Timestamp <> lastBarTs
                     _lastBarTimestampByTradeId(slot.DebugTradeId) = bars(n).Timestamp
                     If isNewBar Then
-                        RecordDebugSnapshot(slot, currentClose, latestPnl, bars(n), stLine, st.Direction(n), atrVal, "BarClose")
+                        Dim barCloseNotes = $"Score={exitEval.Score} [{String.Join(",", exitEval.ContributingSignals)}] Health={exitEval.RecommendedHealth} ConsecExit={slot.ConsecutiveExitBars}"
+                        RecordDebugSnapshot(slot, currentClose, latestPnl, bars(n), stLine, st.Direction(n), atrVal, "BarClose", barCloseNotes)
                     End If
                 End If
 

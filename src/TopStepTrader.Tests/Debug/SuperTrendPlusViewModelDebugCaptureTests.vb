@@ -1,5 +1,6 @@
 Imports Microsoft.Extensions.Logging.Abstractions
 Imports Moq
+Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Models.Debug
@@ -82,6 +83,43 @@ Namespace TopStepTrader.Tests.Debug
                 ex = e
             End Try
             Assert.Null(ex)
+        End Sub
+
+        ' ── FEAT-42: BarClose Notes contain exit engine score data ────────────
+
+        <Fact>
+        Public Sub BarCloseNotes_HealthyEval_ContainsScoreAndHealth()
+            ' Simulate building the Notes string exactly as the ViewModel does.
+            Dim eval As New ExitEvaluation With {
+                .Score = 0,
+                .ImmediateExit = False
+            }
+            Dim slot As New PositionSlot With {.ConsecutiveExitBars = 0}
+
+            Dim notes = $"Score={eval.Score} [{String.Join(",", eval.ContributingSignals)}] Health={eval.RecommendedHealth} ConsecExit={slot.ConsecutiveExitBars}"
+
+            Assert.Contains("Score=0", notes)
+            Assert.Contains("Health=Healthy", notes)
+            Assert.Contains("ConsecExit=0", notes)
+        End Sub
+
+        <Fact>
+        Public Sub BarCloseNotes_FiringSignals_ContainsSignalList()
+            Dim eval As New ExitEvaluation With {
+                .Score = 5,
+                .ImmediateExit = False
+            }
+            eval.ContributingSignals.Add("E2:3")
+            eval.ContributingSignals.Add("E4:2")
+            Dim slot As New PositionSlot With {.ConsecutiveExitBars = 1}
+
+            Dim notes = $"Score={eval.Score} [{String.Join(",", eval.ContributingSignals)}] Health={eval.RecommendedHealth} ConsecExit={slot.ConsecutiveExitBars}"
+
+            Assert.Contains("Score=5", notes)
+            Assert.Contains("E2:3", notes)
+            Assert.Contains("E4:2", notes)
+            Assert.Contains("Health=Warning", notes)
+            Assert.Contains("ConsecExit=1", notes)
         End Sub
 
     End Class

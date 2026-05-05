@@ -13,6 +13,7 @@ Namespace TopStepTrader.Services.Trading
         Implements ITradingSessionContext
 
         Private _selectedAccount As Account
+        Private _autoExecutionEnabled As Boolean = False
 
         Public ReadOnly Property SelectedAccount As Account Implements ITradingSessionContext.SelectedAccount
             Get
@@ -32,6 +33,19 @@ Namespace TopStepTrader.Services.Trading
         End Sub
 
         Public Event AccountChanged As EventHandler(Of Account) Implements ITradingSessionContext.AccountChanged
+
+        Public ReadOnly Property AutoExecutionEnabled As Boolean Implements ITradingSessionContext.AutoExecutionEnabled
+            Get
+                Return _autoExecutionEnabled
+            End Get
+        End Property
+
+        Public Sub SetAutoExecution(enabled As Boolean) Implements ITradingSessionContext.SetAutoExecution
+            _autoExecutionEnabled = enabled
+            RaiseEvent AutoExecutionChanged(Me, EventArgs.Empty)
+        End Sub
+
+        Public Event AutoExecutionChanged As EventHandler Implements ITradingSessionContext.AutoExecutionChanged
 
     End Class
 

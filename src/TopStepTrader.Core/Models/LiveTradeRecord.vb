@@ -24,6 +24,7 @@ Namespace TopStepTrader.Core.Models
         Public Property MaxScaleIns As Integer                ' persona slot limit (1/2/3)
         Public Property StrategyName As String = String.Empty
         Public Property Persona As String = String.Empty
+        Public Property Timeframe As String = String.Empty
 
         Public Property EntryTime As DateTimeOffset
         Public Property ExitTime As DateTimeOffset?

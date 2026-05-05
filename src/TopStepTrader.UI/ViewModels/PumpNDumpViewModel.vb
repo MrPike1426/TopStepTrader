@@ -362,6 +362,7 @@ Namespace TopStepTrader.UI.ViewModels
             LogEntries.Insert(0, "       3× Green → Long (Pump).  3× Red → Short (Dump).")
             LogEntries.Insert(0, "Entry: 3 consecutive 3-min bars all closing in the same direction.")
             LogEntries.Insert(0, "📌 STRATEGY: PUMP-N-DUMP (3-Bar Price Action)")
+            AddHandler _session.AutoExecutionChanged, AddressOf OnAutoExecutionChanged
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════════
@@ -392,6 +393,29 @@ Namespace TopStepTrader.UI.ViewModels
                 Dispatch(Sub() AddLog($"⚠ Account load error: {ex.Message}"))
             End Try
         End Sub
+
+        Private Sub OnAutoExecutionChanged(sender As Object, e As EventArgs)
+            Task.Run(AddressOf RefreshAccountsAsync)
+        End Sub
+
+        Private Async Function RefreshAccountsAsync() As Task
+            Try
+                Dim accountList = Await _accountService.GetActiveAccountsAsync()
+                Dispatch(Sub()
+                             Accounts.Clear()
+                             For Each a In accountList
+                                 Accounts.Add(a)
+                             Next
+                             If Accounts.Count > 0 Then
+                                 Dim preferred = Accounts.FirstOrDefault(
+                                     Function(a) a.Name IsNot Nothing AndAlso
+                                                 a.Name.StartsWith("PRAC", StringComparison.OrdinalIgnoreCase))
+                                 SelectedAccount = If(preferred, Accounts(0))
+                             End If
+                         End Sub)
+            Catch
+            End Try
+        End Function
 
         ' ══════════════════════════════════════════════════════════════════════
         ' START / STOP

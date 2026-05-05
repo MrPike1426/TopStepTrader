@@ -681,6 +681,7 @@ Namespace TopStepTrader.UI.ViewModels
             ' than EMA/RSI Combined on choppy RTH opens.
             ApplyAtrTier("Wide")
             ApplyMultiConfluenceEngine()
+            AddHandler _session.AutoExecutionChanged, AddressOf OnAutoExecutionChanged
         End Sub
 
         ' ── Session account sync ──────────────────────────────────────────────────
@@ -798,6 +799,29 @@ Namespace TopStepTrader.UI.ViewModels
                 Dispatch(Sub() LogLine($"⚠ Account load failed (offline?): {ex.Message} — strategy cards are still selectable."))
             End Try
         End Sub
+
+        Private Sub OnAutoExecutionChanged(sender As Object, e As EventArgs)
+            Task.Run(AddressOf RefreshAccountsAsync)
+        End Sub
+
+        Private Async Function RefreshAccountsAsync() As Task
+            Try
+                Dim accountList = Await _accountService.GetActiveAccountsAsync()
+                Dispatch(Sub()
+                             Accounts.Clear()
+                             For Each a In accountList
+                                 Accounts.Add(a)
+                             Next
+                             If Accounts.Count > 0 Then
+                                 Dim preferred = Accounts.FirstOrDefault(
+                                     Function(a) a.Name IsNot Nothing AndAlso
+                                                 a.Name.StartsWith("PRAC", StringComparison.OrdinalIgnoreCase))
+                                 SelectedAccount = If(preferred, Accounts(0))
+                             End If
+                         End Sub)
+            Catch
+            End Try
+        End Function
 
         ''' <summary>
         ''' On view load, queries the broker API for each of the 5 monitored assets

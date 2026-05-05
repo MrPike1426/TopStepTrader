@@ -591,6 +591,7 @@ Namespace TopStepTrader.UI.ViewModels
             AddLog("Enter: Market entry 1 contract (initial) with fixed TP/SL bracket (StopLimit).")
             AddLog("Wait: EMA8 crosses EMA21 + confirmation from EMA50 (aligned slope).")
             AddLog("📌 STRATEGY EXPLANATION: 3-EMA CASCADE Momentum")
+            AddHandler _session.AutoExecutionChanged, AddressOf OnAutoExecutionChanged
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════════
@@ -623,6 +624,29 @@ Namespace TopStepTrader.UI.ViewModels
                 Dispatch(Sub() AddLog($"⚠ Account load error: {ex.Message}"))
             End Try
         End Sub
+
+        Private Sub OnAutoExecutionChanged(sender As Object, e As EventArgs)
+            Task.Run(AddressOf RefreshAccountsAsync)
+        End Sub
+
+        Private Async Function RefreshAccountsAsync() As Task
+            Try
+                Dim accountList = Await _accountService.GetActiveAccountsAsync()
+                Dispatch(Sub()
+                             Accounts.Clear()
+                             For Each a In accountList
+                                 Accounts.Add(a)
+                             Next
+                             If Accounts.Count > 0 Then
+                                 Dim preferred = Accounts.FirstOrDefault(
+                                     Function(a) a.Name IsNot Nothing AndAlso
+                                                 a.Name.StartsWith("PRAC", StringComparison.OrdinalIgnoreCase))
+                                 SelectedAccount = If(preferred, Accounts(0))
+                             End If
+                         End Sub)
+            Catch
+            End Try
+        End Function
 
         ' ══════════════════════════════════════════════════════════════════════
         ' LIVE SNIPER — START / STOP

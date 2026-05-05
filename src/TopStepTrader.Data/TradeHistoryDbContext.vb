@@ -16,6 +16,23 @@ Namespace TopStepTrader.Data
 
         Public Property LiveTradeRecords As DbSet(Of LiveTradeRecordEntity)
 
+        ''' <summary>Idempotent ALTER TABLE statements for columns added after initial EnsureCreated.</summary>
+        Public Sub EnsureSchemaCurrent()
+            Dim conn = Database.GetDbConnection()
+            If conn.State <> System.Data.ConnectionState.Open Then conn.Open()
+            Using cmd = conn.CreateCommand()
+                For Each sql In New String() {
+                    "ALTER TABLE ""LiveTradeRecords"" ADD COLUMN ""Timeframe"" TEXT NOT NULL DEFAULT ''"
+                }
+                    cmd.CommandText = sql
+                    Try
+                        cmd.ExecuteNonQuery()
+                    Catch ex As Exception When ex.Message.Contains("duplicate column")
+                    End Try
+                Next
+            End Using
+        End Sub
+
         Protected Overrides Sub OnModelCreating(modelBuilder As ModelBuilder)
             MyBase.OnModelCreating(modelBuilder)
 

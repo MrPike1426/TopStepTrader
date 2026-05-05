@@ -26,6 +26,8 @@ Namespace TopStepTrader.Data.Entities
         Public Property StrategyName As String = String.Empty
         <MaxLength(20)>
         Public Property Persona As String = String.Empty
+        <MaxLength(10)>
+        Public Property Timeframe As String = String.Empty
 
         Public Property EntryTime As DateTimeOffset
         Public Property ExitTime As DateTimeOffset?

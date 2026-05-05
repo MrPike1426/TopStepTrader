@@ -683,6 +683,230 @@
             </ScrollViewer>
         </TabItem>
 
+        <!-- ══ Tab 2: SuperTrend+ ════════════════════════════════════════════ -->
+        <TabItem Header="⚡  SuperTrend+" DataContext="{Binding StPlusVm}">
+            <Grid Margin="24,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>   <!-- Row 0: Button row -->
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="Auto"/>   <!-- Row 2: Progress -->
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="*"/>      <!-- Row 4: Pivot grid -->
+                </Grid.RowDefinitions>
+
+                <!-- ── Button row ──────────────────────────────────────────── -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal">
+
+                    <Button Command="{Binding RunCommand}"
+                            ToolTip="Run SuperTrend+ for 3 personas × 7 contracts × 3 timeframes (63 combinations). 90-day lookback. Live persona settings. Results are pinnable to the Pinned tab.">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background"      Value="#0A2A1A"/>
+                                <Setter Property="BorderBrush"     Value="#38A169"/>
+                                <Setter Property="BorderThickness" Value="1.5"/>
+                                <Setter Property="Foreground"      Value="#F0FFF4"/>
+                                <Setter Property="FontWeight"      Value="Bold"/>
+                                <Setter Property="FontSize"        Value="14"/>
+                                <Setter Property="Cursor"          Value="Hand"/>
+                                <Setter Property="Padding"         Value="14,8"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    CornerRadius="5"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#0D3D26"/>
+                                                </Trigger>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="Opacity" Value="0.5"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
+                        <TextBlock Text="⚡  Run SuperTrend+" VerticalAlignment="Center"/>
+                    </Button>
+
+                    <Button Content="✕  Cancel"
+                            Command="{Binding CancelCommand}"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Margin="12,0,0,0" Padding="10,6"
+                            Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                    <StackPanel Margin="20,0,0,0" VerticalAlignment="Center">
+                        <TextBlock FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   Text="SuperTrend+ strategy only — 3 personas × 7 contracts × 3 timeframes. Live persona settings. 90-day lookback."/>
+                        <TextBlock FontSize="10" FontFamily="Consolas" Margin="0,3,0,0"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   Text="5-min bars used at 5 min · 15 min · 1 hr  ·  ATR stops always ON  ·  1-tick slippage  ·  hard close 20:10 UTC"/>
+                        <TextBlock FontSize="10" FontFamily="Consolas" Margin="0,2,0,0"
+                                   Foreground="{StaticResource TextSecondaryBrush}">
+                            <Run Text="Lewis  " FontWeight="SemiBold" Foreground="#90CAF9"/>
+                            <Run Text="1 qty · ADX≥25 · SL=1.5×ATR · TP=3.0×ATR   "/>
+                            <Run Text="Damian " FontWeight="SemiBold" Foreground="#9AE6B4"/>
+                            <Run Text="3 qty · ADX≥20 · SL=1.0×ATR · TP=2.5×ATR   "/>
+                            <Run Text="Joe    " FontWeight="SemiBold" Foreground="#FEB2B2"/>
+                            <Run Text="5 qty · ADX≥15 · SL=0.75×ATR · TP=2.0×ATR"/>
+                        </TextBlock>
+                    </StackPanel>
+
+                </StackPanel>
+
+                <!-- ── Progress ────────────────────────────────────────────── -->
+                <StackPanel Grid.Row="2">
+                    <ProgressBar Height="4"
+                                 Value="{Binding Progress}" Maximum="100"
+                                 Visibility="{Binding IsRunning, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    <TextBlock Text="{Binding ProgressText}"
+                               FontFamily="Consolas" FontSize="10" Margin="0,4,0,0"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                </StackPanel>
+
+                <!-- ── Pivot grid: rows = contract+timeframe, columns = persona ── -->
+                <Border Grid.Row="4" Background="{StaticResource CardBrush}" CornerRadius="6" Padding="0,0,0,4">
+                    <DataGrid ItemsSource="{Binding Results}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserSortColumns="False"
+                              CanUserResizeRows="False"
+                              HeadersVisibility="Column"
+                              GridLinesVisibility="Horizontal"
+                              Background="Transparent"
+                              RowBackground="Transparent"
+                              BorderThickness="0"
+                              RowHeight="58"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                        <DataGrid.ColumnHeaderStyle>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background"      Value="Transparent"/>
+                                <Setter Property="Foreground"      Value="{StaticResource TextSecondaryBrush}"/>
+                                <Setter Property="FontSize"        Value="11"/>
+                                <Setter Property="FontFamily"      Value="Consolas"/>
+                                <Setter Property="FontWeight"      Value="SemiBold"/>
+                                <Setter Property="Padding"         Value="8,6"/>
+                                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                <Setter Property="BorderBrush"     Value="#333344"/>
+                            </Style>
+                        </DataGrid.ColumnHeaderStyle>
+                        <DataGrid.Columns>
+
+                            <DataGridTextColumn Header="CONTRACT" Binding="{Binding ContractName}" Width="80" FontWeight="SemiBold">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground"        Value="{StaticResource TextPrimaryBrush}"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Padding"           Value="8,0"/>
+                                        <Setter Property="FontSize"          Value="12"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <DataGridTextColumn Header="TF" Binding="{Binding TimeframeLabel}" Width="52">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground"        Value="{StaticResource TextSecondaryBrush}"/>
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Padding"           Value="4,0"/>
+                                        <Setter Property="FontSize"          Value="11"/>
+                                        <Setter Property="FontFamily"        Value="Consolas"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <DataGridTemplateColumn Header="LEWIS  ·  1×  SL1.5  TP3.0" Width="*" MinWidth="155">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="8,6">
+                                            <TextBlock Text="{Binding Lewis.TotalPnL}"
+                                                       Foreground="{Binding Lewis.TotalPnLColor, Converter={StaticResource BrushKeyConverter}}"
+                                                       FontSize="14" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding Lewis.WinTrades}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="10" FontFamily="Consolas"
+                                                       Margin="0,3,0,0"/>
+                                            <TextBlock Text="{Binding Lewis.CalmarSharpe}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="10" FontFamily="Consolas"
+                                                       Margin="0,1,0,0"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="DAMIAN  ·  3×  SL1.0  TP2.5" Width="*" MinWidth="155">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="8,6">
+                                            <TextBlock Text="{Binding Damian.TotalPnL}"
+                                                       Foreground="{Binding Damian.TotalPnLColor, Converter={StaticResource BrushKeyConverter}}"
+                                                       FontSize="14" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding Damian.WinTrades}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="10" FontFamily="Consolas"
+                                                       Margin="0,3,0,0"/>
+                                            <TextBlock Text="{Binding Damian.CalmarSharpe}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="10" FontFamily="Consolas"
+                                                       Margin="0,1,0,0"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="JOE  ·  5×  SL0.75  TP2.0" Width="*" MinWidth="155">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="8,6">
+                                            <TextBlock Text="{Binding Joe.TotalPnL}"
+                                                       Foreground="{Binding Joe.TotalPnLColor, Converter={StaticResource BrushKeyConverter}}"
+                                                       FontSize="14" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding Joe.WinTrades}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="10" FontFamily="Consolas"
+                                                       Margin="0,3,0,0"/>
+                                            <TextBlock Text="{Binding Joe.CalmarSharpe}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="10" FontFamily="Consolas"
+                                                       Margin="0,1,0,0"/>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="" Width="40">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <Button Content="📌"
+                                                ToolTip="Pin all 3 persona results to the Pinned tab"
+                                                Command="{Binding DataContext.PinRowCommand,
+                                                    RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}"
+                                                FontSize="11"
+                                                Padding="2,0"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Cursor="Hand"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Border>
+
+            </Grid>
+        </TabItem>
+
         <!-- ══ Tab 3: Maximum Effort ════════════════════════════════════════ -->
         <TabItem Header="💀  Maximum Effort!" DataContext="{Binding MaxEffortVm}">
             <Grid Margin="24,20">

@@ -21,6 +21,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _balanceHistoryService As IBalanceHistoryService
         Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _riskSettings As RiskSettings
+        Private ReadOnly _userPrefs As IUserPreferencesService
         Private ReadOnly _logger As ILogger(Of DashboardViewModel)
 
         ' ── Broker label ─────────────────────────────────────────────────────
@@ -129,6 +130,56 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── Balance history column headers (actual dates) ────────────────────
+
+        Public ReadOnly Property Date1Header As String
+            Get
+                Return DateTime.Today.AddDays(-1).ToString("ddd MM/dd")
+            End Get
+        End Property
+
+        Public ReadOnly Property Date2Header As String
+            Get
+                Return DateTime.Today.AddDays(-2).ToString("ddd MM/dd")
+            End Get
+        End Property
+
+        Public ReadOnly Property Date3Header As String
+            Get
+                Return DateTime.Today.AddDays(-3).ToString("ddd MM/dd")
+            End Get
+        End Property
+
+        Public ReadOnly Property Date4Header As String
+            Get
+                Return DateTime.Today.AddDays(-4).ToString("ddd MM/dd")
+            End Get
+        End Property
+
+        Public ReadOnly Property Date5Header As String
+            Get
+                Return DateTime.Today.AddDays(-5).ToString("ddd MM/dd")
+            End Get
+        End Property
+
+        Public ReadOnly Property Date6Header As String
+            Get
+                Return DateTime.Today.AddDays(-6).ToString("ddd MM/dd")
+            End Get
+        End Property
+
+        Public ReadOnly Property Date7Header As String
+            Get
+                Return DateTime.Today.AddDays(-7).ToString("ddd MM/dd")
+            End Get
+        End Property
+
+        Public ReadOnly Property Date8Header As String
+            Get
+                Return DateTime.Today.AddDays(-8).ToString("ddd MM/dd")
+            End Get
+        End Property
+
         ' ── Derived display properties ───────────────────────────────────────
 
         Public ReadOnly Property PnLColor As String
@@ -157,15 +208,19 @@ Namespace TopStepTrader.UI.ViewModels
 
         ' ── Settings (Auto-Execution & Risk Guard) ──────────────────────────
 
-        Private _autoExecutionEnabled As Boolean = True
+        Private _autoExecutionEnabled As Boolean = False
         Public Property AutoExecutionEnabled As Boolean
             Get
                 Return _autoExecutionEnabled
             End Get
             Set(value As Boolean)
-                SetProperty(_autoExecutionEnabled, value)
-                ' Immediately apply to the live settings object
-                _riskSettings.AutoExecutionEnabled = value
+                If SetProperty(_autoExecutionEnabled, value) Then
+                    _riskSettings.AutoExecutionEnabled = value
+                    _userPrefs.AutoExecutionEnabled = value
+                    _userPrefs.Save()
+                    _session.SetAutoExecution(value)
+                    Task.Run(AddressOf RefreshAccountsAsync)
+                End If
             End Set
         End Property
 
@@ -236,16 +291,19 @@ Namespace TopStepTrader.UI.ViewModels
                        balanceHistoryService As IBalanceHistoryService,
                        session As ITradingSessionContext,
                        riskOptions As IOptions(Of RiskSettings),
+                       userPrefs As IUserPreferencesService,
                        logger As ILogger(Of DashboardViewModel))
             _accountService = accountService
             _authService = authService
             _balanceHistoryService = balanceHistoryService
             _session = session
             _riskSettings = riskOptions.Value
+            _userPrefs = userPrefs
             _logger = logger
 
-            ' Initialize settings
-            _autoExecutionEnabled = True
+            ' Initialize from persisted session state (loaded from user-prefs.json at app startup)
+            _autoExecutionEnabled = _session.AutoExecutionEnabled
+            _riskSettings.AutoExecutionEnabled = _autoExecutionEnabled
             _dailyLossLimitEditable = _riskSettings.DailyLossLimitDollars.ToString()
             _maxPositionEditable = _riskSettings.MaxPositionSizeContracts.ToString()
             _minConfidenceEditable = (_riskSettings.MinSignalConfidence * 100).ToString("F0")
@@ -265,6 +323,22 @@ Namespace TopStepTrader.UI.ViewModels
         Private Sub LoadData()
             Task.Run(AddressOf LoadDataInternal)
         End Sub
+
+        Private Async Function RefreshAccountsAsync() As Task
+            Try
+                Dim accountList = Await _accountService.GetActiveAccountsAsync()
+                Dispatch(Sub()
+                             _accounts.Clear()
+                             For Each account In accountList
+                                 _accounts.Add(account)
+                             Next
+                             Dim practiceAccount = _accounts.FirstOrDefault(Function(a) a.Name.StartsWith("PRAC-", StringComparison.OrdinalIgnoreCase))
+                             SelectedAccount = If(practiceAccount, _accounts.FirstOrDefault())
+                         End Sub)
+            Catch ex As Exception
+                _logger.LogError(ex, "RefreshAccounts failed")
+            End Try
+        End Function
 
         Private Async Function LoadDataInternal() As Task
             Try
@@ -314,8 +388,8 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Async Function LoadBalanceHistoryAsync(accounts As IEnumerable(Of Account)) As Task
             Try
-                ' Get last 5 days of history for all accounts
-                Dim history = Await _balanceHistoryService.GetAllAccountsRecentHistoryAsync(5)
+                ' Get last 8 days of history for all accounts
+                Dim history = Await _balanceHistoryService.GetAllAccountsRecentHistoryAsync(8)
 
                 Dispatch(Sub()
                              _balanceHistoryRows.Clear()
@@ -326,12 +400,12 @@ Namespace TopStepTrader.UI.ViewModels
                                      .CurrentBalance = If(account.TotalValue > 0, account.TotalValue, account.Balance)
                                  }
 
-                                 ' Populate history dates (last 5 days)
+                                 ' Populate history dates (last 8 days)
                                  If history.ContainsKey(account.Id) Then
                                      Dim accountHistory = history(account.Id).OrderByDescending(Function(h) h.RecordedDate).ToList()
 
-                                     ' Get balances for past 5 days
-                                     For i = 0 To 4
+                                     ' Get balances for past 8 days
+                                     For i = 0 To 7
                                          Dim dayAgo = DateTime.UtcNow.AddDays(-(i + 1)).Date
                                          Dim balance = accountHistory.FirstOrDefault(Function(h) h.RecordedDate = dayAgo)
                                          Select Case i
@@ -345,6 +419,12 @@ Namespace TopStepTrader.UI.ViewModels
                                                  row.Date4Balance = If(balance IsNot Nothing, balance.Balance, CDec(0))
                                              Case 4
                                                  row.Date5Balance = If(balance IsNot Nothing, balance.Balance, CDec(0))
+                                             Case 5
+                                                 row.Date6Balance = If(balance IsNot Nothing, balance.Balance, CDec(0))
+                                             Case 6
+                                                 row.Date7Balance = If(balance IsNot Nothing, balance.Balance, CDec(0))
+                                             Case 7
+                                                 row.Date8Balance = If(balance IsNot Nothing, balance.Balance, CDec(0))
                                          End Select
                                      Next
                                  End If
@@ -419,6 +499,9 @@ Namespace TopStepTrader.UI.ViewModels
         Public Property Date3Balance As Decimal
         Public Property Date4Balance As Decimal
         Public Property Date5Balance As Decimal
+        Public Property Date6Balance As Decimal
+        Public Property Date7Balance As Decimal
+        Public Property Date8Balance As Decimal
     End Class
 
 End Namespace

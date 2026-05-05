@@ -18,6 +18,8 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _riskSettings As RiskSettings
         Private ReadOnly _tradingSettings As TradingSettings
         Private ReadOnly _apiSettings As ApiSettings
+        Private ReadOnly _session As ITradingSessionContext
+        Private ReadOnly _userPrefs As IUserPreferencesService
 
         ' ── API Status ───────────────────────────────────────────────────────
 
@@ -119,12 +121,15 @@ Namespace TopStepTrader.UI.ViewModels
                 Return _autoExecutionEnabled
             End Get
             Set(value As Boolean)
-                SetProperty(_autoExecutionEnabled, value)
-                ' Immediately apply to the live settings object
-                _riskSettings.AutoExecutionEnabled = value
-                StatusMessage = If(value,
-                    "⚠ Auto-execution ENABLED — AI will place live orders",
-                    "Auto-execution disabled — manual orders only")
+                If SetProperty(_autoExecutionEnabled, value) Then
+                    _riskSettings.AutoExecutionEnabled = value
+                    _userPrefs.AutoExecutionEnabled = value
+                    _userPrefs.Save()
+                    _session.SetAutoExecution(value)
+                    StatusMessage = If(value,
+                        "⚠ Auto-execution ENABLED — AI will place live orders",
+                        "Auto-execution disabled — manual orders only")
+                End If
             End Set
         End Property
 
@@ -138,18 +143,22 @@ Namespace TopStepTrader.UI.ViewModels
         Public Sub New(authService As IAuthService,
                        apiOptions As IOptions(Of ApiSettings),
                        riskOptions As IOptions(Of RiskSettings),
-                       tradingOptions As IOptions(Of TradingSettings))
+                       tradingOptions As IOptions(Of TradingSettings),
+                       session As ITradingSessionContext,
+                       userPrefs As IUserPreferencesService)
             _authService = authService
             _apiSettings = apiOptions.Value
             _riskSettings = riskOptions.Value
             _tradingSettings = tradingOptions.Value
+            _session = session
+            _userPrefs = userPrefs
 
-            ' Populate form from current settings
+            ' Populate form from current settings (AutoExecution from persisted prefs via session)
             _dailyLossLimit = _riskSettings.DailyLossLimitDollars.ToString()
             _maxDrawdown = _riskSettings.MaxDrawdownDollars.ToString()
             _maxPosition = _riskSettings.MaxPositionSizeContracts.ToString()
             _minConfidence = _riskSettings.MinSignalConfidence.ToString("F2")
-            _autoExecutionEnabled = True  ' Default to enabled
+            _autoExecutionEnabled = _session.AutoExecutionEnabled
 
             ConnectCommand = New RelayCommand(AddressOf ExecuteConnect)
             ApplyRiskCommand = New RelayCommand(AddressOf ExecuteApplyRisk)

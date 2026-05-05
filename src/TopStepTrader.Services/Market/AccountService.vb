@@ -15,19 +15,22 @@ Namespace TopStepTrader.Services.Market
 
         Private ReadOnly _pxClient As PXAccountClient
         Private ReadOnly _keyStore As IApiKeyStore
+        Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _logger As ILogger(Of AccountService)
 
         Public Sub New(pxClient As PXAccountClient,
                        keyStore As IApiKeyStore,
+                       session As ITradingSessionContext,
                        logger As ILogger(Of AccountService))
             _pxClient = pxClient
             _keyStore = keyStore
+            _session = session
             _logger = logger
         End Sub
 
         ''' <summary>
-        ''' Returns TopStepX accounts when credentials are configured.
-        ''' TopStepX requires TopStepXUsername + TopStepXApiKey.
+        ''' Returns accounts filtered by the current AutoExecution mode.
+        ''' When disabled only practice accounts (PRAC-*) are returned.
         ''' </summary>
         Public Async Function GetActiveAccountsAsync() As Task(Of IEnumerable(Of Account)) _
             Implements IAccountService.GetActiveAccountsAsync
@@ -41,7 +44,12 @@ Namespace TopStepTrader.Services.Market
                 Return Enumerable.Empty(Of Account)()
             End If
 
-            Return Await GetTopStepXAccountsAsync()
+            Dim all = Await GetTopStepXAccountsAsync()
+            If Not _session.AutoExecutionEnabled Then
+                Return all.Where(Function(a) a.Name IsNot Nothing AndAlso
+                                              a.Name.StartsWith("PRAC-", StringComparison.OrdinalIgnoreCase))
+            End If
+            Return all
         End Function
 
         Public Async Function GetAccountAsync(accountId As Long) As Task(Of Account) _

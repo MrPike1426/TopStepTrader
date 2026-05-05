@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:infra="clr-namespace:TopStepTrader.UI.Infrastructure"
              mc:Ignorable="d"
              Background="{StaticResource BackgroundBrush}">
 
@@ -119,7 +120,7 @@
             <Border Grid.Row="6" Background="{StaticResource CardBrush}" CornerRadius="6" Padding="16,14">
                 <StackPanel>
                     <!-- Balance History Table -->
-                    <TextBlock Text="BALANCE HISTORY (5 DAYS)" Style="{StaticResource SectionHeadingStyle}" Margin="0,0,0,12"/>
+                    <TextBlock Text="BALANCE HISTORY (8 DAYS)" Style="{StaticResource SectionHeadingStyle}" Margin="0,0,0,12"/>
                     <DataGrid ItemsSource="{Binding BalanceHistoryRows}"
                               AutoGenerateColumns="False"
                               Background="{StaticResource SurfaceBrush}"
@@ -131,14 +132,20 @@
                               GridLinesVisibility="Horizontal"
                               HorizontalGridLinesBrush="{StaticResource BorderBrush}"
                               RowHeight="32">
+                        <DataGrid.Resources>
+                            <infra:BindingProxy x:Key="VmProxy" Data="{Binding}"/>
+                        </DataGrid.Resources>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Account" Binding="{Binding AccountName}" Width="150"/>
-                            <DataGridTextColumn Header="Current" Binding="{Binding CurrentBalance, StringFormat=C0}" Width="120"/>
-                            <DataGridTextColumn Header="Today-1" Binding="{Binding Date1Balance, StringFormat=C0}" Width="100"/>
-                            <DataGridTextColumn Header="Today-2" Binding="{Binding Date2Balance, StringFormat=C0}" Width="100"/>
-                            <DataGridTextColumn Header="Today-3" Binding="{Binding Date3Balance, StringFormat=C0}" Width="100"/>
-                            <DataGridTextColumn Header="Today-4" Binding="{Binding Date4Balance, StringFormat=C0}" Width="100"/>
-                            <DataGridTextColumn Header="Today-5" Binding="{Binding Date5Balance, StringFormat=C0}" Width="100"/>
+                            <DataGridTextColumn Header="Current" Binding="{Binding CurrentBalance, StringFormat=C0}" Width="110"/>
+                            <DataGridTextColumn Header="{Binding Data.Date1Header, Source={StaticResource VmProxy}}" Binding="{Binding Date1Balance, StringFormat=C0}" Width="90"/>
+                            <DataGridTextColumn Header="{Binding Data.Date2Header, Source={StaticResource VmProxy}}" Binding="{Binding Date2Balance, StringFormat=C0}" Width="90"/>
+                            <DataGridTextColumn Header="{Binding Data.Date3Header, Source={StaticResource VmProxy}}" Binding="{Binding Date3Balance, StringFormat=C0}" Width="90"/>
+                            <DataGridTextColumn Header="{Binding Data.Date4Header, Source={StaticResource VmProxy}}" Binding="{Binding Date4Balance, StringFormat=C0}" Width="90"/>
+                            <DataGridTextColumn Header="{Binding Data.Date5Header, Source={StaticResource VmProxy}}" Binding="{Binding Date5Balance, StringFormat=C0}" Width="90"/>
+                            <DataGridTextColumn Header="{Binding Data.Date6Header, Source={StaticResource VmProxy}}" Binding="{Binding Date6Balance, StringFormat=C0}" Width="90"/>
+                            <DataGridTextColumn Header="{Binding Data.Date7Header, Source={StaticResource VmProxy}}" Binding="{Binding Date7Balance, StringFormat=C0}" Width="90"/>
+                            <DataGridTextColumn Header="{Binding Data.Date8Header, Source={StaticResource VmProxy}}" Binding="{Binding Date8Balance, StringFormat=C0}" Width="90"/>
                         </DataGrid.Columns>
                     </DataGrid>
 

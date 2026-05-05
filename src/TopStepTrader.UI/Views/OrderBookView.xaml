@@ -183,6 +183,9 @@
                 <!-- Persona -->
                 <DataGridTextColumn Header="Persona" Binding="{Binding Persona}" Width="70" SortMemberPath="Persona"/>
 
+                <!-- Timeframe -->
+                <DataGridTextColumn Header="TF" Binding="{Binding Timeframe}" Width="50" SortMemberPath="Timeframe"/>
+
                 <!-- Entry Time -->
                 <DataGridTextColumn Header="Entry Time" Binding="{Binding EntryTime}" Width="145" SortMemberPath="EntryTime"/>
 
