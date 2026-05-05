@@ -115,6 +115,39 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── ORB properties (equity-index instruments only) ────────────────────
+        Private _orbSignal As String = ""
+        ''' <summary>"BULL" / "BEAR" / "WAIT" / "BUILDING" / "CLOSED" / "" (non-equity = empty)</summary>
+        Public Property OrbSignal As String
+            Get
+                Return _orbSignal
+            End Get
+            Set(value As String)
+                SetProperty(_orbSignal, value)
+            End Set
+        End Property
+
+        Private _orbRangeDisplay As String = ""
+        ''' <summary>E.g. "OR: 5012 / 4988" once the range is known, otherwise "".</summary>
+        Public Property OrbRangeDisplay As String
+            Get
+                Return _orbRangeDisplay
+            End Get
+            Set(value As String)
+                SetProperty(_orbRangeDisplay, value)
+            End Set
+        End Property
+
+        Private _orbRowColor As Brush = Brushes.Transparent
+        Public Property OrbRowColor As Brush
+            Get
+                Return _orbRowColor
+            End Get
+            Set(value As Brush)
+                SetProperty(_orbRowColor, value)
+            End Set
+        End Property
+
     End Class
 
     Public Class SymbolRowVm
@@ -186,6 +219,23 @@ Namespace TopStepTrader.UI.ViewModels
         ' TopStepX session-close window: entries suppressed, scan skipped.
         Private Shared ReadOnly SessionCloseTime As TimeSpan = TimeSpan.FromHours(21).Add(TimeSpan.FromMinutes(10))
         Private Shared ReadOnly SessionResumeTime As TimeSpan = TimeSpan.FromHours(22)
+
+        ' ── ORB time-of-day constants (US Eastern) ────────────────────────────
+        ' Regular equity session: 09:30–16:00 ET.  OR window: 09:30–10:00.
+        ' Entry window: 10:00–12:45 (first half of session).
+        ' Banner shown: 09:00–17:00 ET only.
+        Private Shared ReadOnly EasternTz As TimeZoneInfo =
+            TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time")
+        Private Shared ReadOnly OrbSessionOpen   As TimeSpan = TimeSpan.FromHours(9).Add(TimeSpan.FromMinutes(30))
+        Private Shared ReadOnly OrbRangeEnd      As TimeSpan = TimeSpan.FromHours(10)
+        Private Shared ReadOnly OrbEntryClose    As TimeSpan = TimeSpan.FromHours(12).Add(TimeSpan.FromMinutes(45))
+        Private Shared ReadOnly OrbSessionClose  As TimeSpan = TimeSpan.FromHours(16)
+        Private Shared ReadOnly OrbBannerStart   As TimeSpan = TimeSpan.FromHours(9)
+        Private Shared ReadOnly OrbBannerEnd     As TimeSpan = TimeSpan.FromHours(17)
+
+        ''' <summary>PxRootSymbols that participate in ORB monitoring (equity index futures only).</summary>
+        Private Shared ReadOnly OrbEquitySymbols As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) _
+            From {"MES", "MNQ", "M2K", "MYM"}
 
         Public ReadOnly Property WatchlistItems As New ObservableCollection(Of WatchlistRowVm)
         Private Const SyncMissThreshold As Integer = 3
@@ -296,6 +346,29 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
             Set(value As Boolean)
                 SetProperty(_isHowItWorksExpanded, value)
+            End Set
+        End Property
+
+        ' ── ORB phase banner ─────────────────────────────────────────────────
+        Private _orbPhaseLabel As String = ""
+        ''' <summary>Human-readable ORB phase shown in the banner strip, e.g. "📐 ORB  •  🟠 Building opening range  09:30–10:00 ET".</summary>
+        Public Property OrbPhaseLabel As String
+            Get
+                Return _orbPhaseLabel
+            End Get
+            Set(value As String)
+                SetProperty(_orbPhaseLabel, value)
+            End Set
+        End Property
+
+        Private _isOrbBannerVisible As Boolean = False
+        ''' <summary>True only during 09:00–17:00 ET on weekdays.</summary>
+        Public Property IsOrbBannerVisible As Boolean
+            Get
+                Return _isOrbBannerVisible
+            End Get
+            Set(value As Boolean)
+                SetProperty(_isOrbBannerVisible, value)
             End Set
         End Property
 
@@ -938,8 +1011,27 @@ Namespace TopStepTrader.UI.ViewModels
                         wRow.SignalReason = signalReason
                         wRow.DiDisplay = diStr
                     End Sub)
+
+                ' ── ORB evaluation (equity-index instruments only, always 5-min bars) ──
+                If OrbEquitySymbols.Contains(contractId) Then
+                    EvaluateOrbSignal(wRow, bars)
+                End If
             Next
             _allMarketsClosed = Not anyFreshBar
+
+            ' Update ORB phase banner once per scan
+            Dim etNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, EasternTz)
+            Dim etTod = etNow.TimeOfDay
+            Dim isBannerVisible = etNow.DayOfWeek <> DayOfWeek.Saturday AndAlso
+                                  etNow.DayOfWeek <> DayOfWeek.Sunday AndAlso
+                                  etTod >= OrbBannerStart AndAlso etTod < OrbBannerEnd
+            Dim phaseLabel = If(isBannerVisible, GetOrbPhaseLabel(etTod), "")
+            Application.Current?.Dispatcher?.Invoke(
+                Sub()
+                    OrbPhaseLabel = phaseLabel
+                    IsOrbBannerVisible = isBannerVisible
+                End Sub)
+
             Return cache
         End Function
 
@@ -947,6 +1039,162 @@ Namespace TopStepTrader.UI.ViewModels
             StatusBackground = New SolidColorBrush(Color.FromRgb(&H22, &H8B, &H22))
             Await Task.Delay(400)
             StatusBackground = Brushes.Transparent
+        End Sub
+
+        ''' <summary>
+        ''' Returns the human-readable ORB phase label for the given ET time-of-day.
+        ''' Called once per scan tick and bound to the banner strip.
+        ''' </summary>
+        Friend Shared Function GetOrbPhaseLabel(etTod As TimeSpan) As String
+            If etTod < OrbSessionOpen Then
+                Return "📐 ORB  •  ⚫ Pre-market — session opens at 09:30 ET"
+            ElseIf etTod < OrbRangeEnd Then
+                Return "📐 ORB  •  🟠 Building opening range  09:30 – 10:00 ET"
+            ElseIf etTod < OrbEntryClose Then
+                Return "📐 ORB  •  🟢 Entry window open  10:00 – 12:45 ET"
+            ElseIf etTod < OrbSessionClose Then
+                Return "📐 ORB  •  ⛔ Entry window closed — past session midpoint"
+            Else
+                Return "📐 ORB  •  ⚫ Session closed"
+            End If
+        End Function
+
+        ''' <summary>
+        ''' Evaluates the ORB signal for one equity-index watchlist row using the supplied bars.
+        ''' Always uses a 5-minute opening range (6 bars) regardless of the selected timeframe.
+        ''' Updates OrbSignal, OrbRangeDisplay, and OrbRowColor on <paramref name="wRow"/>.
+        ''' Must be called on the UI thread (or wrapped in a Dispatcher.Invoke).
+        ''' </summary>
+        Friend Sub EvaluateOrbSignal(wRow As WatchlistRowVm, bars As IList(Of MarketBar))
+            ' Determine ET phase
+            Dim etNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, EasternTz)
+            Dim etTod = etNow.TimeOfDay
+
+            ' Outside banner window: clear ORB columns
+            If etNow.DayOfWeek = DayOfWeek.Saturday OrElse etNow.DayOfWeek = DayOfWeek.Sunday OrElse
+               etTod < OrbBannerStart OrElse etTod >= OrbBannerEnd Then
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        wRow.OrbSignal = ""
+                        wRow.OrbRangeDisplay = ""
+                        wRow.OrbRowColor = Brushes.Transparent
+                    End Sub)
+                Return
+            End If
+
+            ' Pre-market: show waiting state
+            If etTod < OrbSessionOpen Then
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        wRow.OrbSignal = "PRE"
+                        wRow.OrbRangeDisplay = ""
+                        wRow.OrbRowColor = Brushes.DimGray
+                    End Sub)
+                Return
+            End If
+
+            ' ── Identify today's session bars ────────────────────────────────
+            ' Use the last bar's date as the session date anchor (avoids UTC vs ET edge cases).
+            Dim sessionDate = bars.Last().Timestamp.Date
+            Dim sessionBars = bars.Where(Function(b) b.Timestamp.Date = sessionDate).OrderBy(Function(b) b.Timestamp).ToList()
+
+            ' ORB always uses 5-min bars → 6 bars = 30 minutes.
+            Const OrbBarCount As Integer = 6
+            If sessionBars.Count = 0 Then Return
+
+            ' Still building the opening range
+            If etTod < OrbRangeEnd Then
+                Dim barsBuilt = Math.Min(sessionBars.Count, OrbBarCount)
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        wRow.OrbSignal = "BUILDING"
+                        wRow.OrbRangeDisplay = String.Format("OR: building ({0}/{1})", barsBuilt, OrbBarCount)
+                        wRow.OrbRowColor = Brushes.DarkGoldenrod
+                    End Sub)
+                Return
+            End If
+
+            ' Past entry window
+            If etTod >= OrbEntryClose Then
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        wRow.OrbSignal = "CLOSED"
+                        wRow.OrbRangeDisplay = ""
+                        wRow.OrbRowColor = Brushes.DimGray
+                    End Sub)
+                Return
+            End If
+
+            ' ── Compute OR high / low from first 6 session bars ─────────────
+            Dim orbBars = sessionBars.Take(OrbBarCount).ToList()
+            If orbBars.Count < OrbBarCount Then
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        wRow.OrbSignal = "BUILDING"
+                        wRow.OrbRangeDisplay = String.Format("OR: building ({0}/{1})", orbBars.Count, OrbBarCount)
+                        wRow.OrbRowColor = Brushes.DarkGoldenrod
+                    End Sub)
+                Return
+            End If
+
+            Dim orHigh = orbBars.Max(Function(b) b.High)
+            Dim orLow  = orbBars.Min(Function(b) b.Low)
+            Dim orWidth = orHigh - orLow
+            If orWidth <= 0D Then Return
+
+            Dim rangeDisplay = String.Format("OR: {0:F2} / {1:F2}", orHigh, orLow)
+
+            ' ── ATR(14) no-trade filter: OR width > 2× ATR ──────────────────
+            Dim allHighs = bars.Select(Function(b) b.High).ToList()
+            Dim allLows  = bars.Select(Function(b) b.Low).ToList()
+            Dim allCloses = bars.Select(Function(b) b.Close).ToList()
+            Dim atr14 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, period:=14)
+            Dim n = bars.Count - 1
+            Dim atrNow As Single = If(atr14 IsNot Nothing AndAlso n < atr14.Length, atr14(n), 0.0F)
+            If Not Single.IsNaN(atrNow) AndAlso atrNow > 0F AndAlso orWidth > CDec(atrNow) * 2D Then
+                Application.Current?.Dispatcher?.Invoke(
+                    Sub()
+                        wRow.OrbSignal = "WIDE"
+                        wRow.OrbRangeDisplay = rangeDisplay & "  ⚠ OR too wide"
+                        wRow.OrbRowColor = Brushes.DarkOrange
+                    End Sub)
+                Return
+            End If
+
+            ' ── Volume gate ──────────────────────────────────────────────────
+            Dim lastBar = bars.Last()
+            Dim volSeries = bars.Select(Function(b) b.Volume).ToList()
+            Dim volMa20 = TechnicalIndicators.SMA(volSeries, period:=20)
+            Dim volMaNow As Single = If(volMa20 IsNot Nothing AndAlso n < volMa20.Length AndAlso Not Single.IsNaN(volMa20(n)), volMa20(n), 0.0F)
+            Dim volOk = volMaNow > 0.0F AndAlso lastBar.Volume >= CDec(volMaNow) * 1.2D
+
+            ' ── Signal evaluation ────────────────────────────────────────────
+            Dim close = lastBar.Close
+            Dim orbSignal As String
+            Dim orbColor As Brush
+
+            If close > orHigh AndAlso volOk Then
+                orbSignal = "BULL"
+                orbColor = Brushes.LimeGreen
+            ElseIf close < orLow AndAlso volOk Then
+                orbSignal = "BEAR"
+                orbColor = Brushes.Red
+            ElseIf close > orHigh OrElse close < orLow Then
+                ' Breakout without volume confirmation
+                orbSignal = "WAIT"
+                orbColor = Brushes.Goldenrod
+            Else
+                ' Price inside range
+                orbSignal = "WAIT"
+                orbColor = Brushes.DarkGoldenrod
+            End If
+
+            Application.Current?.Dispatcher?.Invoke(
+                Sub()
+                    wRow.OrbSignal = orbSignal
+                    wRow.OrbRangeDisplay = rangeDisplay
+                    wRow.OrbRowColor = orbColor
+                End Sub)
         End Sub
 
         Private Function UpdateApproachHistory(contractId As String, stDir As Integer, distance As Decimal) As Boolean

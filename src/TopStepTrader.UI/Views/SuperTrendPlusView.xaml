@@ -337,6 +337,52 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- ── ORB — Opening Range Breakout ── -->
+                        <Border Background="#16213A" CornerRadius="6" Padding="14,10" Margin="0,8,0,0">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <TextBlock Text="&#x1F4D0;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <TextBlock Text="ORB — Opening Range Breakout" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Text="  (equity index futures only: MES · MNQ · M2K · MYM)" Foreground="#8090A0" FontSize="12" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17" Margin="0,0,0,8">The ORB strategy uses the first 30 minutes of the regular US equity session to define a range, then trades breakouts from that range during the first half of the session only. It runs on <Run Foreground="White" FontWeight="SemiBold">5-minute bars</Run> regardless of the timeframe selected above.</TextBlock>
+
+                                <Border Background="#1A2440" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,4">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Phase" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="1" Text="What happens" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
+                                        </Grid>
+                                        <Rectangle Height="1" Fill="#2A3A5A" Margin="0,0,0,4"/>
+                                        <Grid Margin="0,0,0,3">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Pre-market" Foreground="#8090A0" FontSize="12"/>
+                                            <TextBlock Grid.Column="1" Text="Before 09:30 ET — watching, no signal" Foreground="#8090A0" FontSize="12"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,3">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="09:30 – 10:00" Foreground="Gold" FontSize="12"/>
+                                            <TextBlock Grid.Column="1" Text="Opening range builds — high and low of the first 6 bars define the OR" Foreground="#8090A0" FontSize="12"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,3">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="10:00 – 12:45" Foreground="#66BB6A" FontSize="12"/>
+                                            <TextBlock Grid.Column="1" Text="Entry window — breakout signals evaluated each tick" Foreground="#8090A0" FontSize="12"/>
+                                        </Grid>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="After 12:45" Foreground="#8090A0" FontSize="12"/>
+                                            <TextBlock Grid.Column="1" Text="Window closed — late entries suppressed to avoid choppy afternoon action" Foreground="#8090A0" FontSize="12"/>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17" Margin="0,0,0,6">A <Run Foreground="White" FontWeight="SemiBold">BULL</Run> signal fires when the bar close exceeds the OR high <Run FontStyle="Italic">and</Run> volume is ≥ 1.2× its 20-bar average. A <Run Foreground="White" FontWeight="SemiBold">BEAR</Run> signal fires when the close falls below the OR low with the same volume confirmation. <Run Foreground="White" FontWeight="SemiBold">WAIT</Run> means a breakout occurred without sufficient volume. <Run Foreground="White" FontWeight="SemiBold">WIDE</Run> means the OR exceeded 2× ATR(14) — the range is too large to offer a reliable R:R and is skipped.</TextBlock>
+                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17">Stop = opposite extreme of the OR. Target = 1.5× OR width (minimum 1:1.5 R:R). <Run Foreground="White" FontWeight="SemiBold">This view shows signals only</Run> — ORB order placement is a separate feature.</TextBlock>
+                            </StackPanel>
+                        </Border>
+
                     </StackPanel>
                 </Border>
             </Border>
@@ -552,6 +598,24 @@
                 </StackPanel>
             </Border>
 
+
+            <!-- ORB phase banner (visible 09:00-17:00 ET on weekdays) -->
+            <Border Margin="0,8,0,0" CornerRadius="6" Padding="10,7"
+                    Background="#16213A" BorderBrush="#3A5A8A" BorderThickness="1">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsOrbBannerVisible}" Value="True">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock Text="{Binding OrbPhaseLabel}"
+                           Foreground="#90CAF9" FontSize="12" FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+            </Border>
             <!-- â”€â”€ Watchlist panel â”€â”€ -->
             <Border Background="{StaticResource SurfaceBrush}"
                     CornerRadius="6" Padding="14,10" Margin="0,10,0,0"
@@ -566,18 +630,24 @@
                     <Grid Grid.Row="0" Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="110"/>
-                                <ColumnDefinition Width="50"/>
-                                <ColumnDefinition Width="90"/>
-                                <ColumnDefinition Width="160"/>
-                                <ColumnDefinition Width="130"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Symbol"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                            <TextBlock Grid.Column="1" Text="Trend"     Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                            <TextBlock Grid.Column="2" Text="Signal"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                            <TextBlock Grid.Column="3" Text="Strength"  Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                            <TextBlock Grid.Column="4" Text="+DI / -DI" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                            <TextBlock Grid.Column="5" Text="What this means" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                            <ColumnDefinition Width="50"/>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="160"/>
+                            <ColumnDefinition Width="130"/>
+                            <ColumnDefinition Width="140"/>
+                            <ColumnDefinition Width="70"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Symbol"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="1" Text="Trend"     Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="2" Text="Signal"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="3" Text="Strength"  Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="4" Text="+DI / -DI" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="5" Text="ORB Range" Foreground="#5C8FBF"    FontSize="11" FontWeight="SemiBold"
+                                   ToolTip="Opening Range high / low (equity index futures, 5-min, 09:30–10:00 ET)"/>
+                        <TextBlock Grid.Column="6" Text="ORB"       Foreground="#5C8FBF"    FontSize="11" FontWeight="SemiBold"
+                                   ToolTip="ORB signal: BULL / BEAR / WAIT / BUILDING / WIDE / CLOSED"/>
+                        <TextBlock Grid.Column="7" Text="What this means" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
                     </Grid>
 
                     <!-- rows -->
@@ -591,6 +661,8 @@
                                         <ColumnDefinition Width="90"/>
                                         <ColumnDefinition Width="160"/>
                                         <ColumnDefinition Width="130"/>
+                                        <ColumnDefinition Width="140"/>
+                                        <ColumnDefinition Width="70"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0"
@@ -613,7 +685,39 @@
                                                Text="{Binding DiDisplay, Mode=OneWay}"
                                                Foreground="{Binding RowColor}"
                                                FontFamily="Consolas" FontSize="12"/>
+                                    <!-- ORB Range: shown for equity index instruments only -->
                                     <TextBlock Grid.Column="5"
+                                               Text="{Binding OrbRangeDisplay, Mode=OneWay}"
+                                               Foreground="{Binding OrbRowColor}"
+                                               FontFamily="Consolas" FontSize="11"
+                                               VerticalAlignment="Center"/>
+                                    <!-- ORB Signal badge -->
+                                    <Border Grid.Column="6" CornerRadius="3" Padding="4,2"
+                                            HorizontalAlignment="Left" VerticalAlignment="Center">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="Transparent"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding OrbSignal}" Value="BULL">
+                                                        <Setter Property="Background" Value="#1A3A1A"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding OrbSignal}" Value="BEAR">
+                                                        <Setter Property="Background" Value="#3A1A1A"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding OrbSignal}" Value="BUILDING">
+                                                        <Setter Property="Background" Value="#2A2000"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding OrbSignal}" Value="WIDE">
+                                                        <Setter Property="Background" Value="#2A1800"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="{Binding OrbSignal, Mode=OneWay}"
+                                                   Foreground="{Binding OrbRowColor}"
+                                                   FontFamily="Consolas" FontSize="11" FontWeight="SemiBold"/>
+                                    </Border>
+                                    <TextBlock Grid.Column="7"
                                                Text="{Binding SignalReason, Mode=OneWay}"
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                FontSize="11" TextWrapping="NoWrap"
