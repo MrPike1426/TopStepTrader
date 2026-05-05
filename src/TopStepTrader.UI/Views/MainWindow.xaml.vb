@@ -79,6 +79,8 @@ Namespace TopStepTrader.UI
                     MainContent.Content = _viewModelLocator.SettingsView
                 Case "ProTrader"
                     MainContent.Content = _viewModelLocator.ProTraderView
+                Case "DebugTradeViewer"
+                    MainContent.Content = _viewModelLocator.DebugTradeViewerView
                 Case "Persona"
                     MainContent.Content = _viewModelLocator.PersonaView
                 Case "ApiKeys"

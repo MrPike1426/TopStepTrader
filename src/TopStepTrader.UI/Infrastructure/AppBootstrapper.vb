@@ -115,6 +115,8 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of ApiKeysView)()
                         services.AddTransient(Of PersonaView)()
                         services.AddTransient(Of ProTraderView)()
+                        services.AddTransient(Of DebugTradeViewerViewModel)()
+                        services.AddTransient(Of DebugTradeViewerView)()
 
                         ' Main window
                         services.AddSingleton(Of MainWindow)()

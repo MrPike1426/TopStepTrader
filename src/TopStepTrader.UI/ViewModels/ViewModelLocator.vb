@@ -121,6 +121,12 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        Public ReadOnly Property DebugTradeViewerView As Views.DebugTradeViewerView
+            Get
+                Return Resolve(Of Views.DebugTradeViewerView)("DebugTradeViewer")
+            End Get
+        End Property
+
         Public Sub Dispose() Implements IDisposable.Dispose
             If Not _disposed Then
                 _instances.Clear()

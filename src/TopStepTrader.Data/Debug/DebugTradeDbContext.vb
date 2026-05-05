@@ -373,6 +373,93 @@ Namespace TopStepTrader.Data.Debug
             End Using
         End Function
 
+        Public Async Function GetAllTradesAsync() As Task(Of List(Of DebugTradeRecord))
+            Dim result As New List(Of DebugTradeRecord)()
+            Using conn = New SqliteConnection(_connectionString)
+                Await conn.OpenAsync()
+                Using cmd = conn.CreateCommand()
+                    cmd.CommandText =
+                        "SELECT TradeId,SlotIndex,Persona,Instrument,TimeFrame,EntryMode,Direction," &
+                        " EntryPrice,EntryTime,InitialSL,InitialTP,ContractCount," &
+                        " SuperTrendConfigJson,AiCheckResult,AiCheckReason," &
+                        " ActualFillPrice,FillConfirmedTime,RealisedPnLDollars,ClosedAt,CreatedAt" &
+                        " FROM DebugTrades ORDER BY CreatedAt DESC"
+                    Using reader = Await cmd.ExecuteReaderAsync()
+                        While Await reader.ReadAsync()
+                            Dim r As New DebugTradeRecord()
+                            r.TradeId = reader.GetString(0)
+                            r.SlotIndex = reader.GetInt32(1)
+                            r.Persona = reader.GetString(2)
+                            r.Instrument = reader.GetString(3)
+                            r.TimeFrame = reader.GetString(4)
+                            r.EntryMode = reader.GetString(5)
+                            r.Direction = reader.GetString(6)
+                            r.EntryPrice = CDec(reader.GetDouble(7))
+                            r.EntryTime = reader.GetString(8)
+                            r.InitialSL = CDec(reader.GetDouble(9))
+                            r.InitialTP = CDec(reader.GetDouble(10))
+                            r.ContractCount = reader.GetInt32(11)
+                            r.SuperTrendConfigJson = reader.GetString(12)
+                            r.AiCheckResult = If(reader.IsDBNull(13), Nothing, reader.GetString(13))
+                            r.AiCheckReason = If(reader.IsDBNull(14), Nothing, reader.GetString(14))
+                            r.ActualFillPrice = If(reader.IsDBNull(15), CType(Nothing, Decimal?), CDec(reader.GetDouble(15)))
+                            r.FillConfirmedTime = If(reader.IsDBNull(16), Nothing, reader.GetString(16))
+                            r.RealisedPnLDollars = If(reader.IsDBNull(17), CType(Nothing, Decimal?), CDec(reader.GetDouble(17)))
+                            r.ClosedAt = If(reader.IsDBNull(18), Nothing, reader.GetString(18))
+                            r.CreatedAt = reader.GetString(19)
+                            result.Add(r)
+                        End While
+                    End Using
+                End Using
+            End Using
+            Return result
+        End Function
+
+        Public Async Function GetSnapshotsAsync(tradeId As String) As Task(Of List(Of DebugSnapshotRecord))
+            Dim result As New List(Of DebugSnapshotRecord)()
+            Using conn = New SqliteConnection(_connectionString)
+                Await conn.OpenAsync()
+                Using cmd = conn.CreateCommand()
+                    cmd.CommandText =
+                        "SELECT TradeId,Timestamp,EventType,LastPrice,Bid,Ask,CurrentSL,CurrentTP," &
+                        " UnrealizedPnLTicks,UnrealizedPnLDollars,Mfe,Mae," &
+                        " BarOpen,BarHigh,BarLow,BarClose,SuperTrendValue,SuperTrendDirection," &
+                        " Atr,Adx,StopPhase,Notes" &
+                        " FROM DebugSnapshots WHERE TradeId = @TradeId ORDER BY Timestamp ASC"
+                    cmd.Parameters.AddWithValue("@TradeId", tradeId)
+                    Using reader = Await cmd.ExecuteReaderAsync()
+                        While Await reader.ReadAsync()
+                            Dim s As New DebugSnapshotRecord()
+                            s.TradeId = reader.GetString(0)
+                            s.Timestamp = reader.GetString(1)
+                            s.EventType = reader.GetString(2)
+                            s.LastPrice = If(reader.IsDBNull(3), CType(Nothing, Decimal?), CDec(reader.GetDouble(3)))
+                            s.Bid = If(reader.IsDBNull(4), CType(Nothing, Decimal?), CDec(reader.GetDouble(4)))
+                            s.Ask = If(reader.IsDBNull(5), CType(Nothing, Decimal?), CDec(reader.GetDouble(5)))
+                            s.CurrentSL = If(reader.IsDBNull(6), CType(Nothing, Decimal?), CDec(reader.GetDouble(6)))
+                            s.CurrentTP = If(reader.IsDBNull(7), CType(Nothing, Decimal?), CDec(reader.GetDouble(7)))
+                            s.UnrealizedPnLTicks = If(reader.IsDBNull(8), CType(Nothing, Decimal?), CDec(reader.GetDouble(8)))
+                            s.UnrealizedPnLDollars = If(reader.IsDBNull(9), CType(Nothing, Decimal?), CDec(reader.GetDouble(9)))
+                            s.Mfe = If(reader.IsDBNull(10), CType(Nothing, Decimal?), CDec(reader.GetDouble(10)))
+                            s.Mae = If(reader.IsDBNull(11), CType(Nothing, Decimal?), CDec(reader.GetDouble(11)))
+                            s.BarOpen = If(reader.IsDBNull(12), CType(Nothing, Decimal?), CDec(reader.GetDouble(12)))
+                            s.BarHigh = If(reader.IsDBNull(13), CType(Nothing, Decimal?), CDec(reader.GetDouble(13)))
+                            s.BarLow = If(reader.IsDBNull(14), CType(Nothing, Decimal?), CDec(reader.GetDouble(14)))
+                            s.BarClose = If(reader.IsDBNull(15), CType(Nothing, Decimal?), CDec(reader.GetDouble(15)))
+                            s.SuperTrendValue = If(reader.IsDBNull(16), CType(Nothing, Decimal?), CDec(reader.GetDouble(16)))
+                            s.SuperTrendDirection = If(reader.IsDBNull(17), Nothing, reader.GetString(17))
+                            s.Atr = If(reader.IsDBNull(18), CType(Nothing, Decimal?), CDec(reader.GetDouble(18)))
+                            s.Adx = If(reader.IsDBNull(19), CType(Nothing, Single?), CSng(reader.GetDouble(19)))
+                            s.StopPhase = If(reader.IsDBNull(20), Nothing, reader.GetString(20))
+                            s.Notes = If(reader.IsDBNull(21), Nothing, reader.GetString(21))
+                            result.Add(s)
+                        End While
+                    End Using
+                End Using
+            End Using
+            Return result
+        End Function
+
         Private Shared Function NullableReal(v As Nullable(Of Decimal)) As Object
             If v.HasValue Then Return CDbl(v.Value)
             Return DBNull.Value
