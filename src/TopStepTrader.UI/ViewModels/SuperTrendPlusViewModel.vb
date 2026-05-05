@@ -1398,6 +1398,13 @@ Namespace TopStepTrader.UI.ViewModels
                     If Not Single.IsNaN(dmi.ADX(n)) Then currentAdx = dmi.ADX(n)
                 End If
 
+                ' Warn and optionally skip if ADX is below persona minimum (defence-in-depth: BUG-53)
+                If currentAdx < PersonaMinAdx Then
+                    _logger.LogWarning(
+                        "ST+ Reconcile [{Contract}] ADX={Adx:F1} is below PersonaMinAdx={Min} — onboarding with warning (position not placed by this app)",
+                        contractId, currentAdx, PersonaMinAdx)
+                End If
+
                 Dim side As String = If(snapshot.IsBuy, "Buy", "Sell")
                 Dim baseContracts As Integer = CInt(Math.Max(1, Math.Round(snapshot.Units)))
 
