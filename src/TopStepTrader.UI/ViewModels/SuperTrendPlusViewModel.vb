@@ -2150,17 +2150,11 @@ Namespace TopStepTrader.UI.ViewModels
             End If
             If slot.AccountId <> 0 AndAlso Not String.IsNullOrEmpty(slot.Instrument) Then
                 Try
-                    If slot.PositionId.HasValue Then
-                        Dim ok = Await _orderService.CancelOrderAsync(slot.PositionId.Value)
-                        _logger.LogInformation("ST+ ReleaseSlot [Slot {Idx}] close {Contract} posId={PosId}: ok={Ok}",
-                                               slot.SlotIndex, slot.Instrument, slot.PositionId.Value, ok)
-                    Else
-                        Await _orderService.FlattenContractAsync(slot.AccountId, slot.Instrument)
-                        _logger.LogInformation("ST+ ReleaseSlot [Slot {Idx}] flatten {Contract} (no positionId)",
-                                               slot.SlotIndex, slot.Instrument)
-                    End If
+                    Await _orderService.FlattenContractAsync(slot.AccountId, slot.Instrument)
+                    _logger.LogInformation("ST+ ReleaseSlot [Slot {Idx}] flatten {Contract}: brackets cancelled + position closed",
+                                           slot.SlotIndex, slot.Instrument)
                 Catch ex As Exception
-                    _logger.LogWarning(ex, "ST+ ReleaseSlot [Slot {Idx}] close order failed for {Contract} — slot cleared anyway",
+                    _logger.LogWarning(ex, "ST+ ReleaseSlot [Slot {Idx}] flatten failed for {Contract} — slot cleared anyway",
                                        slot.SlotIndex, slot.Instrument)
                 End Try
             End If
