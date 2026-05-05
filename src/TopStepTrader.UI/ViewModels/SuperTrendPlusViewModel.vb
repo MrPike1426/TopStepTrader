@@ -1881,6 +1881,10 @@ Namespace TopStepTrader.UI.ViewModels
                     If slot.TradeRecordId > 0 Then
                         Task.Run(Function() _tradeRecordService.UpdateEntryPriceAsync(slot.TradeRecordId, snapshot.OpenRate))
                     End If
+                    If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
+                       Not String.IsNullOrEmpty(slot.DebugTradeId) Then
+                        _debugCapture.UpdateFill(slot.DebugTradeId, snapshot.OpenRate, DateTime.UtcNow)
+                    End If
                 End If
 
                 ' Use snapshot P&L as a fallback; will be overridden below once bar close is available.
@@ -2195,7 +2199,7 @@ Namespace TopStepTrader.UI.ViewModels
                     .Notes = exitReason
                 }
                 _debugCapture.RecordSnapshot(exitSnap)
-                _debugCapture.EndTrade(slot.DebugTradeId, DateTime.UtcNow)
+                _debugCapture.EndTrade(slot.DebugTradeId, DateTime.UtcNow, slot.UnrealizedPnl)
                 _debugMfe.Remove(slot.DebugTradeId)
                 _debugMae.Remove(slot.DebugTradeId)
                 _lastBarTimestampByTradeId.Remove(slot.DebugTradeId)
@@ -2421,6 +2425,8 @@ Namespace TopStepTrader.UI.ViewModels
                 .SuperTrendValue = If(Not Single.IsNaN(CSng(stLine)), CType(stLine, Nullable(Of Decimal)), Nothing),
                 .SuperTrendDirection = If(stDir > 0, "Up", If(stDir < 0, "Down", Nothing)),
                 .Atr = If(Not Single.IsNaN(atrVal), CType(CDec(atrVal), Nullable(Of Decimal)), Nothing),
+                .Adx = If(slot.CurrentAdx <> 0F, CType(slot.CurrentAdx, Nullable(Of Single)), Nothing),
+                .StopPhase = slot.StopPhase.ToString(),
                 .Notes = notes
             }
             _debugCapture.RecordSnapshot(snap)

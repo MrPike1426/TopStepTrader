@@ -38,6 +38,14 @@ Namespace TopStepTrader.Services.Debug
             Inherits DebugMessage
             Public Property TradeId As String
             Public Property ClosedUtc As DateTime
+            Public Property RealisedPnl As Nullable(Of Decimal)
+        End Class
+
+        Private NotInheritable Class FillMsg
+            Inherits DebugMessage
+            Public Property TradeId As String
+            Public Property FillPrice As Decimal
+            Public Property FillConfirmedTime As DateTime
         End Class
 
         Public Property IsEnabled As Boolean Implements IDebugTradeCaptureService.IsEnabled
@@ -71,9 +79,14 @@ Namespace TopStepTrader.Services.Debug
             _channel.Writer.TryWrite(New SnapMsg With {.Snap = snap})
         End Sub
 
-        Public Sub EndTrade(tradeId As String, closedUtc As DateTime) Implements IDebugTradeCaptureService.EndTrade
+        Public Sub UpdateFill(tradeId As String, fillPrice As Decimal, fillConfirmedTime As DateTime) Implements IDebugTradeCaptureService.UpdateFill
             If Not _isEnabled Then Return
-            _channel.Writer.TryWrite(New EndMsg With {.TradeId = tradeId, .ClosedUtc = closedUtc})
+            _channel.Writer.TryWrite(New FillMsg With {.TradeId = tradeId, .FillPrice = fillPrice, .FillConfirmedTime = fillConfirmedTime})
+        End Sub
+
+        Public Sub EndTrade(tradeId As String, closedUtc As DateTime, Optional realisedPnl As Nullable(Of Decimal) = Nothing) Implements IDebugTradeCaptureService.EndTrade
+            If Not _isEnabled Then Return
+            _channel.Writer.TryWrite(New EndMsg With {.TradeId = tradeId, .ClosedUtc = closedUtc, .RealisedPnl = realisedPnl})
         End Sub
 
         Private Async Function ConsumeLoopAsync() As Task
@@ -101,7 +114,8 @@ Namespace TopStepTrader.Services.Debug
         Private Async Function FlushBatchAsync() As Task
             Dim headers As New List(Of DebugTradeRecord)()
             Dim snapshots As New List(Of DebugSnapshotRecord)()
-            Dim endTrades As New List(Of KeyValuePair(Of String, DateTime))()
+            Dim endTrades As New List(Of (TradeId As String, ClosedUtc As DateTime, RealisedPnl As Nullable(Of Decimal)))()
+            Dim fillUpdates As New List(Of (TradeId As String, FillPrice As Decimal, FillConfirmedTime As DateTime))()
 
             Dim msg As DebugMessage = Nothing
             While _channel.Reader.TryRead(msg)
@@ -109,19 +123,22 @@ Namespace TopStepTrader.Services.Debug
                     headers.Add(DirectCast(msg, BeginMsg).Header)
                 ElseIf TypeOf msg Is SnapMsg Then
                     snapshots.Add(DirectCast(msg, SnapMsg).Snap)
+                ElseIf TypeOf msg Is FillMsg Then
+                    Dim fm = DirectCast(msg, FillMsg)
+                    fillUpdates.Add((fm.TradeId, fm.FillPrice, fm.FillConfirmedTime))
                 ElseIf TypeOf msg Is EndMsg Then
                     Dim em = DirectCast(msg, EndMsg)
-                    endTrades.Add(New KeyValuePair(Of String, DateTime)(em.TradeId, em.ClosedUtc))
+                    endTrades.Add((em.TradeId, em.ClosedUtc, em.RealisedPnl))
                 End If
             End While
 
-            If headers.Count = 0 AndAlso snapshots.Count = 0 AndAlso endTrades.Count = 0 Then Return
+            If headers.Count = 0 AndAlso snapshots.Count = 0 AndAlso endTrades.Count = 0 AndAlso fillUpdates.Count = 0 Then Return
 
             Try
-                Await _db.WriteBatchAsync(headers, snapshots, endTrades)
+                Await _db.WriteBatchAsync(headers, snapshots, endTrades, fillUpdates)
             Catch ex As Exception
                 _logger.LogWarning(ex, "DebugCapture: batch write failed — {Count} items dropped",
-                                   headers.Count + snapshots.Count + endTrades.Count)
+                                   headers.Count + snapshots.Count + endTrades.Count + fillUpdates.Count)
             End Try
         End Function
 

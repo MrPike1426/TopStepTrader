@@ -114,7 +114,81 @@ Namespace TopStepTrader.Tests.Debug
             End Using
         End Sub
 
-        ' ── Purge removes rows older than 30 days and trims to maxTradeCount ──
+        ' ── FEAT-41: UpdateFill writes ActualFillPrice and FillConfirmedTime ──
+
+        <Fact>
+        Public Async Function UpdateFill_WritesActualFillPriceAndConfirmedTime() As Task
+            Dim pair = MakeTempDb()
+            Using pair.Service
+                pair.Service.IsEnabled = True
+                Dim tid = Guid.NewGuid().ToString("D")
+                pair.Service.BeginTrade(MakeHeader(tid))
+                pair.Service.UpdateFill(tid, 5012.5D, DateTime.UtcNow)
+                Await Task.Delay(2200)
+                Dim fillPrice = Await pair.DbContext.GetActualFillPriceAsync(tid)
+                Dim fillTime = Await pair.DbContext.GetFillConfirmedTimeAsync(tid)
+                Assert.NotNull(fillPrice)
+                Assert.Equal(5012.5D, fillPrice.Value)
+                Assert.NotNull(fillTime)
+            End Using
+        End Function
+
+        ' ── FEAT-41: EndTrade with realisedPnl writes RealisedPnLDollars ──
+
+        <Fact>
+        Public Async Function EndTrade_WithRealisedPnl_WritesRealisedPnLDollars() As Task
+            Dim pair = MakeTempDb()
+            Using pair.Service
+                pair.Service.IsEnabled = True
+                Dim tid = Guid.NewGuid().ToString("D")
+                pair.Service.BeginTrade(MakeHeader(tid))
+                pair.Service.EndTrade(tid, DateTime.UtcNow, 125.5D)
+                Await Task.Delay(2200)
+                Dim pnl = Await pair.DbContext.GetRealisedPnLAsync(tid)
+                Assert.NotNull(pnl)
+                Assert.Equal(125.5D, pnl.Value)
+            End Using
+        End Function
+
+        ' ── FEAT-41: Snapshots include non-null Adx and StopPhase ──
+
+        <Fact>
+        Public Async Function Snapshot_WithAdxAndStopPhase_WritesNonNullValues() As Task
+            Dim pair = MakeTempDb()
+            Using pair.Service
+                pair.Service.IsEnabled = True
+                Dim tid = Guid.NewGuid().ToString("D")
+                pair.Service.BeginTrade(MakeHeader(tid))
+                Dim snap = MakeSnap(tid, "Heartbeat")
+                snap.Adx = 28.5F
+                snap.StopPhase = "Breakeven"
+                pair.Service.RecordSnapshot(snap)
+                Await Task.Delay(2200)
+                Dim rows = Await pair.DbContext.GetSnapshotAdxAndPhaseAsync(tid)
+                Assert.Single(rows)
+                Assert.NotNull(rows(0).Adx)
+                Assert.InRange(rows(0).Adx.Value, 28.4, 28.6)
+                Assert.Equal("Breakeven", rows(0).StopPhase)
+            End Using
+        End Function
+
+        ' ── FEAT-41: EnsureSchemaAsync is idempotent (calling twice causes no error) ──
+
+        <Fact>
+        Public Async Function EnsureSchema_IsIdempotent_NoErrorOnDoubleCall() As Task
+            Dim dbPath = Path.Combine(Path.GetTempPath(), $"test_idempotent_{Guid.NewGuid():N}.db")
+            Dim connString = $"Data Source={dbPath}"
+            Dim db = New DebugTradeDbContext(connString)
+            Await db.EnsureSchemaAsync()
+            Dim ex As Exception = Nothing
+            Try
+                Await db.EnsureSchemaAsync()
+            Catch e As Exception
+                ex = e
+            End Try
+            Assert.Null(ex)
+            db.Dispose()
+        End Function
 
         <Fact>
         Public Async Function Purge_RemovesOldRowsAndTrimsToMax() As Task
@@ -149,7 +223,7 @@ Namespace TopStepTrader.Tests.Debug
 
             Await db.WriteBatchAsync(headers,
                                      New List(Of DebugSnapshotRecord)(),
-                                     New List(Of KeyValuePair(Of String, DateTime))())
+                                     New List(Of (TradeId As String, ClosedUtc As DateTime, RealisedPnl As Nullable(Of Decimal)))())
 
             Assert.Equal(5, Await db.CountTradesAsync())
 

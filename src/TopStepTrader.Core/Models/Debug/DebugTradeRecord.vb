@@ -16,6 +16,9 @@ Namespace TopStepTrader.Core.Models.Debug
         Public Property SuperTrendConfigJson As String = String.Empty
         Public Property AiCheckResult As String
         Public Property AiCheckReason As String
+        Public Property ActualFillPrice As Nullable(Of Decimal)
+        Public Property FillConfirmedTime As String
+        Public Property RealisedPnLDollars As Nullable(Of Decimal)
         Public Property ClosedAt As String
         Public Property CreatedAt As String = String.Empty
     End Class

@@ -50,6 +50,9 @@ Namespace TopStepTrader.Data.Debug
                         "  SuperTrendConfigJson TEXT NOT NULL," &
                         "  AiCheckResult        TEXT," &
                         "  AiCheckReason        TEXT," &
+                        "  ActualFillPrice      REAL," &
+                        "  FillConfirmedTime    TEXT," &
+                        "  RealisedPnLDollars   REAL," &
                         "  ClosedAt             TEXT," &
                         "  CreatedAt            TEXT NOT NULL" &
                         ");" &
@@ -75,21 +78,52 @@ Namespace TopStepTrader.Data.Debug
                         "  SuperTrendValue      REAL," &
                         "  SuperTrendDirection  TEXT," &
                         "  Atr                  REAL," &
-                        "  VolumeSinceLastSnap  INTEGER," &
+                        "  Adx                  REAL," &
+                        "  StopPhase            TEXT," &
                         "  Notes                TEXT," &
                         "  FOREIGN KEY (TradeId) REFERENCES DebugTrades(TradeId)" &
                         ");" &
                         "CREATE INDEX IF NOT EXISTS IX_DebugSnapshots_TradeId_Time ON DebugSnapshots(TradeId, Timestamp);"
                     Await cmd.ExecuteNonQueryAsync()
                 End Using
+
+                ' Idempotent migration: add new columns to existing databases
+                Await AddColumnIfMissingAsync(conn, "DebugTrades", "ActualFillPrice", "REAL")
+                Await AddColumnIfMissingAsync(conn, "DebugTrades", "FillConfirmedTime", "TEXT")
+                Await AddColumnIfMissingAsync(conn, "DebugTrades", "RealisedPnLDollars", "REAL")
+                Await AddColumnIfMissingAsync(conn, "DebugSnapshots", "Adx", "REAL")
+                Await AddColumnIfMissingAsync(conn, "DebugSnapshots", "StopPhase", "TEXT")
             End Using
+        End Function
+
+        Private Shared Async Function AddColumnIfMissingAsync(conn As SqliteConnection, tableName As String, columnName As String, columnType As String) As Task
+            Dim exists As Boolean = False
+            Using infoCmd = conn.CreateCommand()
+                infoCmd.CommandText = $"PRAGMA table_info({tableName})"
+                Using reader = Await infoCmd.ExecuteReaderAsync()
+                    While Await reader.ReadAsync()
+                        If String.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase) Then
+                            exists = True
+                            Exit While
+                        End If
+                    End While
+                End Using
+            End Using
+            If Not exists Then
+                Using alterCmd = conn.CreateCommand()
+                    alterCmd.CommandText = $"ALTER TABLE {tableName} ADD COLUMN {columnName} {columnType} DEFAULT NULL"
+                    Await alterCmd.ExecuteNonQueryAsync()
+                End Using
+            End If
         End Function
 
         Public Async Function WriteBatchAsync(
                 headers As IReadOnlyList(Of DebugTradeRecord),
                 snapshots As IReadOnlyList(Of DebugSnapshotRecord),
-                endTrades As IReadOnlyList(Of KeyValuePair(Of String, DateTime))) As Task
-            If headers.Count = 0 AndAlso snapshots.Count = 0 AndAlso endTrades.Count = 0 Then Return
+                endTrades As IReadOnlyList(Of (TradeId As String, ClosedUtc As DateTime, RealisedPnl As Nullable(Of Decimal))),
+                Optional fillUpdates As IReadOnlyList(Of (TradeId As String, FillPrice As Decimal, FillConfirmedTime As DateTime)) = Nothing) As Task
+            If headers.Count = 0 AndAlso snapshots.Count = 0 AndAlso endTrades.Count = 0 AndAlso
+               (fillUpdates Is Nothing OrElse fillUpdates.Count = 0) Then Return
             Using conn = New SqliteConnection(_connectionString)
                 Await conn.OpenAsync()
                 Using tx = conn.BeginTransaction()
@@ -100,11 +134,13 @@ Namespace TopStepTrader.Data.Debug
                                 "INSERT OR IGNORE INTO DebugTrades " &
                                 "(TradeId,SlotIndex,Persona,Instrument,TimeFrame,EntryMode,Direction," &
                                 " EntryPrice,EntryTime,InitialSL,InitialTP,ContractCount," &
-                                " SuperTrendConfigJson,AiCheckResult,AiCheckReason,ClosedAt,CreatedAt)" &
+                                " SuperTrendConfigJson,AiCheckResult,AiCheckReason," &
+                                " ActualFillPrice,FillConfirmedTime,RealisedPnLDollars,ClosedAt,CreatedAt)" &
                                 " VALUES " &
                                 "(@TradeId,@SlotIndex,@Persona,@Instrument,@TimeFrame,@EntryMode,@Direction," &
                                 " @EntryPrice,@EntryTime,@InitialSL,@InitialTP,@ContractCount," &
-                                " @SuperTrendConfigJson,@AiCheckResult,@AiCheckReason,@ClosedAt,@CreatedAt)"
+                                " @SuperTrendConfigJson,@AiCheckResult,@AiCheckReason," &
+                                " @ActualFillPrice,@FillConfirmedTime,@RealisedPnLDollars,@ClosedAt,@CreatedAt)"
                             cmd.Parameters.AddWithValue("@TradeId", h.TradeId)
                             cmd.Parameters.AddWithValue("@SlotIndex", h.SlotIndex)
                             cmd.Parameters.AddWithValue("@Persona", h.Persona)
@@ -120,6 +156,9 @@ Namespace TopStepTrader.Data.Debug
                             cmd.Parameters.AddWithValue("@SuperTrendConfigJson", h.SuperTrendConfigJson)
                             cmd.Parameters.AddWithValue("@AiCheckResult", If(h.AiCheckResult IsNot Nothing, CObj(h.AiCheckResult), DBNull.Value))
                             cmd.Parameters.AddWithValue("@AiCheckReason", If(h.AiCheckReason IsNot Nothing, CObj(h.AiCheckReason), DBNull.Value))
+                            cmd.Parameters.AddWithValue("@ActualFillPrice", If(h.ActualFillPrice.HasValue, CObj(CDbl(h.ActualFillPrice.Value)), DBNull.Value))
+                            cmd.Parameters.AddWithValue("@FillConfirmedTime", If(h.FillConfirmedTime IsNot Nothing, CObj(h.FillConfirmedTime), DBNull.Value))
+                            cmd.Parameters.AddWithValue("@RealisedPnLDollars", If(h.RealisedPnLDollars.HasValue, CObj(CDbl(h.RealisedPnLDollars.Value)), DBNull.Value))
                             cmd.Parameters.AddWithValue("@ClosedAt", If(h.ClosedAt IsNot Nothing, CObj(h.ClosedAt), DBNull.Value))
                             cmd.Parameters.AddWithValue("@CreatedAt", h.CreatedAt)
                             Await cmd.ExecuteNonQueryAsync()
@@ -134,12 +173,12 @@ Namespace TopStepTrader.Data.Debug
                                 "(TradeId,Timestamp,EventType,LastPrice,Bid,Ask,CurrentSL,CurrentTP," &
                                 " UnrealizedPnLTicks,UnrealizedPnLDollars,Mfe,Mae," &
                                 " BarOpen,BarHigh,BarLow,BarClose,SuperTrendValue,SuperTrendDirection," &
-                                " Atr,VolumeSinceLastSnap,Notes)" &
+                                " Atr,Adx,StopPhase,Notes)" &
                                 " VALUES " &
                                 "(@TradeId,@Timestamp,@EventType,@LastPrice,@Bid,@Ask,@CurrentSL,@CurrentTP," &
                                 " @UnrealizedPnLTicks,@UnrealizedPnLDollars,@Mfe,@Mae," &
                                 " @BarOpen,@BarHigh,@BarLow,@BarClose,@SuperTrendValue,@SuperTrendDirection," &
-                                " @Atr,@VolumeSinceLastSnap,@Notes)"
+                                " @Atr,@Adx,@StopPhase,@Notes)"
                             cmd.Parameters.AddWithValue("@TradeId", s.TradeId)
                             cmd.Parameters.AddWithValue("@Timestamp", s.Timestamp)
                             cmd.Parameters.AddWithValue("@EventType", s.EventType)
@@ -159,7 +198,8 @@ Namespace TopStepTrader.Data.Debug
                             cmd.Parameters.AddWithValue("@SuperTrendValue", NullableReal(s.SuperTrendValue))
                             cmd.Parameters.AddWithValue("@SuperTrendDirection", If(s.SuperTrendDirection IsNot Nothing, CObj(s.SuperTrendDirection), DBNull.Value))
                             cmd.Parameters.AddWithValue("@Atr", NullableReal(s.Atr))
-                            cmd.Parameters.AddWithValue("@VolumeSinceLastSnap", If(s.VolumeSinceLastSnap.HasValue, CObj(s.VolumeSinceLastSnap.Value), DBNull.Value))
+                            cmd.Parameters.AddWithValue("@Adx", If(s.Adx.HasValue, CObj(CDbl(s.Adx.Value)), DBNull.Value))
+                            cmd.Parameters.AddWithValue("@StopPhase", If(s.StopPhase IsNot Nothing, CObj(s.StopPhase), DBNull.Value))
                             cmd.Parameters.AddWithValue("@Notes", If(s.Notes IsNot Nothing, CObj(s.Notes), DBNull.Value))
                             Await cmd.ExecuteNonQueryAsync()
                         End Using
@@ -168,12 +208,31 @@ Namespace TopStepTrader.Data.Debug
                     For Each kv In endTrades
                         Using cmd = conn.CreateCommand()
                             cmd.Transaction = tx
-                            cmd.CommandText = "UPDATE DebugTrades SET ClosedAt = @ClosedAt WHERE TradeId = @TradeId"
-                            cmd.Parameters.AddWithValue("@ClosedAt", kv.Value.ToString("O"))
-                            cmd.Parameters.AddWithValue("@TradeId", kv.Key)
+                            cmd.CommandText =
+                                "UPDATE DebugTrades SET ClosedAt = @ClosedAt," &
+                                " RealisedPnLDollars = COALESCE(@RealisedPnL, RealisedPnLDollars)" &
+                                " WHERE TradeId = @TradeId"
+                            cmd.Parameters.AddWithValue("@ClosedAt", kv.ClosedUtc.ToString("O"))
+                            cmd.Parameters.AddWithValue("@RealisedPnL", If(kv.RealisedPnl.HasValue, CObj(CDbl(kv.RealisedPnl.Value)), DBNull.Value))
+                            cmd.Parameters.AddWithValue("@TradeId", kv.TradeId)
                             Await cmd.ExecuteNonQueryAsync()
                         End Using
                     Next
+
+                    If fillUpdates IsNot Nothing Then
+                        For Each fu In fillUpdates
+                            Using cmd = conn.CreateCommand()
+                                cmd.Transaction = tx
+                                cmd.CommandText =
+                                    "UPDATE DebugTrades SET ActualFillPrice = @FillPrice," &
+                                    " FillConfirmedTime = @FillTime WHERE TradeId = @TradeId"
+                                cmd.Parameters.AddWithValue("@FillPrice", CDbl(fu.FillPrice))
+                                cmd.Parameters.AddWithValue("@FillTime", fu.FillConfirmedTime.ToString("O"))
+                                cmd.Parameters.AddWithValue("@TradeId", fu.TradeId)
+                                Await cmd.ExecuteNonQueryAsync()
+                            End Using
+                        Next
+                    End If
 
                     tx.Commit()
                 End Using
@@ -253,6 +312,63 @@ Namespace TopStepTrader.Data.Debug
                     cmd.Parameters.AddWithValue("@TradeId", tradeId)
                     Dim result = Await cmd.ExecuteScalarAsync()
                     Return If(result Is Nothing OrElse result Is DBNull.Value, Nothing, CStr(result))
+                End Using
+            End Using
+        End Function
+
+        Public Async Function GetActualFillPriceAsync(tradeId As String) As Task(Of Decimal?)
+            Using conn = New SqliteConnection(_connectionString)
+                Await conn.OpenAsync()
+                Using cmd = conn.CreateCommand()
+                    cmd.CommandText = "SELECT ActualFillPrice FROM DebugTrades WHERE TradeId = @TradeId"
+                    cmd.Parameters.AddWithValue("@TradeId", tradeId)
+                    Dim result = Await cmd.ExecuteScalarAsync()
+                    If result Is Nothing OrElse result Is DBNull.Value Then Return Nothing
+                    Return CDec(CType(result, Double))
+                End Using
+            End Using
+        End Function
+
+        Public Async Function GetFillConfirmedTimeAsync(tradeId As String) As Task(Of String)
+            Using conn = New SqliteConnection(_connectionString)
+                Await conn.OpenAsync()
+                Using cmd = conn.CreateCommand()
+                    cmd.CommandText = "SELECT FillConfirmedTime FROM DebugTrades WHERE TradeId = @TradeId"
+                    cmd.Parameters.AddWithValue("@TradeId", tradeId)
+                    Dim result = Await cmd.ExecuteScalarAsync()
+                    Return If(result Is Nothing OrElse result Is DBNull.Value, Nothing, CStr(result))
+                End Using
+            End Using
+        End Function
+
+        Public Async Function GetRealisedPnLAsync(tradeId As String) As Task(Of Decimal?)
+            Using conn = New SqliteConnection(_connectionString)
+                Await conn.OpenAsync()
+                Using cmd = conn.CreateCommand()
+                    cmd.CommandText = "SELECT RealisedPnLDollars FROM DebugTrades WHERE TradeId = @TradeId"
+                    cmd.Parameters.AddWithValue("@TradeId", tradeId)
+                    Dim result = Await cmd.ExecuteScalarAsync()
+                    If result Is Nothing OrElse result Is DBNull.Value Then Return Nothing
+                    Return CDec(CType(result, Double))
+                End Using
+            End Using
+        End Function
+
+        Public Async Function GetSnapshotAdxAndPhaseAsync(tradeId As String) As Task(Of (Adx As Double?, StopPhase As String)())
+            Using conn = New SqliteConnection(_connectionString)
+                Await conn.OpenAsync()
+                Using cmd = conn.CreateCommand()
+                    cmd.CommandText = "SELECT Adx, StopPhase FROM DebugSnapshots WHERE TradeId = @TradeId"
+                    cmd.Parameters.AddWithValue("@TradeId", tradeId)
+                    Dim rows As New List(Of (Adx As Double?, StopPhase As String))()
+                    Using reader = Await cmd.ExecuteReaderAsync()
+                        While Await reader.ReadAsync()
+                            Dim adx As Double? = If(reader.IsDBNull(0), CType(Nothing, Double?), reader.GetDouble(0))
+                            Dim phase As String = If(reader.IsDBNull(1), Nothing, reader.GetString(1))
+                            rows.Add((adx, phase))
+                        End While
+                    End Using
+                    Return rows.ToArray()
                 End Using
             End Using
         End Function

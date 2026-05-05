@@ -29,7 +29,8 @@ Namespace TopStepTrader.Core.Models.Debug
         Public Property SuperTrendValue As Nullable(Of Decimal)
         Public Property SuperTrendDirection As String
         Public Property Atr As Nullable(Of Decimal)
-        Public Property VolumeSinceLastSnap As Nullable(Of Integer)
+        Public Property Adx As Nullable(Of Single)
+        Public Property StopPhase As String
         Public Property Notes As String
     End Class
 
