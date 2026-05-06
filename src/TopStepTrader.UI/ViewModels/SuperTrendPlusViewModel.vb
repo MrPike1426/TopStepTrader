@@ -2363,13 +2363,14 @@ Namespace TopStepTrader.UI.ViewModels
                     Dim newStop As Decimal
 
                     If Config.Take100ProfitEnabled Then
-                         ' ── Take $100 mode: the R-based phase ladder is OFF ──────────────────
+                          ' ── Take $100 mode: the R-based phase ladder is OFF ──────────────────
                          ' State 1 (PnL < $100):   SL trails the SuperTrend line (ratchet only).
                          ' State 2 (PnL ≥ $100):   SL uses two stacked ratchet floors:
                          '   Floor A — entry price (breakeven): SL may never drop below entry.
-                         '   Floor B — BB median (EMA-10 of 15s bars): once the median clears
-                         '             the breakeven floor the SL follows it upward, ratcheting
-                         '             to lock in profit as the 15-second trend extends.
+                         '   Floor B — BB lower band (LONG) or BB upper band (SHORT), computed
+                         '             from EMA-10 of 15s bars with mult=1.5. Using the outer
+                         '             directional band prevents the floor retracing when the
+                         '             middle dips; ratchet ensures it never moves against trade.
                          Dim isLngSlot = slot.Side = "Buy"
                          If latestPnl >= 100D Then
                              ' Floor A: breakeven — ratchet preserves any higher floor already set.
@@ -2377,24 +2378,28 @@ Namespace TopStepTrader.UI.ViewModels
                              newStop = If(isLngSlot, Math.Max(slot.StopPrice, beStop), Math.Min(slot.StopPrice, beStop))
                              slot.StopPhase = StopPhase.Breakeven
 
-                             ' Floor B: BB median (EMA-10 of closed 15-second bars).
-                             ' Reuses tickBars fetched above — no second API call.
-                             If tickBars IsNot Nothing AndAlso tickBars.Count >= 10 Then
-                                 Dim s15Closes = tickBars.Select(Function(b) CDec(b.Close)).ToList()
-                                 Dim ema10 = TechnicalIndicators.EMA(s15Closes, 10)
-                                 Dim lastIdx = ema10.Length - 1
-                                 If Not Single.IsNaN(ema10(lastIdx)) Then
-                                     Dim bbMid = CDec(ema10(lastIdx))
-                                     newStop = If(isLngSlot, Math.Max(newStop, bbMid), Math.Min(newStop, bbMid))
+                             ' Floor B: BB lower band (LONG) or BB upper band (SHORT) computed from
+                                 ' 15-second closes using EMA-10 as the middle, mult = 1.5.
+                                 ' Using the directional outer band instead of the middle band
+                                 ' prevents the stop floor from retracing when the middle dips.
+                                 ' Reuses tickBars fetched above — no second API call.
+                                 If tickBars IsNot Nothing AndAlso tickBars.Count >= 10 Then
+                                     Dim s15Closes = tickBars.Select(Function(b) CDec(b.Close)).ToList()
+                                     Dim bbBands = TechnicalIndicators.BollingerBands(s15Closes, 10, 1.5)
+                                     Dim lastIdx = bbBands.Upper.Length - 1
+                                     Dim bbBand As Single = If(isLngSlot, bbBands.Lower(lastIdx), bbBands.Upper(lastIdx))
+                                     If Not Single.IsNaN(bbBand) Then
+                                         Dim bbFloor = CDec(bbBand)
+                                         newStop = If(isLngSlot, Math.Max(newStop, bbFloor), Math.Min(newStop, bbFloor))
+                                         _logger.LogInformation(
+                                             "ST+ [Slot {Idx}] Take100 BB-{Band} trail — entry={E:F2} bbFloor={B:F2} newStop={S:F2} pnl={P:F2}",
+                                             slot.SlotIndex, If(isLngSlot, "lower", "upper"), slot.EntryPrice, bbFloor, newStop, latestPnl)
+                                     End If
+                                 Else
                                      _logger.LogInformation(
-                                         "ST+ [Slot {Idx}] Take100 BB-mid trail — entry={E:F2} bbMid={B:F2} newStop={S:F2} pnl={P:F2}",
-                                         slot.SlotIndex, slot.EntryPrice, bbMid, newStop, latestPnl)
+                                         "ST+ [Slot {Idx}] Take100 breakeven (no 15s bars yet) — entry={Entry:F2} newStop={Stop:F2} pnl={Pnl:F2}",
+                                         slot.SlotIndex, slot.EntryPrice, newStop, latestPnl)
                                  End If
-                             Else
-                                 _logger.LogInformation(
-                                     "ST+ [Slot {Idx}] Take100 breakeven (no 15s bars yet) — entry={Entry:F2} newStop={Stop:F2} pnl={Pnl:F2}",
-                                     slot.SlotIndex, slot.EntryPrice, newStop, latestPnl)
-                             End If
                          Else
                              ' Pre-$100: trail SuperTrend line, ratchet only.
                              newStop = If(isLngSlot, Math.Max(slot.StopPrice, stLineForPhase), Math.Min(slot.StopPrice, stLineForPhase))
