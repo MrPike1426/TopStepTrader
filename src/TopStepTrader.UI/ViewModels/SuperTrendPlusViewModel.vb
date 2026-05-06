@@ -316,6 +316,21 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── Take $100 Profit toggle ──────────────────────────────────────────
+        ''' <summary>When True, once unrealised P&amp;L reaches $100 the stop snaps to the
+        ''' BB mid (EMA 10, 1.5×) on the 15-second bar, ratchet rules still apply.</summary>
+        Public Property IsTake100Enabled As Boolean
+            Get
+                Return Config.Take100ProfitEnabled
+            End Get
+            Set(value As Boolean)
+                If Config.Take100ProfitEnabled <> value Then
+                    Config.Take100ProfitEnabled = value
+                    NotifyPropertyChanged(NameOf(IsTake100Enabled))
+                End If
+            End Set
+        End Property
+
         ' ── Slot boxes (replaces persona boxes) ─────────────────────────────
         Public ReadOnly Property Slot1 As SlotBoxVm = New SlotBoxVm(0)
         Public ReadOnly Property Slot2 As SlotBoxVm = New SlotBoxVm(1)
@@ -419,8 +434,8 @@ Namespace TopStepTrader.UI.ViewModels
             Get
                 Select Case _activePersona
                     Case "Lewis" : Return 40.0F
-                    Case "Joe"   : Return 20.0F
-                    Case Else    : Return 30.0F  ' Damian default
+                    Case "Joe" : Return 20.0F
+                    Case Else : Return 30.0F  ' Damian default
                 End Select
             End Get
         End Property
@@ -430,8 +445,8 @@ Namespace TopStepTrader.UI.ViewModels
             Get
                 Select Case _activePersona
                     Case "Lewis" : Return 0.75D
-                    Case "Joe"   : Return 2.0D
-                    Case Else    : Return 1.5D  ' Damian default
+                    Case "Joe" : Return 2D
+                    Case Else : Return 1.5D  ' Damian default
                 End Select
             End Get
         End Property
@@ -557,13 +572,13 @@ Namespace TopStepTrader.UI.ViewModels
             _slotManager = New SlotManager(Config)
             _exitEngine = New ExitSignalEngine(
                 Microsoft.Extensions.Logging.Abstractions.NullLogger(Of ExitSignalEngine).Instance)
-            StartStopCommand    = New RelayCommand(AddressOf OnStartStop)
+            StartStopCommand = New RelayCommand(AddressOf OnStartStop)
             AiCheckSlot1Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot1))
             AiCheckSlot2Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot2))
             AiCheckSlot3Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot3))
-            SelectLewisCommand  = New RelayCommand(Sub() ActivePersona = "Lewis")
+            SelectLewisCommand = New RelayCommand(Sub() ActivePersona = "Lewis")
             SelectDamianCommand = New RelayCommand(Sub() ActivePersona = "Damian")
-            SelectJoeCommand    = New RelayCommand(Sub() ActivePersona = "Joe")
+            SelectJoeCommand = New RelayCommand(Sub() ActivePersona = "Joe")
             ApplyPersonaConfig()
 
             Slot1.Slot = _slotManager.Slots(0)
@@ -671,40 +686,40 @@ Namespace TopStepTrader.UI.ViewModels
             ApplyPersonaConfig()
 
             ' Config POCO properties
-            Config.MaxSlots              = entity.MaxSlots
-            Config.AdxWeakThreshold      = entity.AdxWeakThreshold
-            Config.AdxModerateThreshold  = entity.AdxModerateThreshold
-            Config.AdxStrongThreshold    = entity.AdxStrongThreshold
-            Config.BreakevenTriggerR     = entity.BreakevenTriggerR
-            Config.ProfitLockTriggerR    = entity.ProfitLockTriggerR
-            Config.ProfitLockOffsetR     = entity.ProfitLockOffsetR
-            Config.TrailAtrMultiple      = entity.TrailAtrMultiple
-            Config.ProfitTrailTriggerR   = entity.ProfitTrailTriggerR
-            Config.HarvestTriggerR       = entity.HarvestTriggerR
-            Config.HarvestLockR          = entity.HarvestLockR
-            Config.FreeRideTriggerR      = entity.FreeRideTriggerR
-            Config.FreeRideLockR         = entity.FreeRideLockR
+            Config.MaxSlots = entity.MaxSlots
+            Config.AdxWeakThreshold = entity.AdxWeakThreshold
+            Config.AdxModerateThreshold = entity.AdxModerateThreshold
+            Config.AdxStrongThreshold = entity.AdxStrongThreshold
+            Config.BreakevenTriggerR = entity.BreakevenTriggerR
+            Config.ProfitLockTriggerR = entity.ProfitLockTriggerR
+            Config.ProfitLockOffsetR = entity.ProfitLockOffsetR
+            Config.TrailAtrMultiple = entity.TrailAtrMultiple
+            Config.ProfitTrailTriggerR = entity.ProfitTrailTriggerR
+            Config.HarvestTriggerR = entity.HarvestTriggerR
+            Config.HarvestLockR = entity.HarvestLockR
+            Config.FreeRideTriggerR = entity.FreeRideTriggerR
+            Config.FreeRideLockR = entity.FreeRideLockR
             Config.WarningScoreThreshold = entity.WarningScoreThreshold
             Config.ExitingScoreThreshold = entity.ExitingScoreThreshold
         End Sub
 
         Private Function BuildConfigEntity() As Data.Entities.SuperTrendPlusConfigEntity
             Return New Data.Entities.SuperTrendPlusConfigEntity With {
-                .ActivePersona         = _activePersona,
-                .SelectedTimeframe     = _selectedTimeframe,
-                .MaxSlots              = Config.MaxSlots,
-                .AdxWeakThreshold      = Config.AdxWeakThreshold,
-                .AdxModerateThreshold  = Config.AdxModerateThreshold,
-                .AdxStrongThreshold    = Config.AdxStrongThreshold,
-                .BreakevenTriggerR     = Config.BreakevenTriggerR,
-                .ProfitLockTriggerR    = Config.ProfitLockTriggerR,
-                .ProfitLockOffsetR     = Config.ProfitLockOffsetR,
-                .TrailAtrMultiple      = Config.TrailAtrMultiple,
-                .ProfitTrailTriggerR   = Config.ProfitTrailTriggerR,
-                .HarvestTriggerR       = Config.HarvestTriggerR,
-                .HarvestLockR          = Config.HarvestLockR,
-                .FreeRideTriggerR      = Config.FreeRideTriggerR,
-                .FreeRideLockR         = Config.FreeRideLockR,
+                .ActivePersona = _activePersona,
+                .SelectedTimeframe = _selectedTimeframe,
+                .MaxSlots = Config.MaxSlots,
+                .AdxWeakThreshold = Config.AdxWeakThreshold,
+                .AdxModerateThreshold = Config.AdxModerateThreshold,
+                .AdxStrongThreshold = Config.AdxStrongThreshold,
+                .BreakevenTriggerR = Config.BreakevenTriggerR,
+                .ProfitLockTriggerR = Config.ProfitLockTriggerR,
+                .ProfitLockOffsetR = Config.ProfitLockOffsetR,
+                .TrailAtrMultiple = Config.TrailAtrMultiple,
+                .ProfitTrailTriggerR = Config.ProfitTrailTriggerR,
+                .HarvestTriggerR = Config.HarvestTriggerR,
+                .HarvestLockR = Config.HarvestLockR,
+                .FreeRideTriggerR = Config.FreeRideTriggerR,
+                .FreeRideLockR = Config.FreeRideLockR,
                 .WarningScoreThreshold = Config.WarningScoreThreshold,
                 .ExitingScoreThreshold = Config.ExitingScoreThreshold
             }
@@ -733,7 +748,7 @@ Namespace TopStepTrader.UI.ViewModels
             End If
         End Sub
 
-        Private Sub StopMonitoring()
+        Friend Sub StopMonitoring()
             IsMonitoring = False
             SyncLock _timerLock
                 If _timer IsNot Nothing Then
@@ -791,6 +806,11 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Private Async Function DoTickAsync() As Task
+            ' Guard: if Stop Monitoring was clicked while this tick was in-flight, abort immediately.
+            If Not _isMonitoring Then
+                _logger.LogInformation("ST+ DoTickAsync aborted — monitoring was stopped while tick was in-flight.")
+                Return
+            End If
             _releasedThisTick = False
             Dim tf = MapTimeframe(_selectedTimeframe)
 
@@ -956,12 +976,12 @@ Namespace TopStepTrader.UI.ViewModels
                                   If(signal = "BEAR", "Moderate downtrend — bot will open 2 positions.",
                                      "Trending — waiting for +DI/-DI to align with SuperTrend."))
                 ElseIf adxVal >= Config.AdxWeakThreshold Then
-                    strength = String.Format("ADX:{0:D2} L1: Decaff", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} L0: Decaff", CInt(adxVal))
                     signalReason = If(signal = "BULL", "Uptrend active — bot will open 1 position.",
                                   If(signal = "BEAR", "Downtrend active — bot will open 1 position.",
                                      "Trending — waiting for +DI/-DI to align with SuperTrend."))
                 ElseIf adxVal >= 15 Then
-                    strength = String.Format("ADX:{0:D2} L0: Mellow Birds", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} L1: Mellow Birds", CInt(adxVal))
                     signalReason = "Trend is weak — watching for momentum to build before entering."
                 Else
                     strength = String.Format("ADX:{0:D2} Cat Piss", CInt(adxVal))
@@ -971,7 +991,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim adxStr As String = If(Single.IsNaN(adxVal), "ADX:--",
                                           If(adxVal >= Config.AdxStrongThreshold, String.Format("ADX:{0:D2} L3: Espresso", CInt(adxVal)),
                                           If(adxVal >= Config.AdxModerateThreshold, String.Format("ADX:{0:D2} L2: Latte", CInt(adxVal)),
-                                          If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L1: Decaff", CInt(adxVal)),
+                                          If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L0: Decaff", CInt(adxVal)),
                                              String.Format("ADX:{0:D2}", CInt(adxVal))))))
                 Dim diStr As String = If(Single.IsNaN(plusDi) OrElse Single.IsNaN(minusDi),
                                         "+DI:-- -DI:--",
@@ -1138,7 +1158,7 @@ Namespace TopStepTrader.UI.ViewModels
             End If
 
             Dim orHigh = orbBars.Max(Function(b) b.High)
-            Dim orLow  = orbBars.Min(Function(b) b.Low)
+            Dim orLow = orbBars.Min(Function(b) b.Low)
             Dim orWidth = orHigh - orLow
             If orWidth <= 0D Then Return
 
@@ -1146,7 +1166,7 @@ Namespace TopStepTrader.UI.ViewModels
 
             ' ── ATR(14) no-trade filter: OR width > 2× ATR ──────────────────
             Dim allHighs = bars.Select(Function(b) b.High).ToList()
-            Dim allLows  = bars.Select(Function(b) b.Low).ToList()
+            Dim allLows = bars.Select(Function(b) b.Low).ToList()
             Dim allCloses = bars.Select(Function(b) b.Close).ToList()
             Dim atr14 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, period:=14)
             Dim n = bars.Count - 1
@@ -1163,7 +1183,7 @@ Namespace TopStepTrader.UI.ViewModels
 
             ' ── Volume gate ──────────────────────────────────────────────────
             Dim lastBar = bars.Last()
-            Dim volSeries = bars.Select(Function(b) b.Volume).ToList()
+            Dim volSeries = bars.Select(Function(b) CDec(b.Volume)).ToList()
             Dim volMa20 = TechnicalIndicators.SMA(volSeries, period:=20)
             Dim volMaNow As Single = If(volMa20 IsNot Nothing AndAlso n < volMa20.Length AndAlso Not Single.IsNaN(volMa20(n)), volMa20(n), 0.0F)
             Dim volOk = volMaNow > 0.0F AndAlso lastBar.Volume >= CDec(volMaNow) * 1.2D
@@ -1310,7 +1330,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim adxStr = If(Single.IsNaN(adxVal), "ADX:--",
                                If(adxVal >= Config.AdxStrongThreshold, String.Format("ADX:{0:D2} L3: Espresso", CInt(adxVal)),
                                If(adxVal >= Config.AdxModerateThreshold, String.Format("ADX:{0:D2} L2: Latte", CInt(adxVal)),
-                               If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L1: Decaff", CInt(adxVal)),
+                               If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L0: Decaff", CInt(adxVal)),
                                   String.Format("ADX:{0:D2}", CInt(adxVal))))))
 
                 If Not isFavourable Then
@@ -1412,11 +1432,11 @@ Namespace TopStepTrader.UI.ViewModels
             Try
                 Dim bars1H = Await _barService.GetLiveBarsAsync(contractId, BarTimeframe.OneHour, 50)
                 If bars1H Is Nothing OrElse bars1H.Count < 10 Then Return True
-                Dim highs  = bars1H.Select(Function(b) b.High).ToList()
-                Dim lows   = bars1H.Select(Function(b) b.Low).ToList()
+                Dim highs = bars1H.Select(Function(b) b.High).ToList()
+                Dim lows = bars1H.Select(Function(b) b.Low).ToList()
                 Dim closes = bars1H.Select(Function(b) b.Close).ToList()
-                Dim st1H   = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
-                Dim dir    = st1H.Direction(bars1H.Count - 1)
+                Dim st1H = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
+                Dim dir = st1H.Direction(bars1H.Count - 1)
                 If Single.IsNaN(dir) OrElse dir = 0.0F Then Return True
                 Return If(isLong, dir > 0, dir < 0)
             Catch ex As Exception
@@ -1519,7 +1539,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim adxStr As String = If(Single.IsNaN(adxVal), "ADX:--",
                                           If(adxVal >= Config.AdxStrongThreshold, String.Format("ADX:{0:D2} L3: Espresso", CInt(adxVal)),
                                           If(adxVal >= Config.AdxModerateThreshold, String.Format("ADX:{0:D2} L2: Latte", CInt(adxVal)),
-                                          If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L1: Decaff", CInt(adxVal)),
+                                          If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L0: Decaff", CInt(adxVal)),
                                              String.Format("ADX:{0:D2}", CInt(adxVal))))))
                 Dim signalLabel As String = If(earlySignal, "EARLY", "flat")
                 Dim sigColor As Brush = If(earlySignal, Brushes.Goldenrod, Brushes.White)
@@ -1637,9 +1657,9 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim currentAdx As Single = 0F
                 If bars IsNot Nothing AndAlso bars.Count >= 14 Then
                     Dim highs = bars.Select(Function(b) b.High).ToList()
-                    Dim lows  = bars.Select(Function(b) b.Low).ToList()
-                    Dim cls   = bars.Select(Function(b) b.Close).ToList()
-                    Dim st  = TechnicalIndicators.SuperTrend(highs, lows, cls, period:=10, multiplier:=_stMultiplier)
+                    Dim lows = bars.Select(Function(b) b.Low).ToList()
+                    Dim cls = bars.Select(Function(b) b.Close).ToList()
+                    Dim st = TechnicalIndicators.SuperTrend(highs, lows, cls, period:=10, multiplier:=_stMultiplier)
                     Dim dmi = TechnicalIndicators.DMI(highs, lows, cls, period:=14)
                     Dim n = bars.Count - 1
                     stLine = CDec(st.Line(n))
@@ -1659,24 +1679,24 @@ Namespace TopStepTrader.UI.ViewModels
                 ' Populate the slot directly (bypasses bar-gate / counter-trend rules that
                 ' don't apply to positions already live on the exchange)
                 Dim s2 = _slotManager.Slots(freeSlot.SlotIndex)
-                s2.Instrument     = contractId
-                s2.Side           = side
-                s2.EntryAdx       = currentAdx
-                s2.CurrentAdx     = currentAdx
-                s2.EntryBarTime   = snapshot.OpenedAtUtc
-                s2.EntryPrice     = snapshot.OpenRate
-                s2.StopPrice      = stLine
-                s2.Contracts      = baseContracts
-                s2.IsOpen         = True
-                s2.Health              = Core.Enums.SlotHealth.Healthy
-                s2.MissCount           = 0
+                s2.Instrument = contractId
+                s2.Side = side
+                s2.EntryAdx = currentAdx
+                s2.CurrentAdx = currentAdx
+                s2.EntryBarTime = snapshot.OpenedAtUtc
+                s2.EntryPrice = snapshot.OpenRate
+                s2.StopPrice = stLine
+                s2.Contracts = baseContracts
+                s2.IsOpen = True
+                s2.Health = Core.Enums.SlotHealth.Healthy
+                s2.MissCount = 0
                 s2.ConsecutiveExitBars = 0
-                s2.UnrealizedPnl       = 0D
-                s2.EntryReason         = $"Onboarded (ADX {CInt(currentAdx)})"
-                s2.StopPhase           = Core.Enums.StopPhase.Initial
-                s2.AccountId      = accountId
-                s2.EntryTime      = DateTime.Now
-                s2.PositionId     = snapshot.PositionId
+                s2.UnrealizedPnl = 0D
+                s2.EntryReason = $"Onboarded (ADX {CInt(currentAdx)})"
+                s2.StopPhase = Core.Enums.StopPhase.Initial
+                s2.AccountId = accountId
+                s2.EntryTime = DateTime.Now
+                s2.PositionId = snapshot.PositionId
 
                 _logger.LogInformation(
                     "ST+ Reconcile [{Contract}] onboarded into Slot {Idx}: side={Side} entry={Entry} stop={Stop} contracts={Qty} ADX={Adx:F1}",
@@ -1694,10 +1714,10 @@ Namespace TopStepTrader.UI.ViewModels
                     Dim scaleOrder As New Core.Models.Order With {
                         .AccountId = accountId,
                         .ContractId = contractId,
-                        .Side       = If(side = "Buy", Core.Enums.OrderSide.Buy, Core.Enums.OrderSide.Sell),
-                        .Quantity   = extraContracts,
-                        .OrderType  = Core.Enums.OrderType.Market,
-                        .InitialStopTicks       = Nothing,
+                        .Side = If(side = "Buy", Core.Enums.OrderSide.Buy, Core.Enums.OrderSide.Sell),
+                        .Quantity = extraContracts,
+                        .OrderType = Core.Enums.OrderType.Market,
+                        .InitialStopTicks = Nothing,
                         .InitialTakeProfitTicks = Nothing
                     }
                     Dim placed As Core.Models.Order = Nothing
@@ -1730,7 +1750,7 @@ Namespace TopStepTrader.UI.ViewModels
                     Sub()
                         If box IsNot Nothing Then
                             box.IdleMonitorText = String.Empty
-                            box.HasPosition    = True
+                            box.HasPosition = True
                             UpdatePositionDisplay(box, s2, 0D)
                             Task.Run(Async Function() As Task
                                          Await box.FlashBorderAsync()
@@ -1869,17 +1889,17 @@ Namespace TopStepTrader.UI.ViewModels
                             _slotManager.CloseSlot(slot.SlotIndex)
                             Return
                         End If
-                    ' YES — update watchlist row with green confirmation
-                    Dim wIdxOk As Integer = Array.IndexOf(Instruments, contractId)
-                    If wIdxOk >= 0 Then
-                        Application.Current?.Dispatcher?.Invoke(
+                        ' YES — update watchlist row with green confirmation
+                        Dim wIdxOk As Integer = Array.IndexOf(Instruments, contractId)
+                        If wIdxOk >= 0 Then
+                            Application.Current?.Dispatcher?.Invoke(
                             Sub()
                                 WatchlistItems(wIdxOk).SignalReason = "🤖 AI Checked ✓"
                             End Sub)
-                    End If
-                    AddAiLogEntry(contractId, "Pre-trade check PASSED ✓")
-                    capturedAiResult = "PASSED"
-                    capturedAiReason = If(aiResult.Reasoning.Length > 500,
+                        End If
+                        AddAiLogEntry(contractId, "Pre-trade check PASSED ✓")
+                        capturedAiResult = "PASSED"
+                        capturedAiReason = If(aiResult.Reasoning.Length > 500,
                                          aiResult.Reasoning.Substring(0, 497) & "...",
                                          aiResult.Reasoning)
                     End Using
@@ -1908,6 +1928,13 @@ Namespace TopStepTrader.UI.ViewModels
                 .InitialStopTicks = If(isPrimary, stopTicks, Nothing),
                 .InitialTakeProfitTicks = Nothing
             }
+            ' Guard: abort order placement if monitoring was stopped while FireEntryAsync was awaiting.
+            If Not _isMonitoring Then
+                _logger.LogWarning("ST+ FireEntry [{Contract}] BLOCKED — monitoring stopped before order placement.", contractId)
+                _slotManager.CloseSlot(slot.SlotIndex)
+                Return
+            End If
+
             Dim placed As Order = Nothing
             Try
                 placed = Await _orderService.PlaceOrderAsync(order)
@@ -2042,12 +2069,12 @@ Namespace TopStepTrader.UI.ViewModels
             _logger.LogInformation("ST+ [Slot {Idx}] Scale-in +{Add} for {Contract} (total will be {Total})",
                                    slot.SlotIndex, addContracts, slot.Instrument, slot.Contracts + addContracts)
             Dim order As New Order With {
-                .AccountId              = slot.AccountId,
-                .ContractId             = slot.Instrument,
-                .Side                   = If(slot.Side = "Buy", OrderSide.Buy, OrderSide.Sell),
-                .Quantity               = addContracts,
-                .OrderType              = OrderType.Market,
-                .InitialStopTicks       = Nothing,
+                .AccountId = slot.AccountId,
+                .ContractId = slot.Instrument,
+                .Side = If(slot.Side = "Buy", OrderSide.Buy, OrderSide.Sell),
+                .Quantity = addContracts,
+                .OrderType = OrderType.Market,
+                .InitialStopTicks = Nothing,
                 .InitialTakeProfitTicks = Nothing
             }
             Try
@@ -2072,8 +2099,8 @@ Namespace TopStepTrader.UI.ViewModels
                     Dim latestPnl = slot.UnrealizedPnl
                     Dim box = BoxForSlot(slot)
                     Application.Current?.Dispatcher?.Invoke(Sub()
-                        If box IsNot Nothing Then UpdatePositionDisplay(box, slot, latestPnl)
-                    End Sub)
+                                                                If box IsNot Nothing Then UpdatePositionDisplay(box, slot, latestPnl)
+                                                            End Sub)
                 Else
                     _logger.LogWarning("ST+ [Slot {Idx}] Scale-in rejected for {Contract}: status={Status}",
                                        slot.SlotIndex, slot.Instrument, placed?.Status)
@@ -2158,12 +2185,19 @@ Namespace TopStepTrader.UI.ViewModels
                 ' P&L display and the phased stop ratchet (BUG-51), so intra-bar price spikes
                 ' that peak and retrace within one strategy bar can still advance the stop.
                 ' Indicator calculations (ST line, DMI, ATR) still use the strategy-TF closes.
+                ' tickBars is hoisted here so Take100 can reuse the same fetch without a second API call.
                 Dim currentClose As Decimal = CDec(closes(n))  ' fallback to strategy-TF close
+                Dim tickBars As IList(Of MarketBar) = Nothing
                 Try
-                    Dim tickBars = Await _barService.GetLiveBarsAsync(slot.Instrument, BarTimeframe.FifteenSecond, 10)
-                    If tickBars IsNot Nothing AndAlso tickBars.Count > 0 Then
+                    Dim rawTickBars = Await _barService.GetLiveBarsAsync(slot.Instrument, BarTimeframe.FifteenSecond, 20)
+                    If rawTickBars IsNot Nothing AndAlso rawTickBars.Count > 0 Then
+                        ' Strip the forming bar — act only on closed 15s bars.
+                        Dim lastBarAge = (DateTime.UtcNow - rawTickBars(rawTickBars.Count - 1).Timestamp).TotalSeconds
+                        tickBars = If(lastBarAge < 15 AndAlso rawTickBars.Count > 1,
+                                      CType(rawTickBars.Take(rawTickBars.Count - 1).ToList(), IList(Of MarketBar)),
+                                      rawTickBars)
                         currentClose = CDec(tickBars(tickBars.Count - 1).Close)
-                        _logger.LogDebug("ST+ [Slot {Idx}] {Contract} currentClose={Price} (15s bar)", slot.SlotIndex, slot.Instrument, currentClose)
+                        _logger.LogDebug("ST+ [Slot {Idx}] {Contract} currentClose={Price} (15s bar close)", slot.SlotIndex, slot.Instrument, currentClose)
                     End If
                 Catch
                     ' Non-fatal: fall back to strategy-TF close already assigned above
@@ -2190,7 +2224,7 @@ Namespace TopStepTrader.UI.ViewModels
 
                 Dim boxForDisplay = BoxForSlot(slot)
                 Application.Current?.Dispatcher?.Invoke(Sub()
-                                                            If boxForDisplay IsNot Nothing Then UpdatePositionDisplay(boxForDisplay, slot, latestPnl)
+                                                            If boxForDisplay IsNot Nothing Then UpdatePositionDisplay(boxForDisplay, slot, latestPnl, currentClose)
                                                         End Sub)
                 Dim st = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
                 Dim dmiForExit = TechnicalIndicators.DMI(highs, lows, closes, period:=14)
@@ -2222,6 +2256,18 @@ Namespace TopStepTrader.UI.ViewModels
                 ' Always refresh current ADX for live display (independent of entry confirmation).
                 Dim adxNow = dmiForExit.ADX(n)
                 If Not Single.IsNaN(adxNow) Then slot.CurrentAdx = adxNow
+
+                ' Push trend-weakening sample for Row 4 (8-bar / 2-minute composite).
+                Dim diPlusNow = dmiForExit.PlusDI(n)
+                Dim diMinusNow = dmiForExit.MinusDI(n)
+                Dim priceToStNow = If(slot.EntryPrice <> 0D AndAlso stLine <> 0D,
+                                      CSng(Math.Abs(currentClose - stLine)), 0F)
+                Dim boxForTrend = BoxForSlot(slot)
+                Application.Current?.Dispatcher?.Invoke(Sub()
+                                                            If boxForTrend IsNot Nothing Then
+                                                                boxForTrend.PushAdxSample(adxNow, diPlusNow, diMinusNow, priceToStNow)
+                                                            End If
+                                                        End Sub)
 
                 ' STRAT-31: Scale in as ADX strengthens from a lower to a higher band.
                 ' Skip during early-mode grace (position not yet ST-confirmed) and before entry fills.
@@ -2311,15 +2357,58 @@ Namespace TopStepTrader.UI.ViewModels
                     ' all slots share the same underlying TopStepX position and racing edits
                     ' would use different InitialRisk baselines and could widen the stop.
                     '
-                    ' SuperTrend+ uses a 6-phase configurable ladder via ComputePhasedStop overload.
-                    ' This overwrites the generic phased-stop produced by ExitSignalEngine.Evaluate
-                    ' and keeps the logic isolated to this strategy only.
                     Dim stLineForPhase = If(Not Single.IsNaN(st.Line(n)), CDec(st.Line(n)), slot.StopPrice)
                     Dim atrForPhase = If(n < atr14Exit.Length AndAlso Not Single.IsNaN(atr14Exit(n)), CDec(atr14Exit(n)), 0D)
                     Dim oldStopPhase = slot.StopPhase
-                    Dim stPhasedResult = _exitEngine.ComputePhasedStop(slot, currentClose, stLineForPhase, atrForPhase, Config)
-                    Dim newStop = stPhasedResult.NewStop
-                    slot.StopPhase = stPhasedResult.Phase
+                    Dim newStop As Decimal
+
+                    If Config.Take100ProfitEnabled Then
+                         ' ── Take $100 mode: the R-based phase ladder is OFF ──────────────────
+                         ' State 1 (PnL < $100):   SL trails the SuperTrend line (ratchet only).
+                         ' State 2 (PnL ≥ $100):   SL uses two stacked ratchet floors:
+                         '   Floor A — entry price (breakeven): SL may never drop below entry.
+                         '   Floor B — BB median (EMA-10 of 15s bars): once the median clears
+                         '             the breakeven floor the SL follows it upward, ratcheting
+                         '             to lock in profit as the 15-second trend extends.
+                         Dim isLngSlot = slot.Side = "Buy"
+                         If latestPnl >= 100D Then
+                             ' Floor A: breakeven — ratchet preserves any higher floor already set.
+                             Dim beStop = slot.EntryPrice
+                             newStop = If(isLngSlot, Math.Max(slot.StopPrice, beStop), Math.Min(slot.StopPrice, beStop))
+                             slot.StopPhase = StopPhase.Breakeven
+
+                             ' Floor B: BB median (EMA-10 of closed 15-second bars).
+                             ' Reuses tickBars fetched above — no second API call.
+                             If tickBars IsNot Nothing AndAlso tickBars.Count >= 10 Then
+                                 Dim s15Closes = tickBars.Select(Function(b) CDec(b.Close)).ToList()
+                                 Dim ema10 = TechnicalIndicators.EMA(s15Closes, 10)
+                                 Dim lastIdx = ema10.Length - 1
+                                 If Not Single.IsNaN(ema10(lastIdx)) Then
+                                     Dim bbMid = CDec(ema10(lastIdx))
+                                     newStop = If(isLngSlot, Math.Max(newStop, bbMid), Math.Min(newStop, bbMid))
+                                     _logger.LogInformation(
+                                         "ST+ [Slot {Idx}] Take100 BB-mid trail — entry={E:F2} bbMid={B:F2} newStop={S:F2} pnl={P:F2}",
+                                         slot.SlotIndex, slot.EntryPrice, bbMid, newStop, latestPnl)
+                                 End If
+                             Else
+                                 _logger.LogInformation(
+                                     "ST+ [Slot {Idx}] Take100 breakeven (no 15s bars yet) — entry={Entry:F2} newStop={Stop:F2} pnl={Pnl:F2}",
+                                     slot.SlotIndex, slot.EntryPrice, newStop, latestPnl)
+                             End If
+                         Else
+                             ' Pre-$100: trail SuperTrend line, ratchet only.
+                             newStop = If(isLngSlot, Math.Max(slot.StopPrice, stLineForPhase), Math.Min(slot.StopPrice, stLineForPhase))
+                             slot.StopPhase = StopPhase.Initial
+                         End If
+                    Else
+                        ' ── Standard 6-phase configurable ladder ────────────────────────────
+                        ' SuperTrend+ uses a configurable ladder via ComputePhasedStop overload.
+                        ' This overwrites the generic phased-stop produced by ExitSignalEngine.Evaluate
+                        ' and keeps the logic isolated to this strategy only.
+                        Dim stPhasedResult = _exitEngine.ComputePhasedStop(slot, currentClose, stLineForPhase, atrForPhase, Config)
+                        newStop = stPhasedResult.NewStop
+                        slot.StopPhase = stPhasedResult.Phase
+                    End If
 
                     Dim isPrimaryForEdit As Boolean =
                         Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
@@ -2433,6 +2522,7 @@ Namespace TopStepTrader.UI.ViewModels
                         box.IsRrAchieved = False
                         box.TargetPnlLine = String.Empty
                         box.ClearAiResult()
+                        box.ClearTrendHistory()
                     End If
                 End Sub)
             ' ── Debug Capture: Exit snapshot + EndTrade (FEAT-39) ───────────────
@@ -2461,18 +2551,30 @@ Namespace TopStepTrader.UI.ViewModels
             End If
         End Function
 
-        Private Sub UpdatePositionDisplay(box As SlotBoxVm, slot As PositionSlot, pnl As Decimal)
+        Private Sub UpdatePositionDisplay(box As SlotBoxVm, slot As PositionSlot, pnl As Decimal,
+                                          Optional livePrice As Decimal = 0D)
             Dim sideLbl As String = If(slot.Side = "Buy", "LONG", "SHORT")
             Dim idx As Integer = Array.IndexOf(Instruments, slot.Instrument)
             Dim label As String = If(idx >= 0, InstrumentLabels(idx), slot.Instrument)
-            Dim entry As String = If(slot.EntryPrice = 0D, "--", slot.EntryPrice.ToString("F2"))
-            Dim sl As String = If(slot.StopPrice = 0D, "--", slot.StopPrice.ToString("F2"))
             Dim entryTimeStr As String = If(slot.EntryTime = DateTime.MinValue, "--", slot.EntryTime.ToString("HH:mm:ss"))
-            box.SlotLabel = ($"{label}  {slot.Instrument} — {sideLbl} @ {entryTimeStr}").ToUpper()
-            Dim newDisplay As String = String.Format("Entry SP: {0}  |  Live SL: {1}", entry, sl)
+
+            ' ── Row 1 ─────────────────────────────────────────────────────────
+            box.SlotLabel = $"{label}  {slot.Instrument} — {sideLbl} @ {entryTimeStr}"
+
+            ' ── Row 2 ─────────────────────────────────────────────────────────
+            Dim priceFmt As String = If(livePrice = 0D, "--", livePrice.ToString("F2"))
+            Dim slFmt As String = If(slot.StopPrice = 0D, "--", slot.StopPrice.ToString("F2"))
+            Dim strength As String = AdxBandLabel(slot.CurrentAdx)
+            box.LivePriceDisplay = priceFmt
+            box.SlDisplay = slFmt
+            box.EntrySpDisplay = If(slot.EntryPrice = 0D, "--", slot.EntryPrice.ToString("F2"))
+            box.StrengthLabel = strength
+
+            ' Legacy display (kept for debug / existing tooling)
+            Dim newDisplay As String = $"Price: {priceFmt}  |  SL: {slFmt}  |  {strength}"
             Dim sign As String = If(pnl > 0D, "+", If(pnl < 0D, "-", ""))
             Dim absAmount As String = Math.Abs(pnl).ToString("F2")
-            Dim newPnlLine As String = String.Format("P&L: {0}${1}", sign, absAmount)
+            Dim newPnlLine As String = $"P&L: {sign}${absAmount}"
             Dim isFirstPopulation As Boolean = String.IsNullOrEmpty(box.LastPositionDisplay)
             Dim pnlChanged As Boolean = (newPnlLine <> box.PnlLine)
             Dim displayChanged As Boolean = (newDisplay <> box.LastPositionDisplay) OrElse pnlChanged
@@ -2483,28 +2585,86 @@ Namespace TopStepTrader.UI.ViewModels
             box.PnlBrush = Brushes.White
             box.PnlBorderBrush = If(pnl > 0D, Brushes.LimeGreen, If(pnl < 0D, Brushes.Red, Brushes.Gray))
             box.StopPhaseLabel = PhaseLabel(slot.StopPhase, Config)
-            Dim adxStr As String = If(slot.CurrentAdx > 0F, String.Format("  |  Live ADX: {0:F2}", slot.CurrentAdx), String.Empty)
+
+            ' ── Row 3: P&L, Target, and Next Phase ────────────────────────────
             Dim targetPnl As Decimal = 0D
             If slot.InitialRiskDollars > 0D Then
                 targetPnl = Math.Round(slot.InitialRiskDollars * PersonaRrRatio, 2)
-                box.TargetPnlLine = String.Format("Target: ${0:F2}{1}", targetPnl, adxStr)
-            ElseIf slot.CurrentAdx > 0F Then
-                box.TargetPnlLine = String.Format("Live ADX: {0:F2}", slot.CurrentAdx)
+                box.TargetPnlLine = $"Target: ${targetPnl:F2}"
             Else
                 box.TargetPnlLine = String.Empty
             End If
             box.IsRrAchieved = (targetPnl > 0D AndAlso pnl >= targetPnl)
-            If pnlChanged AndAlso Not isFirstPopulation Then
+
+            ' Next phase label
+            box.NextPhaseLabel = NextPhaseDisplay(slot, pnl)
+
+            ' ── Flashes ───────────────────────────────────────────────────────
+            If Not isFirstPopulation Then
                 Task.Run(Async Function() As Task
-                             Await box.FlashPnlTextAsync()
+                             Await box.FlashRowAsync()
                          End Function)
-            End If
-            If displayChanged AndAlso Not isFirstPopulation Then
-                Task.Run(Async Function() As Task
-                             Await box.FlashPnlAsync()
-                         End Function)
+                If pnlChanged Then
+                    Task.Run(Async Function() As Task
+                                 Await box.FlashPnlTextAsync()
+                             End Function)
+                End If
+                If displayChanged Then
+                    Task.Run(Async Function() As Task
+                                 Await box.FlashPnlAsync()
+                             End Function)
+                End If
             End If
         End Sub
+
+        ''' <summary>Returns the ADX band label for the given ADX reading.</summary>
+        Private Function AdxBandLabel(adx As Single) As String
+            If adx <= 0F Then Return String.Empty
+            If adx >= Config.AdxStrongThreshold Then Return "Espresso"
+            If adx >= Config.AdxModerateThreshold Then Return "Latte"
+            If adx >= Config.AdxWeakThreshold Then Return "Decaff"
+            Return String.Empty
+        End Function
+
+        ''' <summary>
+        ''' Computes a one-line "Next phase" label showing the trigger in R and the dollar distance.
+        ''' e.g.  "Next: Breakeven in 0.5R = $28.75"
+        ''' </summary>
+        Private Function NextPhaseDisplay(slot As PositionSlot, currentPnl As Decimal) As String
+            If slot.InitialRiskDollars <= 0D Then Return String.Empty
+            Dim ir = slot.InitialRiskDollars
+            Select Case slot.StopPhase
+                Case StopPhase.Initial
+                    Dim triggerR = Config.BreakevenTriggerR
+                    Dim dollarTarget = Math.Round(ir * triggerR, 2)
+                    Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
+                    Return $"Next: Breakeven in {triggerR:F1}R = ${remaining:F2}"
+                Case StopPhase.Breakeven
+                    Dim triggerR = Config.ProfitLockTriggerR
+                    Dim dollarTarget = Math.Round(ir * triggerR, 2)
+                    Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
+                    Return $"Next: ProfitLock in {triggerR:F1}R = ${remaining:F2}"
+                Case StopPhase.ProfitLock
+                    Dim triggerR = Config.ProfitTrailTriggerR
+                    Dim dollarTarget = Math.Round(ir * triggerR, 2)
+                    Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
+                    Return $"Next: ProfitTrail in {triggerR:F1}R = ${remaining:F2}"
+                Case StopPhase.ProfitTrail
+                    Dim triggerR = Config.HarvestTriggerR
+                    Dim dollarTarget = Math.Round(ir * triggerR, 2)
+                    Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
+                    Return $"Next: Harvest in {triggerR:F1}R = ${remaining:F2}"
+                Case StopPhase.Harvest
+                    Dim triggerR = Config.FreeRideTriggerR
+                    Dim dollarTarget = Math.Round(ir * triggerR, 2)
+                    Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
+                    Return $"Next: FreeRide in {triggerR:F1}R = ${remaining:F2}"
+                Case StopPhase.FreeRide
+                    Return "🏆 FreeRide — letting it run"
+                Case Else
+                    Return String.Empty
+            End Select
+        End Function
 
         ''' <summary>Returns a human-readable phase label that explains both the phase name
         ''' and its meaning in terms of how the stop is managed at that point.</summary>
@@ -2683,10 +2843,16 @@ Namespace TopStepTrader.UI.ViewModels
         Public Sub Dispose() Implements IDisposable.Dispose
             If Not _disposed Then
                 _disposed = True
-                SyncLock _timerLock
-                    _timer?.Dispose()
-                    _timer = Nothing
-                End SyncLock
+                ' StopMonitoring disposes the timer and resets all in-memory slot state,
+                ' preventing lingering entry desires (e.g. M2K) after app exit.
+                If _isMonitoring Then
+                    StopMonitoring()
+                Else
+                    SyncLock _timerLock
+                        _timer?.Dispose()
+                        _timer = Nothing
+                    End SyncLock
+                End If
             End If
         End Sub
 

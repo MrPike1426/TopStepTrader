@@ -75,6 +75,15 @@ Namespace TopStepTrader.Core.Settings
         ''' </summary>
         Public Property MondayMorningHtfFilterEnabled As Boolean = True
 
+        ' ── Take $100 Profit feature ──────────────────────────────────────────
+        ''' <summary>
+        ''' When True, once unrealised P&amp;L reaches $100 the stop is snapped to the
+        ''' BB middle band (EMA 10, mult 1.5) on the 15-second bar — whichever is more
+        ''' favourable than the current phased stop. The ratchet rule still applies:
+        ''' the stop never moves back.
+        ''' </summary>
+        Public Property Take100ProfitEnabled As Boolean = True
+
     End Class
 
 End Namespace

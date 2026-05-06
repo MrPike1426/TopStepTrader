@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:converters="clr-namespace:TopStepTrader.UI.Infrastructure"
+             xmlns:controls="clr-namespace:TopStepTrader.UI.Controls"
              mc:Ignorable="d"
              Background="{StaticResource BackgroundBrush}">
 
@@ -205,7 +206,7 @@
 
                                     <Border Grid.Column="0" Background="#1A2440" CornerRadius="4" Padding="10,8" BorderBrush="#2A3A5A" BorderThickness="1">
                                         <StackPanel>
-                                            <TextBlock Text="L1  Decaff" Foreground="#90CAF9" FontSize="11" FontWeight="Bold" Margin="0,0,0,3"/>
+                                            <TextBlock Text="L0  Decaff" Foreground="#90CAF9" FontSize="11" FontWeight="Bold" Margin="0,0,0,3"/>
                                             <TextBlock Text="ADX 25 – 39" Foreground="White" FontSize="12" Margin="0,0,0,5"/>
                                             <Border Background="#0D1520" CornerRadius="3" Padding="8,5">
                                                 <TextBlock Text="1 contract" Foreground="White" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center"/>
@@ -434,20 +435,22 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- Row 2: Persona buttons, AI toggle, Start/Stop, status -->
+                    <!-- Row 2: Persona buttons, AI toggle, Take100, Start/Stop, status -->
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="6"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="6"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="12"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="12"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>  <!-- 0  Lewis -->
+                            <ColumnDefinition Width="6"/>     <!-- 1  gap -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 2  Damian -->
+                            <ColumnDefinition Width="6"/>     <!-- 3  gap -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 4  Joe -->
+                            <ColumnDefinition Width="12"/>    <!-- 5  gap -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 6  AI toggle -->
+                            <ColumnDefinition Width="8"/>     <!-- 7  gap -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 8  Take $100 -->
+                            <ColumnDefinition Width="8"/>     <!-- 9  gap -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 10 Start/Stop -->
+                            <ColumnDefinition Width="*"/>     <!-- 11 stretch -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 12 Status badge -->
                         </Grid.ColumnDefinitions>
 
                         <!-- Lewis persona button -->
@@ -575,15 +578,70 @@
                             </StackPanel>
                         </ToggleButton>
 
+                        <!-- Take $100 Profit toggle -->
+                        <ToggleButton Grid.Column="8"
+                                      IsChecked="{Binding IsTake100Enabled, Mode=TwoWay}"
+                                      Padding="10,6" VerticalAlignment="Center" Cursor="Hand"
+                                      ToolTip="When ON: once a trade hits $100 profit the stop-loss snaps to the BB middle band (EMA 10, mult 1.5) on the 15-second bar. The ratchet rule still applies — the stop never moves back.">
+                            <ToggleButton.Style>
+                                <Style TargetType="ToggleButton">
+                                    <Setter Property="Background"      Value="#2A3A5A"/>
+                                    <Setter Property="BorderBrush"     Value="#3A5A8A"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="Foreground"      Value="{StaticResource TextSecondaryBrush}"/>
+                                    <Setter Property="Cursor"          Value="Hand"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="3"
+                                                        Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter Property="Background"  Value="#1B5E20"/>
+                                            <Setter Property="BorderBrush" Value="#66BB6A"/>
+                                            <Setter Property="Foreground"  Value="White"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Opacity" Value="0.85"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ToggleButton.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="💰" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
+                                <TextBlock VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="White">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text"       Value="Take $100"/>
+                                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsTake100Enabled}" Value="True">
+                                                    <Setter Property="Foreground" Value="#A5D6A7"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </ToggleButton>
+
                         <!-- Start / Stop button -->
-                        <Button Grid.Column="8"
+                        <Button Grid.Column="10"
                                 Content="{Binding StartStopLabel}"
                                 Command="{Binding StartStopCommand}"
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 Padding="14,6" VerticalAlignment="Center"/>
 
                         <!-- Status badge -->
-                        <Border Grid.Column="10"
+                        <Border Grid.Column="12"
                                 Background="{Binding StatusBackground}"
                                 CornerRadius="4" Margin="8,0,0,0"
                                 Visibility="{Binding StatusVisibility}"
@@ -730,7 +788,7 @@
                 </Grid>
             </Border>
 
-            <!-- ── Three slot boxes ── -->
+            <!-- ── Three slot cards ── -->
             <Grid Margin="0,12,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -740,681 +798,20 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Slot 1 box -->
-                <Border Grid.Column="0"
-                        Opacity="{Binding Slot1.BoxOpacity}"
-                        Background="{StaticResource SurfaceBrush}"
-                        CornerRadius="6" Padding="12,10"
-                        BorderBrush="{Binding Slot1.PnlBorderBrush}"
-                        BorderThickness="3">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Slot1.IsBorderFlashing}" Value="True">
-                                    <Setter Property="BorderBrush" Value="White"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding Slot1.IsPnlFlashing}" Value="True">
-                                    <Setter Property="BorderBrush" Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
+                <controls:SlotCardControl Grid.Column="0"
+                                          DataContext="{Binding Slot1}"
+                                          AiCommand="{Binding DataContext.AiCheckSlot1Command,
+                                              RelativeSource={RelativeSource AncestorType=UserControl}}"/>
 
-                        <!-- Gold title bar background — lights up when RR target is reached -->
-                        <Border Grid.Row="0"
-                                Margin="-12,-10,-12,6"
-                                Background="{Binding Slot1.TitleBarBackground}"
-                                CornerRadius="6,6,0,0"/>
+                <controls:SlotCardControl Grid.Column="2"
+                                          DataContext="{Binding Slot2}"
+                                          AiCommand="{Binding DataContext.AiCheckSlot2Command,
+                                              RelativeSource={RelativeSource AncestorType=UserControl}}"/>
 
-                        <!-- Header: instrument + direction + entry time, P&L right-aligned -->
-                        <Grid Grid.Row="0" Margin="0,0,0,6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0"
-                                       Text="{Binding Slot1.SlotLabel}"
-                                       FontWeight="Bold" Foreground="White" FontSize="12"
-                                       TextWrapping="Wrap"/>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                                <TextBlock Text="&#x23F8; Paused"
-                                           Visibility="{Binding Slot1.PausedBadgeVisibility}"
-                                           Foreground="Orange" FontSize="11"
-                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <!-- P&L inline with header when position is open -->
-                                <TextBlock Visibility="{Binding Slot1.PositionVisibility}"
-                                           FontFamily="Consolas" FontSize="13" FontWeight="SemiBold"
-                                           VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{Binding Slot1.PnlTextBrush}"/>
-                                            <Setter Property="FontWeight" Value="Normal"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Slot1.IsPnlTextFlashing}" Value="True">
-                                                    <Setter Property="Foreground" Value="Yellow"/>
-                                                    <Setter Property="FontWeight" Value="Bold"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                    <Run Text="{Binding Slot1.PnlLine, Mode=OneWay}"/>
-                                </TextBlock>
-                            </StackPanel>
-                        </Grid>
-
-                        <Separator Grid.Row="1" Margin="0,0,0,6"/>
-
-                        <!-- Symbol rows (ADX + signal watchlist) -->
-                        <ItemsControl Grid.Row="2" ItemsSource="{Binding Slot1.Symbols}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Margin="0,2"
-                                               Foreground="{Binding RowColor}"
-                                               FontFamily="Consolas" FontSize="12">
-                                        <Run Text="{Binding Symbol, Mode=OneWay}"/>
-                                        <Run Text="  "/>
-                                        <Run Text="{Binding Arrow, Mode=OneWay}"/>
-                                        <Run Text="  "/>
-                                        <Run Text="{Binding AdxDisplay, Mode=OneWay}"/>
-                                        <Run Text="  "/>
-                                        <Run Text="{Binding Signal, Mode=OneWay}"/>
-                                    </TextBlock>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <!-- Idle monitoring text (shown when no position is open) -->
-                        <Border Grid.Row="3"
-                                Visibility="{Binding Slot1.IdleVisibility}"
-                                Padding="0,6,0,0">
-                            <TextBlock>
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text"       Value="{Binding Slot1.IdleMonitorText}"/>
-                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                        <Setter Property="FontFamily" Value="Consolas"/>
-                                        <Setter Property="FontSize"   Value="10"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Slot1.IsIdleFlashing}" Value="True">
-                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
-                                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Border>
-
-                        <!-- Position area: entry price / SL / target / phase -->
-                        <Border Grid.Row="4"
-                                Visibility="{Binding Slot1.PositionVisibility}"
-                                Background="#1A2A50" CornerRadius="4"
-                                Padding="8,6" Margin="0,8,0,0">
-                            <StackPanel>
-                                <!-- Row 2: Entry Price and Current SL -->
-                                <TextBlock Text="{Binding Slot1.PositionDisplay}"
-                                           Foreground="White"
-                                           FontFamily="Consolas" FontSize="12"
-                                           TextWrapping="Wrap"/>
-                                <!-- Phase label -->
-                                <TextBlock Text="{Binding Slot1.StopPhaseLabel}"
-                                           Foreground="#80B0FF" FontFamily="Consolas" FontSize="11"
-                                           Margin="0,2,0,0"/>
-                                <!-- Row 3: Target P&L and live ADX -->
-                                <TextBlock Text="{Binding Slot1.TargetPnlLine, Mode=OneWay}"
-                                           Visibility="{Binding Slot1.TargetPnlVisibility}"
-                                           Foreground="ForestGreen"
-                                           FontFamily="Consolas" FontSize="12"
-                                           Margin="0,2,0,0"/>
-
-                                <!-- RR Achieved milestone badge -->
-                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
-                                        Visibility="{Binding Slot1.RrAchievedVisibility}"
-                                        Background="#2B2000" BorderBrush="#FFD700" BorderThickness="1">
-                                    <TextBlock Text="&#x1F3C6; RR Achieved. Boom!!"
-                                               Foreground="#FFD700" FontWeight="Bold" FontSize="12"
-                                               HorizontalAlignment="Center"/>
-                                </Border>
-
-                                <!-- AI mid-trade result -->
-                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
-                                        Visibility="{Binding Slot1.AiResultVisibility}"
-                                        BorderBrush="{Binding Slot1.AiVerdictBrush}" BorderThickness="1"
-                                        Background="#0D1A2E">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Slot1.AiVerdictText}"
-                                                   Foreground="{Binding Slot1.AiVerdictBrush}"
-                                                   FontWeight="Bold" FontSize="12"/>
-                                        <TextBlock Text="{Binding Slot1.AiExplanation}"
-                                                   Foreground="White" FontSize="11"
-                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
-                                        <TextBlock FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap">
-                                            <Run Text="Action: " Foreground="{StaticResource TextSecondaryBrush}"/>
-                                            <Run Text="{Binding Slot1.AiSuggestedAction}" Foreground="Cyan"/>
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- AI sense-check button (blue theme) -->
-                        <Button Grid.Row="5" Margin="0,8,0,0" HorizontalAlignment="Stretch"
-                                Padding="6,4" FontSize="11"
-                                Visibility="{Binding Slot1.PositionVisibility}"
-                                IsEnabled="{Binding Slot1.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
-                                Command="{Binding AiCheckSlot1Command}"
-                                ToolTip="Ask Claude Haiku to sense-check this live position">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Background"  Value="#1565C0"/>
-                                    <Setter Property="BorderBrush" Value="#1976D2"/>
-                                    <Setter Property="Foreground"  Value="White"/>
-                                    <Setter Property="BorderThickness" Value="1"/>
-                                    <Setter Property="Cursor"      Value="Hand"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border Background="{TemplateBinding Background}"
-                                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                                        CornerRadius="3"
-                                                        Padding="{TemplateBinding Padding}">
-                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background"  Value="#2E7D32"/>
-                                            <Setter Property="BorderBrush" Value="#388E3C"/>
-                                        </Trigger>
-                                        <DataTrigger Binding="{Binding Slot1.IsAiChecking}" Value="True">
-                                            <Setter Property="Background"  Value="#F57C00"/>
-                                            <Setter Property="BorderBrush" Value="#FF9800"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
-                                <TextBlock VerticalAlignment="Center" Foreground="White">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Text" Value="AI Sense Check"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Slot1.IsAiChecking}" Value="True">
-                                                    <Setter Property="Text" Value="Checking&#x2026;"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </StackPanel>
-                        </Button>
-                    </Grid>
-                </Border>
-
-                <!-- Slot 2 box -->
-                <Border Grid.Column="2"
-                        Opacity="{Binding Slot2.BoxOpacity}"
-                        Background="{StaticResource SurfaceBrush}"
-                        CornerRadius="6" Padding="12,10"
-                        BorderBrush="{Binding Slot2.PnlBorderBrush}"
-                        BorderThickness="3">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Slot2.IsBorderFlashing}" Value="True">
-                                    <Setter Property="BorderBrush" Value="White"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding Slot2.IsPnlFlashing}" Value="True">
-                                    <Setter Property="BorderBrush" Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <!-- Gold title bar background — lights up when RR target is reached -->
-                        <Border Grid.Row="0"
-                                Margin="-12,-10,-12,6"
-                                Background="{Binding Slot2.TitleBarBackground}"
-                                CornerRadius="6,6,0,0"/>
-
-                        <!-- Header: instrument + direction + entry time, P&L right-aligned -->
-                        <Grid Grid.Row="0" Margin="0,0,0,6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0"
-                                       Text="{Binding Slot2.SlotLabel}"
-                                       FontWeight="Bold" Foreground="White" FontSize="12"
-                                       TextWrapping="Wrap"/>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                                <TextBlock Text="&#x23F8; Paused"
-                                           Visibility="{Binding Slot2.PausedBadgeVisibility}"
-                                           Foreground="Orange" FontSize="11"
-                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <!-- P&L inline with header when position is open -->
-                                <TextBlock Visibility="{Binding Slot2.PositionVisibility}"
-                                           FontFamily="Consolas" FontSize="13" FontWeight="SemiBold"
-                                           VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{Binding Slot2.PnlTextBrush}"/>
-                                            <Setter Property="FontWeight" Value="Normal"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Slot2.IsPnlTextFlashing}" Value="True">
-                                                    <Setter Property="Foreground" Value="Yellow"/>
-                                                    <Setter Property="FontWeight" Value="Bold"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                    <Run Text="{Binding Slot2.PnlLine, Mode=OneWay}"/>
-                                </TextBlock>
-                            </StackPanel>
-                        </Grid>
-
-                        <Separator Grid.Row="1" Margin="0,0,0,6"/>
-
-                        <!-- Symbol rows (ADX + signal watchlist) -->
-                        <ItemsControl Grid.Row="2" ItemsSource="{Binding Slot2.Symbols}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Margin="0,2"
-                                               Foreground="{Binding RowColor}"
-                                               FontFamily="Consolas" FontSize="12">
-                                        <Run Text="{Binding Symbol, Mode=OneWay}"/>
-                                        <Run Text="  "/>
-                                        <Run Text="{Binding Arrow, Mode=OneWay}"/>
-                                        <Run Text="  "/>
-                                        <Run Text="{Binding AdxDisplay, Mode=OneWay}"/>
-                                        <Run Text="  "/>
-                                        <Run Text="{Binding Signal, Mode=OneWay}"/>
-                                    </TextBlock>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <!-- Idle monitoring text (shown when no position is open) -->
-                        <Border Grid.Row="3"
-                                Visibility="{Binding Slot2.IdleVisibility}"
-                                Padding="0,6,0,0">
-                            <TextBlock>
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text"       Value="{Binding Slot2.IdleMonitorText}"/>
-                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                        <Setter Property="FontFamily" Value="Consolas"/>
-                                        <Setter Property="FontSize"   Value="10"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Slot2.IsIdleFlashing}" Value="True">
-                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
-                                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Border>
-
-                        <!-- Position area: entry price / SL / target / phase -->
-                        <Border Grid.Row="4"
-                                Visibility="{Binding Slot2.PositionVisibility}"
-                                Background="#1A2A50" CornerRadius="4"
-                                Padding="8,6" Margin="0,8,0,0">
-                            <StackPanel>
-                                <!-- Row 2: Entry Price and Current SL -->
-                                <TextBlock Text="{Binding Slot2.PositionDisplay}"
-                                           Foreground="White"
-                                           FontFamily="Consolas" FontSize="12"
-                                           TextWrapping="Wrap"/>
-                                <!-- Phase label -->
-                                <TextBlock Text="{Binding Slot2.StopPhaseLabel}"
-                                           Foreground="#80B0FF" FontFamily="Consolas" FontSize="11"
-                                           Margin="0,2,0,0"/>
-                                <!-- Row 3: Target P&L and live ADX -->
-                                <TextBlock Text="{Binding Slot2.TargetPnlLine, Mode=OneWay}"
-                                           Visibility="{Binding Slot2.TargetPnlVisibility}"
-                                           Foreground="ForestGreen"
-                                           FontFamily="Consolas" FontSize="12"
-                                           Margin="0,2,0,0"/>
-
-                                <!-- RR Achieved milestone badge -->
-                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
-                                        Visibility="{Binding Slot2.RrAchievedVisibility}"
-                                        Background="#2B2000" BorderBrush="#FFD700" BorderThickness="1">
-                                    <TextBlock Text="&#x1F3C6; RR Achieved. Boom!!"
-                                               Foreground="#FFD700" FontWeight="Bold" FontSize="12"
-                                               HorizontalAlignment="Center"/>
-                                </Border>
-
-                                <!-- AI mid-trade result -->
-                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
-                                        Visibility="{Binding Slot2.AiResultVisibility}"
-                                        BorderBrush="{Binding Slot2.AiVerdictBrush}" BorderThickness="1"
-                                        Background="#0D1A2E">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Slot2.AiVerdictText}"
-                                                   Foreground="{Binding Slot2.AiVerdictBrush}"
-                                                   FontWeight="Bold" FontSize="12"/>
-                                        <TextBlock Text="{Binding Slot2.AiExplanation}"
-                                                   Foreground="White" FontSize="11"
-                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
-                                        <TextBlock FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap">
-                                            <Run Text="Action: " Foreground="{StaticResource TextSecondaryBrush}"/>
-                                            <Run Text="{Binding Slot2.AiSuggestedAction}" Foreground="Cyan"/>
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- AI sense-check button (blue theme) -->
-                        <Button Grid.Row="5" Margin="0,8,0,0" HorizontalAlignment="Stretch"
-                                Padding="6,4" FontSize="11"
-                                Visibility="{Binding Slot2.PositionVisibility}"
-                                IsEnabled="{Binding Slot2.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
-                                Command="{Binding AiCheckSlot2Command}"
-                                ToolTip="Ask Claude Haiku to sense-check this live position">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Background"  Value="#1565C0"/>
-                                    <Setter Property="BorderBrush" Value="#1976D2"/>
-                                    <Setter Property="Foreground"  Value="White"/>
-                                    <Setter Property="BorderThickness" Value="1"/>
-                                    <Setter Property="Cursor"      Value="Hand"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border Background="{TemplateBinding Background}"
-                                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                                        CornerRadius="3"
-                                                        Padding="{TemplateBinding Padding}">
-                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background"  Value="#2E7D32"/>
-                                            <Setter Property="BorderBrush" Value="#388E3C"/>
-                                        </Trigger>
-                                        <DataTrigger Binding="{Binding Slot2.IsAiChecking}" Value="True">
-                                            <Setter Property="Background"  Value="#F57C00"/>
-                                            <Setter Property="BorderBrush" Value="#FF9800"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
-                                <TextBlock VerticalAlignment="Center" Foreground="White">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Text" Value="AI Sense Check"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Slot2.IsAiChecking}" Value="True">
-                                                    <Setter Property="Text" Value="Checking&#x2026;"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </StackPanel>
-                        </Button>
-                    </Grid>
-                </Border>
-
-                <!-- Slot 3 box -->
-                <Border Grid.Column="4"
-                        Opacity="{Binding Slot3.BoxOpacity}"
-                        Background="{StaticResource SurfaceBrush}"
-                        CornerRadius="6" Padding="12,10"
-                        BorderBrush="{Binding Slot3.PnlBorderBrush}"
-                        BorderThickness="3">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Slot3.IsBorderFlashing}" Value="True">
-                                    <Setter Property="BorderBrush" Value="White"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding Slot3.IsPnlFlashing}" Value="True">
-                                    <Setter Property="BorderBrush" Value="White"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <!-- Gold title bar background — lights up when RR target is reached -->
-                        <Border Grid.Row="0"
-                                Margin="-12,-10,-12,6"
-                                Background="{Binding Slot3.TitleBarBackground}"
-                                CornerRadius="6,6,0,0"/>
-
-                        <!-- Header: instrument + direction + entry time, P&L right-aligned -->
-                        <Grid Grid.Row="0" Margin="0,0,0,6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0"
-                                       Text="{Binding Slot3.SlotLabel}"
-                                       FontWeight="Bold" Foreground="White" FontSize="12"
-                                       TextWrapping="Wrap"/>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
-                                <TextBlock Text="&#x23F8; Paused"
-                                           Visibility="{Binding Slot3.PausedBadgeVisibility}"
-                                           Foreground="Orange" FontSize="11"
-                                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <!-- P&L inline with header when position is open -->
-                                <TextBlock Visibility="{Binding Slot3.PositionVisibility}"
-                                           FontFamily="Consolas" FontSize="13" FontWeight="SemiBold"
-                                           VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{Binding Slot3.PnlTextBrush}"/>
-                                            <Setter Property="FontWeight" Value="Normal"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Slot3.IsPnlTextFlashing}" Value="True">
-                                                    <Setter Property="Foreground" Value="Yellow"/>
-                                                    <Setter Property="FontWeight" Value="Bold"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                    <Run Text="{Binding Slot3.PnlLine, Mode=OneWay}"/>
-                                </TextBlock>
-                            </StackPanel>
-                        </Grid>
-
-                        <Separator Grid.Row="1" Margin="0,0,0,6"/>
-
-                        <!-- Symbol rows (ADX + signal watchlist) -->
-                        <ItemsControl Grid.Row="2" ItemsSource="{Binding Slot3.Symbols}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Margin="0,2"
-                                               Foreground="{Binding RowColor}"
-                                               FontFamily="Consolas" FontSize="12">
-                                        <Run Text="{Binding Symbol, Mode=OneWay}"/>
-                                        <Run Text="  "/>
-                                        <Run Text="{Binding Arrow, Mode=OneWay}"/>
-                                        <Run Text="  "/>
-                                        <Run Text="{Binding AdxDisplay, Mode=OneWay}"/>
-                                        <Run Text="  "/>
-                                        <Run Text="{Binding Signal, Mode=OneWay}"/>
-                                    </TextBlock>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <!-- Idle monitoring text (shown when no position is open) -->
-                        <Border Grid.Row="3"
-                                Visibility="{Binding Slot3.IdleVisibility}"
-                                Padding="0,6,0,0">
-                            <TextBlock>
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="Text"       Value="{Binding Slot3.IdleMonitorText}"/>
-                                        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                        <Setter Property="FontFamily" Value="Consolas"/>
-                                        <Setter Property="FontSize"   Value="10"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding Slot3.IsIdleFlashing}" Value="True">
-                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
-                                                <Setter Property="FontWeight" Value="SemiBold"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Border>
-
-                        <!-- Position area: entry price / SL / target / phase -->
-                        <Border Grid.Row="4"
-                                Visibility="{Binding Slot3.PositionVisibility}"
-                                Background="#1A2A50" CornerRadius="4"
-                                Padding="8,6" Margin="0,8,0,0">
-                            <StackPanel>
-                                <!-- Row 2: Entry Price and Current SL -->
-                                <TextBlock Text="{Binding Slot3.PositionDisplay}"
-                                           Foreground="White"
-                                           FontFamily="Consolas" FontSize="12"
-                                           TextWrapping="Wrap"/>
-                                <!-- Phase label -->
-                                <TextBlock Text="{Binding Slot3.StopPhaseLabel}"
-                                           Foreground="#80B0FF" FontFamily="Consolas" FontSize="11"
-                                           Margin="0,2,0,0"/>
-                                <!-- Row 3: Target P&L and live ADX -->
-                                <TextBlock Text="{Binding Slot3.TargetPnlLine, Mode=OneWay}"
-                                           Visibility="{Binding Slot3.TargetPnlVisibility}"
-                                           Foreground="ForestGreen"
-                                           FontFamily="Consolas" FontSize="12"
-                                           Margin="0,2,0,0"/>
-
-                                <!-- RR Achieved milestone badge -->
-                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
-                                        Visibility="{Binding Slot3.RrAchievedVisibility}"
-                                        Background="#2B2000" BorderBrush="#FFD700" BorderThickness="1">
-                                    <TextBlock Text="&#x1F3C6; RR Achieved. Boom!!"
-                                               Foreground="#FFD700" FontWeight="Bold" FontSize="12"
-                                               HorizontalAlignment="Center"/>
-                                </Border>
-
-                                <!-- AI mid-trade result -->
-                                <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
-                                        Visibility="{Binding Slot3.AiResultVisibility}"
-                                        BorderBrush="{Binding Slot3.AiVerdictBrush}" BorderThickness="1"
-                                        Background="#0D1A2E">
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Slot3.AiVerdictText}"
-                                                   Foreground="{Binding Slot3.AiVerdictBrush}"
-                                                   FontWeight="Bold" FontSize="12"/>
-                                        <TextBlock Text="{Binding Slot3.AiExplanation}"
-                                                   Foreground="White" FontSize="11"
-                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
-                                        <TextBlock FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap">
-                                            <Run Text="Action: " Foreground="{StaticResource TextSecondaryBrush}"/>
-                                            <Run Text="{Binding Slot3.AiSuggestedAction}" Foreground="Cyan"/>
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- AI sense-check button (blue theme) -->
-                        <Button Grid.Row="5" Margin="0,8,0,0" HorizontalAlignment="Stretch"
-                                Padding="6,4" FontSize="11"
-                                Visibility="{Binding Slot3.PositionVisibility}"
-                                IsEnabled="{Binding Slot3.IsAiChecking, Converter={StaticResource BoolInverseConverter}}"
-                                Command="{Binding AiCheckSlot3Command}"
-                                ToolTip="Ask Claude Haiku to sense-check this live position">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Background"  Value="#1565C0"/>
-                                    <Setter Property="BorderBrush" Value="#1976D2"/>
-                                    <Setter Property="Foreground"  Value="White"/>
-                                    <Setter Property="BorderThickness" Value="1"/>
-                                    <Setter Property="Cursor"      Value="Hand"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="Button">
-                                                <Border Background="{TemplateBinding Background}"
-                                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                                        CornerRadius="3"
-                                                        Padding="{TemplateBinding Padding}">
-                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background"  Value="#2E7D32"/>
-                                            <Setter Property="BorderBrush" Value="#388E3C"/>
-                                        </Trigger>
-                                        <DataTrigger Binding="{Binding Slot3.IsAiChecking}" Value="True">
-                                            <Setter Property="Background"  Value="#F57C00"/>
-                                            <Setter Property="BorderBrush" Value="#FF9800"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#x1F916;" FontSize="13" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
-                                <TextBlock VerticalAlignment="Center" Foreground="White">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Text" Value="AI Sense Check"/>
-                                            <Setter Property="Foreground" Value="White"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Slot3.IsAiChecking}" Value="True">
-                                                    <Setter Property="Text" Value="Checking&#x2026;"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </StackPanel>
-                        </Button>
-                    </Grid>
-                </Border>
-
+                <controls:SlotCardControl Grid.Column="4"
+                                          DataContext="{Binding Slot3}"
+                                          AiCommand="{Binding DataContext.AiCheckSlot3Command,
+                                              RelativeSource={RelativeSource AncestorType=UserControl}}"/>
             </Grid>
 
             <!-- ── AI Check History Log ── -->

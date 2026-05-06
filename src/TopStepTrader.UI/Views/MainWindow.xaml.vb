@@ -28,7 +28,26 @@ Namespace TopStepTrader.UI
             _session = session
             DataContext = Me
             AddHandler _session.AccountChanged, AddressOf OnSessionAccountChanged
+            AddHandler Me.Closing, AddressOf OnWindowClosing
             NavigateTo("Dashboard")
+        End Sub
+
+        ''' <summary>
+        ''' Ensures the SuperTrend+ VM is cleanly stopped before the process exits so that no
+        ''' in-flight tick can place an order after the window is closed (e.g. the M2K ghost-order bug).
+        ''' </summary>
+        Private Sub OnWindowClosing(sender As Object, e As CancelEventArgs)
+            Try
+                Dim stView = _viewModelLocator.SuperTrendPlusView
+                If stView IsNot Nothing Then
+                    Dim vm = TryCast(stView.DataContext, SuperTrendPlusViewModel)
+                    If vm IsNot Nothing AndAlso vm.IsMonitoring Then
+                        vm.StopMonitoring()
+                    End If
+                End If
+            Catch
+                ' Never block the close — just swallow any error
+            End Try
         End Sub
 
         Private Sub OnSessionAccountChanged(sender As Object, account As Account)

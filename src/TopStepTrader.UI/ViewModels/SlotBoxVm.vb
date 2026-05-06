@@ -388,6 +388,185 @@ Namespace TopStepTrader.UI.ViewModels
             IsAiChecking = False
         End Sub
 
+        ' ── Per-tick display properties (Row 1 / Row 2 / Row 3 / Row 4) ─────
+
+        Private _entrySpDisplay As String = String.Empty
+        ''' <summary>"SP: 1234.56" — start (entry) price, set once on open.</summary>
+        Public Property EntrySpDisplay As String
+            Get
+                Return _entrySpDisplay
+            End Get
+            Set(value As String)
+                SetProperty(_entrySpDisplay, value)
+            End Set
+        End Property
+
+        Private _livePriceDisplay As String = String.Empty
+        ''' <summary>Current live price updated every 15 s, e.g. "1238.50".</summary>
+        Public Property LivePriceDisplay As String
+            Get
+                Return _livePriceDisplay
+            End Get
+            Set(value As String)
+                SetProperty(_livePriceDisplay, value)
+            End Set
+        End Property
+
+        Private _slDisplay As String = String.Empty
+        ''' <summary>"SL: 1233.00" — current stop loss price.</summary>
+        Public Property SlDisplay As String
+            Get
+                Return _slDisplay
+            End Get
+            Set(value As String)
+                SetProperty(_slDisplay, value)
+            End Set
+        End Property
+
+        Private _strengthLabel As String = String.Empty
+        ''' <summary>ADX band name at entry: "Decaff", "Latte" or "Espresso".</summary>
+        Public Property StrengthLabel As String
+            Get
+                Return _strengthLabel
+            End Get
+            Set(value As String)
+                SetProperty(_strengthLabel, value)
+            End Set
+        End Property
+
+        Private _nextPhaseLabel As String = String.Empty
+        ''' <summary>"Next: Breakeven in 0.5R = $28.75" — distance to next stop phase in $.</summary>
+        Public Property NextPhaseLabel As String
+            Get
+                Return _nextPhaseLabel
+            End Get
+            Set(value As String)
+                SetProperty(_nextPhaseLabel, value)
+            End Set
+        End Property
+
+        Private _trendHealthLabel As String = String.Empty
+        ''' <summary>One-line composite trend health summary, e.g. "⚠ Softening (2m)".</summary>
+        Public Property TrendHealthLabel As String
+            Get
+                Return _trendHealthLabel
+            End Get
+            Set(value As String)
+                SetProperty(_trendHealthLabel, value)
+            End Set
+        End Property
+
+        Private _trendHealthBrush As Brush = Brushes.DimGray
+        ''' <summary>Colour for TrendHealthLabel: LimeGreen / Gold / OrangeRed.</summary>
+        Public Property TrendHealthBrush As Brush
+            Get
+                Return _trendHealthBrush
+            End Get
+            Set(value As Brush)
+                SetProperty(_trendHealthBrush, value)
+            End Set
+        End Property
+
+        ' ── Row-2 flash (entire row flashes on each 15 s update) ─────────────
+        Private _isRowFlashing As Boolean = False
+        ''' <summary>True for 400 ms after each 15-second tick — drives Row 2 flash in XAML.</summary>
+        Public Property IsRowFlashing As Boolean
+            Get
+                Return _isRowFlashing
+            End Get
+            Set(value As Boolean)
+                SetProperty(_isRowFlashing, value)
+            End Set
+        End Property
+
+        ''' <summary>400 ms flash on Row 2 to signal a live data update.</summary>
+        Public Async Function FlashRowAsync() As Task
+            IsRowFlashing = True
+            Await Task.Delay(400)
+            IsRowFlashing = False
+        End Function
+
+        ' ── 8-bar (2-minute) trend-weakening composite ───────────────────────
+        Private ReadOnly _adxHistory As New Queue(Of Single)
+        Private ReadOnly _diSpreadHistory As New Queue(Of Single)
+        Private ReadOnly _priceToStHistory As New Queue(Of Single)
+        Private Const TrendHistoryDepth As Integer = 8
+
+        ''' <summary>
+        ''' Push one 15-second sample into the rolling 8-bar (2-minute) history and
+        ''' recompute TrendHealthLabel / TrendHealthBrush.
+        ''' Three signals are composited:
+        '''   1. ADX slope declining over the window
+        '''   2. DI spread (|+DI − −DI|) narrowing
+        '''   3. Price converging toward the SuperTrend line
+        ''' Score 0 = holding, 1 = softening, 2–3 = weakening.
+        ''' </summary>
+        Public Sub PushAdxSample(adx As Single, diPlus As Single, diMinus As Single,
+                                  priceToSt As Single)
+            If Not Single.IsNaN(adx) Then
+                _adxHistory.Enqueue(adx)
+                If _adxHistory.Count > TrendHistoryDepth Then _adxHistory.Dequeue()
+            End If
+
+            If Not (Single.IsNaN(diPlus) OrElse Single.IsNaN(diMinus)) Then
+                _diSpreadHistory.Enqueue(Math.Abs(diPlus - diMinus))
+                If _diSpreadHistory.Count > TrendHistoryDepth Then _diSpreadHistory.Dequeue()
+            End If
+
+            If priceToSt > 0F Then
+                _priceToStHistory.Enqueue(priceToSt)
+                If _priceToStHistory.Count > TrendHistoryDepth Then _priceToStHistory.Dequeue()
+            End If
+
+            If _adxHistory.Count < 4 Then Return  ' not enough data yet
+
+            Dim score As Integer = 0
+            Dim split As Integer = Math.Max(1, _adxHistory.Count \ 2)
+
+            ' Signal 1: ADX falling
+            Dim adxArr = _adxHistory.ToArray()
+            If adxArr.Skip(split).Average() < adxArr.Take(split).Average() Then score += 1
+
+            ' Signal 2: DI spread narrowing
+            If _diSpreadHistory.Count >= 4 Then
+                Dim diArr = _diSpreadHistory.ToArray()
+                Dim diSplit = Math.Max(1, diArr.Length \ 2)
+                If diArr.Skip(diSplit).Average() < diArr.Take(diSplit).Average() Then score += 1
+            End If
+
+            ' Signal 3: Price converging toward ST line
+            If _priceToStHistory.Count >= 4 Then
+                Dim stArr = _priceToStHistory.ToArray()
+                Dim stSplit = Math.Max(1, stArr.Length \ 2)
+                If stArr.Skip(stSplit).Average() < stArr.Take(stSplit).Average() Then score += 1
+            End If
+
+            If score = 0 Then
+                TrendHealthLabel = "✅ Trend holding (2m)"
+                TrendHealthBrush = Brushes.LimeGreen
+            ElseIf score = 1 Then
+                TrendHealthLabel = "⚠ Softening (2m)"
+                TrendHealthBrush = New SolidColorBrush(Color.FromRgb(&HFF, &HCC, &H00))
+            Else
+                TrendHealthLabel = "🔴 Weakening (2m)"
+                TrendHealthBrush = Brushes.OrangeRed
+            End If
+        End Sub
+
+        ''' <summary>Reset all rolling history (called when slot is released).</summary>
+        Public Sub ClearTrendHistory()
+            _adxHistory.Clear()
+            _diSpreadHistory.Clear()
+            _priceToStHistory.Clear()
+            TrendHealthLabel = String.Empty
+            TrendHealthBrush = Brushes.DimGray
+            LivePriceDisplay = String.Empty
+            EntrySpDisplay = String.Empty
+            SlDisplay = String.Empty
+            StrengthLabel = String.Empty
+            NextPhaseLabel = String.Empty
+        End Sub
+
     End Class
 
 End Namespace
