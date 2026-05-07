@@ -8,8 +8,8 @@ Namespace TopStepTrader.UI
     Module Program
 
         <System.STAThread>
-        Sub Main()
-            Dim app As New App()
+        Sub Main(args As String())
+            Dim app As New App() With {.StartupArgs = args}
             app.InitializeComponent()
             app.Run()
         End Sub

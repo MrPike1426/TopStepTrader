@@ -117,6 +117,10 @@ Namespace TopStepTrader.API.Models.Responses
         <JsonPropertyName("contractId")>
         Public Property ContractId As String = String.Empty
 
+        ''' <summary>Returned by /api/Position/search; absent on /searchOpen.</summary>
+        <JsonPropertyName("creationTimestamp")>
+        Public Property CreationTimestamp As String = String.Empty
+
         ''' <summary>
         ''' Raw position size (unsigned).  Combine with PositionType to get signed NetPos.
         ''' /api/Position/searchOpen returns "size" not "netPos".

@@ -35,6 +35,18 @@ Namespace TopStepTrader.Core.Interfaces
         ''' <summary>Returns all stop adjustments for a trade in chronological order.</summary>
         Function GetStopAdjustmentsAsync(liveTradeRecordId As Long) As Task(Of IList(Of TradeStopAdjustment))
 
+        ''' <summary>
+        ''' FEAT-50: Captures TopStepX Order/Position/Trade snapshots into local SQLite
+        ''' at trade close. Best-effort; failures are logged and swallowed.
+        ''' </summary>
+        Function CaptureClosingSnapshotsAsync(recordId As Long, accountId As Long) As Task
+
+        ''' <summary>
+        ''' FEAT-50: Walks every closed record without snapshots and runs capture for it.
+        ''' Triggered from a Settings menu action or via the --backfill-snapshots startup arg.
+        ''' </summary>
+        Function BackfillSnapshotsAsync(accountId As Long) As Task
+
     End Interface
 
 End Namespace

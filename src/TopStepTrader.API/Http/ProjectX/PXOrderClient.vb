@@ -79,6 +79,23 @@ Namespace TopStepTrader.API.Http.ProjectX
             Return PostAsync(Of PXAccountIdRequest, PXPositionSearchResponse)(endpoint, request, cancel:=cancel)
         End Function
 
+        ''' <summary>
+        ''' POST /api/Position/search — historical positions (open + closed) within a time window.
+        ''' Used by FEAT-50 trade-close snapshot capture.
+        ''' </summary>
+        Public Function SearchPositionsAsync(accountId As Long,
+                                             Optional startTimestamp As Long? = Nothing,
+                                             Optional endTimestamp As Long? = Nothing,
+                                             Optional cancel As CancellationToken = Nothing) As Task(Of PXPositionSearchResponse)
+            Dim request = New PXSearchOrderRequest With {
+                .AccountId = accountId,
+                .StartTimestamp = startTimestamp,
+                .EndTimestamp = endTimestamp
+            }
+            Dim endpoint = $"{_settings.RestBaseUrl}/api/Position/search"
+            Return PostAsync(Of PXSearchOrderRequest, PXPositionSearchResponse)(endpoint, request, cancel:=cancel)
+        End Function
+
         Public Function CloseContractAsync(accountId As Long, contractId As String,
                                            Optional cancel As CancellationToken = Nothing) As Task(Of PXBaseResponse)
             Dim request = New PXCloseContractRequest With {.AccountId = accountId, .ContractId = contractId}

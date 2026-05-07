@@ -16,6 +16,9 @@ Namespace TopStepTrader.Data
 
         Public Property LiveTradeRecords As DbSet(Of LiveTradeRecordEntity)
         Public Property TradeStopAdjustments As DbSet(Of TradeStopAdjustmentEntity)
+        Public Property TradeOrderSnapshots As DbSet(Of TradeOrderSnapshotEntity)
+        Public Property TradePositionSnapshots As DbSet(Of TradePositionSnapshotEntity)
+        Public Property TradeFillSnapshots As DbSet(Of TradeFillSnapshotEntity)
 
         ''' <summary>Idempotent ALTER TABLE statements for columns added after initial EnsureCreated.</summary>
         Public Sub EnsureSchemaCurrent()
@@ -34,6 +37,60 @@ Namespace TopStepTrader.Data
                 cmd.ExecuteNonQuery()
                 cmd.CommandText = "CREATE INDEX IF NOT EXISTS IX_TradeStopAdjustments_RecordId " &
                     "ON TradeStopAdjustments (LiveTradeRecordId, Timestamp)"
+                cmd.ExecuteNonQuery()
+
+                ' ?? FEAT-50: Trade snapshot tables (Orders / Positions / Trades) ??
+                cmd.CommandText = "CREATE TABLE IF NOT EXISTS TradeOrderSnapshots (" &
+                    "Id INTEGER PRIMARY KEY AUTOINCREMENT, " &
+                    "LiveTradeRecordId INTEGER NOT NULL, " &
+                    "TopStepXOrderId INTEGER NOT NULL, " &
+                    "ContractId TEXT NOT NULL, " &
+                    "OrderType TEXT NOT NULL, " &
+                    "Side TEXT NOT NULL, " &
+                    "Status TEXT NOT NULL, " &
+                    "Size INTEGER NOT NULL, " &
+                    "LimitPrice TEXT, " &
+                    "StopPrice TEXT, " &
+                    "FilledPrice TEXT, " &
+                    "CreatedAt TEXT NOT NULL, " &
+                    "UpdatedAt TEXT, " &
+                    "RawJson TEXT NOT NULL)"
+                cmd.ExecuteNonQuery()
+                cmd.CommandText = "CREATE INDEX IF NOT EXISTS IX_TradeOrderSnapshots_RecordId " &
+                    "ON TradeOrderSnapshots (LiveTradeRecordId)"
+                cmd.ExecuteNonQuery()
+
+                cmd.CommandText = "CREATE TABLE IF NOT EXISTS TradePositionSnapshots (" &
+                    "Id INTEGER PRIMARY KEY AUTOINCREMENT, " &
+                    "LiveTradeRecordId INTEGER NOT NULL, " &
+                    "TopStepXPositionId INTEGER NOT NULL, " &
+                    "ContractId TEXT NOT NULL, " &
+                    "Side TEXT NOT NULL, " &
+                    "Size INTEGER NOT NULL, " &
+                    "AvgEntryPrice TEXT NOT NULL, " &
+                    "RealisedPnL TEXT, " &
+                    "OpenedAt TEXT NOT NULL, " &
+                    "ClosedAt TEXT, " &
+                    "RawJson TEXT NOT NULL)"
+                cmd.ExecuteNonQuery()
+                cmd.CommandText = "CREATE INDEX IF NOT EXISTS IX_TradePositionSnapshots_RecordId " &
+                    "ON TradePositionSnapshots (LiveTradeRecordId)"
+                cmd.ExecuteNonQuery()
+
+                cmd.CommandText = "CREATE TABLE IF NOT EXISTS TradeFillSnapshots (" &
+                    "Id INTEGER PRIMARY KEY AUTOINCREMENT, " &
+                    "LiveTradeRecordId INTEGER NOT NULL, " &
+                    "TopStepXTradeId INTEGER NOT NULL, " &
+                    "TopStepXOrderId INTEGER NOT NULL, " &
+                    "ContractId TEXT NOT NULL, " &
+                    "Side TEXT NOT NULL, " &
+                    "Size INTEGER NOT NULL, " &
+                    "Price TEXT NOT NULL, " &
+                    "Timestamp TEXT NOT NULL, " &
+                    "RawJson TEXT NOT NULL)"
+                cmd.ExecuteNonQuery()
+                cmd.CommandText = "CREATE INDEX IF NOT EXISTS IX_TradeFillSnapshots_RecordId " &
+                    "ON TradeFillSnapshots (LiveTradeRecordId)"
                 cmd.ExecuteNonQuery()
 
                 For Each sql In New String() {

@@ -19,6 +19,9 @@ Namespace TopStepTrader.UI
         ''' <summary>Service provider exposed for controls that cannot use constructor DI (e.g. UserControls).</summary>
         Friend Shared Services As IServiceProvider
 
+        ''' <summary>Command-line args forwarded from Program.Main (FEAT-50: --backfill-snapshots).</summary>
+        Public Property StartupArgs As String() = Array.Empty(Of String)()
+
         Protected Overrides Async Sub OnStartup(e As StartupEventArgs)
             MyBase.OnStartup(e)
 
@@ -67,6 +70,21 @@ Namespace TopStepTrader.UI
 
             ' ── Startup bar gap check ──────────────────────────────────────────
             Await CheckAndPromptMissingBarsAsync()
+
+            ' FEAT-50: optional snapshot backfill triggered by --backfill-snapshots arg.
+            If StartupArgs IsNot Nothing AndAlso
+               StartupArgs.Any(Function(a) String.Equals(a, "--backfill-snapshots", StringComparison.OrdinalIgnoreCase)) Then
+                Try
+                    Dim tradeRecordService = _host.Services.GetRequiredService(Of ITradeRecordService)()
+                    Dim session = _host.Services.GetRequiredService(Of ITradingSessionContext)()
+                    Dim accountId As Long = If(session?.SelectedAccount?.Id, 0L)
+                    If accountId <> 0 Then
+                        Await tradeRecordService.BackfillSnapshotsAsync(accountId)
+                    End If
+                Catch ex As Exception
+                    System.Diagnostics.Debug.WriteLine($"BackfillSnapshots startup error: {ex.Message}")
+                End Try
+            End If
 
             mainWindow.Show()
         End Sub

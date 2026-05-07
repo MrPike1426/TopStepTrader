@@ -19,13 +19,16 @@ Namespace TopStepTrader.Services.Trades
 
         Private ReadOnly _scopeFactory As IServiceScopeFactory
         Private ReadOnly _orderClient As PXOrderClient
+        Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _logger As ILogger(Of TradeRecordService)
 
         Public Sub New(scopeFactory As IServiceScopeFactory,
                        orderClient As PXOrderClient,
+                       session As ITradingSessionContext,
                        logger As ILogger(Of TradeRecordService))
             _scopeFactory = scopeFactory
             _orderClient = orderClient
+            _session = session
             _logger = logger
         End Sub
 
@@ -86,6 +89,17 @@ Namespace TopStepTrader.Services.Trades
             Catch ex As Exception
                 _logger.LogWarning(ex, "TradeRecordService.CloseTradeAsync failed for record {Id}", id)
             End Try
+
+            ' FEAT-50: capture broker snapshots after the close is persisted.
+            ' Best-effort — failures must never bubble out of CloseTradeAsync.
+            Dim accountId As Long = If(_session?.SelectedAccount?.Id, 0L)
+            If accountId <> 0 Then
+                Try
+                    Await CaptureClosingSnapshotsAsync(id, accountId)
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "TradeRecordService.CaptureClosingSnapshotsAsync failed for record {Id}", id)
+                End Try
+            End If
         End Function
 
         Public Async Function UpdateEntryPriceAsync(id As Long, entryPrice As Decimal) As Task _
@@ -270,6 +284,186 @@ Namespace TopStepTrader.Services.Trades
             Catch ex As Exception
                 _logger.LogWarning(ex, "TradeRecordService.GetStopAdjustmentsAsync failed for record {Id}", liveTradeRecordId)
                 Return New List(Of Core.Models.TradeStopAdjustment)()
+            End Try
+        End Function
+
+        Public Async Function CaptureClosingSnapshotsAsync(recordId As Long, accountId As Long) As Task _
+            Implements ITradeRecordService.CaptureClosingSnapshotsAsync
+            If recordId = 0 OrElse accountId = 0 Then Return
+
+            ' Load the record so we know contract + time window
+            Dim entity As LiveTradeRecordEntity = Nothing
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
+                    Dim recents = Await repo.GetRecentAsync(2000)
+                    entity = recents.FirstOrDefault(Function(r) r.Id = recordId)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "CaptureClosingSnapshots: failed to load record {Id}", recordId)
+                Return
+            End Try
+            If entity Is Nothing Then Return
+
+            Dim startTs = entity.EntryTime.AddMinutes(-1).ToUnixTimeMilliseconds()
+            Dim endTimeRef = If(entity.ExitTime.HasValue, entity.ExitTime.Value, DateTimeOffset.UtcNow)
+            Dim endTs = endTimeRef.AddMinutes(1).ToUnixTimeMilliseconds()
+            Dim contractId = entity.ContractId
+
+            Dim orderRows As New List(Of TradeOrderSnapshotEntity)()
+            Try
+                Dim resp = Await _orderClient.SearchOrdersAsync(accountId, startTs, endTs)
+                If resp IsNot Nothing AndAlso resp.Orders IsNot Nothing Then
+                    For Each o In resp.Orders.Where(Function(x) x.ContractId = contractId)
+                        orderRows.Add(New TradeOrderSnapshotEntity With {
+                            .LiveTradeRecordId = recordId,
+                            .TopStepXOrderId = o.Id,
+                            .ContractId = o.ContractId,
+                            .OrderType = MapOrderType(o.OrderType),
+                            .Side = MapSide(o.Side),
+                            .Status = MapOrderStatus(o.Status),
+                            .Size = o.Size,
+                            .LimitPrice = If(o.LimitPrice.HasValue, o.LimitPrice.Value.ToString("G"), Nothing),
+                            .StopPrice = If(o.StopPrice.HasValue, o.StopPrice.Value.ToString("G"), Nothing),
+                            .FilledPrice = If(o.AvgFillPrice.HasValue, o.AvgFillPrice.Value.ToString("G"), Nothing),
+                            .CreatedAt = If(String.IsNullOrEmpty(o.CreationTimestamp), DateTimeOffset.UtcNow.ToString("o"), o.CreationTimestamp),
+                            .UpdatedAt = Nothing,
+                            .RawJson = SafeSerialize(o)
+                        })
+                    Next
+                End If
+            Catch ex As Exception
+                _logger.LogWarning(ex, "CaptureClosingSnapshots: SearchOrdersAsync failed for record {Id}", recordId)
+            End Try
+
+            Dim positionRows As New List(Of TradePositionSnapshotEntity)()
+            Try
+                Dim resp = Await _orderClient.SearchPositionsAsync(accountId, startTs, endTs)
+                If resp IsNot Nothing AndAlso resp.Positions IsNot Nothing Then
+                    For Each p In resp.Positions.Where(Function(x) x.ContractId = contractId)
+                        positionRows.Add(New TradePositionSnapshotEntity With {
+                            .LiveTradeRecordId = recordId,
+                            .TopStepXPositionId = p.Id,
+                            .ContractId = p.ContractId,
+                            .Side = If(p.PositionType = 1, "Buy", "Sell"),
+                            .Size = p.Size,
+                            .AvgEntryPrice = p.AveragePrice.ToString("G"),
+                            .RealisedPnL = p.OpenPnL.ToString("G"),
+                            .OpenedAt = If(String.IsNullOrEmpty(p.CreationTimestamp), entity.EntryTime.UtcDateTime.ToString("o"), p.CreationTimestamp),
+                            .ClosedAt = If(entity.ExitTime.HasValue, entity.ExitTime.Value.UtcDateTime.ToString("o"), Nothing),
+                            .RawJson = SafeSerialize(p)
+                        })
+                    Next
+                End If
+            Catch ex As Exception
+                _logger.LogWarning(ex, "CaptureClosingSnapshots: SearchPositionsAsync failed for record {Id}", recordId)
+            End Try
+
+            Dim fillRows As New List(Of TradeFillSnapshotEntity)()
+            Try
+                Dim resp = Await _orderClient.SearchTradesAsync(accountId, startTs, endTs)
+                If resp IsNot Nothing AndAlso resp.Trades IsNot Nothing Then
+                    For Each t In resp.Trades.Where(Function(x) x.ContractId = contractId)
+                        fillRows.Add(New TradeFillSnapshotEntity With {
+                            .LiveTradeRecordId = recordId,
+                            .TopStepXTradeId = t.Id,
+                            .TopStepXOrderId = t.OrderId,
+                            .ContractId = t.ContractId,
+                            .Side = MapSide(t.Side),
+                            .Size = t.Size,
+                            .Price = t.Price.ToString("G"),
+                            .Timestamp = If(String.IsNullOrEmpty(t.CreationTimestamp), DateTimeOffset.UtcNow.ToString("o"), t.CreationTimestamp),
+                            .RawJson = SafeSerialize(t)
+                        })
+                    Next
+                End If
+            Catch ex As Exception
+                _logger.LogWarning(ex, "CaptureClosingSnapshots: SearchTradesAsync failed for record {Id}", recordId)
+            End Try
+
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim snapRepo = scope.ServiceProvider.GetRequiredService(Of ITradeSnapshotRepository)()
+                    If orderRows.Count > 0 Then Await snapRepo.AddOrdersAsync(orderRows)
+                    If positionRows.Count > 0 Then Await snapRepo.AddPositionsAsync(positionRows)
+                    If fillRows.Count > 0 Then Await snapRepo.AddFillsAsync(fillRows)
+                End Using
+                _logger.LogInformation("CaptureClosingSnapshots: record {Id} — {Orders} orders, {Positions} positions, {Fills} fills persisted",
+                                       recordId, orderRows.Count, positionRows.Count, fillRows.Count)
+            Catch ex As Exception
+                _logger.LogWarning(ex, "CaptureClosingSnapshots: persistence failed for record {Id}", recordId)
+            End Try
+        End Function
+
+        Public Async Function BackfillSnapshotsAsync(accountId As Long) As Task _
+            Implements ITradeRecordService.BackfillSnapshotsAsync
+            If accountId = 0 Then Return
+            Dim closedRecords As IList(Of LiveTradeRecordEntity)
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
+                    closedRecords = Await repo.GetRecentAsync(5000, closedOnly:=True)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "BackfillSnapshots: failed to load closed records")
+                Return
+            End Try
+
+            Dim processed As Integer = 0
+            For Each rec In closedRecords
+                Dim hasAny As Boolean
+                Try
+                    Using scope = _scopeFactory.CreateScope()
+                        Dim snapRepo = scope.ServiceProvider.GetRequiredService(Of ITradeSnapshotRepository)()
+                        hasAny = Await snapRepo.HasAnySnapshotsAsync(rec.Id)
+                    End Using
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "BackfillSnapshots: HasAny check failed for record {Id}", rec.Id)
+                    Continue For
+                End Try
+                If hasAny Then Continue For
+
+                Try
+                    Await CaptureClosingSnapshotsAsync(rec.Id, accountId)
+                    processed += 1
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "BackfillSnapshots: capture failed for record {Id}", rec.Id)
+                End Try
+            Next
+            _logger.LogInformation("BackfillSnapshots complete: {Count} record(s) backfilled", processed)
+        End Function
+
+        Private Shared Function MapSide(side As Integer) As String
+            Return If(side = 0, "Buy", "Sell")
+        End Function
+
+        Private Shared Function MapOrderType(t As Integer) As String
+            Select Case t
+                Case 1 : Return "Limit"
+                Case 2 : Return "Market"
+                Case 4 : Return "Stop"
+                Case 5 : Return "TrailingStop"
+                Case Else : Return $"Type{t}"
+            End Select
+        End Function
+
+        Private Shared Function MapOrderStatus(s As Integer) As String
+            Select Case s
+                Case 1 : Return "Open"
+                Case 2 : Return "Filled"
+                Case 3 : Return "Cancelled"
+                Case 4 : Return "Expired"
+                Case 5 : Return "Rejected"
+                Case 6 : Return "Pending"
+                Case Else : Return $"Status{s}"
+            End Select
+        End Function
+
+        Private Shared Function SafeSerialize(value As Object) As String
+            Try
+                Return System.Text.Json.JsonSerializer.Serialize(value)
+            Catch
+                Return "{}"
             End Try
         End Function
 
