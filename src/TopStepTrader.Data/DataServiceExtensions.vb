@@ -2,6 +2,7 @@ Imports System.IO
 Imports Microsoft.EntityFrameworkCore
 Imports Microsoft.Extensions.Configuration
 Imports Microsoft.Extensions.DependencyInjection
+Imports TopStepTrader.Data.Debug
 Imports TopStepTrader.Data.Repositories
 
 Namespace TopStepTrader.Data
@@ -13,12 +14,13 @@ Namespace TopStepTrader.Data
         Public Sub AddDataServices(services As IServiceCollection, configuration As IConfiguration)
 
             ' Resolve DB path — if the connection string is a bare filename, place it
-            ' next to the running executable so it is always in the same folder as the app.
+            ' in the TopStepTrader_Diagnostics folder at solution root.
             Dim raw = configuration.GetConnectionString("DefaultConnection") ' e.g. "TopStepTrader.db"
             Dim dbPath As String
             If raw IsNot Nothing AndAlso Not raw.StartsWith("Data Source", StringComparison.OrdinalIgnoreCase) Then
-                ' Bare filename — make it absolute relative to the exe directory
-                dbPath = $"Data Source={Path.Combine(AppContext.BaseDirectory, raw)}"
+                ' Bare filename — make it absolute relative to the diagnostics folder
+                Dim diagnosticsFolder = DebugTradeDbContext.ResolveDiagnosticsFolder()
+                dbPath = $"Data Source={Path.Combine(diagnosticsFolder, raw)}"
             Else
                 dbPath = raw  ' already a full connection string
             End If
@@ -38,7 +40,9 @@ Namespace TopStepTrader.Data
             services.AddScoped(Of IAdaptiveParametersRepository, AdaptiveParametersRepository)()
 
             ' ── Trade history (separate TradeHistory.db) ──────────────────────
-            Dim tradeDbPath = $"Data Source={Path.Combine(AppContext.BaseDirectory, "TradeHistory.db")}"
+            Dim diagnosticsFolderPath = DebugTradeDbContext.ResolveDiagnosticsFolder()
+            Directory.CreateDirectory(diagnosticsFolderPath)
+            Dim tradeDbPath = $"Data Source={Path.Combine(diagnosticsFolderPath, "TradeHistory.db")}"
             services.AddDbContext(Of TradeHistoryDbContext)(
                 Sub(opts)
                     opts.UseSqlite(tradeDbPath)

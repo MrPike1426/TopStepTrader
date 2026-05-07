@@ -22,7 +22,7 @@ Namespace TopStepTrader.Data.Debug
             End If
         End Sub
 
-        Friend Shared Function ResolveDiagnosticsFolder() As String
+        Public Shared Function ResolveDiagnosticsFolder() As String
             ' Walk up from AppContext.BaseDirectory (e.g., bin\x64\Debug\net10.0-windows\)
             ' to find solution root, or fall back to calculated path
             Dim baseDir = AppContext.BaseDirectory
