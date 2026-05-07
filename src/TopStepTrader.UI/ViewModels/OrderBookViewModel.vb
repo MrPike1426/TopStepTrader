@@ -30,26 +30,6 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Private _strategyFilter As String = String.Empty
-        Public Property StrategyFilter As String
-            Get
-                Return _strategyFilter
-            End Get
-            Set(value As String)
-                SetProperty(_strategyFilter, value)
-            End Set
-        End Property
-
-        Private _personaFilter As String = String.Empty
-        Public Property PersonaFilter As String
-            Get
-                Return _personaFilter
-            End Get
-            Set(value As String)
-                SetProperty(_personaFilter, value)
-            End Set
-        End Property
-
         Private _selectedPnLFilter As String = "All"
         Public Property SelectedPnLFilter As String
             Get
@@ -115,8 +95,6 @@ Namespace TopStepTrader.UI.ViewModels
 
                              Dim filter As New TradeFilter With {
                                  .Symbol = If(_symbolFilter?.Trim() = "All", String.Empty, _symbolFilter?.Trim()),
-                                 .Strategy = If(_strategyFilter?.Trim() = "All", String.Empty, _strategyFilter?.Trim()),
-                                 .Persona = If(_personaFilter?.Trim() = "All", String.Empty, _personaFilter?.Trim()),
                                  .PnLFilter = pnlEnum,
                                  .ClosedOnly = True
                              }
@@ -147,6 +125,7 @@ Namespace TopStepTrader.UI.ViewModels
     ''' <summary>View-friendly row for a single live trade record.</summary>
     Public Class TradeRowVm
 
+        Public Property OrderId As String
         Public Property Id As String
         Public Property Symbol As String
         Public Property Direction As String
@@ -180,6 +159,9 @@ Namespace TopStepTrader.UI.ViewModels
         End Property
 
         Public Sub New(t As LiveTradeRecord)
+            ' OrderId: TopStepX market entry order ID
+            OrderId = If(t.EntryOrderId > 0, t.EntryOrderId.ToString(), "—")
+
             ' ID: prefer TopStepX Trade ID, fall back to entry order ID
             Dim rawId = If(t.TopStepXTradeId.HasValue, t.TopStepXTradeId.Value, t.EntryOrderId)
             Id = If(rawId > 0, rawId.ToString(), "—")

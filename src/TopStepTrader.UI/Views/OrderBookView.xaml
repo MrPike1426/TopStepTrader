@@ -52,22 +52,6 @@
                          Padding="4,2" FontSize="12" VerticalContentAlignment="Center"
                          ToolTip="e.g. /M6E — leave blank for all"/>
 
-                <TextBlock Text="Strategy:" Foreground="#8899BB" FontSize="12"
-                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                <TextBox Text="{Binding StrategyFilter, UpdateSourceTrigger=PropertyChanged}"
-                         Width="110" Height="26" Margin="0,0,16,0"
-                         Background="#1A2A3A" Foreground="White" BorderBrush="#2A4A6A"
-                         Padding="4,2" FontSize="12" VerticalContentAlignment="Center"
-                         ToolTip="e.g. SuperTrend+ — leave blank for all"/>
-
-                <TextBlock Text="Persona:" Foreground="#8899BB" FontSize="12"
-                           VerticalAlignment="Center" Margin="0,0,6,0"/>
-                <TextBox Text="{Binding PersonaFilter, UpdateSourceTrigger=PropertyChanged}"
-                         Width="70" Height="26" Margin="0,0,16,0"
-                         Background="#1A2A3A" Foreground="White" BorderBrush="#2A4A6A"
-                         Padding="4,2" FontSize="12" VerticalContentAlignment="Center"
-                         ToolTip="Lewis, Damian or Joe — leave blank for all"/>
-
                 <TextBlock Text="P&amp;L:" Foreground="#8899BB" FontSize="12"
                            VerticalAlignment="Center" Margin="0,0,6,0"/>
                 <ComboBox ItemsSource="{Binding PnLFilterOptions}"
@@ -146,8 +130,19 @@
 
             <DataGrid.Columns>
 
-                <!-- ID -->
-                <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="105" SortMemberPath="Id"/>
+                <!-- Order ID -->
+                <DataGridTemplateColumn Header="Order ID" Width="105" SortMemberPath="OrderId">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding OrderId}"
+                                       Foreground="#87CEEB"
+                                       FontWeight="SemiBold"
+                                       TextDecorations="Underline"
+                                       VerticalAlignment="Center" Padding="8,0"
+                                       Cursor="Hand"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
 
                 <!-- Symbol -->
                 <DataGridTemplateColumn Header="Symbol" Width="65" SortMemberPath="Symbol">
@@ -172,35 +167,14 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <!-- Sizes -->
-                <DataGridTextColumn Header="Size" Binding="{Binding Sizes}" Width="45" SortMemberPath="Sizes"/>
-
-                <!-- Leverage (MaxScaleIns) -->
-                <DataGridTextColumn Header="Leverage" Binding="{Binding Leverage}" Width="65"/>
-
-                <!-- Strategy -->
-                <DataGridTextColumn Header="Strategy" Binding="{Binding Strategy}" Width="110" SortMemberPath="Strategy"/>
-
-                <!-- Persona -->
-                <DataGridTextColumn Header="Persona" Binding="{Binding Persona}" Width="70" SortMemberPath="Persona"/>
-
                 <!-- Timeframe -->
                 <DataGridTextColumn Header="TF" Binding="{Binding Timeframe}" Width="50" SortMemberPath="Timeframe"/>
 
                 <!-- Entry Time -->
-                <DataGridTextColumn Header="Entry Time" Binding="{Binding EntryTime}" Width="145" SortMemberPath="EntryTime"/>
-
-                <!-- Exit Time -->
-                <DataGridTextColumn Header="Exit Time" Binding="{Binding ExitTime}" Width="80" SortMemberPath="ExitTime"/>
+                <DataGridTextColumn Header="Entry" Binding="{Binding EntryTime}" Width="145" SortMemberPath="EntryTime"/>
 
                 <!-- Duration -->
                 <DataGridTextColumn Header="Duration" Binding="{Binding Duration}" Width="75"/>
-
-                <!-- Entry Price -->
-                <DataGridTextColumn Header="Entry Px" Binding="{Binding EntryPrice}" Width="80"/>
-
-                <!-- Exit Price -->
-                <DataGridTextColumn Header="Exit Px" Binding="{Binding ExitPrice}" Width="80"/>
 
                 <!-- P&L -->
                 <DataGridTemplateColumn Header="P&amp;L" Width="80" SortMemberPath="PnLRaw" CanUserSort="True">
@@ -213,15 +187,6 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-
-                <!-- Commission -->
-                <DataGridTextColumn Header="Commission" Binding="{Binding Commission}" Width="85"/>
-
-                <!-- Fees -->
-                <DataGridTextColumn Header="Fees" Binding="{Binding Fees}" Width="60"/>
-
-                <!-- Exit Reason -->
-                <DataGridTextColumn Header="Exit" Binding="{Binding ExitReason}" Width="110"/>
 
             </DataGrid.Columns>
         </DataGrid>
