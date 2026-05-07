@@ -21,6 +21,14 @@ Namespace TopStepTrader.Core.Interfaces
                                             Optional cancel As CancellationToken = Nothing) As Task(Of Decimal?)
 
         ''' <summary>
+        ''' Returns the stop price from the companion Stop Market bracket order placed at entry,
+        ''' or Nothing when no open stop bracket is found for the contract.
+        ''' </summary>
+        Function TryGetBracketStopPriceAsync(accountId As Long,
+                                              contractId As String,
+                                              Optional cancel As CancellationToken = Nothing) As Task(Of Decimal?)
+
+        ''' <summary>
         ''' Queries the broker API directly for open positions on a specific instrument.
         ''' Does NOT use the local database — only the API has ground truth on live positions.
         ''' </summary>

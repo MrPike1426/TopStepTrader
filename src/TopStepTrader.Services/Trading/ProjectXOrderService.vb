@@ -272,11 +272,60 @@ Namespace TopStepTrader.Services.Trading
             Return Await _orderRepo.GetOrderHistoryAsync(accountId, from, [to])
         End Function
 
-        Public Function TryGetOrderFillPriceAsync(externalOrderId As Long, accountId As Long,
-                                                   Optional cancel As CancellationToken = Nothing) _
+        Public Async Function TryGetOrderFillPriceAsync(externalOrderId As Long, accountId As Long,
+                                                         Optional cancel As CancellationToken = Nothing) _
             As Task(Of Decimal?) Implements IOrderService.TryGetOrderFillPriceAsync
-            ' TopStepX fill price comes via UserHub GatewayUserTrade event; not available via REST poll
-            Return Task.FromResult(CType(Nothing, Decimal?))
+            Try
+                ' Search recent orders (last 10 minutes) to find this order's avgFillPrice.
+                Dim fromTs = DateTimeOffset.UtcNow.AddMinutes(-10)
+                Dim resp = Await _orderClient.SearchOrdersAsync(
+                    accountId,
+                    startTimestamp:=fromTs.ToUnixTimeMilliseconds(),
+                    cancel:=cancel)
+                If resp?.Orders Is Nothing Then Return Nothing
+                Dim match = resp.Orders.FirstOrDefault(Function(o) o.Id = externalOrderId)
+                If match Is Nothing Then Return Nothing
+                If match.AvgFillPrice.HasValue AndAlso match.AvgFillPrice.Value > 0 Then
+                    Return CDec(match.AvgFillPrice.Value)
+                End If
+                Return Nothing
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TryGetOrderFillPriceAsync failed for orderId={Id}", externalOrderId)
+                Return Nothing
+            End Try
+        End Function
+
+        ''' <summary>
+        ''' Returns the stop price from the companion Stop Market bracket order placed at entry.
+        ''' Searches open orders for a type=4 (Stop Market) order on the same contract.
+        ''' Returns Nothing when no bracket is found.
+        ''' </summary>
+        Public Async Function TryGetBracketStopPriceAsync(accountId As Long, contractId As String,
+                                                           Optional cancel As CancellationToken = Nothing) As Task(Of Decimal?) Implements IOrderService.TryGetBracketStopPriceAsync
+            Try
+                Dim resolvedId = Await ResolveToActivePxContractIdAsync(contractId, cancel)
+                Dim resp = Await _orderClient.SearchOpenOrdersAsync(accountId, cancel)
+                If resp?.Orders Is Nothing Then Return Nothing
+                Dim stopOrder = resp.Orders.FirstOrDefault(
+                    Function(o) String.Equals(o.ContractId, resolvedId, StringComparison.OrdinalIgnoreCase) AndAlso
+                                o.OrderType = 4 AndAlso   ' Stop Market
+                                o.StopPrice.HasValue AndAlso o.StopPrice.Value > 0)
+                If stopOrder IsNot Nothing Then Return CDec(stopOrder.StopPrice.Value)
+                ' Root-symbol fallback for contract rolls
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
+                If fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxRootSymbol) Then
+                    Dim rootPrefix = $"CON.F.US.{fav.PxRootSymbol}."
+                    stopOrder = resp.Orders.FirstOrDefault(
+                        Function(o) o.ContractId.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase) AndAlso
+                                    o.OrderType = 4 AndAlso
+                                    o.StopPrice.HasValue AndAlso o.StopPrice.Value > 0)
+                    If stopOrder IsNot Nothing Then Return CDec(stopOrder.StopPrice.Value)
+                End If
+                Return Nothing
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TryGetBracketStopPriceAsync failed for {Contract}", contractId)
+                Return Nothing
+            End Try
         End Function
 
         Public Async Function GetLiveWorkingOrdersAsync(accountId As Long, contractId As String,

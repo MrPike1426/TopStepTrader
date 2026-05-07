@@ -14,16 +14,37 @@ Namespace TopStepTrader.Data.Debug
         Public Sub New(Optional connectionString As String = Nothing, Optional maxTradeCount As Integer = 100)
             _maxTradeCount = maxTradeCount
             If String.IsNullOrEmpty(connectionString) Then
-                Dim dir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "TopStepTrader")
-                Directory.CreateDirectory(dir)
+                Dim dir = ResolveDiagnosticsFolder()
                 Dim dbPath = Path.Combine(dir, "debug_trades.db")
                 _connectionString = $"Data Source={dbPath}"
             Else
                 _connectionString = connectionString
             End If
         End Sub
+
+        Friend Shared Function ResolveDiagnosticsFolder() As String
+            ' Walk up from AppContext.BaseDirectory (e.g., bin\x64\Debug\net10.0-windows\)
+            ' to find solution root, or fall back to calculated path
+            Dim baseDir = AppContext.BaseDirectory
+            Dim current = New DirectoryInfo(baseDir)
+
+            ' Walk up to find .sln file
+            While current IsNot Nothing
+                If Directory.GetFiles(current.FullName, "*.sln").Length > 0 Then
+                    Dim slnRoot = current.FullName
+                    Dim diagnosticsDir = Path.Combine(slnRoot, "TopStepTrader_Diagnostics")
+                    Directory.CreateDirectory(diagnosticsDir)
+                    Return diagnosticsDir
+                End If
+                current = current.Parent
+            End While
+
+            ' Fall back: bin\x64\Debug\net10.0-windows\ -> solution root (4 levels up)
+            Dim fallbackPath = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."))
+            Dim fallbackDiagnosticsDir = Path.Combine(fallbackPath, "TopStepTrader_Diagnostics")
+            Directory.CreateDirectory(fallbackDiagnosticsDir)
+            Return fallbackDiagnosticsDir
+        End Function
 
         Public Async Function EnsureSchemaAsync() As Task
             Using conn = New SqliteConnection(_connectionString)

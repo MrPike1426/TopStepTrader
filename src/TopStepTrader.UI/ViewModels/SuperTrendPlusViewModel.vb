@@ -2032,7 +2032,43 @@ Namespace TopStepTrader.UI.ViewModels
                                            slot.SlotIndex, slot.Instrument, slot.PositionId)
                 End If
                 If snapshot.OpenRate <> 0D AndAlso slot.EntryPrice = 0D Then
-                    slot.EntryPrice = snapshot.OpenRate
+                    ' Prefer the order's Execute Price (avgFillPrice) over the position snapshot
+                    ' averagePrice — the order fill is the authoritative entry price shown on the
+                    ' Orders tab and used for accurate P&L and R-level calculations.
+                    Dim confirmedEntry As Decimal = 0D
+                    If slot.EntryOrderId.HasValue Then
+                        Try
+                            Dim fillPx = Await _orderService.TryGetOrderFillPriceAsync(
+                                slot.EntryOrderId.Value, slot.AccountId)
+                            If fillPx.HasValue AndAlso fillPx.Value > 0D Then
+                                confirmedEntry = fillPx.Value
+                                _logger.LogInformation(
+                                    "ST+ [Slot {Idx}] {Contract} EntryPrice from execute price: {Price:F2} (order {OId})",
+                                    slot.SlotIndex, slot.Instrument, confirmedEntry, slot.EntryOrderId.Value)
+                            End If
+                        Catch ex As Exception
+                            _logger.LogWarning(ex, "ST+ [Slot {Idx}] TryGetOrderFillPriceAsync failed for {Contract}", slot.SlotIndex, slot.Instrument)
+                        End Try
+                    End If
+                    ' Fall back to position snapshot averagePrice when order search fails
+                    If confirmedEntry = 0D Then confirmedEntry = snapshot.OpenRate
+                    slot.EntryPrice = confirmedEntry
+
+                    ' Pull the initial stop price from the live Stop Market bracket order.
+                    ' This is the Stop Price shown on the Orders tab and is more accurate than
+                    ' the ST-line estimate that was stored at signal time.
+                    Try
+                        Dim bracketStop = Await _orderService.TryGetBracketStopPriceAsync(slot.AccountId, slot.Instrument)
+                        If bracketStop.HasValue AndAlso bracketStop.Value > 0D Then
+                            _logger.LogInformation(
+                                "ST+ [Slot {Idx}] {Contract} StopPrice from bracket order: {Stop:F2}",
+                                slot.SlotIndex, slot.Instrument, bracketStop.Value)
+                            slot.StopPrice = bracketStop.Value
+                        End If
+                    Catch ex As Exception
+                        _logger.LogWarning(ex, "ST+ [Slot {Idx}] TryGetBracketStopPriceAsync failed for {Contract}", slot.SlotIndex, slot.Instrument)
+                    End Try
+
                     ' One-time sync: the initial bracket SL is placed using lastClose-based ticks,
                     ' which diverges from the true fill price when a gap open occurs.  Drive the
                     ' broker SL to the correct ST-line value stored at entry time.
@@ -2046,11 +2082,11 @@ Namespace TopStepTrader.UI.ViewModels
                         End Try
                     End If
                     If slot.TradeRecordId > 0 Then
-                        Task.Run(Function() _tradeRecordService.UpdateEntryPriceAsync(slot.TradeRecordId, snapshot.OpenRate))
+                        Task.Run(Function() _tradeRecordService.UpdateEntryPriceAsync(slot.TradeRecordId, confirmedEntry))
                     End If
                     If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
                        Not String.IsNullOrEmpty(slot.DebugTradeId) Then
-                        _debugCapture.UpdateFill(slot.DebugTradeId, snapshot.OpenRate, DateTime.UtcNow)
+                        _debugCapture.UpdateFill(slot.DebugTradeId, confirmedEntry, DateTime.UtcNow)
                     End If
                 End If
 
