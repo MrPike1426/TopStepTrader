@@ -134,28 +134,25 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <!-- Price -->
+                        <!-- Live Price -->
                         <StackPanel Grid.Column="0" Orientation="Horizontal">
-                            <TextBlock Text="Price: " Foreground="{StaticResource TextSecondaryBrush}"
+                            <TextBlock Text="Live Price: " Foreground="{StaticResource TextSecondaryBrush}"
                                        FontFamily="Consolas" FontSize="12"/>
                             <TextBlock Text="{Binding LivePriceDisplay, Mode=OneWay}"
                                        Foreground="White" FontFamily="Consolas" FontSize="12" FontWeight="SemiBold"/>
                         </StackPanel>
-                        <!-- SL -->
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0">
+                        <!-- SL + $ risk -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
                             <TextBlock Text="SL: " Foreground="{StaticResource TextSecondaryBrush}"
                                        FontFamily="Consolas" FontSize="12"/>
                             <TextBlock Text="{Binding SlDisplay, Mode=OneWay}"
                                        Foreground="#EF9A9A" FontFamily="Consolas" FontSize="12" FontWeight="SemiBold"/>
+                            <TextBlock Text=" " FontFamily="Consolas" FontSize="12"/>
+                            <TextBlock Text="{Binding SlDollarDisplay, Mode=OneWay}"
+                                       Foreground="#EF9A9A" FontFamily="Consolas" FontSize="11"
+                                       VerticalAlignment="Center"/>
                         </StackPanel>
-                        <!-- Strength band -->
-                        <Border Grid.Column="2" CornerRadius="3" Padding="6,2"
-                                Background="#0D1520">
-                            <TextBlock Text="{Binding StrengthLabel, Mode=OneWay}"
-                                       Foreground="#42A5F5" FontFamily="Consolas" FontSize="11" FontWeight="Bold"/>
-                        </Border>
                     </Grid>
                 </Border>
 
@@ -168,17 +165,30 @@
                 <Border Background="#141E30" CornerRadius="4"
                         Padding="8,6" Margin="0,4,0,0">
                     <StackPanel>
-                        <!-- Target + P&L on one line -->
+                        <!-- Size | Target | P&L on one line -->
                         <Grid Visibility="{Binding TargetPnlVisibility}">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
+                            <!-- Size -->
                             <TextBlock Grid.Column="0"
+                                       Text="{Binding SizeLabel, Mode=OneWay}"
+                                       Foreground="#90CAF9"
+                                       FontFamily="Consolas" FontSize="12" FontWeight="SemiBold"/>
+                            <!-- separator -->
+                            <TextBlock Grid.Column="1" Text="  |  "
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontFamily="Consolas" FontSize="12"/>
+                            <!-- Target -->
+                            <TextBlock Grid.Column="2"
                                        Text="{Binding TargetPnlLine, Mode=OneWay}"
                                        Foreground="ForestGreen"
                                        FontFamily="Consolas" FontSize="12"/>
-                            <TextBlock Grid.Column="1"
+                            <!-- P&L -->
+                            <TextBlock Grid.Column="3"
                                        Text="{Binding PnlLine, Mode=OneWay}"
                                        Foreground="{Binding PnlTextBrush}"
                                        FontFamily="Consolas" FontSize="12" FontWeight="SemiBold"

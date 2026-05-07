@@ -361,6 +361,17 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        Private _sizeLabel As String = String.Empty
+        ''' <summary>Position size label, e.g. "Size 2x".</summary>
+        Public Property SizeLabel As String
+            Get
+                Return _sizeLabel
+            End Get
+            Set(value As String)
+                SetProperty(_sizeLabel, value)
+            End Set
+        End Property
+
         Private _targetPnlLine As String = String.Empty
         ''' <summary>Formatted target line, e.g. "Target: $56.25" — shown from position open.</summary>
         Public Property TargetPnlLine As String
@@ -420,6 +431,17 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
             Set(value As String)
                 SetProperty(_slDisplay, value)
+            End Set
+        End Property
+
+        Private _slDollarDisplay As String = String.Empty
+        ''' <summary>Dollar risk from entry to current SL, e.g. "($28.75)".</summary>
+        Public Property SlDollarDisplay As String
+            Get
+                Return _slDollarDisplay
+            End Get
+            Set(value As String)
+                SetProperty(_slDollarDisplay, value)
             End Set
         End Property
 

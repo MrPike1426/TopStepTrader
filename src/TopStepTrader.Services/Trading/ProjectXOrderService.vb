@@ -510,10 +510,18 @@ Namespace TopStepTrader.Services.Trading
                         Dim newSlTicks = TickMath.StopTicksFromPrice(entryPrice, slRate.Value, info.TickSize)
                         Dim validatedTicks = TickMath.ClampToMinStop(newSlTicks, info.MinStopTicks)
                         If validatedTicks <> newSlTicks Then
+                            ' Min-stop clamping was applied: push the stop further away from entry using the
+                            ' directional tick helper (long stop moves further below; short stop further above).
                             _logger.LogWarning("EditPositionSlTp: SL clamped {Req}→{Val} ticks for {Contract}",
                                                newSlTicks, validatedTicks, pos.ContractId)
+                            slRate = TickMath.PriceFromTicks(entryPrice, validatedTicks, info.TickSize, isBuy, isStop:=True)
+                        ElseIf info.TickSize > 0D Then
+                            ' No clamping needed: snap the requested price to the nearest tick boundary and
+                            ' send it as-is. Do NOT reconstruct via PriceFromTicks — that helper always
+                            ' places the price on the unfavourable side of entry (long→below, short→above),
+                            ' which is wrong once the ratchet has advanced the stop to breakeven or above.
+                            slRate = Math.Round(slRate.Value / info.TickSize, MidpointRounding.AwayFromZero) * info.TickSize
                         End If
-                        slRate = TickMath.PriceFromTicks(entryPrice, validatedTicks, info.TickSize, isBuy, isStop:=True)
                         For Each slOrder In slOrders
                             Dim slMod = New PXModifyOrderRequest With {
                                 .AccountId = accountId,

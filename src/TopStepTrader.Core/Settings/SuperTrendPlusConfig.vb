@@ -36,28 +36,28 @@ Namespace TopStepTrader.Core.Settings
         Public Property BreakevenTriggerR As Decimal = 0.5D
 
         ''' <summary>Profit (in R) at which the stop locks at entry + ProfitLockOffsetR. Default 1R.</summary>
-        Public Property ProfitLockTriggerR As Decimal = 1.0D
+        Public Property ProfitLockTriggerR As Decimal = 1D
 
         ''' <summary>Amount above entry (in R) the stop is locked at the ProfitLock phase. Default 0.3R.</summary>
         Public Property ProfitLockOffsetR As Decimal = 0.3D
 
         ''' <summary>ATR multiplier for the trailing stop during the ProfitTrail phase. Default 2.0.</summary>
-        Public Property TrailAtrMultiple As Decimal = 2.0D
+        Public Property TrailAtrMultiple As Decimal = 2D
 
         ''' <summary>Profit (in R) at which the ATR trailing stop activates. Default 1.5R.</summary>
         Public Property ProfitTrailTriggerR As Decimal = 1.5D
 
         ''' <summary>Profit (in R) at which the stop is locked at entry + HarvestLockR. Default 2R.</summary>
-        Public Property HarvestTriggerR As Decimal = 2.0D
+        Public Property HarvestTriggerR As Decimal = 2D
 
         ''' <summary>Amount above entry (in R) the stop is locked at the Harvest phase. Default 1.5R.</summary>
         Public Property HarvestLockR As Decimal = 1.5D
 
         ''' <summary>Profit (in R) at which the stop is locked at entry + FreeRideLockR. Default 3R.</summary>
-        Public Property FreeRideTriggerR As Decimal = 3.0D
+        Public Property FreeRideTriggerR As Decimal = 3D
 
         ''' <summary>Amount above entry (in R) the stop is locked at the FreeRide phase. Default 2R.</summary>
-        Public Property FreeRideLockR As Decimal = 2.0D
+        Public Property FreeRideLockR As Decimal = 2D
 
         ' ── Degradation score thresholds ─────────────────────────────────────────
         Public Property WarningScoreThreshold As Integer = 3
