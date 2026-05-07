@@ -53,7 +53,19 @@ Namespace TopStepTrader.Services.Trades
                         .CreatedAt = DateTimeOffset.UtcNow,
                         .UpdatedAt = DateTimeOffset.UtcNow
                     }
-                    Return Await repo.AddAsync(entity)
+                    Dim newId = Await repo.AddAsync(entity)
+                    ' Log the Initial stop adjustment row
+                    If newId > 0 AndAlso record.InitialStopPrice <> 0D Then
+                        Dim stopRepo = scope.ServiceProvider.GetRequiredService(Of ITradeStopAdjustmentRepository)()
+                        Await stopRepo.AddAsync(New Data.Entities.TradeStopAdjustmentEntity With {
+                            .LiveTradeRecordId = newId,
+                            .Timestamp = DateTimeOffset.UtcNow.UtcDateTime.ToString("o"),
+                            .OldStop = record.InitialStopPrice.ToString("G"),
+                            .NewStop = record.InitialStopPrice.ToString("G"),
+                            .TriggerReason = "Initial"
+                        })
+                    End If
+                    Return newId
                 End Using
             Catch ex As Exception
                 _logger.LogWarning(ex, "TradeRecordService.OpenTradeAsync failed for {Symbol}", record.Symbol)
@@ -211,6 +223,54 @@ Namespace TopStepTrader.Services.Trades
             Dim v As Long
             Long.TryParse(raw, v)
             Return v
+        End Function
+
+        Public Async Function LogStopAdjustmentAsync(liveTradeRecordId As Long,
+                                                     timestamp As DateTimeOffset,
+                                                     oldStop As Decimal,
+                                                     newStop As Decimal,
+                                                     triggerReason As String,
+                                                     Optional notes As String = Nothing) As Task _
+            Implements ITradeRecordService.LogStopAdjustmentAsync
+            If liveTradeRecordId = 0 Then Return
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ITradeStopAdjustmentRepository)()
+                    Dim entity As New Data.Entities.TradeStopAdjustmentEntity With {
+                        .LiveTradeRecordId = liveTradeRecordId,
+                        .Timestamp = timestamp.UtcDateTime.ToString("o"),
+                        .OldStop = oldStop.ToString("G"),
+                        .NewStop = newStop.ToString("G"),
+                        .TriggerReason = If(triggerReason, String.Empty),
+                        .Notes = notes
+                    }
+                    Await repo.AddAsync(entity)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.LogStopAdjustmentAsync failed for record {Id}", liveTradeRecordId)
+            End Try
+        End Function
+
+        Public Async Function GetStopAdjustmentsAsync(liveTradeRecordId As Long) As Task(Of IList(Of Core.Models.TradeStopAdjustment)) _
+            Implements ITradeRecordService.GetStopAdjustmentsAsync
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ITradeStopAdjustmentRepository)()
+                    Dim rows = Await repo.GetByTradeRecordAsync(liveTradeRecordId)
+                    Return rows.Select(Function(r) New Core.Models.TradeStopAdjustment With {
+                        .Id = r.Id,
+                        .LiveTradeRecordId = r.LiveTradeRecordId,
+                        .Timestamp = DateTimeOffset.Parse(r.Timestamp, Nothing, Globalization.DateTimeStyles.RoundtripKind),
+                        .OldStop = Decimal.Parse(r.OldStop, Globalization.CultureInfo.InvariantCulture),
+                        .NewStop = Decimal.Parse(r.NewStop, Globalization.CultureInfo.InvariantCulture),
+                        .TriggerReason = r.TriggerReason,
+                        .Notes = r.Notes
+                    }).ToList()
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.GetStopAdjustmentsAsync failed for record {Id}", liveTradeRecordId)
+                Return New List(Of Core.Models.TradeStopAdjustment)()
+            End Try
         End Function
 
         Private Shared Function ToModel(e As LiveTradeRecordEntity) As LiveTradeRecord

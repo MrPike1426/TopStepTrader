@@ -1,5 +1,6 @@
 Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.Core.Enums
+Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Settings
 
@@ -13,9 +14,17 @@ Namespace TopStepTrader.Services.Trading
     Public Class ExitSignalEngine
 
         Private ReadOnly _logger As ILogger(Of ExitSignalEngine)
+        Private ReadOnly _tradeService As ITradeRecordService
 
         Public Sub New(logger As ILogger(Of ExitSignalEngine))
             _logger = logger
+            _tradeService = Nothing
+        End Sub
+
+        Public Sub New(logger As ILogger(Of ExitSignalEngine),
+                       tradeService As ITradeRecordService)
+            _logger = logger
+            _tradeService = tradeService
         End Sub
 
         ''' <summary>
@@ -243,6 +252,17 @@ Namespace TopStepTrader.Services.Trading
                                                If(n < atrValues.Length AndAlso Not Single.IsNaN(atrValues(n)), CDec(atrValues(n)), 0D))
             eval.PhasedStopPrice = phasedStop.NewStop
             eval.StopPhase       = phasedStop.Phase
+
+            ' Persist the SL adjustment when the ratchet moves the stop
+            If _tradeService IsNot Nothing AndAlso slot.TradeRecordId > 0 AndAlso
+               phasedStop.NewStop <> slot.StopPrice Then
+                Dim reason = phasedStop.Phase.ToString()   ' e.g. "Breakeven", "ProfitTrail", "Harvest", "FreeRide"
+                Task.Run(Async Function()
+                             Await _tradeService.LogStopAdjustmentAsync(
+                                 slot.TradeRecordId, DateTimeOffset.UtcNow,
+                                 slot.StopPrice, phasedStop.NewStop, reason)
+                         End Function)
+            End If
 
             _logger.LogInformation(
                 "ExitEngine [Slot {Idx}] {Contract} score={Score} health={Health} signals=[{Sigs}] phase={Phase} stop={Stop:F2}",

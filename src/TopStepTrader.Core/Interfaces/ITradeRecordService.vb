@@ -26,6 +26,15 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Function RecoverOpenTradesAsync(accountId As Long) As Task
 
+        ''' <summary>Persists a stop-loss adjustment event for a live trade.</summary>
+        Function LogStopAdjustmentAsync(liveTradeRecordId As Long, timestamp As DateTimeOffset,
+                                        oldStop As Decimal, newStop As Decimal,
+                                        triggerReason As String,
+                                        Optional notes As String = Nothing) As Task
+
+        ''' <summary>Returns all stop adjustments for a trade in chronological order.</summary>
+        Function GetStopAdjustmentsAsync(liveTradeRecordId As Long) As Task(Of IList(Of TradeStopAdjustment))
+
     End Interface
 
 End Namespace

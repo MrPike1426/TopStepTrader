@@ -42,6 +42,9 @@ Namespace TopStepTrader.Core.Models
         Public Property IsOpen As Boolean = True
         Public Property IsRecoveredFromCrash As Boolean = False
 
+        ''' <summary>Stop price at the moment the trade was opened. Used to log the Initial stop adjustment row.</summary>
+        Public Property InitialStopPrice As Decimal
+
     End Class
 
 End Namespace

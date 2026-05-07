@@ -15,12 +15,27 @@ Namespace TopStepTrader.Data
         End Sub
 
         Public Property LiveTradeRecords As DbSet(Of LiveTradeRecordEntity)
+        Public Property TradeStopAdjustments As DbSet(Of TradeStopAdjustmentEntity)
 
         ''' <summary>Idempotent ALTER TABLE statements for columns added after initial EnsureCreated.</summary>
         Public Sub EnsureSchemaCurrent()
             Dim conn = Database.GetDbConnection()
             If conn.State <> System.Data.ConnectionState.Open Then conn.Open()
             Using cmd = conn.CreateCommand()
+                ' Create TradeStopAdjustments table idempotently
+                cmd.CommandText = "CREATE TABLE IF NOT EXISTS TradeStopAdjustments (" &
+                    "Id INTEGER PRIMARY KEY AUTOINCREMENT, " &
+                    "LiveTradeRecordId INTEGER NOT NULL, " &
+                    "Timestamp TEXT NOT NULL, " &
+                    "OldStop TEXT NOT NULL, " &
+                    "NewStop TEXT NOT NULL, " &
+                    "TriggerReason TEXT NOT NULL, " &
+                    "Notes TEXT)"
+                cmd.ExecuteNonQuery()
+                cmd.CommandText = "CREATE INDEX IF NOT EXISTS IX_TradeStopAdjustments_RecordId " &
+                    "ON TradeStopAdjustments (LiveTradeRecordId, Timestamp)"
+                cmd.ExecuteNonQuery()
+
                 For Each sql In New String() {
                     "ALTER TABLE ""LiveTradeRecords"" ADD COLUMN ""Timeframe"" TEXT NOT NULL DEFAULT ''"
                 }

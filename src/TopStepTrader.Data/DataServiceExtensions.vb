@@ -49,6 +49,7 @@ Namespace TopStepTrader.Data
                     opts.EnableSensitiveDataLogging(False)
                 End Sub)
             services.AddScoped(Of ILiveTradeRecordRepository, LiveTradeRecordRepository)()
+            services.AddScoped(Of ITradeStopAdjustmentRepository, TradeStopAdjustmentRepository)()
 
         End Sub
 
