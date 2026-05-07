@@ -109,12 +109,14 @@ Namespace TopStepTrader.Services.Trades
                 Using scope = _scopeFactory.CreateScope()
                     Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
                     Dim pnlF = If(filter IsNot Nothing, filter.PnLFilter, PnLFilterType.All)
+                    Dim closedOnlyF = If(filter IsNot Nothing, filter.ClosedOnly, False)
                     Dim entities = Await repo.GetRecentAsync(
                         count,
                         symbolFilter:=If(filter?.Symbol, String.Empty),
                         strategyFilter:=If(filter?.Strategy, String.Empty),
                         personaFilter:=If(filter?.Persona, String.Empty),
-                        pnlFilter:=pnlF)
+                        pnlFilter:=pnlF,
+                        closedOnly:=closedOnlyF)
                     Return entities.Select(AddressOf ToModel).ToList()
                 End Using
             Catch ex As Exception

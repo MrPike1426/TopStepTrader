@@ -20,7 +20,8 @@ Namespace TopStepTrader.Data.Repositories
                                 Optional symbolFilter As String = Nothing,
                                 Optional strategyFilter As String = Nothing,
                                 Optional personaFilter As String = Nothing,
-                                Optional pnlFilter As PnLFilterType = PnLFilterType.All) As Task(Of IList(Of LiveTradeRecordEntity))
+                                Optional pnlFilter As PnLFilterType = PnLFilterType.All,
+                                Optional closedOnly As Boolean = False) As Task(Of IList(Of LiveTradeRecordEntity))
 
     End Interface
 

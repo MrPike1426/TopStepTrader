@@ -117,7 +117,8 @@ Namespace TopStepTrader.UI.ViewModels
                                  .Symbol = If(_symbolFilter?.Trim() = "All", String.Empty, _symbolFilter?.Trim()),
                                  .Strategy = If(_strategyFilter?.Trim() = "All", String.Empty, _strategyFilter?.Trim()),
                                  .Persona = If(_personaFilter?.Trim() = "All", String.Empty, _personaFilter?.Trim()),
-                                 .PnLFilter = pnlEnum
+                                 .PnLFilter = pnlEnum,
+                                 .ClosedOnly = True
                              }
 
                              Dim trades = Await _tradeService.GetRecentTradesAsync(MaxRows, filter)
@@ -127,9 +128,7 @@ Namespace TopStepTrader.UI.ViewModels
                                           For Each t In trades
                                               TradeRows.Add(New TradeRowVm(t))
                                           Next
-                                          Dim openCount = trades.Where(Function(t) t.IsOpen).Count()
-                                          StatusText = $"{trades.Count} trade(s) loaded" &
-                                                       If(openCount > 0, $" · {openCount} open", String.Empty)
+                                          StatusText = $"{trades.Count} trade(s) loaded"
                                       End Sub)
                          Catch ex As Exception
                              Dispatch(Sub() StatusText = $"Error loading trades: {ex.Message}")
@@ -166,12 +165,10 @@ Namespace TopStepTrader.UI.ViewModels
         Public Property Commission As String
         Public Property Fees As String
         Public Property ExitReason As String
-        Public Property IsOpen As Boolean
         Public Property IsRecovered As Boolean
 
         Public ReadOnly Property PnLColor As String
             Get
-                If IsOpen Then Return "#AAAAAA"
                 Return If(PnLRaw > 0D, "#4CAF50", If(PnLRaw < 0D, "#EF5350", "#AAAAAA"))
             End Get
         End Property
@@ -179,12 +176,6 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property DirectionColor As String
             Get
                 Return If(Direction = "Long", "#4CAF50", "#EF5350")
-            End Get
-        End Property
-
-        Public ReadOnly Property RowOpacity As String
-            Get
-                Return If(IsOpen, "0.7", "1.0")
             End Get
         End Property
 
@@ -201,24 +192,17 @@ Namespace TopStepTrader.UI.ViewModels
             Persona = t.Persona
             Timeframe = If(t.Timeframe = String.Empty, "—", t.Timeframe)
             EntryTime = t.EntryTime.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss")
-            ExitTime = If(t.ExitTime.HasValue, t.ExitTime.Value.LocalDateTime.ToString("HH:mm:ss"), If(t.IsOpen, "Open", "—"))
+            ExitTime = If(t.ExitTime.HasValue, t.ExitTime.Value.LocalDateTime.ToString("HH:mm:ss"), "—")
             Duration = FormatDuration(t.EntryTime, t.ExitTime)
             EntryPrice = If(t.EntryPrice <> 0D, t.EntryPrice.ToString("F4"), "—")
-            ExitPrice = If(t.ExitPrice.HasValue, t.ExitPrice.Value.ToString("F4"), If(t.IsOpen, "Live", "—"))
+            ExitPrice = If(t.ExitPrice.HasValue, t.ExitPrice.Value.ToString("F4"), "—")
 
             PnLRaw = If(t.PnL.HasValue, t.PnL.Value, 0D)
-            If t.IsOpen Then
-                PnLDisplay = "…"
-            ElseIf t.PnL.HasValue Then
-                PnLDisplay = $"{If(t.PnL.Value >= 0D, "+", "")}${t.PnL.Value:F2}"
-            Else
-                PnLDisplay = "—"
-            End If
+            PnLDisplay = If(t.PnL.HasValue, $"{If(t.PnL.Value >= 0D, "+", "")}${t.PnL.Value:F2}", "—")
 
             Commission = $"-${t.CommissionUsd:F2}"
             Fees = $"-${t.FeesUsd:F2}"
             ExitReason = t.ExitReason
-            IsOpen = t.IsOpen
             IsRecovered = t.IsRecoveredFromCrash
         End Sub
 

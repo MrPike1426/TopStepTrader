@@ -65,7 +65,8 @@ Namespace TopStepTrader.Data.Repositories
                                              Optional symbolFilter As String = Nothing,
                                              Optional strategyFilter As String = Nothing,
                                              Optional personaFilter As String = Nothing,
-                                             Optional pnlFilter As PnLFilterType = PnLFilterType.All) As Task(Of IList(Of LiveTradeRecordEntity)) _
+                                             Optional pnlFilter As PnLFilterType = PnLFilterType.All,
+                                             Optional closedOnly As Boolean = False) As Task(Of IList(Of LiveTradeRecordEntity)) _
             Implements ILiveTradeRecordRepository.GetRecentAsync
             Dim q = _db.LiveTradeRecords.AsQueryable()
 
@@ -77,6 +78,9 @@ Namespace TopStepTrader.Data.Repositories
             End If
             If Not String.IsNullOrEmpty(personaFilter) Then
                 q = q.Where(Function(r) r.Persona = personaFilter)
+            End If
+            If closedOnly Then
+                q = q.Where(Function(r) Not r.IsOpen)
             End If
             Select Case pnlFilter
                 Case PnLFilterType.Winners
