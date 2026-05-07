@@ -186,7 +186,7 @@ Namespace TopStepTrader.UI.ViewModels
             Dim adxInt = CInt(Math.Round(adx))
             If adx >= 60 Then Return $"ADX {adxInt} — L3: Espresso"
             If adx >= 40 Then Return $"ADX {adxInt} — L2: Latte"
-            Return $"ADX {adxInt} — L1: Decaff"
+            Return $"ADX {adxInt} — L1: Mellow Birds"
         End Function
 
     End Class

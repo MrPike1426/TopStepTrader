@@ -16,7 +16,7 @@ Namespace TopStepTrader.Core.Settings
         ''' <summary>Minimum ADX required to open any slot (set from persona).</summary>
         Public Property MinEntryAdx As Single = 30.0F
 
-        ''' <summary>ADX lower band boundary — Decaff starts here (fixed).</summary>
+        ''' <summary>ADX lower band boundary — Mellow Birds (L1) starts here (fixed).</summary>
         Public Property AdxWeakThreshold As Single = 25.0F
 
         ''' <summary>ADX at which the bot places 2 contracts — Latte band (fixed).</summary>

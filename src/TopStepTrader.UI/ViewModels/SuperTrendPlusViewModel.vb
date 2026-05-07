@@ -942,12 +942,12 @@ Namespace TopStepTrader.UI.ViewModels
                                   If(signal = "BEAR", "Moderate downtrend — bot will open 2 positions.",
                                      "Trending — waiting for +DI/-DI to align with SuperTrend."))
                 ElseIf adxVal >= Config.AdxWeakThreshold Then
-                    strength = String.Format("ADX:{0:D2} L0: Decaff", CInt(adxVal))
-                    signalReason = If(signal = "BULL", "Uptrend active — bot will open 1 position.",
-                                  If(signal = "BEAR", "Downtrend active — bot will open 1 position.",
-                                     "Trending — waiting for +DI/-DI to align with SuperTrend."))
-                ElseIf adxVal >= 15 Then
                     strength = String.Format("ADX:{0:D2} L1: Mellow Birds", CInt(adxVal))
+                    signalReason = If(signal = "BULL", "Uptrend active — bot will open 1 position.",
+                                   If(signal = "BEAR", "Downtrend active — bot will open 1 position.",
+                                      "Trending — waiting for +DI/-DI to align with SuperTrend."))
+                ElseIf adxVal >= 15 Then
+                    strength = String.Format("ADX:{0:D2} L0: Decaff", CInt(adxVal))
                     signalReason = "Trend is weak — watching for momentum to build before entering."
                 Else
                     strength = String.Format("ADX:{0:D2} Cat Piss", CInt(adxVal))
@@ -1179,8 +1179,8 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim adxStr = If(Single.IsNaN(adxVal), "ADX:--",
                                If(adxVal >= Config.AdxStrongThreshold, String.Format("ADX:{0:D2} L3: Espresso", CInt(adxVal)),
                                If(adxVal >= Config.AdxModerateThreshold, String.Format("ADX:{0:D2} L2: Latte", CInt(adxVal)),
-                               If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L0: Decaff", CInt(adxVal)),
-                                  String.Format("ADX:{0:D2}", CInt(adxVal))))))
+                               If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L1: Mellow Birds", CInt(adxVal)),
+                                   String.Format("ADX:{0:D2}", CInt(adxVal))))))
 
                 If Not isFavourable Then
                     UpdateSlotSymbolRows(i, "--", adxStr, "flat", Brushes.White)
@@ -1431,7 +1431,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim adxStr As String = If(Single.IsNaN(adxVal), "ADX:--",
                                           If(adxVal >= Config.AdxStrongThreshold, String.Format("ADX:{0:D2} L3: Espresso", CInt(adxVal)),
                                           If(adxVal >= Config.AdxModerateThreshold, String.Format("ADX:{0:D2} L2: Latte", CInt(adxVal)),
-                                          If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L0: Decaff", CInt(adxVal)),
+                                          If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L1: Mellow Birds", CInt(adxVal)),
                                              String.Format("ADX:{0:D2}", CInt(adxVal))))))
                 Dim signalLabel As String = If(earlySignal, "EARLY", "flat")
                 Dim sigColor As Brush = If(earlySignal, Brushes.Goldenrod, Brushes.White)
@@ -2423,8 +2423,8 @@ Namespace TopStepTrader.UI.ViewModels
             If adx <= 0F Then Return String.Empty
             If adx >= Config.AdxStrongThreshold Then Return "Espresso"
             If adx >= Config.AdxModerateThreshold Then Return "Latte"
-            If adx >= Config.AdxWeakThreshold Then Return "Decaff"
-            Return String.Empty
+            If adx >= Config.AdxWeakThreshold Then Return "Mellow Birds"
+            Return "Decaff"
         End Function
 
         ''' <summary>
