@@ -1,3 +1,4 @@
+Imports System.Collections.Generic
 Imports Microsoft.Extensions.Logging.Abstractions
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Models
@@ -8,100 +9,144 @@ Imports Xunit
 Namespace TopStepTrader.Tests.ViewModels
 
     ''' <summary>
-    ''' BUG-50: Phased stop must be skipped during early-mode grace (IsEarlyModeEntry = True).
-    ''' Without the guard, ComputePhasedStop uses the bullish ST support line as a ratchet
-    ''' target for a short — producing a stop below entry that TopStepX rejects silently.
+    ''' BUG-50 (rewritten for FEAT-47): exit management must never move a SHORT
+    ''' slot's stop below entry, even when the 15s SuperTrend line sits on the
+    ''' wrong side of price during the early bars of a trade. Under the new
+    ''' architecture, "early-mode grace" is enforced by the view-model entry
+    ''' gate; the ScalperExitManager itself enforces the ratchet-only invariant
+    ''' that proves the BUG-50 scenario can no longer reproduce.
     ''' </summary>
     Public Class SuperTrendPlusBug50Tests
 
-        Private ReadOnly _engine As ExitSignalEngine =
-            New ExitSignalEngine(NullLogger(Of ExitSignalEngine).Instance)
+        Private ReadOnly _scalper As ScalperExitManager =
+            New ScalperExitManager(NullLogger(Of ScalperExitManager).Instance)
 
-        Private Shared Function DefaultConfig() As SuperTrendPlusConfig
-            Return New SuperTrendPlusConfig()
+        Private Shared Function DefaultConfig() As ScalperConfig
+            Return New ScalperConfig()
         End Function
 
-        ' ── Helpers ──────────────────────────────────────────────────────────
+        ''' <summary>
+        ''' Build N closed 15s bars for a SHORT-friendly downtrend from
+        ''' <paramref name="startPrice"/> drifting down by <paramref name="step"/>
+        ''' per bar. Range high/low are kept tight around close.
+        ''' </summary>
+        Private Shared Function MakeDowntrendBars(startPrice As Decimal,
+                                                  stepSize As Decimal,
+                                                  count As Integer,
+                                                  Optional contract As String = "GOLD") As List(Of MarketBar)
+            Dim bars As New List(Of MarketBar)
+            Dim t = New DateTimeOffset(2025, 5, 4, 14, 0, 0, TimeSpan.Zero)
+            Dim price = startPrice
+            For i = 0 To count - 1
+                Dim closePrice = price - stepSize * i
+                bars.Add(New MarketBar With {
+                    .ContractId = contract,
+                    .Timestamp  = t.AddSeconds(15 * i),
+                    .Open       = closePrice + 0.05D,
+                    .High       = closePrice + 0.10D,
+                    .Low        = closePrice - 0.10D,
+                    .Close      = closePrice,
+                    .Volume     = 100
+                })
+            Next
+            Return bars
+        End Function
 
-        ''' <summary>Short slot that models the UAT trade 2542011663 scenario.</summary>
-        Private Shared Function MakeShortSlotEarlyMode() As PositionSlot
+        Private Shared Function MakeUptrendBars(startPrice As Decimal,
+                                                stepSize As Decimal,
+                                                count As Integer,
+                                                Optional contract As String = "GOLD") As List(Of MarketBar)
+            Dim bars As New List(Of MarketBar)
+            Dim t = New DateTimeOffset(2025, 5, 4, 14, 0, 0, TimeSpan.Zero)
+            Dim price = startPrice
+            For i = 0 To count - 1
+                Dim closePrice = price + stepSize * i
+                bars.Add(New MarketBar With {
+                    .ContractId = contract,
+                    .Timestamp  = t.AddSeconds(15 * i),
+                    .Open       = closePrice - 0.05D,
+                    .High       = closePrice + 0.10D,
+                    .Low        = closePrice - 0.10D,
+                    .Close      = closePrice,
+                    .Volume     = 100
+                })
+            Next
+            Return bars
+        End Function
+
+        Private Shared Function MakeShortSlot() As PositionSlot
+            ' Mirrors the UAT trade 2542011663: SHORT GOLD, R ≈ 29.36
             Return New PositionSlot With {
-                .SlotIndex    = 0,
-                .Instrument   = "GOLD",
-                .Side         = "Sell",
-                .IsOpen       = True,
-                .EntryPrice   = 4585.40D,
-                .StopPrice    = 4614.76D,   ' bracket SL above entry
-                .InitialRisk  = Math.Abs(4585.40D - 4614.76D),
-                .StopPhase    = StopPhase.Initial,
-                .IsEarlyModeEntry = True
+                .SlotIndex   = 0,
+                .Instrument  = "GOLD",
+                .Side        = "Sell",
+                .IsOpen      = True,
+                .EntryPrice  = 4585.40D,
+                .StopPrice   = 4614.76D,
+                .InitialRisk = 4614.76D - 4585.40D,
+                .StopPhase   = StopPhase.Initial
             }
         End Function
 
-        ' ── Test 1: ComputePhasedStop produces a wrong stop when called with bullish ST line ──
-        ' This validates the root cause: before the guard was added, the phased stop block
-        ' would replace the bracket SL (4614.76) with the bullish ST support (~4560), which
-        ' is below entry for a short — a rejected and silent no-op by TopStepX.
+        ' ── Test 1: SHORT ratchet-only invariant — stop never moves above bracket ──
+        ' Even when the 15s SuperTrend line is bullish (sitting BELOW price for a
+        ' short, i.e. the wrong side), the scalper must not widen the SHORT stop.
 
         <Fact>
-        Public Sub ComputePhasedStop_ShortSlot_BullishStLine_ProducesStopBelowEntry()
-            Dim slot = MakeShortSlotEarlyMode()
-
-            ' Bullish ST support line — below entry for a short that has not yet been confirmed
-            Dim bullishStLine = 4560.0D
-            Dim currentPrice  = 4583.0D    ' small drift from entry, still in Initial phase
-            Dim atr           = 5.0D
-
-            Dim result = _engine.ComputePhasedStop(slot, currentPrice, bullishStLine, atr, DefaultConfig())
-
-            ' The ratchet for a short is Math.Min(existingStop, stLine) = Math.Min(4614.76, 4560) = 4560
-            ' This is BELOW entry (4585.40) — an invalid stop that TopStepX rejects.
-            Assert.True(result.NewStop < slot.EntryPrice,
-                        $"Without the IsEarlyModeEntry guard, ComputePhasedStop produces {result.NewStop} " &
-                        $"which is below entry {slot.EntryPrice} — proving the bug.")
-        End Sub
-
-        ' ── Test 2: Guard prevents StopPrice mutation when IsEarlyModeEntry = True ──
-        ' Reproduces the ViewModel guard logic in isolation: if the caller checks
-        ' IsEarlyModeEntry before invoking ComputePhasedStop, StopPrice stays frozen.
-
-        <Fact>
-        Public Sub PhasedStop_SkippedWhenIsEarlyModeEntry_StopPriceUnchanged()
-            Dim slot = MakeShortSlotEarlyMode()
+        Public Sub Evaluate_ShortSlot_BullishStLine_StopNeverWidensAboveBracket()
+            Dim slot  = MakeShortSlot()
+            Dim state As New ScalperState()
+            ' Uptrend in 15s bars → SuperTrend will print bullish (line below price).
+            ' Price is between entry and bracket SL — slot is in small drawdown.
+            Dim bars  = MakeUptrendBars(startPrice:=4582D, stepSize:=0.20D, count:=30)
+            Dim currentPrice = bars(bars.Count - 1).Close
             Dim originalStop = slot.StopPrice
 
-            ' Simulate what the fixed ViewModel does: skip the block when IsEarlyModeEntry = True.
-            If Not slot.IsEarlyModeEntry Then
-                Dim result = _engine.ComputePhasedStop(slot, 4583.0D, 4560.0D, 5.0D, DefaultConfig())
-                slot.StopPrice = result.NewStop
-            End If
+            Dim decision = _scalper.Evaluate(slot, state, bars, currentPrice, DefaultConfig())
 
-            Assert.Equal(originalStop, slot.StopPrice)
+            ' SHORT ratchet: stop may only move DOWN (toward entry / profit). It
+            ' must never exceed the original bracket SL — that is the invariant
+            ' BUG-50 proved was violated by the old phased-stop block.
+            Assert.True(decision.NewStop <= originalStop,
+                        $"SHORT stop widened from {originalStop} to {decision.NewStop} — ratchet broken.")
         End Sub
 
-        ' ── Test 3: Once IsEarlyModeEntry clears, phased stop resumes correctly ──
-        ' After ST confirms direction the guard lifts and ratcheting works as designed.
-        ' For a short with a bearish ST line (above entry but below the bracket SL),
-        ' the stop should ratchet down toward the confirmed ST line.
+        ' ── Test 2: SHORT in Initial — stop never falls below entry from ST line ──
+        ' The original BUG-50 symptom: stop ended up BELOW entry on a short. The
+        ' scalper's Initial-phase trail only follows the ST line when its
+        ' direction agrees with the slot side, so a bullish ST cannot drag a
+        ' SHORT slot's stop through entry.
 
         <Fact>
-        Public Sub PhasedStop_ResumesAfterEarlyModeClears_StopRatchetsTowardStLine()
-            Dim slot = MakeShortSlotEarlyMode()
-            slot.IsEarlyModeEntry = False    ' ST has confirmed — early-mode grace cleared
+        Public Sub Evaluate_ShortSlot_InInitial_StopStaysAtOrAboveEntry()
+            Dim slot  = MakeShortSlot()
+            Dim state As New ScalperState()
+            Dim bars  = MakeUptrendBars(startPrice:=4582D, stepSize:=0.20D, count:=30)
+            Dim currentPrice = bars(bars.Count - 1).Close
 
-            ' Bearish ST resistance line is between entry and bracket: valid ratchet target for a short.
-            ' For a short, the stop moves DOWN (toward entry/profit) — Math.Min(bracketSL, stLine).
-            Dim confirmedBearishStLine = 4605.0D   ' above entry (4585.40), below bracket (4614.76)
-            Dim currentPrice = 4580.0D             ' short is mildly in profit, still in Initial phase
+            Dim decision = _scalper.Evaluate(slot, state, bars, currentPrice, DefaultConfig())
 
-            Dim result = _engine.ComputePhasedStop(slot, currentPrice, confirmedBearishStLine, 5.0D, DefaultConfig())
+            Assert.True(decision.NewStop >= slot.EntryPrice,
+                        $"SHORT stop {decision.NewStop} must remain at or above entry {slot.EntryPrice}.")
+        End Sub
 
-            ' Ratchet: Math.Min(4614.76, 4605) = 4605 — stop moves down (tightens for a short)
-            Assert.True(result.NewStop < slot.StopPrice,
-                        $"After IsEarlyModeEntry clears, phased stop should ratchet from {slot.StopPrice} " &
-                        $"to {result.NewStop} using the confirmed bearish ST line.")
-            Assert.True(result.NewStop > slot.EntryPrice,
-                        $"Ratcheted stop {result.NewStop} must remain above entry {slot.EntryPrice}.")
+        ' ── Test 3: SHORT with confirmed bearish 15s ST — stop ratchets DOWN ──
+        ' Once the 15s ST direction confirms the short, the Initial trail tightens
+        ' the stop toward the ST line — but never beyond the ratchet.
+
+        <Fact>
+        Public Sub Evaluate_ShortSlot_BearishStLine_StopRatchetsDown()
+            Dim slot  = MakeShortSlot()
+            Dim state As New ScalperState()
+            ' Downtrend in 15s bars → SuperTrend will print bearish (line above price).
+            Dim bars  = MakeDowntrendBars(startPrice:=4584D, stepSize:=0.20D, count:=30)
+            Dim currentPrice = bars(bars.Count - 1).Close
+            Dim originalStop = slot.StopPrice
+
+            Dim decision = _scalper.Evaluate(slot, state, bars, currentPrice, DefaultConfig())
+
+            Assert.True(decision.NewStop <= originalStop,
+                        $"SHORT stop should ratchet down from {originalStop}, got {decision.NewStop}.")
         End Sub
 
     End Class

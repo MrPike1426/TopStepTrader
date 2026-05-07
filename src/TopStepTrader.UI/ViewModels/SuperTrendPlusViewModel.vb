@@ -247,15 +247,16 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _approachHistory As New Dictionary(Of String, ApproachState)
         Private ReadOnly _prevStDirByInstrument As New Dictionary(Of String, Single)()
         Private ReadOnly _exitEngine As ExitSignalEngine
+        Private ReadOnly _scalper As ScalperExitManager
+        Private ReadOnly _scalperStates As New Dictionary(Of Integer, ScalperState)()
+        ''' <summary>Instruments whose slot has been released at least once this monitoring session.
+        ''' Cleared on Start. Used to enforce the 15s BB-middle re-entry sense-check (FEAT-47).</summary>
+        Private ReadOnly _instrumentsReleasedThisSession As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
         Private _useEarlyMode As Boolean = False
 
         ''' <summary>Set when any slot is released during a tick; cleared at tick start.
         ''' Prevents same-tick re-entry after a position is closed.</summary>
         Private _releasedThisTick As Boolean = False
-
-        ''' <summary>Stores the DateTimeOffset when each instrument's slot was last released.
-        ''' Re-entry is blocked until at least one full bar has elapsed.</summary>
-        Private ReadOnly _reEntryCooldown As New Dictionary(Of String, DateTimeOffset)(StringComparer.OrdinalIgnoreCase)
 
         ''' <summary>Instruments suppressed from AI pre-trade checks until the stored DateTimeOffset (15-min block on NO).</summary>
         Private ReadOnly _aiSuppression As New Dictionary(Of String, DateTimeOffset)(StringComparer.OrdinalIgnoreCase)
@@ -296,9 +297,9 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        ' ── Take $100 Profit toggle ──────────────────────────────────────────
-        ''' <summary>When True, once unrealised P&amp;L reaches $100 the stop snaps to the
-        ''' BB mid (EMA 10, 1.5×) on the 15-second bar, ratchet rules still apply.</summary>
+        ' ── Take $100 Profit toggle (ORPHANED — FEAT-47) ─────────────────────
+        ''' <summary>Orphaned property left in place pending CHORE-01 schema cleanup.
+        ''' No code path reads or writes this; the Scalper now owns all exit management.</summary>
         Public Property IsTake100Enabled As Boolean
             Get
                 Return Config.Take100ProfitEnabled
@@ -512,6 +513,7 @@ Namespace TopStepTrader.UI.ViewModels
                        claudeService As IClaudeReviewService,
                        logger As ILogger(Of SuperTrendPlusViewModel),
                        tradeRecordService As Core.Interfaces.ITradeRecordService,
+                       scalper As ScalperExitManager,
                        Optional configRepo As SuperTrendPlusConfigRepository = Nothing,
                        Optional debugCapture As Core.Interfaces.IDebugTradeCaptureService = Nothing)
             _barService = barService
@@ -525,6 +527,7 @@ Namespace TopStepTrader.UI.ViewModels
             _tradeRecordService = tradeRecordService
             _configRepo = configRepo
             _debugCapture = debugCapture
+            _scalper = scalper
             Config = New SuperTrendPlusConfig()
             _slotManager = New SlotManager(Config)
             _exitEngine = New ExitSignalEngine(
@@ -700,6 +703,8 @@ Namespace TopStepTrader.UI.ViewModels
         Private Sub StartMonitoring()
             IsHowItWorksExpanded = False
             IsMonitoring = True
+            _instrumentsReleasedThisSession.Clear()
+            _scalperStates.Clear()
             _timer = New Timer(AddressOf TimerCallback, Nothing, 0, 15000)
             If _selectedAccount Is Nothing OrElse _selectedAccount.Id = 0 Then
                 StatusText = "? No account selected — monitoring in read-only mode (orders will be blocked until account loads)"
@@ -1143,18 +1148,16 @@ Namespace TopStepTrader.UI.ViewModels
 
                 Dim isFavourable As Boolean = (isLong OrElse isShort) AndAlso (isFlip OrElse isActive) AndAlso bbMedianAgrees
 
-                ' Re-entry cooldown: skip if released within the last bar duration
-                If isFavourable AndAlso Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
-                    String.Equals(s.Instrument, contractId, StringComparison.OrdinalIgnoreCase)) Then
-                    Dim cooldownUntil As DateTimeOffset
-                    If _reEntryCooldown.TryGetValue(contractId, cooldownUntil) Then
-                        Dim barMinutes As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
-                        If _selectedTimeframe.EndsWith("hr") Then barMinutes *= 60
-                        If DateTimeOffset.UtcNow < cooldownUntil.AddMinutes(barMinutes) Then
-                            _logger.LogInformation("ST+ [{Contract}] re-entry cooldown active — skipping until {Until:HH:mm:ss}",
-                                                   contractId, cooldownUntil.AddMinutes(barMinutes).UtcDateTime)
-                            isFavourable = False
-                        End If
+                ' FEAT-47: 15s BB-middle re-entry sense check.
+                ' For instruments released this session, require 15s BB middle (length 10, mult 2.0)
+                ' to confirm direction on the just-closed 15s bar before re-entering.
+                If isFavourable AndAlso _instrumentsReleasedThisSession.Contains(contractId) AndAlso
+                   Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
+                       String.Equals(s.Instrument, contractId, StringComparison.OrdinalIgnoreCase)) Then
+                    If Not Await Bb15sConfirmsDirectionAsync(contractId, isLong) Then
+                        _logger.LogInformation(
+                            "ST+ [{Contract}] 15s BB confirmation gate — re-entry suppressed", contractId)
+                        isFavourable = False
                     End If
                 End If
 
@@ -1292,6 +1295,35 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         ''' <summary>
+        ''' FEAT-47 re-entry sense check: confirm 15s BB middle (length 10, mult 2.0)
+        ''' direction agrees with the proposed side on the just-closed 15s bar.
+        ''' For LONG: close must be at or above the BB middle; for SHORT, at or below.
+        ''' Returns True (allow) on any data shortfall to avoid blocking valid signals.
+        ''' </summary>
+        Private Async Function Bb15sConfirmsDirectionAsync(contractId As String, isLong As Boolean) As Task(Of Boolean)
+            Try
+                Dim raw = Await _barService.GetLiveBarsAsync(contractId, BarTimeframe.FifteenSecond, 30)
+                If raw Is Nothing OrElse raw.Count < 11 Then Return True
+                ' Strip forming bar.
+                Dim closedBars As IList(Of MarketBar) =
+                    If((DateTime.UtcNow - raw(raw.Count - 1).Timestamp).TotalSeconds < 15 AndAlso raw.Count > 1,
+                       CType(raw.Take(raw.Count - 1).ToList(), IList(Of MarketBar)),
+                       raw)
+                If closedBars.Count < 10 Then Return True
+                Dim closesDec = closedBars.Select(Function(b) CDec(b.Close)).ToList()
+                Dim bb = TechnicalIndicators.BollingerBands(closesDec, 10, 2.0)
+                Dim lastIdx = bb.Middle.Length - 1
+                Dim mid As Single = bb.Middle(lastIdx)
+                If Single.IsNaN(mid) Then Return True
+                Dim lastClose As Decimal = closesDec(closesDec.Count - 1)
+                Return If(isLong, lastClose >= CDec(mid), lastClose <= CDec(mid))
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ 15s BB confirmation failed for {Contract} — allowing entry", contractId)
+                Return True
+            End Try
+        End Function
+
+        ''' <summary>
         ''' Early-mode entry: multi-signal early reversal trigger, then ADX-band slot count.
         ''' </summary>
         Private Async Function EvaluateEarlyEntrySequenceAsync(tf As BarTimeframe,
@@ -1387,15 +1419,11 @@ Namespace TopStepTrader.UI.ViewModels
 
                 Dim earlySignal As Boolean = sig1 AndAlso sig2 AndAlso sig3 AndAlso sig4 AndAlso sig5 AndAlso earlyBbMedianAgrees
 
-                ' Re-entry cooldown for early-mode: skip instrument released within last bar
-                If earlySignal AndAlso Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = contractId) Then
-                    Dim cooldownUntilE As DateTimeOffset
-                    If _reEntryCooldown.TryGetValue(contractId, cooldownUntilE) Then
-                        Dim barMinsE As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
-                        If _selectedTimeframe.EndsWith("hr") Then barMinsE *= 60
-                        If DateTimeOffset.UtcNow < cooldownUntilE.AddMinutes(barMinsE) Then
-                            earlySignal = False
-                        End If
+                ' FEAT-47: 15s BB-middle re-entry sense check (early-mode parity).
+                If earlySignal AndAlso _instrumentsReleasedThisSession.Contains(contractId) AndAlso
+                   Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso s.Instrument = contractId) Then
+                    If Not Await Bb15sConfirmsDirectionAsync(contractId, anticipatedLong) Then
+                        earlySignal = False
                     End If
                 End If
 
@@ -2146,138 +2174,30 @@ Namespace TopStepTrader.UI.ViewModels
                     End If
                 End If
 
-                ' Composite exit signal evaluation
-                Dim exitEval = _exitEngine.Evaluate(slot, highs, lows, closes,
-                                                    st.Line, st.Direction,
-                                                    dmiForExit.PlusDI, dmiForExit.MinusDI,
-                                                    dmiForExit.ADX, atr14Exit,
-                                                    vwapExit, rsiExit)
-
-                slot.Health = exitEval.RecommendedHealth
-
-                Dim boxForHealth = BoxForSlot(slot)
-                Application.Current?.Dispatcher?.Invoke(Sub()
-                                                            If boxForHealth IsNot Nothing Then
-                                                                boxForHealth.HealthBrush = HealthBrushFor(slot.Health)
-                                                            End If
-                                                        End Sub)
-
-                ' ── Debug Capture: Heartbeat (and BarClose when new bar detected) ─
-                If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
-                   Not String.IsNullOrEmpty(slot.DebugTradeId) Then
-                    Dim atrVal As Single = If(n < atr14Exit.Length AndAlso Not Single.IsNaN(atr14Exit(n)), atr14Exit(n), 0F)
-                    RecordDebugSnapshot(slot, currentClose, latestPnl, bars(n), stLine, st.Direction(n), atrVal, "Heartbeat")
-                    Dim lastBarTs As DateTimeOffset
-                    Dim isNewBar = (Not _lastBarTimestampByTradeId.TryGetValue(slot.DebugTradeId, lastBarTs)) OrElse
-                                   bars(n).Timestamp <> lastBarTs
-                    _lastBarTimestampByTradeId(slot.DebugTradeId) = bars(n).Timestamp
-                    If isNewBar Then
-                        Dim barCloseNotes = $"Score={exitEval.Score} [{String.Join(",", exitEval.ContributingSignals)}] Health={exitEval.RecommendedHealth} ConsecExit={slot.ConsecutiveExitBars}"
-                        RecordDebugSnapshot(slot, currentClose, latestPnl, bars(n), stLine, st.Direction(n), atrVal, "BarClose", barCloseNotes)
-                    End If
+                ' FEAT-47: Delegate exit management to the reusable Scalper service.
+                ' All open-position decisions (phase ladder, BB trail, ScaredyCat, exit)
+                ' are owned by ScalperExitManager. This view only handles entries.
+                Dim scalperState As ScalperState = Nothing
+                If Not _scalperStates.TryGetValue(slot.SlotIndex, scalperState) Then
+                    scalperState = New ScalperState()
+                    _scalperStates(slot.SlotIndex) = scalperState
                 End If
 
-                ' ── 2-bar confirmation guard ──────────────────────────────────────
-                ' An immediate E1 SuperTrend flip exits on the current bar unconditionally.
-                ' All other Exiting scores require 2 consecutive bars at Exiting health to
-                ' prevent single-bar consolidation at trend highs from triggering a close.
-                If exitEval.ImmediateExit Then
-                    If slot.IsEarlyModeEntry Then
-                        ' BUG-49: E1 suppressed — early-mode entry awaiting ST confirmation.
-                        ' The SL bracket at the ST line handles downside protection during the grace period.
-                        _logger.LogInformation("ST+ [Slot {Idx}] E1 suppressed (early-mode grace) for {Contract}",
-                                               slot.SlotIndex, slot.Instrument)
-                    Else
-                        ' E1 flip — close without waiting for confirmation
-                        slot.ConsecutiveExitBars = 0
-                        Await ReleaseSlotAsync(slot, "ST Flip")
-                        Return
-                    End If
+                Dim scalperCfg As New ScalperConfig()
+                Dim scalperDecision = _scalper.Evaluate(slot, scalperState, tickBars, currentClose, scalperCfg)
+                _scalperStates(slot.SlotIndex) = scalperDecision.NewState
+
+                If scalperDecision.ShouldExit Then
+                    Await ReleaseSlotAsync(slot, If(String.IsNullOrEmpty(scalperDecision.Reason), "Scalper Exit", scalperDecision.Reason))
+                    Return
                 End If
 
-                If slot.Health = SlotHealth.Exiting Then
-                    slot.ConsecutiveExitBars += 1
-                    _logger.LogInformation("ST+ [Slot {Idx}] {Contract} exit score={Score} — consecutiveExitBars={Count}",
-                                           slot.SlotIndex, slot.Instrument, exitEval.Score, slot.ConsecutiveExitBars)
-                    If slot.ConsecutiveExitBars >= 2 Then
-                        slot.ConsecutiveExitBars = 0
-                        Await ReleaseSlotAsync(slot, "Exit Signal")
-                        Return
-                    End If
-                Else
-                    slot.ConsecutiveExitBars = 0
-                End If
-
-                ' BUG-50: Skip phased stop entirely during early-mode grace.
-                ' ST has not yet confirmed direction, so stLine is on the wrong side of entry
-                ' (e.g. bullish support below a short entry). ComputePhasedStop would produce a
-                ' stop below entry that TopStepX rejects silently, freezing the SL.
-                ' The bracket SL already protects downside during this period.
+                ' Skip stop edits during early-mode grace — bracket SL handles downside
+                ' until ST confirms direction.
                 If Not slot.IsEarlyModeEntry Then
-                    ' Advance phased stop (ratchet-only).
-                    ' Only the primary slot — the lowest-indexed open slot for this instrument —
-                    ' is allowed to call EditPositionSlTpAsync.  Scale-in slots update their
-                    ' local state and display but do NOT touch the exchange bracket, because
-                    ' all slots share the same underlying TopStepX position and racing edits
-                    ' would use different InitialRisk baselines and could widen the stop.
-                    '
-                    Dim stLineForPhase = If(Not Single.IsNaN(st.Line(n)), CDec(st.Line(n)), slot.StopPrice)
-                    Dim atrForPhase = If(n < atr14Exit.Length AndAlso Not Single.IsNaN(atr14Exit(n)), CDec(atr14Exit(n)), 0D)
+                    Dim newStop As Decimal = scalperDecision.NewStop
                     Dim oldStopPhase = slot.StopPhase
-                    Dim newStop As Decimal
-
-                    If Config.Take100ProfitEnabled Then
-                          ' ── Take $100 mode: the R-based phase ladder is OFF ──────────────────
-                         ' State 1 (PnL < $100):   SL trails the SuperTrend line (ratchet only).
-                         ' State 2 (PnL ≥ $100):   SL uses two stacked ratchet floors:
-                         '   Floor A — entry price (breakeven): SL may never drop below entry.
-                         '   Floor B — BB lower band (LONG) or BB upper band (SHORT), computed
-                         '             from EMA-10 of 15s bars with mult=1.5. Using the outer
-                         '             directional band prevents the floor retracing when the
-                         '             middle dips; ratchet ensures it never moves against trade.
-                         Dim isLngSlot = slot.Side = "Buy"
-                         If latestPnl >= 100D Then
-                             ' Floor A: breakeven — ratchet preserves any higher floor already set.
-                             Dim beStop = slot.EntryPrice
-                             newStop = If(isLngSlot, Math.Max(slot.StopPrice, beStop), Math.Min(slot.StopPrice, beStop))
-                             slot.StopPhase = StopPhase.Breakeven
-
-                             ' Floor B: BB lower band (LONG) or BB upper band (SHORT) computed from
-                                 ' 15-second closes using EMA-10 as the middle, mult = 1.5.
-                                 ' Using the directional outer band instead of the middle band
-                                 ' prevents the stop floor from retracing when the middle dips.
-                                 ' Reuses tickBars fetched above — no second API call.
-                                 If tickBars IsNot Nothing AndAlso tickBars.Count >= 10 Then
-                                     Dim s15Closes = tickBars.Select(Function(b) CDec(b.Close)).ToList()
-                                     Dim bbBands = TechnicalIndicators.BollingerBands(s15Closes, 10, 1.5)
-                                     Dim lastIdx = bbBands.Upper.Length - 1
-                                     Dim bbBand As Single = If(isLngSlot, bbBands.Lower(lastIdx), bbBands.Upper(lastIdx))
-                                     If Not Single.IsNaN(bbBand) Then
-                                         Dim bbFloor = CDec(bbBand)
-                                         newStop = If(isLngSlot, Math.Max(newStop, bbFloor), Math.Min(newStop, bbFloor))
-                                         _logger.LogInformation(
-                                             "ST+ [Slot {Idx}] Take100 BB-{Band} trail — entry={E:F2} bbFloor={B:F2} newStop={S:F2} pnl={P:F2}",
-                                             slot.SlotIndex, If(isLngSlot, "lower", "upper"), slot.EntryPrice, bbFloor, newStop, latestPnl)
-                                     End If
-                                 Else
-                                     _logger.LogInformation(
-                                         "ST+ [Slot {Idx}] Take100 breakeven (no 15s bars yet) — entry={Entry:F2} newStop={Stop:F2} pnl={Pnl:F2}",
-                                         slot.SlotIndex, slot.EntryPrice, newStop, latestPnl)
-                                 End If
-                         Else
-                             ' Pre-$100: trail SuperTrend line, ratchet only.
-                             newStop = If(isLngSlot, Math.Max(slot.StopPrice, stLineForPhase), Math.Min(slot.StopPrice, stLineForPhase))
-                             slot.StopPhase = StopPhase.Initial
-                         End If
-                    Else
-                        ' ── Standard 6-phase configurable ladder ────────────────────────────
-                        ' SuperTrend+ uses a configurable ladder via ComputePhasedStop overload.
-                        ' This overwrites the generic phased-stop produced by ExitSignalEngine.Evaluate
-                        ' and keeps the logic isolated to this strategy only.
-                        Dim stPhasedResult = _exitEngine.ComputePhasedStop(slot, currentClose, stLineForPhase, atrForPhase, Config)
-                        newStop = stPhasedResult.NewStop
-                        slot.StopPhase = stPhasedResult.Phase
-                    End If
+                    slot.StopPhase = scalperDecision.NewPhase
 
                     Dim isPrimaryForEdit As Boolean =
                         Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
@@ -2302,7 +2222,7 @@ Namespace TopStepTrader.UI.ViewModels
                                     }
                                     _debugCapture.RecordSnapshot(slSnap)
                                 End If
-                                _logger.LogInformation("ST+ SL phase={Phase} trail->{Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
+                                _logger.LogInformation("ST+ Scalper SL phase={Phase} trail->{Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
                                                        slot.StopPhase, newStop,
                                                        If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"),
                                                        slot.SlotIndex, slot.Instrument)
@@ -2314,13 +2234,10 @@ Namespace TopStepTrader.UI.ViewModels
                             _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
                         End Try
                     ElseIf Not isPrimaryForEdit Then
-                        _logger.LogInformation("ST+ SL ratchet deferred for scale-in [Slot {Idx}] on {Contract} — primary slot owns bracket",
+                        _logger.LogInformation("ST+ Scalper SL ratchet deferred for scale-in [Slot {Idx}] on {Contract} — primary slot owns bracket",
                                                slot.SlotIndex, slot.Instrument)
                     End If
 
-                    ' Only advance the in-memory stop when the broker edit was confirmed (primary slot)
-                    ' or when this is a scale-in slot whose display-only stop can freely track the phase.
-                    ' Keeping slot.StopPrice at its old value on API failure causes the next tick to retry.
                     If newStop <> slot.StopPrice AndAlso (Not isPrimaryForEdit OrElse primaryEditSucceeded) Then
                         slot.StopPrice = newStop
                         Dim boxForTrail = BoxForSlot(slot)
@@ -2361,10 +2278,13 @@ Namespace TopStepTrader.UI.ViewModels
             ' slot clears in-memory, causing EvaluateSlotEntriesAsync to re-enter the
             ' same instrument on the next tick (BUG-35).
             _releasedThisTick = True  ' block same-tick re-entry
-            ' One-bar cooldown (see SuperTrendPlusConfig re-entry cooldown policy comment).
+            ' FEAT-47: Mark instrument as released this session so the entry path
+            ' enforces the 15s BB-middle confirmation gate before re-entering.
             If Not String.IsNullOrEmpty(slot.Instrument) Then
-                _reEntryCooldown(slot.Instrument) = DateTimeOffset.UtcNow
+                _instrumentsReleasedThisSession.Add(slot.Instrument)
             End If
+            ' Drop any cached scalper state for this slot.
+            _scalperStates.Remove(slot.SlotIndex)
             If slot.AccountId <> 0 AndAlso Not String.IsNullOrEmpty(slot.Instrument) Then
                 Try
                     Await _orderService.FlattenContractAsync(slot.AccountId, slot.Instrument)

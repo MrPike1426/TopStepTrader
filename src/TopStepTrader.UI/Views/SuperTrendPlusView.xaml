@@ -242,99 +242,52 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- ── Stop Phases ── -->
+                        <!-- ── The Scalper — Profit Protection & Exit ── -->
                         <Border Background="#16213A" CornerRadius="6" Padding="14,10" Margin="0,0,0,8">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                     <TextBlock Text="&#x1F6E1;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                    <TextBlock Text="Trade Management — Stop Phases" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
+                                    <TextBlock Text="The Scalper — Profit Protection &amp; Exit" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17" Margin="0,0,0,8">
-                                    There is <Run Foreground="White" FontWeight="SemiBold">no hard take-profit order</Run>. Every position is managed by a ratcheting stop that advances through six phases as profit grows. The stop never moves back.  <Run Foreground="#90CAF9">R = initial risk (entry price − stop at entry).</Run>
+                                    Once a position is open, exit management is owned by <Run Foreground="White" FontWeight="SemiBold">The Scalper</Run> — a reusable service that ratchets the stop on closed 15-second bars. The stop never moves backwards. <Run Foreground="#90CAF9">R = initial risk (entry − stop at entry).</Run>
                                 </TextBlock>
 
-                                <!-- Phase timeline -->
                                 <Border Background="#1A2440" CornerRadius="4" Padding="10,8">
                                     <StackPanel>
                                         <Grid Margin="0,0,0,4">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="Phase" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
                                             <TextBlock Grid.Column="1" Text="Trigger" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
-                                            <TextBlock Grid.Column="2" Text="Stop moves to…" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="2" Text="Stop trail" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
                                         </Grid>
                                         <Rectangle Height="1" Fill="#2A3A5A" Margin="0,0,0,4"/>
-                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="Initial"      Foreground="#8090A0" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="Entry"        Foreground="White" FontSize="12"/>
-                                            <TextBlock Grid.Column="2" Text="SuperTrend line (follows trend)"  Foreground="#8090A0" FontSize="12"/>
+                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Initial"     Foreground="#8090A0" FontSize="12"/>
+                                            <TextBlock Grid.Column="1" Text="Entry"       Foreground="White" FontSize="12"/>
+                                            <TextBlock Grid.Column="2" Text="15s SuperTrend line (ratchet only)" Foreground="#8090A0" FontSize="12"/>
                                         </Grid>
-                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="Breakeven"   Foreground="#A5D6A7" FontSize="12"/>
                                             <TextBlock Grid.Column="1" Text="0.5R profit" Foreground="White" FontSize="12"/>
-                                            <TextBlock Grid.Column="2" Text="Exact entry price — risk eliminated"  Foreground="#8090A0" FontSize="12"/>
+                                            <TextBlock Grid.Column="2" Text="max(entry, 15s ST) — risk eliminated" Foreground="#8090A0" FontSize="12"/>
                                         </Grid>
-                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="ProfitLock"  Foreground="#66BB6A" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="1R profit"   Foreground="White" FontSize="12"/>
-                                            <TextBlock Grid.Column="2" Text="Entry + 0.3R — partial profit banked"  Foreground="#8090A0" FontSize="12"/>
-                                        </Grid>
-                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="ProfitTrail" Foreground="#FFD54F" FontSize="12"/>
                                             <TextBlock Grid.Column="1" Text="1.5R profit" Foreground="White" FontSize="12"/>
-                                            <TextBlock Grid.Column="2" Text="ATR-based trailing stop — rides the move"  Foreground="#8090A0" FontSize="12"/>
+                                            <TextBlock Grid.Column="2" Text="15s BB lower (LONG) / upper (SHORT) — band trail, ST trail dropped" Foreground="#8090A0" FontSize="12"/>
                                         </Grid>
-                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="Harvest"     Foreground="#FFA726" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="2R profit"   Foreground="White" FontSize="12"/>
-                                            <TextBlock Grid.Column="2" Text="Entry + 1.5R — locked in"  Foreground="#8090A0" FontSize="12"/>
-                                        </Grid>
-                                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="70"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="FreeRide" Foreground="Gold" FontSize="12" FontWeight="Bold"/>
-                                            <TextBlock Grid.Column="1" Text="3R profit"   Foreground="White" FontSize="12"/>
-                                            <TextBlock Grid.Column="2" Text="Entry + 2R — house money, let it run"  Foreground="#8090A0" FontSize="12"/>
+                                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="ScaredyCat"  Foreground="#FFCC80" FontSize="12"/>
+                                            <TextBlock Grid.Column="1" Text="One-way arm" Foreground="White" FontSize="12"/>
+                                            <TextBlock Grid.Column="2" Text="8 consecutive 15s BB-middle bars against trade + 15s ST disagrees → BB mult 2.0 → 1.5 for the rest of the trade" Foreground="#8090A0" FontSize="12" TextWrapping="Wrap"/>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
 
-                                <TextBlock Margin="0,6,0,0" TextWrapping="Wrap" Foreground="White" FontSize="12" LineHeight="15">
-                                    <Run Foreground="#FFD54F" FontWeight="SemiBold">Gold title bar</Run> lights up on a slot when the position P&amp;L reaches the active persona's RR target — the trade is now in extra profit. The stop phases continue advancing automatically until exit.
+                                <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17">
+                                    Exit fires when a closed 15s bar crosses the latest stop. After a release, the same instrument cannot re-enter until the closed 15s bar agrees with the new direction relative to the BB middle (length 10, mult 2.0).
                                 </TextBlock>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- ── Degradation Signals ── -->
-                        <Border Background="#16213A" CornerRadius="6" Padding="14,10" Margin="0,0,0,0">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="&#x26A0;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0" Foreground="Gold"/>
-                                    <TextBlock Text="Intelligent Exit — Degradation Signals" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17" Margin="0,0,0,6">Nine signals are scored every bar. When the combined score crosses a threshold the slot health changes colour and an exit is triggered.</TextBlock>
-
-                                <Border Background="#1A2440" CornerRadius="4" Padding="10,8" Margin="0,0,0,6">
-                                    <StackPanel>
-                                        <TextBlock Foreground="#EF9A9A" FontSize="12" LineHeight="17">E1  <Run FontWeight="SemiBold">(8 pts)</Run>  SuperTrend Flip — trend reversed — immediate exit</TextBlock>
-                                        <TextBlock Foreground="#8090A0" FontSize="12" LineHeight="17">E2  <Run FontWeight="SemiBold">(3 pts)</Run>  Momentum Slowing — price converging toward ST line &gt; 0.5×ATR over 3 bars</TextBlock>
-                                        <TextBlock Foreground="#8090A0" FontSize="12" LineHeight="17">E3  <Run FontWeight="SemiBold">(2 pts)</Run>  ADX Declining — ADX falling for 2 bars and 10+ pts below entry ADX</TextBlock>
-                                        <TextBlock Foreground="#8090A0" FontSize="12" LineHeight="17">E4  <Run FontWeight="SemiBold">(2 pts)</Run>  DI Compression — DI spread narrowed ≥15% in one bar</TextBlock>
-                                        <TextBlock Foreground="#FFCC80" FontSize="12" LineHeight="17">E5  <Run FontWeight="SemiBold">(4 pts)</Run>  DI Crossover — +DI/−DI crossed against trade direction</TextBlock>
-                                        <TextBlock Foreground="#8090A0" FontSize="12" LineHeight="17">E6  <Run FontWeight="SemiBold">(2 pts)</Run>  Rejection Bar — wick &gt; 2× body, close past bar midpoint</TextBlock>
-                                        <TextBlock Foreground="#8090A0" FontSize="12" LineHeight="17">E7  <Run FontWeight="SemiBold">(1 pt)</Run>   ATR Contraction — ATR falling for 2 bars and below 80% of entry ATR</TextBlock>
-                                        <TextBlock Foreground="#8090A0" FontSize="12" LineHeight="17">E8  <Run FontWeight="SemiBold">(2 pts)</Run>  VWAP Cross — price crossed VWAP against trade direction</TextBlock>
-                                        <TextBlock Foreground="#8090A0" FontSize="12" LineHeight="17">E9  <Run FontWeight="SemiBold">(3 pts)</Run>  RSI Hidden Divergence — price / RSI diverging against the trade</TextBlock>
-                                    </StackPanel>
-                                </Border>
-
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Background="#2D2000" CornerRadius="3" Padding="8,4" Margin="0,0,8,0">
-                                        <TextBlock Foreground="Gold" FontSize="12" FontWeight="SemiBold">&#x25CF;  Score 3–5  Warning</TextBlock>
-                                    </Border>
-                                    <TextBlock Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0">Degradation building — no new slots open</TextBlock>
-                                    <Border Background="#2D0A00" CornerRadius="3" Padding="8,4">
-                                        <TextBlock Foreground="OrangeRed" FontSize="12" FontWeight="SemiBold">&#x25CF;  Score 6+  Exiting</TextBlock>
-                                    </Border>
-                                    <TextBlock Foreground="White" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0">Exit on next closed bar</TextBlock>
-                                </StackPanel>
                             </StackPanel>
                         </Border>
 
@@ -435,7 +388,7 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- Row 2: Persona buttons, AI toggle, Take100, Start/Stop, status -->
+                    <!-- Row 2: Persona buttons, AI toggle, Start/Stop, status -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>  <!-- 0  Lewis -->
@@ -446,11 +399,9 @@
                             <ColumnDefinition Width="12"/>    <!-- 5  gap -->
                             <ColumnDefinition Width="Auto"/>  <!-- 6  AI toggle -->
                             <ColumnDefinition Width="8"/>     <!-- 7  gap -->
-                            <ColumnDefinition Width="Auto"/>  <!-- 8  Take $100 -->
-                            <ColumnDefinition Width="8"/>     <!-- 9  gap -->
-                            <ColumnDefinition Width="Auto"/>  <!-- 10 Start/Stop -->
-                            <ColumnDefinition Width="*"/>     <!-- 11 stretch -->
-                            <ColumnDefinition Width="Auto"/>  <!-- 12 Status badge -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 8  Start/Stop -->
+                            <ColumnDefinition Width="*"/>     <!-- 9  stretch -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 10 Status badge -->
                         </Grid.ColumnDefinitions>
 
                         <!-- Lewis persona button -->
@@ -578,70 +529,15 @@
                             </StackPanel>
                         </ToggleButton>
 
-                        <!-- Take $100 Profit toggle -->
-                        <ToggleButton Grid.Column="8"
-                                      IsChecked="{Binding IsTake100Enabled, Mode=TwoWay}"
-                                      Padding="10,6" VerticalAlignment="Center" Cursor="Hand"
-                                      ToolTip="When ON: once a trade hits $100 profit the stop-loss snaps to the BB middle band (EMA 10, mult 1.5) on the 15-second bar. The ratchet rule still applies — the stop never moves back.">
-                            <ToggleButton.Style>
-                                <Style TargetType="ToggleButton">
-                                    <Setter Property="Background"      Value="#2A3A5A"/>
-                                    <Setter Property="BorderBrush"     Value="#3A5A8A"/>
-                                    <Setter Property="BorderThickness" Value="1"/>
-                                    <Setter Property="Foreground"      Value="{StaticResource TextSecondaryBrush}"/>
-                                    <Setter Property="Cursor"          Value="Hand"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="ToggleButton">
-                                                <Border Background="{TemplateBinding Background}"
-                                                        BorderBrush="{TemplateBinding BorderBrush}"
-                                                        BorderThickness="{TemplateBinding BorderThickness}"
-                                                        CornerRadius="3"
-                                                        Padding="{TemplateBinding Padding}">
-                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsChecked" Value="True">
-                                            <Setter Property="Background"  Value="#1B5E20"/>
-                                            <Setter Property="BorderBrush" Value="#66BB6A"/>
-                                            <Setter Property="Foreground"  Value="White"/>
-                                        </Trigger>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Opacity" Value="0.85"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </ToggleButton.Style>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="💰" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
-                                <TextBlock VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="White">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Text"       Value="Take $100"/>
-                                            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsTake100Enabled}" Value="True">
-                                                    <Setter Property="Foreground" Value="#A5D6A7"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </StackPanel>
-                        </ToggleButton>
-
                         <!-- Start / Stop button -->
-                        <Button Grid.Column="10"
+                        <Button Grid.Column="8"
                                 Content="{Binding StartStopLabel}"
                                 Command="{Binding StartStopCommand}"
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 Padding="14,6" VerticalAlignment="Center"/>
 
                         <!-- Status badge -->
-                        <Border Grid.Column="12"
+                        <Border Grid.Column="10"
                                 Background="{Binding StatusBackground}"
                                 CornerRadius="4" Margin="8,0,0,0"
                                 Visibility="{Binding StatusVisibility}"

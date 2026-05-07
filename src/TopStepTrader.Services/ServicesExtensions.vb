@@ -63,6 +63,9 @@ Namespace TopStepTrader.Services
             services.AddScoped(Of IOrderService, ProjectXOrderService)()
             services.AddScoped(Of TrendAnalysisService)()
 
+            ' ── Scalper exit manager (QUAL-04) — reusable scalping TP/exit ladder
+            services.AddSingleton(Of ScalperExitManager)()
+
             ' ── Diagnostic logger (one instance per engine — Transient matches engine lifetime)
             services.AddTransient(Of DiagnosticLogger)()
 

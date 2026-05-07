@@ -5,6 +5,7 @@ Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Models.Debug
 Imports TopStepTrader.Services.Market
+Imports TopStepTrader.Services.Trading
 Imports TopStepTrader.UI.ViewModels
 Imports Xunit
 
@@ -36,6 +37,7 @@ Namespace TopStepTrader.Tests.Debug
                 New Mock(Of IClaudeReviewService)().Object,
                 NullLogger(Of SuperTrendPlusViewModel).Instance,
                 New Mock(Of ITradeRecordService)().Object,
+                New ScalperExitManager(NullLogger(Of ScalperExitManager).Instance),
                 Nothing,
                 _mockDebugCapture.Object)
         End Function
@@ -74,7 +76,8 @@ Namespace TopStepTrader.Tests.Debug
                 _mockContractResolver.Object,
                 New Mock(Of IClaudeReviewService)().Object,
                 NullLogger(Of SuperTrendPlusViewModel).Instance,
-                New Mock(Of ITradeRecordService)().Object)
+                New Mock(Of ITradeRecordService)().Object,
+                New ScalperExitManager(NullLogger(Of ScalperExitManager).Instance))
 
             Dim ex As Exception = Nothing
             Try

@@ -1,3 +1,4 @@
+Imports System.Collections.Generic
 Imports Microsoft.Extensions.Logging.Abstractions
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Models
@@ -8,115 +9,135 @@ Imports Xunit
 Namespace TopStepTrader.Tests.ViewModels
 
     ''' <summary>
-    ''' BUG-51: Phased stop was called with closes(n) (strategy-TF bar close), making it
-    ''' blind to intra-bar price spikes. Fix: pass currentClose (15-second bar) instead.
-    ''' Source: UAT 2026-05-04 trade 2542011663.
+    ''' BUG-51 (rewritten for FEAT-47): exit management must operate on the
+    ''' just-closed 15-second bar, not on a stale strategy-timeframe close.
+    ''' Under the new architecture, ScalperExitManager.Evaluate consumes the
+    ''' 15s bar list and uses its last close as currentPrice, so phase advances
+    ''' (Initial → Breakeven → ProfitLock) react to live 15s price movement.
+    ''' These tests pin that behaviour at the service contract.
     ''' </summary>
     Public Class SuperTrendPlusBug51Tests
 
-        Private ReadOnly _engine As ExitSignalEngine =
-            New ExitSignalEngine(NullLogger(Of ExitSignalEngine).Instance)
+        Private ReadOnly _scalper As ScalperExitManager =
+            New ScalperExitManager(NullLogger(Of ScalperExitManager).Instance)
 
-        Private Shared Function DefaultConfig() As SuperTrendPlusConfig
-            Return New SuperTrendPlusConfig()
+        Private Shared Function DefaultConfig() As ScalperConfig
+            Return New ScalperConfig()
+        End Function
+
+        Private Shared Function MakeUptrendBars(startPrice As Decimal,
+                                                stepSize As Decimal,
+                                                count As Integer) As List(Of MarketBar)
+            Dim bars As New List(Of MarketBar)
+            Dim t = New DateTimeOffset(2025, 5, 4, 14, 0, 0, TimeSpan.Zero)
+            For i = 0 To count - 1
+                Dim closePrice = startPrice + stepSize * i
+                bars.Add(New MarketBar With {
+                    .ContractId = "ES",
+                    .Timestamp  = t.AddSeconds(15 * i),
+                    .Open       = closePrice - 0.05D,
+                    .High       = closePrice + 0.10D,
+                    .Low        = closePrice - 0.10D,
+                    .Close      = closePrice,
+                    .Volume     = 100
+                })
+            Next
+            Return bars
         End Function
 
         ''' <summary>
-        ''' Long slot at entry=100, R=10 (stop at 90), ST line at 95.
-        ''' BreakevenTriggerR default = 0.5R → threshold at profit = 5.0 (price = 105).
+        ''' LONG slot at entry=100, R=10 (stop at 90).
+        ''' BreakevenTriggerR default = 0.5R → threshold profit = 5 (price = 105).
+        ''' ProfitLockTriggerR default = 1.5R → threshold profit = 15 (price = 115).
         ''' </summary>
         Private Shared Function MakeLongSlot() As PositionSlot
             Return New PositionSlot With {
-                .SlotIndex       = 0,
-                .Instrument      = "ES",
-                .Side            = "Buy",
-                .IsOpen          = True,
-                .EntryPrice      = 100.0D,
-                .StopPrice       = 90.0D,
-                .InitialRisk     = 10.0D,   ' R = 10
-                .StopPhase       = StopPhase.Initial,
-                .IsEarlyModeEntry = False
+                .SlotIndex   = 0,
+                .Instrument  = "ES",
+                .Side        = "Buy",
+                .IsOpen      = True,
+                .EntryPrice  = 100.0D,
+                .StopPrice   = 90.0D,
+                .InitialRisk = 10.0D,
+                .StopPhase   = StopPhase.Initial
             }
         End Function
 
-        ' ── Test 1: Root cause — closes(n) misses the intra-bar spike ─────────
-        ' With the stale strategy-TF close (0.4R profit) the stop stays in Initial
-        ' phase and only trails the ST line.  This is what the buggy code produced.
+        ' ── Test 1: stale strategy-TF close (below BE trigger) keeps slot Initial ─
+        ' If we feed Evaluate a currentPrice = 104 (0.4R), the slot must stay in
+        ' Initial — the same outcome the old buggy code produced when it received
+        ' the stale strategy-TF bar close.
 
         <Fact>
-        Public Sub ComputePhasedStop_WithStaleBarClose_StopStaysInitial()
-            Dim slot   = MakeLongSlot()
-            Dim stLine = 95.0D
-            ' closes(n) = 104 → profit = 4 = 0.4R < BreakevenTriggerR (0.5R)
-            Dim stalePrice = 104.0D
+        Public Sub Evaluate_StaleClose_KeepsSlotInInitial()
+            Dim slot  = MakeLongSlot()
+            Dim state As New ScalperState()
+            Dim bars  = MakeUptrendBars(startPrice:=100D, stepSize:=0.10D, count:=30)
+            Dim staleClose As Decimal = 104D
 
-            Dim result = _engine.ComputePhasedStop(slot, stalePrice, stLine, 0D, DefaultConfig())
+            Dim decision = _scalper.Evaluate(slot, state, bars, staleClose, DefaultConfig())
 
-            ' Initial phase: ratchet to ST line max(90, 95) = 95
-            Assert.Equal(StopPhase.Initial, result.Phase)
-            Assert.Equal(95.0D, result.NewStop)
+            Assert.Equal(StopPhase.Initial, decision.NewPhase)
         End Sub
 
-        ' ── Test 2: Fix — currentClose sees the spike and advances to Breakeven ─
-        ' The 15-second bar already shows 0.6R profit, crossing the 0.5R threshold.
-        ' ComputePhasedStop must advance the stop to entry (breakeven).
+        ' ── Test 2: live 15s close ≥ BE trigger advances slot to Breakeven ─
+        ' currentPrice = 106 (0.6R) crosses BreakevenTriggerR; the scalper must
+        ' advance the phase and pull the stop up to at least entry (100).
 
         <Fact>
-        Public Sub ComputePhasedStop_WithCurrentClose_AdvancesToBreakeven()
-            Dim slot   = MakeLongSlot()
-            Dim stLine = 95.0D
-            ' currentClose = 106 → profit = 6 = 0.6R ≥ BreakevenTriggerR (0.5R)
-            Dim livePrice = 106.0D
+        Public Sub Evaluate_LiveClose_AdvancesToBreakeven()
+            Dim slot  = MakeLongSlot()
+            Dim state As New ScalperState()
+            Dim bars  = MakeUptrendBars(startPrice:=100D, stepSize:=0.10D, count:=30)
+            Dim liveClose As Decimal = 106D
 
-            Dim result = _engine.ComputePhasedStop(slot, livePrice, stLine, 0D, DefaultConfig())
+            Dim decision = _scalper.Evaluate(slot, state, bars, liveClose, DefaultConfig())
 
-            ' Breakeven phase: stop = entry = 100
-            Assert.Equal(StopPhase.Breakeven, result.Phase)
-            Assert.Equal(100.0D, result.NewStop)
+            Assert.Equal(StopPhase.Breakeven, decision.NewPhase)
+            Assert.True(decision.NewStop >= slot.EntryPrice,
+                        $"Breakeven stop {decision.NewStop} must be ≥ entry {slot.EntryPrice}.")
         End Sub
 
-        ' ── Test 3: Contrast — same bar, different price argument, different outcome ─
-        ' Proves that the sole difference between old (bug) and new (fix) behaviour
-        ' is which price is passed to ComputePhasedStop.
+        ' ── Test 3: stale vs live within the same bar set — different outcomes ─
+        ' Proves the only difference between the buggy and fixed paths is which
+        ' price reaches the scalper service.
 
         <Fact>
-        Public Sub ComputePhasedStop_SpikedIntraBar_LivePriceAdvances_StaleDoesNot()
-            Dim slot   = MakeLongSlot()
-            Dim stLine = 95.0D
-            ' Spike is visible only in the 15s bar; strategy-TF bar has not closed yet.
-            Dim staleBarClose = 103.0D   ' 0.3R — still Initial
-            Dim liveBarClose  = 108.0D   ' 0.8R — crosses ProfitLockTriggerR (1.0R)? No, 0.8R < 1R.
-            '                              Actually crosses BreakevenTriggerR (0.5R): advances to Breakeven.
+        Public Sub Evaluate_StaleVsLive_OnSameBars_ProducesDifferentPhases()
+            Dim bars      = MakeUptrendBars(startPrice:=100D, stepSize:=0.10D, count:=30)
+            Dim cfg       = DefaultConfig()
+            Dim staleSlot = MakeLongSlot()
+            Dim liveSlot  = MakeLongSlot()
+            Dim staleState As New ScalperState()
+            Dim liveState  As New ScalperState()
 
-            Dim staleResult = _engine.ComputePhasedStop(slot, staleBarClose, stLine, 0D, DefaultConfig())
-            Dim liveResult  = _engine.ComputePhasedStop(slot, liveBarClose,  stLine, 0D, DefaultConfig())
+            Dim staleResult = _scalper.Evaluate(staleSlot, staleState, bars, 103D, cfg)   ' 0.3R
+            Dim liveResult  = _scalper.Evaluate(liveSlot,  liveState,  bars, 108D, cfg)   ' 0.8R
 
-            ' Old code (stale): Initial phase, stop trails ST line
-            Assert.Equal(StopPhase.Initial, staleResult.Phase)
-
-            ' New code (live): Breakeven phase, stop = entry
-            Assert.Equal(StopPhase.Breakeven, liveResult.Phase)
-            Assert.True(liveResult.NewStop > staleResult.NewStop,
-                        $"Live-price stop {liveResult.NewStop} must exceed stale-price stop {staleResult.NewStop}")
+            Assert.Equal(StopPhase.Initial,   staleResult.NewPhase)
+            Assert.Equal(StopPhase.Breakeven, liveResult.NewPhase)
+            Assert.True(liveResult.NewStop >= staleResult.NewStop,
+                        $"Live-price stop {liveResult.NewStop} must be ≥ stale-price stop {staleResult.NewStop}.")
         End Sub
 
-        ' ── Test 4: Ratchet-only invariant — stop never retreats ──────────────
-        ' Even if currentClose dips back after a spike, the stop must not retreat.
+        ' ── Test 4: ratchet-only invariant — stop never retreats across calls ─
 
         <Fact>
-        Public Sub ComputePhasedStop_CurrentClose_NeverRetreatsStop()
-            Dim slot = MakeLongSlot()
-            slot.StopPhase = StopPhase.Breakeven
-            slot.StopPrice = 100.0D    ' already at breakeven
-            Dim stLine = 95.0D
+        Public Sub Evaluate_LongSlot_StopNeverRetreatsAcrossEvaluations()
+            Dim slot  = MakeLongSlot()
+            Dim state As New ScalperState()
+            Dim bars  = MakeUptrendBars(startPrice:=100D, stepSize:=0.10D, count:=30)
 
-            ' Price fell back below breakeven threshold — profit = 0.3R
-            Dim retracedPrice = 103.0D
-            Dim result = _engine.ComputePhasedStop(slot, retracedPrice, stLine, 0D, DefaultConfig())
+            ' First evaluation pushes the slot to Breakeven.
+            Dim first = _scalper.Evaluate(slot, state, bars, 106D, DefaultConfig())
+            slot.StopPrice = first.NewStop
+            slot.StopPhase = first.NewPhase
 
-            ' Ratchet: stop must not drop below the recorded breakeven level
-            Assert.True(result.NewStop >= slot.StopPrice,
-                        $"Stop retreated from {slot.StopPrice} to {result.NewStop} — ratchet broken.")
+            ' Second evaluation with a retraced price must not lower the stop.
+            Dim second = _scalper.Evaluate(slot, state, bars, 103D, DefaultConfig())
+
+            Assert.True(second.NewStop >= slot.StopPrice,
+                        $"Stop retreated from {slot.StopPrice} to {second.NewStop} — ratchet broken.")
         End Sub
 
     End Class

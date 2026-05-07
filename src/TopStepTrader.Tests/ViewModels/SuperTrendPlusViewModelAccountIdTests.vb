@@ -3,6 +3,7 @@ Imports Microsoft.Extensions.Logging.Abstractions
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Services.Market
+Imports TopStepTrader.Services.Trading
 Imports TopStepTrader.UI.ViewModels
 Imports Xunit
 
@@ -37,7 +38,8 @@ Namespace TopStepTrader.Tests.ViewModels
                 _mockContractResolver.Object,
                 New Mock(Of IClaudeReviewService)().Object,
                 NullLogger(Of SuperTrendPlusViewModel).Instance,
-                New Mock(Of ITradeRecordService)().Object)
+                New Mock(Of ITradeRecordService)().Object,
+                New ScalperExitManager(NullLogger(Of ScalperExitManager).Instance))
         End Function
 
         <Fact>
