@@ -1,3 +1,4 @@
+Imports System.ComponentModel
 Imports System.Diagnostics
 Imports System.IO
 Imports System.Text
@@ -53,17 +54,32 @@ Namespace TopStepTrader.Services.PostMortem
             args.Append("--closed-by app ")
             args.Append("--issue ").Append(QuoteArg(If(issueText, String.Empty)))
 
-            Dim psi As New ProcessStartInfo("python", args.ToString()) With {
-                .UseShellExecute = False,
-                .RedirectStandardOutput = True,
-                .RedirectStandardError = True,
-                .CreateNoWindow = True,
-                .WorkingDirectory = slnRoot
-            }
-
             Dim proc As Process = Nothing
             Try
+                Dim psi As New ProcessStartInfo("py", "-3 " & args.ToString()) With {
+                    .UseShellExecute = False,
+                    .RedirectStandardOutput = True,
+                    .RedirectStandardError = True,
+                    .CreateNoWindow = True,
+                    .WorkingDirectory = slnRoot
+                }
                 proc = Process.Start(psi)
+            Catch ex As Win32Exception
+                Try
+                    Dim psi As New ProcessStartInfo("python", args.ToString()) With {
+                        .UseShellExecute = False,
+                        .RedirectStandardOutput = True,
+                        .RedirectStandardError = True,
+                        .CreateNoWindow = True,
+                        .WorkingDirectory = slnRoot
+                    }
+                    proc = Process.Start(psi)
+                Catch ex2 As Exception
+                    _logger.LogWarning(ex2, "PostMortemLauncher: failed to start python")
+                    result.Success = False
+                    result.StdErrTail = ex2.Message
+                    Return result
+                End Try
             Catch ex As Exception
                 _logger.LogWarning(ex, "PostMortemLauncher: failed to start python")
                 result.Success = False
