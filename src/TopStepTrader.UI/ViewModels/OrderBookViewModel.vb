@@ -1,9 +1,11 @@
 Imports System.Collections.ObjectModel
 Imports System.Windows
+Imports Microsoft.Extensions.DependencyInjection
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.UI.ViewModels.Base
+Imports TopStepTrader.UI.Views
 
 Namespace TopStepTrader.UI.ViewModels
 
@@ -56,6 +58,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public ReadOnly Property RefreshCommand As RelayCommand
         Public ReadOnly Property ApplyFilterCommand As RelayCommand
+        Public ReadOnly Property OpenDetailCommand As RelayCommand(Of TradeRowVm)
 
         ' ── Constructor ──────────────────────────────────────────────────
 
@@ -64,6 +67,24 @@ Namespace TopStepTrader.UI.ViewModels
             _accountService = accountService
             RefreshCommand = New RelayCommand(AddressOf LoadData)
             ApplyFilterCommand = New RelayCommand(AddressOf LoadData)
+            OpenDetailCommand = New RelayCommand(Of TradeRowVm)(AddressOf OpenDetail)
+        End Sub
+
+        ''' <summary>FEAT-51: Resolve TradeDetailViewModel from DI and open the detail window.</summary>
+        Private Sub OpenDetail(row As TradeRowVm)
+            If row Is Nothing Then Return
+            Dim recordId As Long
+            If Not Long.TryParse(row.RecordId, recordId) OrElse recordId <= 0 Then Return
+            Dim sp = App.Services
+            If sp Is Nothing Then Return
+            Dim vm = sp.GetRequiredService(Of TradeDetailViewModel)()
+            Dim window As New TradeDetailWindow() With {
+                .DataContext = vm,
+                .Owner = Application.Current?.MainWindow
+            }
+            ' Fire-and-forget load; window opens immediately and populates as data arrives.
+            Task.Run(Function() vm.LoadAsync(recordId))
+            window.ShowDialog()
         End Sub
 
         Public Sub LoadDataAsync()
@@ -125,6 +146,8 @@ Namespace TopStepTrader.UI.ViewModels
     ''' <summary>View-friendly row for a single live trade record.</summary>
     Public Class TradeRowVm
 
+        ''' <summary>Database id of the LiveTradeRecord (used by FEAT-51 to load the detail popup).</summary>
+        Public Property RecordId As String
         Public Property OrderId As String
         Public Property Id As String
         Public Property Symbol As String
@@ -159,6 +182,7 @@ Namespace TopStepTrader.UI.ViewModels
         End Property
 
         Public Sub New(t As LiveTradeRecord)
+            RecordId = t.Id.ToString()
             ' OrderId: TopStepX market entry order ID
             OrderId = If(t.EntryOrderId > 0, t.EntryOrderId.ToString(), "—")
 

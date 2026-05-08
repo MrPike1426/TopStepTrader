@@ -11,6 +11,7 @@ Imports TopStepTrader.Services.Debug
 Imports TopStepTrader.Services.Diagnostics
 Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.Personas
+Imports TopStepTrader.Services.PostMortem
 Imports TopStepTrader.Services.Trades
 Imports TopStepTrader.Services.Trading
 
@@ -82,6 +83,9 @@ Namespace TopStepTrader.Services
 
             ' ── Trade history recording (Singleton — called from Transient VMs)
             services.AddSingleton(Of ITradeRecordService, TradeRecordService)()
+
+            ' ── FEAT-51: Post-mortem launcher (wraps python script invocation; mockable)
+            services.AddSingleton(Of IPostMortemLauncher, PostMortemLauncher)()
 
             ' ── Debug trade capture (FEAT-39) — Singleton; background Channel consumer
             services.AddSingleton(Of DebugTradeDbContext)()

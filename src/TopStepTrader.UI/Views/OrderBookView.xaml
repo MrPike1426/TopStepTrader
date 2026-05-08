@@ -134,12 +134,14 @@
                 <DataGridTemplateColumn Header="Order ID" Width="105" SortMemberPath="OrderId">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding OrderId}"
-                                       Foreground="#87CEEB"
-                                       FontWeight="SemiBold"
-                                       TextDecorations="Underline"
-                                       VerticalAlignment="Center" Padding="8,0"
-                                       Cursor="Hand"/>
+                            <TextBlock VerticalAlignment="Center" Padding="8,0" Cursor="Hand">
+                                <Hyperlink Foreground="#87CEEB"
+                                           TextDecorations="Underline"
+                                           Command="{Binding DataContext.OpenDetailCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                           CommandParameter="{Binding}">
+                                    <Run Text="{Binding OrderId}" FontWeight="SemiBold"/>
+                                </Hyperlink>
+                            </TextBlock>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

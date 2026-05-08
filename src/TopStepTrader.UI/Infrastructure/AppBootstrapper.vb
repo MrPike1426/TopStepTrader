@@ -118,6 +118,9 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of DebugTradeViewerViewModel)()
                         services.AddTransient(Of DebugTradeViewerView)()
 
+                        ' FEAT-51: Trade detail popup
+                        services.AddTransient(Of TradeDetailViewModel)()
+
                         ' Main window
                         services.AddSingleton(Of MainWindow)()
 
