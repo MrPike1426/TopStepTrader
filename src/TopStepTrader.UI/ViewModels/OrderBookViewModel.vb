@@ -65,8 +65,8 @@ Namespace TopStepTrader.UI.ViewModels
         Public Sub New(tradeService As ITradeRecordService, accountService As IAccountService)
             _tradeService = tradeService
             _accountService = accountService
-            RefreshCommand = New RelayCommand(AddressOf LoadData)
-            ApplyFilterCommand = New RelayCommand(AddressOf LoadData)
+            RefreshCommand = New RelayCommand(Sub() LoadDataAsync(force:=True))
+            ApplyFilterCommand = New RelayCommand(Sub() LoadDataAsync(force:=True))
             OpenDetailCommand = New RelayCommand(Of TradeRowVm)(AddressOf OpenDetail)
         End Sub
 
@@ -88,8 +88,31 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Public Sub LoadDataAsync()
-            Task.Run(AddressOf LoadDataWithRecovery)
+            LoadDataAsync(force:=False)
         End Sub
+
+        ''' <summary>BUG-66: debounce repeat tab-activation reloads (5 s window) and guard re-entrancy.</summary>
+        Public Sub LoadDataAsync(force As Boolean)
+            SyncLock _loadGate
+                If _isLoading Then Return
+                If Not force AndAlso (DateTime.UtcNow - _lastLoadUtc).TotalSeconds < 5 Then Return
+                _isLoading = True
+            End SyncLock
+            Task.Run(Async Function()
+                         Try
+                             Await LoadDataWithRecovery()
+                         Finally
+                             SyncLock _loadGate
+                                 _lastLoadUtc = DateTime.UtcNow
+                                 _isLoading = False
+                             End SyncLock
+                         End Try
+                     End Function)
+        End Sub
+
+        Private ReadOnly _loadGate As New Object()
+        Private _isLoading As Boolean
+        Private _lastLoadUtc As DateTime = DateTime.MinValue
 
         Private Async Function LoadDataWithRecovery() As Task
             ' Attempt crash recovery first (no-op if no open records)

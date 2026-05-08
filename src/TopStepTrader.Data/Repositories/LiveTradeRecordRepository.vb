@@ -61,6 +61,11 @@ Namespace TopStepTrader.Data.Repositories
                 .ToListAsync()
         End Function
 
+        Public Async Function GetByIdAsync(id As Long) As Task(Of LiveTradeRecordEntity) _
+            Implements ILiveTradeRecordRepository.GetByIdAsync
+            Return Await _db.LiveTradeRecords.FindAsync(id)
+        End Function
+
         Public Async Function GetRecentAsync(count As Integer,
                                              Optional symbolFilter As String = Nothing,
                                              Optional strategyFilter As String = Nothing,

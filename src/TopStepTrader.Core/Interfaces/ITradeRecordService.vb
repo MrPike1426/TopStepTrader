@@ -20,6 +20,9 @@ Namespace TopStepTrader.Core.Interfaces
         ''' <summary>Returns the most recent trades, newest first, applying optional filters.</summary>
         Function GetRecentTradesAsync(count As Integer, Optional filter As TradeFilter = Nothing) As Task(Of IList(Of LiveTradeRecord))
 
+        ''' <summary>BUG-64: efficient single-record lookup by primary key.</summary>
+        Function GetTradeByIdAsync(id As Long) As Task(Of LiveTradeRecord)
+
         ''' <summary>
         ''' On app startup, finds IsOpen records in the DB and attempts to resolve their
         ''' exit fills via the TopStepX trade history API.

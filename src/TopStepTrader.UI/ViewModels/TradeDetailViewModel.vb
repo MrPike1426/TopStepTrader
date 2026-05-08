@@ -96,9 +96,8 @@ Namespace TopStepTrader.UI.ViewModels
         Public Async Function LoadAsync(recordId As Long) As Task
             IsBusy = True
             Try
-                ' Locate record (no dedicated GetByIdAsync — fetch a wide window).
-                Dim trades = Await _tradeService.GetRecentTradesAsync(2000, Nothing)
-                _record = trades.FirstOrDefault(Function(r) r.Id = recordId)
+                ' BUG-64: efficient PK lookup instead of materialising 2000 rows.
+                _record = Await _tradeService.GetTradeByIdAsync(recordId)
                 If _record Is Nothing Then
                     StatusText = $"Record {recordId} not found."
                     Return
@@ -112,13 +111,14 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim fillRows = Await _snapshotRepo.GetFillsAsync(recordId)
                 Dim ratchet = Await _stopAdjRepo.GetByTradeRecordAsync(recordId)
 
-                Dispatch(Sub()
-                             Orders.Clear() : For Each o In orderRows : Orders.Add(o) : Next
-                             Positions.Clear() : For Each p In positionRows : Positions.Add(p) : Next
-                             Fills.Clear() : For Each f In fillRows : Fills.Add(f) : Next
-                             RatchetRows.Clear() : For Each r In ratchet : RatchetRows.Add(r) : Next
-                             StatusText = $"Loaded {Orders.Count} orders, {Positions.Count} positions, {Fills.Count} fills, {RatchetRows.Count} ratchet rows."
-                         End Sub)
+                ' BUG-68: rebuild each collection in one shot to avoid N layout passes.
+                DispatchAsync(Sub()
+                                  ReplaceAll(Orders, orderRows)
+                                  ReplaceAll(Positions, positionRows)
+                                  ReplaceAll(Fills, fillRows)
+                                  ReplaceAll(RatchetRows, ratchet)
+                                  StatusText = $"Loaded {Orders.Count} orders, {Positions.Count} positions, {Fills.Count} fills, {RatchetRows.Count} ratchet rows."
+                              End Sub)
             Catch ex As Exception
                 _logger.LogWarning(ex, "TradeDetailViewModel.LoadAsync failed for {Id}", recordId)
                 StatusText = $"Load failed: {ex.Message}"
@@ -126,6 +126,14 @@ Namespace TopStepTrader.UI.ViewModels
                 IsBusy = False
             End Try
         End Function
+
+        Private Shared Sub ReplaceAll(Of T)(target As ObservableCollection(Of T), source As IEnumerable(Of T))
+            target.Clear()
+            If source Is Nothing Then Return
+            For Each item In source
+                target.Add(item)
+            Next
+        End Sub
 
         Private Sub OnRunPostMortem()
             If _record Is Nothing Then
@@ -138,11 +146,10 @@ Namespace TopStepTrader.UI.ViewModels
             If req.Cancelled Then Return
 
             ' Fire-and-forget; never block the UI thread.
+            ' BUG-68: drop nested Task.Run — RunPostMortemAsync is already async I/O.
             Dim issueText As String = req.IssueText
             StatusText = "Running post-mortem…"
-            Task.Run(Async Function()
-                         Await RunPostMortemAsync(issueText)
-                     End Function)
+            Dim _ignored = RunPostMortemAsync(issueText)
         End Sub
 
         Public Async Function RunPostMortemAsync(issueText As String) As Task
@@ -187,6 +194,15 @@ Namespace TopStepTrader.UI.ViewModels
         Private Sub Dispatch(action As Action)
             If Application.Current?.Dispatcher IsNot Nothing Then
                 Application.Current.Dispatcher.Invoke(action)
+            Else
+                action()
+            End If
+        End Sub
+
+        ''' <summary>BUG-68: async dispatch so we don't block the calling thread on UI work.</summary>
+        Private Sub DispatchAsync(action As Action)
+            If Application.Current?.Dispatcher IsNot Nothing Then
+                Application.Current.Dispatcher.BeginInvoke(action)
             Else
                 action()
             End If

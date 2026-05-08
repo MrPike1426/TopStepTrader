@@ -91,14 +91,21 @@ Namespace TopStepTrader.Services.Trades
             End Try
 
             ' FEAT-50: capture broker snapshots after the close is persisted.
-            ' Best-effort — failures must never bubble out of CloseTradeAsync.
+            ' BUG-63: do NOT block CloseTradeAsync on PX REST calls. Schedule
+            ' on the threadpool with full try/catch — trading hot path stays clean.
             Dim accountId As Long = If(_session?.SelectedAccount?.Id, 0L)
             If accountId <> 0 Then
-                Try
-                    Await CaptureClosingSnapshotsAsync(id, accountId)
-                Catch ex As Exception
-                    _logger.LogWarning(ex, "TradeRecordService.CaptureClosingSnapshotsAsync failed for record {Id}", id)
-                End Try
+                Dim svc = DirectCast(Me, ITradeRecordService)
+                Dim log = _logger
+                Dim recordId = id
+                Dim acc = accountId
+                Task.Run(Async Function()
+                             Try
+                                 Await svc.CaptureClosingSnapshotsAsync(recordId, acc)
+                             Catch ex As Exception
+                                 log.LogWarning(ex, "TradeRecordService.CaptureClosingSnapshotsAsync (background) failed for record {Id}", recordId)
+                             End Try
+                         End Function)
             End If
         End Function
 
@@ -148,6 +155,21 @@ Namespace TopStepTrader.Services.Trades
             Catch ex As Exception
                 _logger.LogWarning(ex, "TradeRecordService.GetRecentTradesAsync failed")
                 Return New List(Of LiveTradeRecord)()
+            End Try
+        End Function
+
+        Public Async Function GetTradeByIdAsync(id As Long) As Task(Of LiveTradeRecord) _
+            Implements ITradeRecordService.GetTradeByIdAsync
+            If id = 0 Then Return Nothing
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
+                    Dim entity = Await repo.GetByIdAsync(id)
+                    Return If(entity Is Nothing, Nothing, ToModel(entity))
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.GetTradeByIdAsync failed for record {Id}", id)
+                Return Nothing
             End Try
         End Function
 
@@ -291,13 +313,12 @@ Namespace TopStepTrader.Services.Trades
             Implements ITradeRecordService.CaptureClosingSnapshotsAsync
             If recordId = 0 OrElse accountId = 0 Then Return
 
-            ' Load the record so we know contract + time window
+            ' BUG-64: load by primary key instead of materialising 2000 rows.
             Dim entity As LiveTradeRecordEntity = Nothing
             Try
                 Using scope = _scopeFactory.CreateScope()
                     Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
-                    Dim recents = Await repo.GetRecentAsync(2000)
-                    entity = recents.FirstOrDefault(Function(r) r.Id = recordId)
+                    entity = Await repo.GetByIdAsync(recordId)
                 End Using
             Catch ex As Exception
                 _logger.LogWarning(ex, "CaptureClosingSnapshots: failed to load record {Id}", recordId)
@@ -310,76 +331,75 @@ Namespace TopStepTrader.Services.Trades
             Dim endTs = endTimeRef.AddMinutes(1).ToUnixTimeMilliseconds()
             Dim contractId = entity.ContractId
 
-            Dim orderRows As New List(Of TradeOrderSnapshotEntity)()
+            ' BUG-63: run the 3 PX search calls in parallel with a hard timeout.
+            Dim cts As New Threading.CancellationTokenSource(TimeSpan.FromSeconds(10))
+            Dim ordersTask = SafePxCallAsync(Function() _orderClient.SearchOrdersAsync(accountId, startTs, endTs), cts.Token, recordId, "SearchOrdersAsync")
+            Dim positionsTask = SafePxCallAsync(Function() _orderClient.SearchPositionsAsync(accountId, startTs, endTs), cts.Token, recordId, "SearchPositionsAsync")
+            Dim tradesTask = SafePxCallAsync(Function() _orderClient.SearchTradesAsync(accountId, startTs, endTs), cts.Token, recordId, "SearchTradesAsync")
             Try
-                Dim resp = Await _orderClient.SearchOrdersAsync(accountId, startTs, endTs)
-                If resp IsNot Nothing AndAlso resp.Orders IsNot Nothing Then
-                    For Each o In resp.Orders.Where(Function(x) x.ContractId = contractId)
-                        orderRows.Add(New TradeOrderSnapshotEntity With {
-                            .LiveTradeRecordId = recordId,
-                            .TopStepXOrderId = o.Id,
-                            .ContractId = o.ContractId,
-                            .OrderType = MapOrderType(o.OrderType),
-                            .Side = MapSide(o.Side),
-                            .Status = MapOrderStatus(o.Status),
-                            .Size = o.Size,
-                            .LimitPrice = If(o.LimitPrice.HasValue, o.LimitPrice.Value.ToString("G"), Nothing),
-                            .StopPrice = If(o.StopPrice.HasValue, o.StopPrice.Value.ToString("G"), Nothing),
-                            .FilledPrice = If(o.AvgFillPrice.HasValue, o.AvgFillPrice.Value.ToString("G"), Nothing),
-                            .CreatedAt = If(String.IsNullOrEmpty(o.CreationTimestamp), DateTimeOffset.UtcNow.ToString("o"), o.CreationTimestamp),
-                            .UpdatedAt = Nothing,
-                            .RawJson = SafeSerialize(o)
-                        })
-                    Next
-                End If
-            Catch ex As Exception
-                _logger.LogWarning(ex, "CaptureClosingSnapshots: SearchOrdersAsync failed for record {Id}", recordId)
+                Await Task.WhenAll(ordersTask, positionsTask, tradesTask)
+            Catch
+                ' individual failures already logged inside SafePxCallAsync
             End Try
+
+            Dim orderRows As New List(Of TradeOrderSnapshotEntity)()
+            Dim ordersResp = ordersTask.Result
+            If ordersResp IsNot Nothing AndAlso ordersResp.Orders IsNot Nothing Then
+                For Each o In ordersResp.Orders.Where(Function(x) x.ContractId = contractId)
+                    orderRows.Add(New TradeOrderSnapshotEntity With {
+                        .LiveTradeRecordId = recordId,
+                        .TopStepXOrderId = o.Id,
+                        .ContractId = o.ContractId,
+                        .OrderType = MapOrderType(o.OrderType),
+                        .Side = MapSide(o.Side),
+                        .Status = MapOrderStatus(o.Status),
+                        .Size = o.Size,
+                        .LimitPrice = If(o.LimitPrice.HasValue, o.LimitPrice.Value.ToString("G", Globalization.CultureInfo.InvariantCulture), Nothing),
+                        .StopPrice = If(o.StopPrice.HasValue, o.StopPrice.Value.ToString("G", Globalization.CultureInfo.InvariantCulture), Nothing),
+                        .FilledPrice = If(o.AvgFillPrice.HasValue, o.AvgFillPrice.Value.ToString("G", Globalization.CultureInfo.InvariantCulture), Nothing),
+                        .CreatedAt = If(String.IsNullOrEmpty(o.CreationTimestamp), DateTimeOffset.UtcNow.ToString("o"), o.CreationTimestamp),
+                        .UpdatedAt = Nothing,
+                        .RawJson = SafeSerialize(o)
+                    })
+                Next
+            End If
 
             Dim positionRows As New List(Of TradePositionSnapshotEntity)()
-            Try
-                Dim resp = Await _orderClient.SearchPositionsAsync(accountId, startTs, endTs)
-                If resp IsNot Nothing AndAlso resp.Positions IsNot Nothing Then
-                    For Each p In resp.Positions.Where(Function(x) x.ContractId = contractId)
-                        positionRows.Add(New TradePositionSnapshotEntity With {
-                            .LiveTradeRecordId = recordId,
-                            .TopStepXPositionId = p.Id,
-                            .ContractId = p.ContractId,
-                            .Side = If(p.PositionType = 1, "Buy", "Sell"),
-                            .Size = p.Size,
-                            .AvgEntryPrice = p.AveragePrice.ToString("G"),
-                            .RealisedPnL = p.OpenPnL.ToString("G"),
-                            .OpenedAt = If(String.IsNullOrEmpty(p.CreationTimestamp), entity.EntryTime.UtcDateTime.ToString("o"), p.CreationTimestamp),
-                            .ClosedAt = If(entity.ExitTime.HasValue, entity.ExitTime.Value.UtcDateTime.ToString("o"), Nothing),
-                            .RawJson = SafeSerialize(p)
-                        })
-                    Next
-                End If
-            Catch ex As Exception
-                _logger.LogWarning(ex, "CaptureClosingSnapshots: SearchPositionsAsync failed for record {Id}", recordId)
-            End Try
+            Dim positionsResp = positionsTask.Result
+            If positionsResp IsNot Nothing AndAlso positionsResp.Positions IsNot Nothing Then
+                For Each p In positionsResp.Positions.Where(Function(x) x.ContractId = contractId)
+                    positionRows.Add(New TradePositionSnapshotEntity With {
+                        .LiveTradeRecordId = recordId,
+                        .TopStepXPositionId = p.Id,
+                        .ContractId = p.ContractId,
+                        .Side = If(p.PositionType = 1, "Buy", "Sell"),
+                        .Size = p.Size,
+                        .AvgEntryPrice = p.AveragePrice.ToString("G", Globalization.CultureInfo.InvariantCulture),
+                        .RealisedPnL = p.OpenPnL.ToString("G", Globalization.CultureInfo.InvariantCulture),
+                        .OpenedAt = If(String.IsNullOrEmpty(p.CreationTimestamp), entity.EntryTime.UtcDateTime.ToString("o"), p.CreationTimestamp),
+                        .ClosedAt = If(entity.ExitTime.HasValue, entity.ExitTime.Value.UtcDateTime.ToString("o"), Nothing),
+                        .RawJson = SafeSerialize(p)
+                    })
+                Next
+            End If
 
             Dim fillRows As New List(Of TradeFillSnapshotEntity)()
-            Try
-                Dim resp = Await _orderClient.SearchTradesAsync(accountId, startTs, endTs)
-                If resp IsNot Nothing AndAlso resp.Trades IsNot Nothing Then
-                    For Each t In resp.Trades.Where(Function(x) x.ContractId = contractId)
-                        fillRows.Add(New TradeFillSnapshotEntity With {
-                            .LiveTradeRecordId = recordId,
-                            .TopStepXTradeId = t.Id,
-                            .TopStepXOrderId = t.OrderId,
-                            .ContractId = t.ContractId,
-                            .Side = MapSide(t.Side),
-                            .Size = t.Size,
-                            .Price = t.Price.ToString("G"),
-                            .Timestamp = If(String.IsNullOrEmpty(t.CreationTimestamp), DateTimeOffset.UtcNow.ToString("o"), t.CreationTimestamp),
-                            .RawJson = SafeSerialize(t)
-                        })
-                    Next
-                End If
-            Catch ex As Exception
-                _logger.LogWarning(ex, "CaptureClosingSnapshots: SearchTradesAsync failed for record {Id}", recordId)
-            End Try
+            Dim tradesResp = tradesTask.Result
+            If tradesResp IsNot Nothing AndAlso tradesResp.Trades IsNot Nothing Then
+                For Each t In tradesResp.Trades.Where(Function(x) x.ContractId = contractId)
+                    fillRows.Add(New TradeFillSnapshotEntity With {
+                        .LiveTradeRecordId = recordId,
+                        .TopStepXTradeId = t.Id,
+                        .TopStepXOrderId = t.OrderId,
+                        .ContractId = t.ContractId,
+                        .Side = MapSide(t.Side),
+                        .Size = t.Size,
+                        .Price = t.Price.ToString("G", Globalization.CultureInfo.InvariantCulture),
+                        .Timestamp = If(String.IsNullOrEmpty(t.CreationTimestamp), DateTimeOffset.UtcNow.ToString("o"), t.CreationTimestamp),
+                        .RawJson = SafeSerialize(t)
+                    })
+                Next
+            End If
 
             Try
                 Using scope = _scopeFactory.CreateScope()
@@ -409,7 +429,9 @@ Namespace TopStepTrader.Services.Trades
                 Return
             End Try
 
+            ' BUG-67: throttle PX traffic, cancellable, periodic progress.
             Dim processed As Integer = 0
+            Dim total = closedRecords.Count
             For Each rec In closedRecords
                 Dim hasAny As Boolean
                 Try
@@ -426,6 +448,11 @@ Namespace TopStepTrader.Services.Trades
                 Try
                     Await CaptureClosingSnapshotsAsync(rec.Id, accountId)
                     processed += 1
+                    If processed Mod 25 = 0 Then
+                        _logger.LogInformation("BackfillSnapshots: {Done}/{Total} records processed", processed, total)
+                    End If
+                    ' Inter-request pacing so we don't hammer TopStepX REST.
+                    Await Task.Delay(100)
                 Catch ex As Exception
                     _logger.LogWarning(ex, "BackfillSnapshots: capture failed for record {Id}", rec.Id)
                 End Try
@@ -464,6 +491,24 @@ Namespace TopStepTrader.Services.Trades
                 Return System.Text.Json.JsonSerializer.Serialize(value)
             Catch
                 Return "{}"
+            End Try
+        End Function
+
+        ''' <summary>
+        ''' BUG-63: wraps a PX REST call so the parallel WhenAll for snapshot capture
+        ''' never throws \u2014 each failure is logged independently and returns Nothing.
+        ''' </summary>
+        Private Async Function SafePxCallAsync(Of TResp As Class)(invoker As Func(Of Task(Of TResp)),
+                                                                  cancel As Threading.CancellationToken,
+                                                                  recordId As Long,
+                                                                  callName As String) As Task(Of TResp)
+            Try
+                Dim t = invoker()
+                If t Is Nothing Then Return Nothing
+                Return Await t.WaitAsync(cancel)
+            Catch ex As Exception
+                _logger.LogWarning(ex, "CaptureClosingSnapshots: {Call} failed for record {Id}", callName, recordId)
+                Return Nothing
             End Try
         End Function
 

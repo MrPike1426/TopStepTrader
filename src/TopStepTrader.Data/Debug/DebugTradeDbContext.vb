@@ -23,27 +23,41 @@ Namespace TopStepTrader.Data.Debug
         End Sub
 
         Public Shared Function ResolveDiagnosticsFolder() As String
-            ' Walk up from AppContext.BaseDirectory (e.g., bin\x64\Debug\net10.0-windows\)
-            ' to find solution root, or fall back to calculated path
-            Dim baseDir = AppContext.BaseDirectory
-            Dim current = New DirectoryInfo(baseDir)
+            Return _diagnosticsFolder.Value
+        End Function
 
-            ' Walk up to find .sln file
-            While current IsNot Nothing
-                If Directory.GetFiles(current.FullName, "*.sln").Length > 0 Then
-                    Dim slnRoot = current.FullName
-                    Dim diagnosticsDir = Path.Combine(slnRoot, "TopStepTrader_Diagnostics")
-                    Directory.CreateDirectory(diagnosticsDir)
-                    Return diagnosticsDir
-                End If
-                current = current.Parent
-            End While
+        ' BUG-65: cache the resolved path; production-safe fallback to %LOCALAPPDATA%.
+        Private Shared ReadOnly _diagnosticsFolder As New Lazy(Of String)(AddressOf ComputeDiagnosticsFolder)
 
-            ' Fall back: bin\x64\Debug\net10.0-windows\ -> solution root (4 levels up)
-            Dim fallbackPath = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", ".."))
-            Dim fallbackDiagnosticsDir = Path.Combine(fallbackPath, "TopStepTrader_Diagnostics")
-            Directory.CreateDirectory(fallbackDiagnosticsDir)
-            Return fallbackDiagnosticsDir
+        Private Shared Function ComputeDiagnosticsFolder() As String
+            ' Walk up from AppContext.BaseDirectory to find the .sln (dev builds).
+            Try
+                Dim baseDir = AppContext.BaseDirectory
+                Dim current = New DirectoryInfo(baseDir)
+                Dim hops = 0
+                While current IsNot Nothing AndAlso hops < 8
+                    If Directory.GetFiles(current.FullName, "*.sln").Length > 0 Then
+                        Dim diagnosticsDir = Path.Combine(current.FullName, "TopStepTrader_Diagnostics")
+                        Try
+                            Directory.CreateDirectory(diagnosticsDir)
+                            Return diagnosticsDir
+                        Catch
+                            ' fall through to %LOCALAPPDATA%
+                            Exit While
+                        End Try
+                    End If
+                    current = current.Parent
+                    hops += 1
+                End While
+            Catch
+                ' fall through
+            End Try
+
+            ' Production-safe fallback: per-user writable location.
+            Dim localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
+            Dim fallbackDir = Path.Combine(localAppData, "TopStepTrader", "Diagnostics")
+            Directory.CreateDirectory(fallbackDir)
+            Return fallbackDir
         End Function
 
         Public Async Function EnsureSchemaAsync() As Task

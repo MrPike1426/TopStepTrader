@@ -16,6 +16,9 @@ Namespace TopStepTrader.Data.Repositories
 
         Function GetOpenRecordsAsync() As Task(Of IList(Of LiveTradeRecordEntity))
 
+        ''' <summary>BUG-64: efficient single-record lookup via primary key.</summary>
+        Function GetByIdAsync(id As Long) As Task(Of LiveTradeRecordEntity)
+
         Function GetRecentAsync(count As Integer,
                                 Optional symbolFilter As String = Nothing,
                                 Optional strategyFilter As String = Nothing,

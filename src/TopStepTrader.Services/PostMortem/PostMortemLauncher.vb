@@ -21,6 +21,8 @@ Namespace TopStepTrader.Services.PostMortem
             _logger = logger
         End Sub
 
+        Private Shared ReadOnly _slnRoot As New Lazy(Of String)(AddressOf ComputeSolutionRoot)
+
         Public Async Function RunAsync(orderId As Long,
                                        tradeId As Long?,
                                        symbol As String,
@@ -28,9 +30,17 @@ Namespace TopStepTrader.Services.PostMortem
                                        issueText As String) As Task(Of PostMortemResult) _
             Implements IPostMortemLauncher.RunAsync
 
-            Dim slnRoot = ResolveSolutionRoot()
+            Dim slnRoot = _slnRoot.Value
             Dim scriptPath = Path.Combine(slnRoot, "tools", "postmortem", "postmortem.py")
             Dim reportsDir = Path.Combine(slnRoot, "tools", "postmortem", "reports")
+
+            Dim result As New PostMortemResult()
+            If Not File.Exists(scriptPath) Then
+                _logger.LogWarning("PostMortemLauncher: script not found at {Path}", scriptPath)
+                result.Success = False
+                result.StdErrTail = $"postmortem.py not found at {scriptPath}"
+                Return result
+            End If
 
             Dim args As New StringBuilder()
             args.Append("""").Append(scriptPath).Append(""" ")
@@ -51,7 +61,6 @@ Namespace TopStepTrader.Services.PostMortem
                 .WorkingDirectory = slnRoot
             }
 
-            Dim result As New PostMortemResult()
             Dim proc As Process = Nothing
             Try
                 proc = Process.Start(psi)
@@ -67,21 +76,23 @@ Namespace TopStepTrader.Services.PostMortem
                 Return result
             End If
 
-            ' Capture stdout/stderr so the buffers don't deadlock the python process.
-            Dim stdoutTask = proc.StandardOutput.ReadToEndAsync()
-            Dim stderrTask = proc.StandardError.ReadToEndAsync()
-            Await proc.WaitForExitAsync().ConfigureAwait(False)
-            Await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(False)
+            Using proc
+                ' Capture stdout/stderr so the buffers don't deadlock the python process.
+                Dim stdoutTask = proc.StandardOutput.ReadToEndAsync()
+                Dim stderrTask = proc.StandardError.ReadToEndAsync()
+                Await proc.WaitForExitAsync().ConfigureAwait(False)
+                Await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(False)
 
-            result.ExitCode = proc.ExitCode
-            Dim stderr = stderrTask.Result
-            result.StdErrTail = TailLines(stderr, 6)
+                result.ExitCode = proc.ExitCode
+                Dim stderr = stderrTask.Result
+                result.StdErrTail = TailLines(stderr, 6)
 
-            If proc.ExitCode <> 0 Then
-                _logger.LogWarning("PostMortem exit {Code}: {Err}", proc.ExitCode, result.StdErrTail)
-                result.Success = False
-                Return result
-            End If
+                If proc.ExitCode <> 0 Then
+                    _logger.LogWarning("PostMortem exit {Code}: {Err}", proc.ExitCode, result.StdErrTail)
+                    result.Success = False
+                    Return result
+                End If
+            End Using
 
             result.ReportPath = ResolveReportPath(reportsDir, symbol, orderId, entryTimeLocal)
             result.Success = Not String.IsNullOrEmpty(result.ReportPath)
@@ -100,7 +111,7 @@ Namespace TopStepTrader.Services.PostMortem
             Return String.Join(Environment.NewLine, lines.Skip(lines.Length - maxLines)).Trim()
         End Function
 
-        Private Shared Function ResolveSolutionRoot() As String
+        Private Shared Function ComputeSolutionRoot() As String
             Dim dir As New DirectoryInfo(AppContext.BaseDirectory)
             While dir IsNot Nothing
                 If dir.GetFiles("*.sln").Any() Then Return dir.FullName

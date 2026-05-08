@@ -16,6 +16,11 @@ Namespace TopStepTrader.Services.Trading
         Private ReadOnly _logger As ILogger(Of ExitSignalEngine)
         Private ReadOnly _tradeService As ITradeRecordService
 
+        ' BUG-62: dedupe SL adjustment writes per slot+trade so a per-bar
+        ' Evaluate() call doesn't re-log the same Old→New stop until the
+        ' caller confirms the broker modify and updates slot.StopPrice.
+        Private ReadOnly _lastLoggedStop As New System.Collections.Concurrent.ConcurrentDictionary(Of String, Decimal)
+
         Public Sub New(logger As ILogger(Of ExitSignalEngine))
             _logger = logger
             _tradeService = Nothing
@@ -253,15 +258,32 @@ Namespace TopStepTrader.Services.Trading
             eval.PhasedStopPrice = phasedStop.NewStop
             eval.StopPhase       = phasedStop.Phase
 
-            ' Persist the SL adjustment when the ratchet moves the stop
+            ' Persist the SL adjustment when the ratchet moves the stop.
+            ' BUG-62: snapshot values into locals + dedupe per (record, slot)
+            ' so we don't restorm the DB every bar until the broker confirms.
             If _tradeService IsNot Nothing AndAlso slot.TradeRecordId > 0 AndAlso
                phasedStop.NewStop <> slot.StopPrice Then
+                Dim recordId = slot.TradeRecordId
+                Dim oldStop = slot.StopPrice
+                Dim newStop = phasedStop.NewStop
                 Dim reason = phasedStop.Phase.ToString()   ' e.g. "Breakeven", "ProfitTrail", "Harvest", "FreeRide"
-                Task.Run(Async Function()
-                             Await _tradeService.LogStopAdjustmentAsync(
-                                 slot.TradeRecordId, DateTimeOffset.UtcNow,
-                                 slot.StopPrice, phasedStop.NewStop, reason)
-                         End Function)
+                Dim dedupeKey = recordId.ToString() & ":" & slot.SlotIndex.ToString()
+                Dim previous As Decimal
+                Dim alreadyLogged = _lastLoggedStop.TryGetValue(dedupeKey, previous) AndAlso previous = newStop
+                If Not alreadyLogged Then
+                    _lastLoggedStop(dedupeKey) = newStop
+                    Dim svc = _tradeService
+                    Dim log = _logger
+                    Task.Run(Async Function()
+                                 Try
+                                     Await svc.LogStopAdjustmentAsync(
+                                         recordId, DateTimeOffset.UtcNow,
+                                         oldStop, newStop, reason)
+                                 Catch ex As Exception
+                                     log.LogWarning(ex, "ExitSignalEngine: LogStopAdjustmentAsync failed for record {Id}", recordId)
+                                 End Try
+                             End Function)
+                End If
             End If
 
             _logger.LogInformation(

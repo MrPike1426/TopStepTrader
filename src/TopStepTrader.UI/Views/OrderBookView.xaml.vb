@@ -11,10 +11,13 @@ Namespace TopStepTrader.UI.Views
         End Sub
 
         Private Sub OnViewLoaded(sender As Object, e As System.Windows.RoutedEventArgs)
-            Dim vm = DirectCast(DataContext, OrderBookViewModel)
-            If vm IsNot Nothing Then
-                vm.LoadDataAsync()
-            End If
+            ' BUG-66: VM debounces; just delegate.
+            Try
+                Dim vm = TryCast(DataContext, OrderBookViewModel)
+                If vm IsNot Nothing Then vm.LoadDataAsync()
+            Catch
+                ' Loaded handlers must never throw into WPF.
+            End Try
         End Sub
 
     End Class
