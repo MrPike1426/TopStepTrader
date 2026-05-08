@@ -85,7 +85,7 @@ Namespace TopStepTrader.Services.Market
             Try
                 response = Await _pxHistoryClient.RetrieveBarsAsync(
                     contractId, unit, unitNumber, barsToFetch,
-                    live:=True,
+                    live:=False,
                     startTime:=startTime,
                     endTime:=endTime,
                     cancel:=cancel)
@@ -175,7 +175,7 @@ Namespace TopStepTrader.Services.Market
                 Dim pxId = If(Not String.IsNullOrEmpty(resolved), resolved, fav.PxContractId)
                 Dim response = Await _pxHistoryClient.RetrieveBarsAsync(
                     pxId, unit:=1, unitNumber:=2, limit:=5,
-                    live:=True, startTime:=DateTimeOffset.UtcNow.AddMinutes(-2),
+                    live:=False, startTime:=DateTimeOffset.UtcNow.AddMinutes(-2),
                     endTime:=DateTimeOffset.UtcNow, cancel:=cancel)
                 If response Is Nothing OrElse response.Bars Is Nothing OrElse response.Bars.Count = 0 Then
                     Return 0D
@@ -220,7 +220,7 @@ Namespace TopStepTrader.Services.Market
                                         barCount * CDbl(_strategy_TimeframeMinutesForLiveBar(timeframe)) + (3 * 24 * 60))
                 Dim response = Await _pxHistoryClient.RetrieveBarsAsync(
                     pxId, unit:=unit, unitNumber:=unitNumber, limit:=barCount,
-                    live:=True,
+                    live:=False,
                     startTime:=DateTimeOffset.UtcNow.AddMinutes(-lookbackMinutes),
                     endTime:=DateTimeOffset.UtcNow, cancel:=cancel)
                 If response Is Nothing OrElse Not response.Success OrElse

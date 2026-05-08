@@ -474,6 +474,27 @@ Namespace TopStepTrader.UI.ViewModels
         ''' <summary>Scrolling history of all AI checks, newest first.</summary>
         Public ReadOnly Property AiHistoryLog As New ObservableCollection(Of AiLogEntryVm)()
 
+        ' ── ORB banner (XAML bindings) ──────────────────────────────────────────────
+        Private _isOrbBannerVisible As Boolean = False
+        Public Property IsOrbBannerVisible As Boolean
+            Get
+                Return _isOrbBannerVisible
+            End Get
+            Set(value As Boolean)
+                SetProperty(_isOrbBannerVisible, value)
+            End Set
+        End Property
+
+        Private _orbPhaseLabel As String = String.Empty
+        Public Property OrbPhaseLabel As String
+            Get
+                Return _orbPhaseLabel
+            End Get
+            Set(value As String)
+                SetProperty(_orbPhaseLabel, value)
+            End Set
+        End Property
+
         Private Sub AddAiLogEntry(indicator As String, checkResult As String)
             Dim entry As New AiLogEntryVm With {
                 .Timestamp = DateTime.Now.ToString("HH:mm:ss"),
@@ -799,6 +820,15 @@ Namespace TopStepTrader.UI.ViewModels
 
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
+                    ' ORB banner: visible 09:00–17:00 ET on weekdays
+                    Dim etNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
+                        TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"))
+                    Dim isWeekday = etNow.DayOfWeek <> DayOfWeek.Saturday AndAlso etNow.DayOfWeek <> DayOfWeek.Sunday
+                    Dim etTod = etNow.TimeOfDay
+                    IsOrbBannerVisible = isWeekday AndAlso etTod >= TimeSpan.FromHours(9) AndAlso etTod < TimeSpan.FromHours(17)
+                    If IsOrbBannerVisible Then
+                        OrbPhaseLabel = $"📐  ORB  —  {GetOrbPhaseLabel(etTod)}"
+                    End If
                     StatusText = String.Format("In Progress: Updated {0:HH:mm:ss}", DateTime.Now)
                     FlashStatusAsync()
                     ' Pulse idle text on empty boxes and refresh their timestamp
