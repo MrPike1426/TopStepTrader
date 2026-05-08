@@ -34,6 +34,7 @@ Namespace TopStepTrader.API
 
 ' ── SignalR hubs — Singleton (hold persistent connections) ────────────
             services.AddSingleton(Of MarketHubClient)()
+            services.AddSingleton(Of IMarketQuoteFeed)(Function(sp) sp.GetRequiredService(Of MarketHubClient)())
             services.AddSingleton(Of UserHubClient)()
 
         End Sub

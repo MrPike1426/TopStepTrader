@@ -54,6 +54,9 @@ Namespace TopStepTrader.Services
             ' Startup bar gap check + backfill for all favourite contracts (past 60 days)
             services.AddScoped(Of IStartupBarCheckService, StartupBarCheckService)()
 
+            ' ARCH-06 — Singleton live price + P&L stream consumed by Scalper Test (and future views).
+            services.AddSingleton(Of Core.Interfaces.ILivePnLService, LivePnLService)()
+
             ' ── Contract metadata (TopStepX — resolves via PXContractClient)
             services.AddScoped(Of IContractMetadataService, ContractMetadataService)()
 

@@ -14,6 +14,7 @@ Namespace TopStepTrader.API.Hubs
     ''' </summary>
     Public Class MarketHubClient
         Implements IAsyncDisposable
+        Implements IMarketQuoteFeed
 
         Private ReadOnly _settings As ProjectXSettings
         Private ReadOnly _tokenManager As ProjectXTokenManager
@@ -21,7 +22,7 @@ Namespace TopStepTrader.API.Hubs
         Private _connection As HubConnection
         Private ReadOnly _subscribedContracts As New HashSet(Of String)
 
-        Public Event QuoteReceived As EventHandler(Of MarketQuoteEventArgs)
+        Public Event QuoteReceived As EventHandler(Of MarketQuoteEventArgs) Implements IMarketQuoteFeed.QuoteReceived
         Public Event BarReceived As EventHandler(Of MarketBarEventArgs)
         Public Event ConnectionStateChanged As EventHandler(Of HubConnectionState)
 
@@ -93,7 +94,7 @@ Namespace TopStepTrader.API.Hubs
         End Function
 
         Public Async Function SubscribeContractAsync(contractId As String,
-                                                      Optional cancel As CancellationToken = Nothing) As Task
+                                                      Optional cancel As CancellationToken = Nothing) As Task Implements IMarketQuoteFeed.SubscribeContractAsync
             If _connection Is Nothing Then Await StartAsync(cancel)
             If _subscribedContracts.Contains(contractId) Then Return
             Await ResubscribeAsync(contractId, cancel)
@@ -101,7 +102,7 @@ Namespace TopStepTrader.API.Hubs
         End Function
 
         Public Async Function UnsubscribeContractAsync(contractId As String,
-                                                        Optional cancel As CancellationToken = Nothing) As Task
+                                                        Optional cancel As CancellationToken = Nothing) As Task Implements IMarketQuoteFeed.UnsubscribeContractAsync
             If Not _subscribedContracts.Contains(contractId) Then Return
             Await _connection.InvokeAsync("UnsubscribeContractQuotes", contractId, cancel)
             Await _connection.InvokeAsync("UnsubscribeContractTrades", contractId, cancel)
