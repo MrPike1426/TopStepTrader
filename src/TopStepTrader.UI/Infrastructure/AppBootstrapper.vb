@@ -103,6 +103,8 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of SettingsView)()
 
                         services.AddTransient(Of TestTradeView)()
+                        services.AddTransient(Of ScalperTestViewModel)()
+                        services.AddTransient(Of ScalperTestView)()
                         services.AddTransient(Of SniperView)()
                         services.AddTransient(Of ISniperExecutionEngine, SniperExecutionEngine)()
                         services.AddTransient(Of PumpNDumpView)()

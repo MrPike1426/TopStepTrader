@@ -67,6 +67,12 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        Public ReadOnly Property ScalperTestView As ScalperTestView
+            Get
+                Return Resolve(Of ScalperTestView)("ScalperTest")
+            End Get
+        End Property
+
         Public ReadOnly Property SniperView As SniperView
             Get
                 Return Resolve(Of SniperView)("Sniper")
