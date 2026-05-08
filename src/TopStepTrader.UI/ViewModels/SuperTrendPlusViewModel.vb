@@ -1976,13 +1976,15 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim fcSub = FavouriteContracts.TryGetBySymbolResolved(contractId, _contractResolver)
                 Dim pxIdSub As String = If(fcSub IsNot Nothing, fcSub.PxContractId, Nothing)
                 If Not String.IsNullOrEmpty(pxIdSub) Then
-                    Task.Run(Async Function() As Task
-                                 Try
-                                     Await _marketHub.SubscribeContractAsync(pxIdSub)
-                                 Catch ex As Exception
-                                     _logger.LogDebug(ex, "ST+ MarketHub subscribe failed for {Id}", pxIdSub)
-                                 End Try
-                             End Function)
+                    #Disable Warning BC42358
+                                        Task.Run(Async Function() As Task
+                                                     Try
+                                                         Await _marketHub.SubscribeContractAsync(pxIdSub)
+                                                     Catch ex As Exception
+                                                         _logger.LogDebug(ex, "ST+ MarketHub subscribe failed for {Id}", pxIdSub)
+                                                     End Try
+                                                 End Function)
+                    #Enable Warning BC42358
                 End If
             End If
 
@@ -2025,6 +2027,7 @@ Namespace TopStepTrader.UI.ViewModels
             slot.EntryAtr = 0D  ' set from bar data below
 
             ' Persist opening trade record to TradeHistory.db
+#Disable Warning BC42358
             Task.Run(Async Function()
                          Try
                              Dim fcRec = FavouriteContracts.TryGetBySymbolResolved(contractId, _contractResolver)
@@ -2053,6 +2056,7 @@ Namespace TopStepTrader.UI.ViewModels
                              _logger.LogWarning(ex, "ST+ [Slot {Idx}] failed to open trade record for {Contract}", slot.SlotIndex, contractId)
                          End Try
                      End Function)
+#Enable Warning BC42358
 
             ' Capture entry ATR from the bars that were used to fire the entry
             Try
@@ -2342,7 +2346,11 @@ Namespace TopStepTrader.UI.ViewModels
                         End Try
                     End If
                     If slot.TradeRecordId > 0 Then
-                        Task.Run(Function() _tradeRecordService.UpdateEntryPriceAsync(slot.TradeRecordId, confirmedEntry))
+                        #Disable Warning BC42358
+                                                Task.Run(Async Function() As Task
+                                                             Await _tradeRecordService.UpdateEntryPriceAsync(slot.TradeRecordId, confirmedEntry)
+                                                         End Function)
+                        #Enable Warning BC42358
                     End If
                     If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
                        Not String.IsNullOrEmpty(slot.DebugTradeId) Then
@@ -2592,13 +2600,15 @@ Namespace TopStepTrader.UI.ViewModels
                             Dim ph = slot.StopPhase.ToString()
                             Dim svc = _tradeRecordService
                             Dim log = _logger
-                            Task.Run(Async Function()
-                                         Try
-                                             Await svc.LogStopAdjustmentAsync(rid, DateTimeOffset.UtcNow, prevStop, ns, ph)
-                                         Catch ex As Exception
-                                             log.LogWarning(ex, "ST+ LogStopAdjustmentAsync failed for record {Id}", rid)
-                                         End Try
-                                     End Function)
+                            #Disable Warning BC42358
+                                                        Task.Run(Async Function()
+                                                                     Try
+                                                                         Await svc.LogStopAdjustmentAsync(rid, DateTimeOffset.UtcNow, prevStop, ns, ph)
+                                                                     Catch ex As Exception
+                                                                         log.LogWarning(ex, "ST+ LogStopAdjustmentAsync failed for record {Id}", rid)
+                                                                     End Try
+                                                                 End Function)
+                            #Enable Warning BC42358
                         End If
                         slot.StopPrice = newStop
                         Dim boxForTrail = BoxForSlot(slot)
@@ -2706,13 +2716,15 @@ Namespace TopStepTrader.UI.ViewModels
                                 String.Equals(s.Instrument, closingInstrument, StringComparison.OrdinalIgnoreCase))
                 If Not stillNeeded AndAlso Not String.IsNullOrEmpty(pxIdUnsub) Then
                     _lastQuotePrices.TryRemove(pxIdUnsub, Nothing)
-                    Task.Run(Async Function() As Task
-                                 Try
-                                     Await _marketHub.UnsubscribeContractAsync(pxIdUnsub)
-                                 Catch ex As Exception
-                                     _logger.LogDebug(ex, "ST+ MarketHub unsubscribe failed for {Id}", pxIdUnsub)
-                                 End Try
-                             End Function)
+                    #Disable Warning BC42358
+                                        Task.Run(Async Function() As Task
+                                                     Try
+                                                         Await _marketHub.UnsubscribeContractAsync(pxIdUnsub)
+                                                     Catch ex As Exception
+                                                         _logger.LogDebug(ex, "ST+ MarketHub unsubscribe failed for {Id}", pxIdUnsub)
+                                                     End Try
+                                                 End Function)
+                    #Enable Warning BC42358
                 End If
             End If
 

@@ -166,6 +166,7 @@ Namespace TopStepTrader.Services.Trading
                     If slBracket IsNot Nothing Then
                         Dim verifyContractId = resolvedContractId
                         Dim verifyAccountId = accountId
+                        #Disable Warning BC42358
                         Task.Run(Async Function()
                             Try
                                 Await Task.Delay(TimeSpan.FromSeconds(7))
@@ -187,6 +188,7 @@ Namespace TopStepTrader.Services.Trading
                                     "TopStepX naked-entry guard check failed for {Contract}", verifyContractId)
                             End Try
                         End Function)
+                        #Enable Warning BC42358
                     End If
                 Else
                     order.Status = OrderStatus.Rejected

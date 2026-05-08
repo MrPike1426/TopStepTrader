@@ -99,13 +99,15 @@ Namespace TopStepTrader.Services.Trades
                 Dim log = _logger
                 Dim recordId = id
                 Dim acc = accountId
-                Task.Run(Async Function()
-                             Try
-                                 Await svc.CaptureClosingSnapshotsAsync(recordId, acc)
-                             Catch ex As Exception
-                                 log.LogWarning(ex, "TradeRecordService.CaptureClosingSnapshotsAsync (background) failed for record {Id}", recordId)
-                             End Try
-                         End Function)
+                #Disable Warning BC42358
+                                Task.Run(Async Function()
+                                             Try
+                                                 Await svc.CaptureClosingSnapshotsAsync(recordId, acc)
+                                             Catch ex As Exception
+                                                 log.LogWarning(ex, "TradeRecordService.CaptureClosingSnapshotsAsync (background) failed for record {Id}", recordId)
+                                             End Try
+                                         End Function)
+                #Enable Warning BC42358
             End If
         End Function
 
