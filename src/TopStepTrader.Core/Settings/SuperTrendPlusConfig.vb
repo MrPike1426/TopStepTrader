@@ -31,41 +31,9 @@ Namespace TopStepTrader.Core.Settings
         ''' <summary>Chart timeframe label shown in the UI (e.g. "5min").</summary>
         Public Property BarTimeframe As String = "5min"
 
-        ' ── Phased stop thresholds (SuperTrend+ only) ────────────────────────────
-        ''' <summary>Profit (in R) at which the stop moves to exact entry (breakeven). Default 0.5R.</summary>
-        Public Property BreakevenTriggerR As Decimal = 0.5D
-
-        ''' <summary>Profit (in R) at which the stop locks at entry + ProfitLockOffsetR. Default 1R.</summary>
-        Public Property ProfitLockTriggerR As Decimal = 1D
-
-        ''' <summary>Amount above entry (in R) the stop is locked at the ProfitLock phase. Default 0.3R.</summary>
-        Public Property ProfitLockOffsetR As Decimal = 0.3D
-
-        ''' <summary>ATR multiplier for the trailing stop during the ProfitTrail phase. Default 2.0.</summary>
-        Public Property TrailAtrMultiple As Decimal = 2D
-
-        ''' <summary>Profit (in R) at which the ATR trailing stop activates. Default 1.5R.</summary>
-        Public Property ProfitTrailTriggerR As Decimal = 1.5D
-
-        ''' <summary>Profit (in R) at which the stop is locked at entry + HarvestLockR. Default 2R.</summary>
-        Public Property HarvestTriggerR As Decimal = 2D
-
-        ''' <summary>Amount above entry (in R) the stop is locked at the Harvest phase. Default 1.5R.</summary>
-        Public Property HarvestLockR As Decimal = 1.5D
-
-        ''' <summary>Profit (in R) at which the stop is locked at entry + FreeRideLockR. Default 3R.</summary>
-        Public Property FreeRideTriggerR As Decimal = 3D
-
-        ''' <summary>Amount above entry (in R) the stop is locked at the FreeRide phase. Default 2R.</summary>
-        Public Property FreeRideLockR As Decimal = 2D
-
         ' ── Degradation score thresholds ─────────────────────────────────────────
         Public Property WarningScoreThreshold As Integer = 3
         Public Property ExitingScoreThreshold As Integer = 6
-
-        ' ── Re-entry cooldown policy (STRAT-33) ──────────────────────────────────
-        ' After any slot exit (degradation or SL), re-entry on the same instrument is blocked for
-        ' exactly one full bar at the selected timeframe (e.g. 60 min on 1hr, 5 min on 5min).
 
         ' ── Monday morning higher-timeframe gate (FEAT-37) ───────────────────────────────────
         ''' <summary>
@@ -75,14 +43,13 @@ Namespace TopStepTrader.Core.Settings
         ''' </summary>
         Public Property MondayMorningHtfFilterEnabled As Boolean = True
 
-        ' ── Take $100 Profit feature ──────────────────────────────────────────
+        ' ── FEAT-46: Pre-entry exit-signal gate ──────────────────────────────────
         ''' <summary>
-        ''' When True, once unrealised P&amp;L reaches $100 the stop is snapped to the
-        ''' BB middle band (EMA 10, mult 1.5) on the 15-second bar — whichever is more
-        ''' favourable than the current phased stop. The ratchet rule still applies:
-        ''' the stop never moves back.
+        ''' Minimum ExitSignalEngine score (E1–E9) that blocks a new entry.
+        ''' Set to 0 to disable. Default 4 — blocks entries where DI crossover (E5=4),
+        ''' or ADX decline + DI compression (E3+E4=4), are already present at signal time.
         ''' </summary>
-        Public Property Take100ProfitEnabled As Boolean = True
+        Public Property EntryExitScoreBlockThreshold As Integer = 4
 
     End Class
 

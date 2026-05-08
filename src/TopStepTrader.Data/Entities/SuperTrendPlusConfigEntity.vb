@@ -25,37 +25,12 @@ Namespace TopStepTrader.Data.Entities
         Public Property AdxModerateThreshold As Single = 40.0F
         Public Property AdxStrongThreshold As Single = 60.0F
 
-        ' ── Phased stop R multiples ─────────────────────────────────────────
-        <Column(TypeName:="decimal(18,4)")>
-        Public Property BreakevenTriggerR As Decimal = 0.5D
-
-        <Column(TypeName:="decimal(18,4)")>
-        Public Property ProfitLockTriggerR As Decimal = 1.0D
-
-        <Column(TypeName:="decimal(18,4)")>
-        Public Property ProfitLockOffsetR As Decimal = 0.3D
-
-        <Column(TypeName:="decimal(18,4)")>
-        Public Property TrailAtrMultiple As Decimal = 2.0D
-
-        <Column(TypeName:="decimal(18,4)")>
-        Public Property ProfitTrailTriggerR As Decimal = 1.5D
-
-        <Column(TypeName:="decimal(18,4)")>
-        Public Property HarvestTriggerR As Decimal = 2.0D
-
-        <Column(TypeName:="decimal(18,4)")>
-        Public Property HarvestLockR As Decimal = 1.5D
-
-        <Column(TypeName:="decimal(18,4)")>
-        Public Property FreeRideTriggerR As Decimal = 3.0D
-
-        <Column(TypeName:="decimal(18,4)")>
-        Public Property FreeRideLockR As Decimal = 2.0D
-
         ' ── Degradation score thresholds ────────────────────────────────────
         Public Property WarningScoreThreshold As Integer = 3
         Public Property ExitingScoreThreshold As Integer = 6
+
+        ' ── FEAT-46: Pre-entry exit-signal gate ─────────────────────────────
+        Public Property EntryExitScoreBlockThreshold As Integer = 4
 
     End Class
 

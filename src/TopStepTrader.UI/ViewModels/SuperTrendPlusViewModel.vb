@@ -297,21 +297,6 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        ' ── Take $100 Profit toggle (ORPHANED — FEAT-47) ─────────────────────
-        ''' <summary>Orphaned property left in place pending CHORE-01 schema cleanup.
-        ''' No code path reads or writes this; the Scalper now owns all exit management.</summary>
-        Public Property IsTake100Enabled As Boolean
-            Get
-                Return Config.Take100ProfitEnabled
-            End Get
-            Set(value As Boolean)
-                If Config.Take100ProfitEnabled <> value Then
-                    Config.Take100ProfitEnabled = value
-                    NotifyPropertyChanged(NameOf(IsTake100Enabled))
-                End If
-            End Set
-        End Property
-
         ' ── Slot boxes (replaces persona boxes) ─────────────────────────────
         Public ReadOnly Property Slot1 As SlotBoxVm = New SlotBoxVm(0)
         Public ReadOnly Property Slot2 As SlotBoxVm = New SlotBoxVm(1)
@@ -654,17 +639,9 @@ Namespace TopStepTrader.UI.ViewModels
             Config.AdxWeakThreshold = entity.AdxWeakThreshold
             Config.AdxModerateThreshold = entity.AdxModerateThreshold
             Config.AdxStrongThreshold = entity.AdxStrongThreshold
-            Config.BreakevenTriggerR = entity.BreakevenTriggerR
-            Config.ProfitLockTriggerR = entity.ProfitLockTriggerR
-            Config.ProfitLockOffsetR = entity.ProfitLockOffsetR
-            Config.TrailAtrMultiple = entity.TrailAtrMultiple
-            Config.ProfitTrailTriggerR = entity.ProfitTrailTriggerR
-            Config.HarvestTriggerR = entity.HarvestTriggerR
-            Config.HarvestLockR = entity.HarvestLockR
-            Config.FreeRideTriggerR = entity.FreeRideTriggerR
-            Config.FreeRideLockR = entity.FreeRideLockR
             Config.WarningScoreThreshold = entity.WarningScoreThreshold
             Config.ExitingScoreThreshold = entity.ExitingScoreThreshold
+            Config.EntryExitScoreBlockThreshold = entity.EntryExitScoreBlockThreshold
         End Sub
 
         Private Function BuildConfigEntity() As Data.Entities.SuperTrendPlusConfigEntity
@@ -675,17 +652,9 @@ Namespace TopStepTrader.UI.ViewModels
                 .AdxWeakThreshold = Config.AdxWeakThreshold,
                 .AdxModerateThreshold = Config.AdxModerateThreshold,
                 .AdxStrongThreshold = Config.AdxStrongThreshold,
-                .BreakevenTriggerR = Config.BreakevenTriggerR,
-                .ProfitLockTriggerR = Config.ProfitLockTriggerR,
-                .ProfitLockOffsetR = Config.ProfitLockOffsetR,
-                .TrailAtrMultiple = Config.TrailAtrMultiple,
-                .ProfitTrailTriggerR = Config.ProfitTrailTriggerR,
-                .HarvestTriggerR = Config.HarvestTriggerR,
-                .HarvestLockR = Config.HarvestLockR,
-                .FreeRideTriggerR = Config.FreeRideTriggerR,
-                .FreeRideLockR = Config.FreeRideLockR,
                 .WarningScoreThreshold = Config.WarningScoreThreshold,
-                .ExitingScoreThreshold = Config.ExitingScoreThreshold
+                .ExitingScoreThreshold = Config.ExitingScoreThreshold,
+                .EntryExitScoreBlockThreshold = Config.EntryExitScoreBlockThreshold
             }
         End Function
 
@@ -1197,6 +1166,35 @@ Namespace TopStepTrader.UI.ViewModels
                 If _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
                     String.Equals(s.Instrument, contractId, StringComparison.OrdinalIgnoreCase)) Then
                     Continue For
+                End If
+
+                ' FEAT-46: Pre-entry exit-signal gate — block if exit conditions already present at signal time.
+                ' Uses the same ExitSignalEngine (E1–E9) that previously ran post-entry; ATR is not available
+                ' here so E2/E7 are disabled (NaN array). Threshold 0 disables the gate entirely.
+                If Config.EntryExitScoreBlockThreshold > 0 Then
+                    Dim preSlot = New PositionSlot() With {
+                        .SlotIndex = -1,
+                        .Instrument = contractId,
+                        .Side = side,
+                        .EntryAdx = adxVal,
+                        .EntryAtr = 0D,
+                        .EntryPrice = CDec(closes(n)),
+                        .StopPrice = stLine
+                    }
+                    Dim nanAtr(n) As Single
+                    For k = 0 To n : nanAtr(k) = Single.NaN : Next
+                    Dim preEval = _exitEngine.Evaluate(preSlot, highs, lows, closes,
+                                                       st.Line, st.Direction,
+                                                       dmi.PlusDI, dmi.MinusDI, dmi.ADX,
+                                                       nanAtr)
+                    If preEval.Score >= Config.EntryExitScoreBlockThreshold Then
+                        _logger.LogInformation(
+                            "ST+ [{Contract}] pre-entry gate (FEAT-46) score={Score} [{Signals}] >= {Threshold} — entry blocked",
+                            contractId, preEval.Score,
+                            String.Join(",", preEval.ContributingSignals),
+                            Config.EntryExitScoreBlockThreshold)
+                        Continue For
+                    End If
                 End If
 
                 candidates.Add((contractId, i, side, adxVal, barTime, stLine, CDec(closes(n))))
@@ -2113,7 +2111,7 @@ Namespace TopStepTrader.UI.ViewModels
                 ' P&L display and the phased stop ratchet (BUG-51), so intra-bar price spikes
                 ' that peak and retrace within one strategy bar can still advance the stop.
                 ' Indicator calculations (ST line, DMI, ATR) still use the strategy-TF closes.
-                ' tickBars is hoisted here so Take100 can reuse the same fetch without a second API call.
+                ' tickBars fetched here — freshest 15s close used for P&L and Scalper ratchet (BUG-51).
                 Dim currentClose As Decimal = CDec(closes(n))  ' fallback to strategy-TF close
                 Dim tickBars As IList(Of MarketBar) = Nothing
                 Try
@@ -2464,61 +2462,39 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         ''' <summary>
-        ''' Computes a one-line "Next phase" label showing the trigger in R and the dollar distance.
+        ''' Computes a one-line "Next phase" label for the Scalper exit ladder.
         ''' e.g.  "Next: Breakeven in 0.5R = $28.75"
         ''' </summary>
-        Private Function NextPhaseDisplay(slot As PositionSlot, currentPnl As Decimal) As String
+        Private Shared Function NextPhaseDisplay(slot As PositionSlot, currentPnl As Decimal) As String
             If slot.InitialRiskDollars <= 0D Then Return String.Empty
             Dim ir = slot.InitialRiskDollars
+            Const beR As Decimal = 0.5D    ' ScalperConfig.BreakevenTriggerR default
+            Const plR As Decimal = 1.5D    ' ScalperConfig.ProfitLockTriggerR default
             Select Case slot.StopPhase
                 Case StopPhase.Initial
-                    Dim triggerR = Config.BreakevenTriggerR
-                    Dim dollarTarget = Math.Round(ir * triggerR, 2)
+                    Dim dollarTarget = Math.Round(ir * beR, 2)
                     Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
-                    Return $"Next: Breakeven in {triggerR:F1}R = ${remaining:F2}"
+                    Return $"Next: Breakeven in {beR:F1}R = ${remaining:F2}"
                 Case StopPhase.Breakeven
-                    Dim triggerR = Config.ProfitLockTriggerR
-                    Dim dollarTarget = Math.Round(ir * triggerR, 2)
+                    Dim dollarTarget = Math.Round(ir * plR, 2)
                     Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
-                    Return $"Next: ProfitLock in {triggerR:F1}R = ${remaining:F2}"
+                    Return $"Next: ProfitLock in {plR:F1}R = ${remaining:F2}"
                 Case StopPhase.ProfitLock
-                    Dim triggerR = Config.ProfitTrailTriggerR
-                    Dim dollarTarget = Math.Round(ir * triggerR, 2)
-                    Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
-                    Return $"Next: ProfitTrail in {triggerR:F1}R = ${remaining:F2}"
-                Case StopPhase.ProfitTrail
-                    Dim triggerR = Config.HarvestTriggerR
-                    Dim dollarTarget = Math.Round(ir * triggerR, 2)
-                    Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
-                    Return $"Next: Harvest in {triggerR:F1}R = ${remaining:F2}"
-                Case StopPhase.Harvest
-                    Dim triggerR = Config.FreeRideTriggerR
-                    Dim dollarTarget = Math.Round(ir * triggerR, 2)
-                    Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
-                    Return $"Next: FreeRide in {triggerR:F1}R = ${remaining:F2}"
-                Case StopPhase.FreeRide
-                    Return "🏆 FreeRide — letting it run"
+                    Return "Riding BB trail — ScaredyCat armed"
                 Case Else
                     Return String.Empty
             End Select
         End Function
 
-        ''' <summary>Returns a human-readable phase label that explains both the phase name
-        ''' and its meaning in terms of how the stop is managed at that point.</summary>
+        ''' <summary>Returns a human-readable phase label for the Scalper exit ladder.</summary>
         Private Shared Function PhaseLabel(phase As StopPhase, cfg As SuperTrendPlusConfig) As String
             Select Case phase
                 Case StopPhase.Initial
-                    Return String.Format("Initial: SL on SuperTrend line - targeting {0:F1}R", cfg.BreakevenTriggerR)
+                    Return "Initial: SL trails 15s SuperTrend line (ratchet)"
                 Case StopPhase.Breakeven
-                    Return "Breakeven: Stops to entry."
+                    Return "Breakeven: SL locked at entry price"
                 Case StopPhase.ProfitLock
-                    Return String.Format("ProfitLock: Stop at entry + {0:F1}R.", cfg.ProfitLockOffsetR)
-                Case StopPhase.ProfitTrail
-                    Return "ProfitTrail: ATR trailing stop - riding the move."
-                Case StopPhase.Harvest
-                    Return String.Format("Harvest: Stop locked at entry + {0:F1}R.", cfg.HarvestLockR)
-                Case StopPhase.FreeRide
-                    Return "FreeRide: Stop at entry + 2R - letting it run."
+                    Return "ProfitLock: SL trails 15s BB lower/upper band"
                 Case Else
                     Return phase.ToString()
             End Select

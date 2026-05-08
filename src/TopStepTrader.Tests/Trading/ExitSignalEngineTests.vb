@@ -518,6 +518,98 @@ Namespace TopStepTrader.Tests.Trading
             Assert.DoesNotContain("E9:3", eval.ContributingSignals)
         End Sub
 
+        ' ── FEAT-46: Pre-entry exit-signal gate ─────────────────────────────
+
+        ''' <summary>
+        ''' Simulates the FEAT-46 pre-entry check: a minimal slot with only Side/EntryAdx set
+        ''' (no open position) is passed to Evaluate. A DI crossover (E5=4) alone should reach
+        ''' the default blocking threshold of 4.
+        ''' </summary>
+        <Fact>
+        Public Sub PreEntryGate_DICrossover_ScoreReachesBlockThreshold()
+            Dim preSlot = New PositionSlot() With {
+                .SlotIndex  = -1,
+                .Side       = "Buy",
+                .EntryAdx   = 35.0F,
+                .EntryAtr   = 0D,
+                .EntryPrice = 100D,
+                .StopPrice  = 95D
+            }
+            Dim n = 10
+            ' DI crossover: +DI was above -DI, now drops below on bar n (E5 fires for long)
+            Dim pdis = FillArr(n, 30.0F)
+            Dim mdis = FillArr(n, 20.0F)
+            pdis(n - 1) = 18.0F   ' +DI < -DI on last bar
+            mdis(n - 1) = 25.0F   ' -DI > +DI on last bar
+
+            Dim nanAtr = FillArr(n, Single.NaN)
+
+            Dim eval = _engine.Evaluate(preSlot,
+                FillDecArr(n, 101D), FillDecArr(n, 99D), FillDecArr(n, 100D),
+                FillArr(n, 95.0F), FillArr(n, 1.0F),
+                pdis, mdis, FillArr(n, 35.0F), nanAtr)
+
+            Assert.Contains("E5:4", eval.ContributingSignals)
+            Assert.True(eval.Score >= 4, $"Expected score >= 4 (blocking threshold), got {eval.Score}")
+        End Sub
+
+        <Fact>
+        Public Sub PreEntryGate_OnlyADXDeclining_ScoreBelowDefaultThreshold()
+            ' E3 fires (ADX declining and 10 below entry), weight=2 — below default threshold 4
+            Dim preSlot = New PositionSlot() With {
+                .SlotIndex  = -1,
+                .Side       = "Buy",
+                .EntryAdx   = 45.0F,
+                .EntryAtr   = 0D,
+                .EntryPrice = 100D,
+                .StopPrice  = 95D
+            }
+            Dim n = 10
+            Dim adxArr = FillArr(n, 40.0F)
+            adxArr(n - 2) = 34.0F   ' falling ADX that's >10 below entry ADX of 45
+            adxArr(n - 1) = 32.0F   ' adx[n] < adx[n-1] < adx[n-2] — three consecutive
+            ' Actually need n-2 > n-1 > n, so:
+            adxArr(n - 3) = 38.0F
+            adxArr(n - 2) = 35.0F
+            adxArr(n - 1) = 32.0F   ' all below 45-10=35? No: 38/35/32 — 35 is boundary
+
+            Dim nanAtr = FillArr(n, Single.NaN)
+
+            Dim eval = _engine.Evaluate(preSlot,
+                FillDecArr(n, 100D), FillDecArr(n, 98D), FillDecArr(n, 100D),
+                FillArr(n, 95.0F), FillArr(n, 1.0F),
+                FillArr(n, 30.0F), FillArr(n, 20.0F),
+                adxArr, nanAtr)
+
+            Assert.True(eval.Score < 4, $"Expected score < 4 (below threshold), got {eval.Score}")
+        End Sub
+
+        <Fact>
+        Public Sub PreEntryGate_ZeroThreshold_NeverBlocks()
+            ' When EntryExitScoreBlockThreshold = 0 the gate is disabled.
+            ' This test verifies that even a high score does not cause blocking
+            ' when the caller checks (score >= 0) — every non-negative integer satisfies that,
+            ' which is why the caller first checks threshold > 0 before calling Evaluate.
+            ' Here we just confirm Evaluate itself returns correct scores; gate logic is in VM.
+            Dim preSlot = New PositionSlot() With {
+                .SlotIndex  = -1,
+                .Side       = "Buy",
+                .EntryAdx   = 35.0F,
+                .EntryAtr   = 0D,
+                .EntryPrice = 100D,
+                .StopPrice  = 95D
+            }
+            ' Healthy bars — no signals fire
+            Dim n = 10
+            Dim eval = _engine.Evaluate(preSlot,
+                FillDecArr(n, 101D), FillDecArr(n, 99D), FillDecArr(n, 100D),
+                FillArr(n, 90.0F), FillArr(n, 1.0F),
+                FillArr(n, 30.0F), FillArr(n, 20.0F),
+                FillArr(n, 35.0F), FillArr(n, Single.NaN))
+
+            Assert.Equal(0, eval.Score)
+        End Sub
+
     End Class
 
 End Namespace

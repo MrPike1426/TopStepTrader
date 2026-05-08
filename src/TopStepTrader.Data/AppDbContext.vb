@@ -419,26 +419,18 @@ Namespace TopStepTrader.Data
             Try
                 Dim stpDdl = New String() {
                     "CREATE TABLE IF NOT EXISTS ""SuperTrendPlusConfig"" (
-                         ""Id""                     INTEGER NOT NULL PRIMARY KEY,
-                         ""SelectedTpMultiple""      TEXT    NOT NULL DEFAULT '2×',
-                         ""StMultiplier""            REAL    NOT NULL DEFAULT 3.0,
-                         ""SelectedTimeframe""       TEXT    NOT NULL DEFAULT '15min',
-                         ""MaxSlots""                INTEGER NOT NULL DEFAULT 3,
-                         ""ContractsPerSlot""        INTEGER NOT NULL DEFAULT 1,
-                         ""AdxWeakThreshold""        REAL    NOT NULL DEFAULT 25.0,
-                         ""AdxModerateThreshold""    REAL    NOT NULL DEFAULT 40.0,
-                         ""AdxStrongThreshold""      REAL    NOT NULL DEFAULT 60.0,
-                         ""BreakevenTriggerR""       TEXT    NOT NULL DEFAULT '0.5',
-                         ""ProfitLockTriggerR""      TEXT    NOT NULL DEFAULT '1.0',
-                         ""ProfitLockOffsetR""       TEXT    NOT NULL DEFAULT '0.3',
-                         ""TrailAtrMultiple""        TEXT    NOT NULL DEFAULT '2.0',
-                         ""ProfitTrailTriggerR""     TEXT    NOT NULL DEFAULT '1.5',
-                         ""HarvestTriggerR""         TEXT    NOT NULL DEFAULT '2.0',
-                         ""HarvestLockR""            TEXT    NOT NULL DEFAULT '1.5',
-                         ""FreeRideTriggerR""        TEXT    NOT NULL DEFAULT '3.0',
-                         ""FreeRideLockR""           TEXT    NOT NULL DEFAULT '2.0',
-                         ""WarningScoreThreshold""   INTEGER NOT NULL DEFAULT 3,
-                         ""ExitingScoreThreshold""   INTEGER NOT NULL DEFAULT 6)"
+                         ""Id""                              INTEGER NOT NULL PRIMARY KEY,
+                         ""SelectedTpMultiple""              TEXT    NOT NULL DEFAULT '2×',
+                         ""StMultiplier""                    REAL    NOT NULL DEFAULT 3.0,
+                         ""SelectedTimeframe""               TEXT    NOT NULL DEFAULT '15min',
+                         ""MaxSlots""                        INTEGER NOT NULL DEFAULT 3,
+                         ""ContractsPerSlot""                INTEGER NOT NULL DEFAULT 1,
+                         ""AdxWeakThreshold""                REAL    NOT NULL DEFAULT 25.0,
+                         ""AdxModerateThreshold""            REAL    NOT NULL DEFAULT 40.0,
+                         ""AdxStrongThreshold""              REAL    NOT NULL DEFAULT 60.0,
+                         ""WarningScoreThreshold""           INTEGER NOT NULL DEFAULT 3,
+                         ""ExitingScoreThreshold""           INTEGER NOT NULL DEFAULT 6,
+                         ""EntryExitScoreBlockThreshold""    INTEGER NOT NULL DEFAULT 4)"
                 }
                 For Each ddl In stpDdl
                     Using cmd = conn.CreateCommand()
@@ -464,6 +456,46 @@ Namespace TopStepTrader.Data
                 End Try
             Finally
                 If mustClose7 Then conn.Close()
+            End Try
+
+            ' ── CHORE-01: Drop dead phase-ladder columns, add FEAT-46 threshold ──
+            ' Idempotent — duplicate-column errors are swallowed; "no such column"
+            ' errors from DROP COLUMN are swallowed (column already absent).
+            Dim mustClose8 = (conn.State <> ConnectionState.Open)
+            If mustClose8 Then conn.Open()
+            Try
+                Dim deadCols = New String() {
+                    "BreakevenTriggerR", "ProfitLockTriggerR", "ProfitLockOffsetR",
+                    "TrailAtrMultiple",  "ProfitTrailTriggerR",
+                    "HarvestTriggerR",   "HarvestLockR",
+                    "FreeRideTriggerR",  "FreeRideLockR"
+                }
+                For Each col In deadCols
+                    Try
+                        Using cmd = conn.CreateCommand()
+                            cmd.CommandText = $"ALTER TABLE ""SuperTrendPlusConfig"" DROP COLUMN ""{col}"""
+                            cmd.ExecuteNonQuery()
+                        End Using
+                    Catch ex As Exception
+                        ' Column already absent or SQLite version < 3.35 — silently skip.
+                        If Not ex.Message.Contains("no such column") AndAlso
+                           Not ex.Message.Contains("no such table") Then
+                            ' Unexpected error — rethrow.
+                            Throw
+                        End If
+                    End Try
+                Next
+
+                Try
+                    Using cmd = conn.CreateCommand()
+                        cmd.CommandText = "ALTER TABLE ""SuperTrendPlusConfig"" ADD COLUMN ""EntryExitScoreBlockThreshold"" INTEGER NOT NULL DEFAULT 4"
+                        cmd.ExecuteNonQuery()
+                    End Using
+                Catch ex As Exception
+                    If Not ex.Message.Contains("duplicate column") Then Throw
+                End Try
+            Finally
+                If mustClose8 Then conn.Close()
             End Try
         End Sub
 

@@ -27,23 +27,15 @@ Namespace TopStepTrader.Data
                 entity.Id = 1
                 _db.SuperTrendPlusConfig.Add(entity)
             Else
-                existing.ActivePersona         = entity.ActivePersona
-                existing.SelectedTimeframe     = entity.SelectedTimeframe
-                existing.MaxSlots              = entity.MaxSlots
-                existing.AdxWeakThreshold      = entity.AdxWeakThreshold
-                existing.AdxModerateThreshold  = entity.AdxModerateThreshold
-                existing.AdxStrongThreshold    = entity.AdxStrongThreshold
-                existing.BreakevenTriggerR     = entity.BreakevenTriggerR
-                existing.ProfitLockTriggerR    = entity.ProfitLockTriggerR
-                existing.ProfitLockOffsetR     = entity.ProfitLockOffsetR
-                existing.TrailAtrMultiple      = entity.TrailAtrMultiple
-                existing.ProfitTrailTriggerR   = entity.ProfitTrailTriggerR
-                existing.HarvestTriggerR       = entity.HarvestTriggerR
-                existing.HarvestLockR          = entity.HarvestLockR
-                existing.FreeRideTriggerR      = entity.FreeRideTriggerR
-                existing.FreeRideLockR         = entity.FreeRideLockR
-                existing.WarningScoreThreshold = entity.WarningScoreThreshold
-                existing.ExitingScoreThreshold = entity.ExitingScoreThreshold
+                existing.ActivePersona                  = entity.ActivePersona
+                existing.SelectedTimeframe              = entity.SelectedTimeframe
+                existing.MaxSlots                       = entity.MaxSlots
+                existing.AdxWeakThreshold               = entity.AdxWeakThreshold
+                existing.AdxModerateThreshold           = entity.AdxModerateThreshold
+                existing.AdxStrongThreshold             = entity.AdxStrongThreshold
+                existing.WarningScoreThreshold          = entity.WarningScoreThreshold
+                existing.ExitingScoreThreshold          = entity.ExitingScoreThreshold
+                existing.EntryExitScoreBlockThreshold   = entity.EntryExitScoreBlockThreshold
             End If
             Await _db.SaveChangesAsync()
         End Function
