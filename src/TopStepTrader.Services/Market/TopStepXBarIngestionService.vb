@@ -196,7 +196,8 @@ Namespace TopStepTrader.Services.Market
         Public Async Function GetLiveBarsAsync(contractId As String,
                                                timeframe As BarTimeframe,
                                                barCount As Integer,
-                                               Optional cancel As CancellationToken = Nothing) As Task(Of IList(Of MarketBar)) Implements IBarIngestionService.GetLiveBarsAsync
+                                               Optional cancel As CancellationToken = Nothing,
+                                               Optional live As Boolean = False) As Task(Of IList(Of MarketBar)) Implements IBarIngestionService.GetLiveBarsAsync
             Try
                 Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
                 If fav Is Nothing OrElse String.IsNullOrEmpty(fav.PxContractId) Then
@@ -215,12 +216,16 @@ Namespace TopStepTrader.Services.Market
                 ' Without it, only ~7 Friday bars fall in the window and every instrument
                 ' skips due to the 15-bar minimum, leaving the watchlist blank all Sunday
                 ' night and into Monday morning.
-                Dim lookbackMinutes = If(timeframe = BarTimeframe.FifteenSecond,
-                                        Math.Ceiling(barCount * 15.0 / 60.0) + 60,
+                Dim secondsPerBar = If(timeframe = BarTimeframe.FiveSecond, 5.0, 15.0)
+                Dim lookbackMinutes = If(timeframe = BarTimeframe.FifteenSecond OrElse timeframe = BarTimeframe.FiveSecond,
+                                        Math.Ceiling(barCount * secondsPerBar / 60.0) + 60,
                                         barCount * CDbl(_strategy_TimeframeMinutesForLiveBar(timeframe)) + (3 * 24 * 60))
+                ' BUG-72: caller-controlled live flag. Strategy evaluation passes False so
+                ' bars come from the simulated/paper feed (matches practice fills); the
+                ' P&L price lookup passes True so the displayed price tracks real CME quotes.
                 Dim response = Await _pxHistoryClient.RetrieveBarsAsync(
                     pxId, unit:=unit, unitNumber:=unitNumber, limit:=barCount,
-                    live:=False,
+                    live:=live,
                     startTime:=DateTimeOffset.UtcNow.AddMinutes(-lookbackMinutes),
                     endTime:=DateTimeOffset.UtcNow, cancel:=cancel)
                 If response Is Nothing OrElse Not response.Success OrElse
@@ -281,6 +286,7 @@ Namespace TopStepTrader.Services.Market
         Private Shared Function TimeframeToUnit(tf As BarTimeframe) As Integer
             Select Case tf
                 Case BarTimeframe.TwoSecond : Return 1                  ' Second
+                Case BarTimeframe.FiveSecond : Return 1                  ' Second
                 Case BarTimeframe.FifteenSecond : Return 1              ' Second
                 Case BarTimeframe.OneMinute, BarTimeframe.ThreeMinute,
                      BarTimeframe.FiveMinute, BarTimeframe.FifteenMinute,
@@ -299,6 +305,7 @@ Namespace TopStepTrader.Services.Market
         Private Shared Function TimeframeToUnitNumber(tf As BarTimeframe) As Integer
             Select Case tf
                 Case BarTimeframe.TwoSecond : Return 2
+                Case BarTimeframe.FiveSecond : Return 5
                 Case BarTimeframe.FifteenSecond : Return 15
                 Case BarTimeframe.OneMinute : Return 1
                 Case BarTimeframe.ThreeMinute : Return 3
@@ -318,7 +325,7 @@ Namespace TopStepTrader.Services.Market
         ''' </summary>
         Private Shared Function MaxLookbackDays(tf As BarTimeframe) As Integer
             Select Case tf
-                Case BarTimeframe.FifteenSecond : Return -1  ' 15-second bars: 1 day lookback is ample for 80 bars
+                Case BarTimeframe.FifteenSecond, BarTimeframe.FiveSecond : Return -1  ' second bars: 1 day lookback is ample for 80 bars
                 Case BarTimeframe.OneMinute, BarTimeframe.ThreeMinute : Return -7
                 Case BarTimeframe.FiveMinute, BarTimeframe.FifteenMinute, BarTimeframe.ThirtyMinute : Return -60
                 Case BarTimeframe.OneHour : Return -90

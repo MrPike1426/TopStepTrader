@@ -40,11 +40,19 @@ Namespace TopStepTrader.Services.Market
         ''' without persisting them to the database.  Used by MultiConfluence flat sessions
         ''' so indicators advance on 15-second closes without accumulating high-frequency rows.
         ''' Returns an empty list on failure; callers must handle gracefully.
+        '''
+        ''' BUG-72: <paramref name="live"/> selects between the simulated/paper feed
+        ''' (False, the default — required for strategy evaluation on practice accounts so
+        ''' that bar history matches the practice fill engine) and the live CME feed (True —
+        ''' required for real-time P&amp;L price lookup so the displayed price tracks the
+        ''' broker's own Positions tab). Strategy-evaluation callers must keep the default;
+        ''' P&amp;L price lookups must pass True.
         ''' </summary>
         Function GetLiveBarsAsync(contractId As String,
                                   timeframe As BarTimeframe,
                                   barCount As Integer,
-                                  Optional cancel As CancellationToken = Nothing) As Task(Of IList(Of MarketBar))
+                                  Optional cancel As CancellationToken = Nothing,
+                                  Optional live As Boolean = False) As Task(Of IList(Of MarketBar))
 
     End Interface
 

@@ -123,6 +123,42 @@ Namespace TopStepTrader.UI.ViewModels
             Return slot
         End Function
 
+        ''' <summary>
+        ''' Applies a scale-in (additional fill on an existing position) to the given slot.
+        ''' Increments <see cref="PositionSlot.Contracts"/> by <paramref name="addContracts"/>
+        ''' and recomputes <see cref="PositionSlot.EntryPrice"/> as the size-weighted average
+        ''' of the prior fills and the new fill price.
+        '''
+        ''' Without this, EntryPrice remains the first-fill price and the local P&amp;L
+        ''' calculation drifts from the broker's VWAP-based P&amp;L by the difference
+        ''' between the first fill and the new VWAP, multiplied by the total contracts.
+        ''' Prefer feeding broker-authoritative VWAP (e.g. PXUserPositionData.NetPrice)
+        ''' via <see cref="SyncFromBrokerVwap"/> when available.
+        ''' </summary>
+        Public Sub ApplyScaleIn(slot As PositionSlot, addContracts As Integer, newFillPrice As Decimal)
+            If slot Is Nothing OrElse addContracts <= 0 Then Return
+            Dim oldQty As Integer = slot.Contracts
+            Dim newQty As Integer = oldQty + addContracts
+            If newQty <= 0 Then Return
+            If slot.EntryPrice > 0D AndAlso newFillPrice > 0D AndAlso oldQty > 0 Then
+                slot.EntryPrice = Math.Round(
+                    (slot.EntryPrice * oldQty + newFillPrice * addContracts) / newQty, 6)
+            End If
+            slot.Contracts = newQty
+        End Sub
+
+        ''' <summary>
+        ''' Authoritatively replaces the slot's EntryPrice and Contracts with the
+        ''' broker-reported VWAP and net position size from a real-time UserHub push.
+        ''' This is the most accurate way to keep the slot in sync after scale-ins
+        ''' or partial closes. No-op when the broker values look invalid (zero/negative).
+        ''' </summary>
+        Public Sub SyncFromBrokerVwap(slot As PositionSlot, brokerVwap As Decimal, brokerNetPos As Integer)
+            If slot Is Nothing Then Return
+            If brokerVwap > 0D Then slot.EntryPrice = brokerVwap
+            If brokerNetPos > 0 Then slot.Contracts = brokerNetPos
+        End Sub
+
         Public Sub CloseSlot(index As Integer)
             If index >= 0 AndAlso index < _slots.Length Then
                 Dim s = _slots(index)
@@ -150,6 +186,9 @@ Namespace TopStepTrader.UI.ViewModels
                 s.IsEarlyModeEntry   = False
                 s.LastAdxBand        = 0
                 s.DebugTradeId       = Nothing
+                s.LivePrice          = 0D
+                s.LivePriceUtc       = DateTime.MinValue
+                s.PriceStaleCount    = 0
             End If
         End Sub
 

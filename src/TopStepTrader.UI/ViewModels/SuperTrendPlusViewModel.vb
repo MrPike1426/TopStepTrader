@@ -1,3 +1,4 @@
+Imports System.Collections.Concurrent
 Imports System.Collections.ObjectModel
 Imports System.Linq
 Imports System.Threading
@@ -14,6 +15,7 @@ Imports TopStepTrader.Data
 Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.Trading
 Imports System.Text.Json
+Imports TopStepTrader.API.Hubs
 Imports TopStepTrader.Core.Models.Debug
 Imports TopStepTrader.UI.ViewModels.Base
 
@@ -92,7 +94,24 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
             Set(value As String)
                 SetProperty(_trendStrength, value)
+                NotifyPropertyChanged(NameOf(StrengthColor))
             End Set
+        End Property
+
+        Public ReadOnly Property StrengthColor As Brush
+            Get
+                ' Extract ADX value from TrendStrength (e.g., "ADX:42 L3: Espresso")
+                Dim adxMatch = System.Text.RegularExpressions.Regex.Match(_trendStrength, "ADX:(\d+)")
+                If adxMatch.Success AndAlso Integer.TryParse(adxMatch.Groups(1).Value, Nothing) Then
+                    Dim strength As Integer = Integer.Parse(adxMatch.Groups(1).Value)
+                    ' Use secondary color (grey/blue) only for weak signals: Cat Piss (< 15) and Decaff (15-24)
+                    If strength < 25 Then
+                        Return CType(Application.Current?.Resources("TextSecondaryBrush"), Brush)
+                    End If
+                End If
+                ' For values >= 25, use RowColor
+                Return RowColor
+            End Get
         End Property
 
         Private _signalReason As String = ""
@@ -211,7 +230,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private Shared ReadOnly InstrumentLabels As String() = _stDefaults.Select(Function(f) If(String.IsNullOrWhiteSpace(f.DisplayName), f.PxRootSymbol, f.DisplayName)).ToArray()
         Private Const BarsToFetch As Integer = 60
         Private Const EntryStaggerMs As Integer = 5000
-        Private Const SlotUpdateStaggerMs As Integer = 5000
+        Private Const SlotUpdateStaggerMs As Integer = 2000
 
         ' TopStepX session-close window: entries suppressed, scan skipped.
         Private Shared ReadOnly SessionCloseTime As TimeSpan = TimeSpan.FromHours(21).Add(TimeSpan.FromMinutes(10))
@@ -231,6 +250,23 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _configRepo As SuperTrendPlusConfigRepository
         Private ReadOnly _tradeRecordService As Core.Interfaces.ITradeRecordService
         Private ReadOnly _debugCapture As Core.Interfaces.IDebugTradeCaptureService
+        ''' <summary>BUG-72: SignalR UserHub client. Subscribed to PositionUpdated for real-time
+        ''' P&amp;L and VWAP entry-price sync, replacing the polling-only path that lagged 30+ minutes
+        ''' behind the broker on practice accounts.</summary>
+        Private ReadOnly _userHub As UserHubClient
+        Private _userHubHandler As EventHandler(Of PXPositionUpdateEventArgs)
+
+        ''' <summary>FEAT-52: SignalR MarketHub client. Subscribed to QuoteReceived for sub-second
+        ''' last-trade prices that drive Live Price + local P&amp;L on each open slot card. Replaces
+        ''' the up-to-15-second polling cadence of the 5-second bar fetch as the primary source.</summary>
+        Private ReadOnly _marketHub As MarketHubClient
+        Private _marketHubHandler As EventHandler(Of MarketQuoteEventArgs)
+
+        ''' <summary>FEAT-52: per-instrument cache of the most recent last-trade price from
+        ''' MarketHub.QuoteReceived. Keyed by resolved PX contract ID (e.g. "CON.F.US.MNQ.U26").
+        ''' Written by the SignalR callback thread; read by the timer + hub threads.</summary>
+        Private ReadOnly _lastQuotePrices As New ConcurrentDictionary(Of String, Double)(
+            StringComparer.OrdinalIgnoreCase)
 
         ' ── Debug capture state (per-trade tracking, keyed by DebugTradeId) ────
         Private ReadOnly _debugMfe As New Dictionary(Of String, Decimal)()
@@ -521,7 +557,9 @@ Namespace TopStepTrader.UI.ViewModels
                        tradeRecordService As Core.Interfaces.ITradeRecordService,
                        scalper As ScalperExitManager,
                        Optional configRepo As SuperTrendPlusConfigRepository = Nothing,
-                       Optional debugCapture As Core.Interfaces.IDebugTradeCaptureService = Nothing)
+                       Optional debugCapture As Core.Interfaces.IDebugTradeCaptureService = Nothing,
+                       Optional userHub As UserHubClient = Nothing,
+                       Optional marketHub As MarketHubClient = Nothing)
             _barService = barService
             _orderService = orderService
             _session = session
@@ -534,6 +572,8 @@ Namespace TopStepTrader.UI.ViewModels
             _configRepo = configRepo
             _debugCapture = debugCapture
             _scalper = scalper
+            _userHub = userHub
+            _marketHub = marketHub
             Config = New SuperTrendPlusConfig()
             _slotManager = New SlotManager(Config)
             _exitEngine = New ExitSignalEngine(
@@ -695,6 +735,20 @@ Namespace TopStepTrader.UI.ViewModels
             IsMonitoring = True
             _instrumentsReleasedThisSession.Clear()
             _scalperStates.Clear()
+            ' BUG-72: subscribe to the SignalR UserHub real-time position stream so P&L
+            ' and entry-price VWAP arrive immediately rather than waiting on the
+            ' 15-second poll (which sourced stale paper-feed prices and could freeze
+            ' the displayed P&L for tens of minutes on practice accounts).
+            If _userHub IsNot Nothing AndAlso _userHubHandler Is Nothing Then
+                _userHubHandler = AddressOf OnHubPositionUpdated
+                AddHandler _userHub.PositionUpdated, _userHubHandler
+            End If
+            ' FEAT-52: subscribe to MarketHub.QuoteReceived for sub-second last-trade prices.
+            ' Per-instrument SubscribeContractAsync calls happen on slot open (FireEntryAsync).
+            If _marketHub IsNot Nothing AndAlso _marketHubHandler Is Nothing Then
+                _marketHubHandler = AddressOf OnMarketQuoteReceived
+                AddHandler _marketHub.QuoteReceived, _marketHubHandler
+            End If
             _timer = New Timer(AddressOf TimerCallback, Nothing, 0, 15000)
             If _selectedAccount Is Nothing OrElse _selectedAccount.Id = 0 Then
                 StatusText = "? No account selected — monitoring in read-only mode (orders will be blocked until account loads)"
@@ -712,6 +766,29 @@ Namespace TopStepTrader.UI.ViewModels
                     _timer = Nothing
                 End If
             End SyncLock
+            ' BUG-72: tear down the SignalR position subscription. Without this the
+            ' VM would keep mutating slot state after Stop Monitoring (and after
+            ' Dispose, if the singleton hub outlives the VM).
+            If _userHub IsNot Nothing AndAlso _userHubHandler IsNot Nothing Then
+                Try
+                    RemoveHandler _userHub.PositionUpdated, _userHubHandler
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ failed to unsubscribe UserHub.PositionUpdated")
+                End Try
+                _userHubHandler = Nothing
+            End If
+            ' FEAT-52: tear down MarketHub quote subscription and drop cached prices.
+            ' Per-contract MarketHub.UnsubscribeContractAsync is the responsibility of
+            ' ReleaseSlotAsync on each individual slot close.
+            If _marketHub IsNot Nothing AndAlso _marketHubHandler IsNot Nothing Then
+                Try
+                    RemoveHandler _marketHub.QuoteReceived, _marketHubHandler
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ failed to unsubscribe MarketHub.QuoteReceived")
+                End Try
+                _marketHubHandler = Nothing
+            End If
+            _lastQuotePrices.Clear()
             _prevStDirByInstrument.Clear()
             For Each wRow In WatchlistItems
                 wRow.Arrow = "–"
@@ -1651,12 +1728,22 @@ Namespace TopStepTrader.UI.ViewModels
                                    (placed.Status = Core.Enums.OrderStatus.Working OrElse
                                     placed.Status = Core.Enums.OrderStatus.Filled)
                     If accepted Then
-                        s2.Contracts += extraContracts
+                        ' BUG-72: VWAP-correct EntryPrice on scale-in. Prefer broker fill price;
+                        ' fall back to most recent live price. SignalR hub authoritatively
+                        ' resyncs once the position update arrives.
+                        Dim addFillPrice As Decimal = 0D
+                        If placed.FillPrice.HasValue AndAlso placed.FillPrice.Value > 0D Then
+                            addFillPrice = placed.FillPrice.Value
+                        ElseIf s2.LivePrice > 0D Then
+                            addFillPrice = s2.LivePrice
+                        End If
+                        _slotManager.ApplyScaleIn(s2, extraContracts, addFillPrice)
                         _logger.LogInformation(
-                            "ST+ Reconcile [{Contract}] scale-in +{Extra} contracts (ADX {Band}). Total contracts now {Total}",
+                            "ST+ Reconcile [{Contract}] scale-in +{Extra} contracts (ADX {Band}). Total contracts now {Total} fillPx={Px}",
                             contractId, extraContracts,
                             If(currentAdx >= Config.AdxStrongThreshold, "L3: Espresso", "L2: Latte"),
-                            s2.Contracts)
+                            s2.Contracts,
+                            If(addFillPrice > 0D, addFillPrice.ToString("F4"), "n/a"))
                     Else
                         _logger.LogWarning(
                             "ST+ Reconcile [{Contract}] scale-in order not accepted (status={Status}), slot keeps base contracts={Base}",
@@ -1882,6 +1969,23 @@ Namespace TopStepTrader.UI.ViewModels
             slot.EntryTime = DateTime.Now
             slot.EntryBarTime = barTime
 
+            ' FEAT-52: subscribe this slot's PX contract to the MarketHub quote stream so
+            ' OnMarketQuoteReceived starts populating _lastQuotePrices for sub-second P&L.
+            ' Fire-and-forget — the SignalR call may take ~100ms; do not block the entry path.
+            If _marketHub IsNot Nothing Then
+                Dim fcSub = FavouriteContracts.TryGetBySymbolResolved(contractId, _contractResolver)
+                Dim pxIdSub As String = If(fcSub IsNot Nothing, fcSub.PxContractId, Nothing)
+                If Not String.IsNullOrEmpty(pxIdSub) Then
+                    Task.Run(Async Function() As Task
+                                 Try
+                                     Await _marketHub.SubscribeContractAsync(pxIdSub)
+                                 Catch ex As Exception
+                                     _logger.LogDebug(ex, "ST+ MarketHub subscribe failed for {Id}", pxIdSub)
+                                 End Try
+                             End Function)
+                End If
+            End If
+
             ' ── Debug Capture: begin trade record (FEAT-39) ──────────────────────
             If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing Then
                 Dim newTradeId = Guid.NewGuid().ToString("D")
@@ -2002,9 +2106,22 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim ok = placed IsNot Nothing AndAlso
                          (placed.Status = OrderStatus.Working OrElse placed.Status = OrderStatus.Filled)
                 If ok Then
-                    slot.Contracts += addContracts
-                    _logger.LogInformation("ST+ [Slot {Idx}] Scale-in accepted — contracts now {Total}",
-                                           slot.SlotIndex, slot.Contracts)
+                    ' BUG-72: Recompute EntryPrice as the size-weighted average across the
+                    ' prior fills and the new fill, instead of leaving it stuck on the first
+                    ' fill (which made local P&L drift by ~$7+ on a 2-lot M6E scale-in).
+                    ' Prefer the broker-reported fill price; if not available yet, fall back
+                    ' to the slot's most recent live price. The SignalR hub will overwrite
+                    ' with the authoritative broker VWAP shortly after the fill.
+                    Dim addFillPrice As Decimal = 0D
+                    If placed.FillPrice.HasValue AndAlso placed.FillPrice.Value > 0D Then
+                        addFillPrice = placed.FillPrice.Value
+                    ElseIf slot.LivePrice > 0D Then
+                        addFillPrice = slot.LivePrice
+                    End If
+                    _slotManager.ApplyScaleIn(slot, addContracts, addFillPrice)
+                    _logger.LogInformation("ST+ [Slot {Idx}] Scale-in accepted — contracts now {Total} fillPx={Px}",
+                                           slot.SlotIndex, slot.Contracts,
+                                           If(addFillPrice > 0D, addFillPrice.ToString("F4"), "n/a"))
                     If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
                        Not String.IsNullOrEmpty(slot.DebugTradeId) Then
                         Dim fillSnap As New DebugSnapshotRecord With {
@@ -2030,6 +2147,121 @@ Namespace TopStepTrader.UI.ViewModels
                                    slot.SlotIndex, slot.Instrument)
             End Try
         End Function
+
+        ''' <summary>
+        ''' BUG-72: Real-time handler for SignalR GatewayUserPosition pushes.
+        '''
+        ''' The TopStepX REST snapshot returns OpenPnL = 0 for futures positions, so the
+        ''' VM previously fell back to local P&L derived from a paper-feed 5-second bar
+        ''' close — a price that could freeze for 30+ minutes on practice accounts. The
+        ''' hub push carries the broker's authoritative OpenPnL and NetPrice (the
+        ''' size-weighted average fill price) for every position update.
+        '''
+        ''' This handler:
+        '''   1. Maps the hub ContractId (e.g. "CON.F.US.MNQ.U26") to the matching open slot
+        '''      via the FavouriteContracts root-symbol lookup.
+        '''   2. Syncs slot.EntryPrice / slot.Contracts to the broker VWAP and net position
+        '''      so scale-ins no longer drift.
+        '''   3. Stores OpenPnL on slot.UnrealizedPnl when the broker reports a non-zero
+        '''      value, deriving the implied live market price from it; falls back to
+        '''      slot.LivePrice from the most recent bar when the hub reports OpenPnL = 0
+        '''      (some practice accounts).
+        '''   4. Pushes the new values to the slot card on the UI dispatcher.
+        ''' </summary>
+        Private Sub OnHubPositionUpdated(sender As Object, e As PXPositionUpdateEventArgs)
+            Try
+                If Not _isMonitoring OrElse e Is Nothing OrElse e.PositionData Is Nothing Then Return
+                Dim data = e.PositionData
+                If String.IsNullOrEmpty(data.ContractId) OrElse data.NetPos = 0 Then Return
+
+                ' Map full contract ID → open slot via root-symbol matcher.
+                Dim slot As PositionSlot = Nothing
+                For Each candidate In _slotManager.Slots
+                    If Not candidate.IsOpen OrElse String.IsNullOrEmpty(candidate.Instrument) Then Continue For
+                    If String.Equals(candidate.Instrument, data.ContractId, StringComparison.OrdinalIgnoreCase) Then
+                        slot = candidate
+                        Exit For
+                    End If
+                    Dim fc = FavouriteContracts.TryGetBySymbolResolved(candidate.Instrument, _contractResolver)
+                    If fc IsNot Nothing AndAlso Not String.IsNullOrEmpty(fc.PxRootSymbol) Then
+                        If data.ContractId.StartsWith($"CON.F.US.{fc.PxRootSymbol}.", StringComparison.OrdinalIgnoreCase) OrElse
+                           String.Equals(data.ContractId, fc.PxContractId, StringComparison.OrdinalIgnoreCase) Then
+                            slot = candidate
+                            Exit For
+                        End If
+                    End If
+                Next
+                If slot Is Nothing Then Return
+
+                Dim brokerVwap As Decimal = CDec(data.NetPrice)
+                Dim brokerNetPos As Integer = Math.Abs(data.NetPos)
+
+                ' Authoritatively sync EntryPrice/Contracts from broker VWAP — fixes the
+                ' scale-in drift bug where the original first-fill price was used for P&L.
+                _slotManager.SyncFromBrokerVwap(slot, brokerVwap, brokerNetPos)
+
+                Dim openPnl As Decimal = CDec(data.OpenPnL)
+                Dim derivedLivePrice As Decimal = slot.LivePrice
+                Dim haveBrokerPnl As Boolean = (openPnl <> 0D)
+                If Not haveBrokerPnl Then
+                    ' FEAT-52: when broker OpenPnL is 0 (futures REST snapshot), prefer the
+                    ' MarketHub quote-cache price over the older bar-close LivePrice for the
+                    ' card display. This keeps Live Price visibly fresh even on hub pushes
+                    ' that arrive between 5-second bar fetches.
+                    Dim fcQuoteHub = FavouriteContracts.TryGetBySymbolResolved(data.ContractId, _contractResolver)
+                    If fcQuoteHub IsNot Nothing AndAlso Not String.IsNullOrEmpty(fcQuoteHub.PxContractId) Then
+                        Dim quotePx As Double = 0D
+                        If _lastQuotePrices.TryGetValue(fcQuoteHub.PxContractId, quotePx) AndAlso quotePx > 0D Then
+                            derivedLivePrice = CDec(quotePx)
+                        End If
+                    End If
+                End If
+                If haveBrokerPnl Then
+                    slot.UnrealizedPnl = openPnl
+                    ' Derive implied market price from broker P&L so the slot card's
+                    ' Live Price field tracks what TopStepX is computing P&L against.
+                    Dim fc2 = FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
+                    If fc2 IsNot Nothing AndAlso fc2.PxTickSize > 0D AndAlso fc2.PxTickValue > 0D AndAlso
+                       slot.Contracts > 0 AndAlso slot.EntryPrice > 0D Then
+                        Dim ticks As Decimal = openPnl / (fc2.PxTickValue * slot.Contracts)
+                        Dim direction As Decimal = If(slot.Side = "Buy", 1D, -1D)
+                        derivedLivePrice = Math.Round(slot.EntryPrice + direction * ticks * fc2.PxTickSize, 6)
+                        slot.LivePrice = derivedLivePrice
+                        slot.LivePriceUtc = DateTime.UtcNow
+                        slot.PriceStaleCount = 0
+                    End If
+                End If
+
+                Dim pnlForDisplay As Decimal = slot.UnrealizedPnl
+                Dim priceForDisplay As Decimal = If(derivedLivePrice > 0D, derivedLivePrice, slot.LivePrice)
+                Dim box = BoxForSlot(slot)
+                Application.Current?.Dispatcher?.BeginInvoke(
+                    Sub()
+                        If box IsNot Nothing AndAlso slot.IsOpen Then
+                            UpdatePositionDisplay(box, slot, pnlForDisplay, priceForDisplay)
+                        End If
+                    End Sub)
+            Catch ex As Exception
+                ' Never let a hub-thread exception crash the SignalR connection.
+                _logger.LogWarning(ex, "ST+ OnHubPositionUpdated handler error")
+            End Try
+        End Sub
+
+        ''' <summary>
+        ''' FEAT-52: caches the most recent last-trade price from the MarketHub GatewayQuote
+        ''' stream, keyed by the broker's full PX contract ID. Runs on the SignalR callback
+        ''' thread, so it must be fast and non-blocking. Prefers LastPrice; falls back to the
+        ''' bid/ask mid when no trade has printed yet on the subscribed contract.
+        ''' </summary>
+        Private Sub OnMarketQuoteReceived(sender As Object, e As MarketQuoteEventArgs)
+            If Not _isMonitoring OrElse e Is Nothing OrElse e.Quote Is Nothing Then Return
+            If String.IsNullOrEmpty(e.Quote.ContractId) Then Return
+            Dim price As Double = CDbl(e.Quote.LastPrice)
+            If price <= 0D AndAlso e.Quote.BidPrice > 0D AndAlso e.Quote.AskPrice > 0D Then
+                price = (CDbl(e.Quote.BidPrice) + CDbl(e.Quote.AskPrice)) / 2.0
+            End If
+            If price > 0D Then _lastQuotePrices(e.Quote.ContractId) = price
+        End Sub
 
         Private Async Function HandleOpenPositionAsync(slot As PositionSlot, tf As BarTimeframe) As Task
             If slot.AccountId = 0 AndAlso _session.SelectedAccount IsNot Nothing Then
@@ -2124,8 +2356,19 @@ Namespace TopStepTrader.UI.ViewModels
 
                 Dim bars As IList(Of MarketBar)
                 Try
-                    bars = Await _barService.GetLiveBarsAsync(slot.Instrument, tf, BarsToFetch)
-                Catch
+                    ' Strategy-evaluation bars MUST stay on the simulated/paper feed
+                    ' (live:=False) because indicator state is computed against the
+                    ' practice-account fill engine. Switching this to live would cause
+                    ' SuperTrend / DMI / ATR to disagree with the bar series the
+                    ' practice account is filling against (BUG-72).
+                    bars = Await _barService.GetLiveBarsAsync(slot.Instrument, tf, BarsToFetch, live:=False)
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ [Slot {Idx}] {Contract} strategy-TF bar fetch failed (tf={Tf})",
+                                       slot.SlotIndex, slot.Instrument, tf)
+                    slot.PriceStaleCount += 1
+                    If slot.PriceStaleCount >= 2 AndAlso slot.Health = SlotHealth.Healthy Then
+                        slot.Health = SlotHealth.Warning
+                    End If
                     Return
                 End Try
                 If bars Is Nothing OrElse bars.Count < 14 Then Return
@@ -2135,31 +2378,70 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim closes = bars.Select(Function(b) b.Close).ToList()
                 Dim n = bars.Count - 1
 
-                ' Fetch a small 15-second bar series to obtain the freshest available price.
+                ' Fetch a small 5-second bar series to obtain the freshest available price.
                 ' The strategy-timeframe bars above can be up to one full bar period stale
                 ' (e.g. 15 minutes for the default 15-min TF). currentClose is used for both
                 ' P&L display and the phased stop ratchet (BUG-51), so intra-bar price spikes
                 ' that peak and retrace within one strategy bar can still advance the stop.
                 ' Indicator calculations (ST line, DMI, ATR) still use the strategy-TF closes.
-                ' tickBars fetched here — freshest 15s close used for P&L and Scalper ratchet (BUG-51).
+                '
+                ' BUG-72: this fetch now requests live:=True so we get real CME quotes here.
+                ' Practice-account paper bars updated infrequently and could freeze the
+                ' displayed P&L for 30+ minutes, causing the local P&L calculation to drift
+                ' tens of dollars away from the broker's own Positions tab. The hub push
+                ' (OnHubPositionUpdated) is the primary live-price source; this remains as
+                ' a per-tick fallback when no hub event has arrived recently.
                 Dim currentClose As Decimal = CDec(closes(n))  ' fallback to strategy-TF close
                 Dim tickBars As IList(Of MarketBar) = Nothing
                 Try
-                    Dim rawTickBars = Await _barService.GetLiveBarsAsync(slot.Instrument, BarTimeframe.FifteenSecond, 20)
+                    Dim rawTickBars = Await _barService.GetLiveBarsAsync(slot.Instrument, BarTimeframe.FiveSecond, 20, live:=True)
                     If rawTickBars IsNot Nothing AndAlso rawTickBars.Count > 0 Then
-                        ' Strip the forming bar — act only on closed 15s bars.
+                        ' Strip the forming bar — act only on closed 5s bars.
                         Dim lastBarAge = (DateTime.UtcNow - rawTickBars(rawTickBars.Count - 1).Timestamp).TotalSeconds
-                        tickBars = If(lastBarAge < 15 AndAlso rawTickBars.Count > 1,
+                        tickBars = If(lastBarAge < 5 AndAlso rawTickBars.Count > 1,
                                       CType(rawTickBars.Take(rawTickBars.Count - 1).ToList(), IList(Of MarketBar)),
                                       rawTickBars)
                         currentClose = CDec(tickBars(tickBars.Count - 1).Close)
-                        _logger.LogDebug("ST+ [Slot {Idx}] {Contract} currentClose={Price} (15s bar close)", slot.SlotIndex, slot.Instrument, currentClose)
+                        slot.LivePrice = currentClose
+                        slot.LivePriceUtc = DateTime.UtcNow
+                        slot.PriceStaleCount = 0
+                        _logger.LogDebug("ST+ [Slot {Idx}] {Contract} currentClose={Price} (5s live bar close)",
+                                         slot.SlotIndex, slot.Instrument, currentClose)
+                    Else
+                        slot.PriceStaleCount += 1
+                        _logger.LogWarning("ST+ [Slot {Idx}] {Contract} 5s live-bar fetch returned no bars (stale count={Stale})",
+                                           slot.SlotIndex, slot.Instrument, slot.PriceStaleCount)
                     End If
-                Catch
-                    ' Non-fatal: fall back to strategy-TF close already assigned above
+                Catch ex As Exception
+                    ' Non-fatal: fall back to strategy-TF close already assigned above.
+                    ' Track stale-price ticks so a sustained outage surfaces a UI warning
+                    ' rather than freezing silently.
+                    slot.PriceStaleCount += 1
+                    _logger.LogWarning(ex, "ST+ [Slot {Idx}] {Contract} 5s live-bar fetch failed (stale count={Stale})",
+                                       slot.SlotIndex, slot.Instrument, slot.PriceStaleCount)
                 End Try
 
-                ' Derive P&L locally from the freshest price (15s bar close).
+                ' FEAT-52: prefer the sub-second MarketHub quote price over the 5-second bar
+                ' close when one has been received. The bar fetch above remains as the
+                ' fallback for the brief window between SubscribeContractAsync and the first
+                ' tick. currentClose flows into both the local P&L formula and the Scalper
+                ' stop ratchet, so quote-sourced prices propagate downstream automatically.
+                Dim fcQuote = FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
+                If fcQuote IsNot Nothing AndAlso Not String.IsNullOrEmpty(fcQuote.PxContractId) Then
+                    Dim quotePx As Double = 0D
+                    If _lastQuotePrices.TryGetValue(fcQuote.PxContractId, quotePx) AndAlso quotePx > 0D Then
+                        currentClose = CDec(quotePx)
+                        slot.LivePrice = currentClose
+                        slot.LivePriceUtc = DateTime.UtcNow
+                        slot.PriceStaleCount = 0
+                    End If
+                End If
+
+                If slot.PriceStaleCount >= 2 AndAlso slot.Health = SlotHealth.Healthy Then
+                    slot.Health = SlotHealth.Warning
+                End If
+
+                ' Derive P&L locally from the freshest price (5s bar close).
                 ' The TopStepX REST snapshot always returns openPnl=0, so local calculation
                 ' is the sole source of truth for the display.
                 If slot.EntryPrice <> 0D Then
@@ -2303,6 +2585,21 @@ Namespace TopStepTrader.UI.ViewModels
                     End If
 
                     If newStop <> slot.StopPrice AndAlso (Not isPrimaryForEdit OrElse primaryEditSucceeded) Then
+                        If slot.TradeRecordId > 0 Then
+                            Dim rid = slot.TradeRecordId
+                            Dim prevStop = slot.StopPrice
+                            Dim ns = newStop
+                            Dim ph = slot.StopPhase.ToString()
+                            Dim svc = _tradeRecordService
+                            Dim log = _logger
+                            Task.Run(Async Function()
+                                         Try
+                                             Await svc.LogStopAdjustmentAsync(rid, DateTimeOffset.UtcNow, prevStop, ns, ph)
+                                         Catch ex As Exception
+                                             log.LogWarning(ex, "ST+ LogStopAdjustmentAsync failed for record {Id}", rid)
+                                         End Try
+                                     End Function)
+                        End If
                         slot.StopPrice = newStop
                         Dim boxForTrail = BoxForSlot(slot)
                         Application.Current?.Dispatcher?.Invoke(Sub()
@@ -2396,6 +2693,29 @@ Namespace TopStepTrader.UI.ViewModels
                 _lastBarTimestampByTradeId.Remove(slot.DebugTradeId)
             End If
 
+            ' FEAT-52: unsubscribe the MarketHub quote stream for this instrument unless
+            ' another open slot still holds the same instrument (defer until both close).
+            ' Capture instrument and PX contract ID before CloseSlot clears the slot fields.
+            Dim closingInstrument As String = slot.Instrument
+            Dim closingSlotIndex As Integer = slot.SlotIndex
+            If _marketHub IsNot Nothing AndAlso Not String.IsNullOrEmpty(closingInstrument) Then
+                Dim fcUnsub = FavouriteContracts.TryGetBySymbolResolved(closingInstrument, _contractResolver)
+                Dim pxIdUnsub As String = If(fcUnsub IsNot Nothing, fcUnsub.PxContractId, Nothing)
+                Dim stillNeeded As Boolean = _slotManager.Slots.Any(
+                    Function(s) s.IsOpen AndAlso s.SlotIndex <> closingSlotIndex AndAlso
+                                String.Equals(s.Instrument, closingInstrument, StringComparison.OrdinalIgnoreCase))
+                If Not stillNeeded AndAlso Not String.IsNullOrEmpty(pxIdUnsub) Then
+                    _lastQuotePrices.TryRemove(pxIdUnsub, Nothing)
+                    Task.Run(Async Function() As Task
+                                 Try
+                                     Await _marketHub.UnsubscribeContractAsync(pxIdUnsub)
+                                 Catch ex As Exception
+                                     _logger.LogDebug(ex, "ST+ MarketHub unsubscribe failed for {Id}", pxIdUnsub)
+                                 End Try
+                             End Function)
+                End If
+            End If
+
             _slotManager.CloseSlot(slot.SlotIndex)
             If Not _slotManager.Slots.Any(Function(s) s.IsOpen) Then
                 SyncLock _timerLock
@@ -2412,12 +2732,12 @@ Namespace TopStepTrader.UI.ViewModels
             Dim entryTimeStr As String = If(slot.EntryTime = DateTime.MinValue, "--", slot.EntryTime.ToString("HH:mm:ss"))
 
             ' ── Row 1 ─────────────────────────────────────────────────────────
-            Dim spFmt As String = If(slot.EntryPrice = 0D, "--", slot.EntryPrice.ToString("F2"))
+            Dim spFmt As String = If(slot.EntryPrice = 0D, "--", slot.EntryPrice.ToString("F4"))
             box.SlotLabel = $"{label}  {slot.Instrument} — {sideLbl} @ {entryTimeStr} — SP: {spFmt}"
 
             ' ── Row 2 ─────────────────────────────────────────────────────────
-            Dim priceFmt As String = If(livePrice = 0D, "--", livePrice.ToString("F2"))
-            Dim slFmt As String = If(slot.StopPrice = 0D, "--", slot.StopPrice.ToString("F2"))
+            Dim priceFmt As String = If(livePrice = 0D, "--", livePrice.ToString("F4"))
+            Dim slFmt As String = If(slot.StopPrice = 0D, "--", slot.StopPrice.ToString("F4"))
             Dim strength As String = AdxBandLabel(slot.CurrentAdx)
             box.LivePriceDisplay = priceFmt
             box.SlDisplay = slFmt

@@ -7,6 +7,7 @@ Namespace TopStepTrader.Core.Enums
     ''' </summary>
     Public Enum BarTimeframe As Integer
         TwoSecond = -2     ' Live-only — maps to TopStepX unit=1 (Second), unitNumber=2
+        FiveSecond = -5    ' Live-only — maps to TopStepX unit=1 (Second), unitNumber=5
         FifteenSecond = 0  ' Live-only — maps to TopStepX unit=1 (Second), unitNumber=15
         OneMinute = 1
         ThreeMinute = 3

@@ -97,6 +97,27 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>FEAT-39: GUID linking this slot to its DebugTrades row while debug capture is on. Nothing when capture disabled.</summary>
         Public Property DebugTradeId As String
 
+        ''' <summary>
+        ''' Most recent live market price for this instrument, sourced from the SignalR
+        ''' UserHub real-time push (preferred) or the live 5-second bar close (fallback).
+        ''' Used for the slot card "Live Price" display and as the input to the Scalper
+        ''' stop-ratchet logic. 0 until the first hub or bar update arrives.
+        ''' </summary>
+        Public Property LivePrice As Decimal
+
+        ''' <summary>
+        ''' UTC timestamp of the most recent live price refresh (hub push or bar fetch).
+        ''' Used to surface stale-price warnings when no update has arrived for several ticks.
+        ''' </summary>
+        Public Property LivePriceUtc As DateTime = DateTime.MinValue
+
+        ''' <summary>
+        ''' Number of consecutive monitoring ticks where the live price fetch failed or
+        ''' returned a stale value. Resets to 0 on a successful fresh price update.
+        ''' Slots with a sustained stale count surface a degraded health warning.
+        ''' </summary>
+        Public Property PriceStaleCount As Integer = 0
+
     End Class
 
 End Namespace
