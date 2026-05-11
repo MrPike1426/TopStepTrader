@@ -2483,17 +2483,17 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim currentClose As Decimal = If(slot.LivePrice > 0D, slot.LivePrice, CDec(closes(n)))
                 Dim tickBars As IList(Of MarketBar) = Nothing
                 Try
-                    Dim rawTickBars = Await _barService.GetLiveBarsAsync(slot.Instrument, BarTimeframe.FiveSecond, 20, live:=False)
+                    Dim rawTickBars = Await _barService.GetLiveBarsAsync(slot.Instrument, BarTimeframe.FifteenSecond, 20, live:=False)
                     If rawTickBars IsNot Nothing AndAlso rawTickBars.Count > 0 Then
-                        ' Strip the forming bar — act only on closed 5s bars.
+                        ' Strip the forming bar — act only on closed 15s bars.
                         Dim lastBarAge = (DateTime.UtcNow - rawTickBars(rawTickBars.Count - 1).Timestamp).TotalSeconds
-                        tickBars = If(lastBarAge < 5 AndAlso rawTickBars.Count > 1,
+                        tickBars = If(lastBarAge < 15 AndAlso rawTickBars.Count > 1,
                                       CType(rawTickBars.Take(rawTickBars.Count - 1).ToList(), IList(Of MarketBar)),
                                       rawTickBars)
                     End If
                 Catch ex As Exception
                     ' Non-fatal: ScalperExitManager.Evaluate tolerates an empty tickBars.
-                    _logger.LogDebug(ex, "ST+ [Slot {Idx}] {Contract} 5s bar fetch (cache) failed — non-fatal",
+                    _logger.LogDebug(ex, "ST+ [Slot {Idx}] {Contract} 15s bar fetch (cache) failed — non-fatal",
                                      slot.SlotIndex, slot.Instrument)
                 End Try
 

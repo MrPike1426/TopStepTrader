@@ -58,22 +58,34 @@ Namespace TopStepTrader.Tests.Trading
             Return list
         End Function
 
-        ''' <summary>30 bars of mild uptrend from 99.30 → 101.33 (0.07/bar).</summary>
-        Private Shared Function RisingBars() As List(Of MarketBar)
+        ''' <summary>30 bars of mild uptrend ending at <paramref name="endClose"/>.</summary>
+        Private Shared Function RisingBarsTo(endClose As Decimal) As List(Of MarketBar)
+            Const barStep As Decimal = 0.07D
             Dim closes(29) As Decimal
             For i = 0 To 29
-                closes(i) = 99.3D + CDec(i) * 0.07D
+                closes(i) = endClose - CDec(29 - i) * barStep
+            Next
+            Return MakeBars(closes)
+        End Function
+
+        ''' <summary>30 bars of mild uptrend from 99.30 → 101.33 (0.07/bar).</summary>
+        Private Shared Function RisingBars() As List(Of MarketBar)
+            Return RisingBarsTo(99.3D + 29D * 0.07D)   ' last close ≈ 101.33
+        End Function
+
+        ''' <summary>30 bars of mild downtrend ending at <paramref name="endClose"/>.</summary>
+        Private Shared Function FallingBarsTo(endClose As Decimal) As List(Of MarketBar)
+            Const barStep As Decimal = 0.07D
+            Dim closes(29) As Decimal
+            For i = 0 To 29
+                closes(i) = endClose + CDec(29 - i) * barStep
             Next
             Return MakeBars(closes)
         End Function
 
         ''' <summary>30 bars of mild downtrend from 100.7 → 98.67 (-0.07/bar).</summary>
         Private Shared Function FallingBars() As List(Of MarketBar)
-            Dim closes(29) As Decimal
-            For i = 0 To 29
-                closes(i) = 100.7D - CDec(i) * 0.07D
-            Next
-            Return MakeBars(closes)
+            Return FallingBarsTo(100.7D - 29D * 0.07D)  ' last close ≈ 98.67
         End Function
 
         ''' <summary>
@@ -117,10 +129,9 @@ Namespace TopStepTrader.Tests.Trading
             Dim slot   = MakeSlot("Buy", entryPrice:=100D, stopPrice:=99D)
             Dim state  = New ScalperState()
             Dim cfg    = New ScalperConfig()
-            Dim bars   = RisingBars()
-            ' Profit < 0.5R so phase stays Initial.
-            Dim price  = 100.3D
-            Dim d = _scalper.Evaluate(slot, state, bars, price, cfg)
+            ' Last closed bar at 100.3 < Breakeven trigger (100.5) — phase must stay Initial.
+            Dim bars   = RisingBarsTo(100.3D)
+            Dim d = _scalper.Evaluate(slot, state, bars, 100.3D, cfg)
 
             Assert.Equal(StopPhase.Initial, d.NewPhase)
             Assert.False(d.ShouldExit)
@@ -134,7 +145,7 @@ Namespace TopStepTrader.Tests.Trading
             slot.StopPrice = 99.95D
             Dim state  = New ScalperState()
             Dim cfg    = New ScalperConfig()
-            Dim bars   = RisingBars()
+            Dim bars   = RisingBarsTo(100.3D)
             Dim d = _scalper.Evaluate(slot, state, bars, 100.3D, cfg)
 
             Assert.True(d.NewStop >= 99.95D, $"SL retraced from 99.95 to {d.NewStop}.")
@@ -147,7 +158,8 @@ Namespace TopStepTrader.Tests.Trading
             Dim slot   = MakeSlot("Buy", entryPrice:=100D, stopPrice:=99D)
             Dim state  = New ScalperState()
             Dim cfg    = New ScalperConfig()
-            Dim bars   = RisingBars()
+            ' Last closed bar must be at 100.5 = entry + 0.5R to trigger Breakeven.
+            Dim bars   = RisingBarsTo(100.5D)
             Dim d = _scalper.Evaluate(slot, state, bars, 100.5D, cfg)
 
             Assert.True(d.NewPhase >= StopPhase.Breakeven)
@@ -160,8 +172,8 @@ Namespace TopStepTrader.Tests.Trading
             Dim state  = New ScalperState()
             Dim cfg    = New ScalperConfig()
 
-            ' First call advances to Breakeven and floors SL at entry.
-            Dim d1 = _scalper.Evaluate(slot, state, RisingBars(), 100.5D, cfg)
+            ' First call: last closed bar at 100.5 = entry + 0.5R → advances to Breakeven.
+            Dim d1 = _scalper.Evaluate(slot, state, RisingBarsTo(100.5D), 100.5D, cfg)
             Assert.True(d1.NewStop >= 100D)
 
             ' Apply the decision back to the slot, then call again with a falling
@@ -180,7 +192,8 @@ Namespace TopStepTrader.Tests.Trading
             Dim slot   = MakeSlot("Buy", entryPrice:=100D, stopPrice:=99D)
             Dim state  = New ScalperState()
             Dim cfg    = New ScalperConfig()
-            Dim bars   = RisingBars()
+            ' Last closed bar at 101.5 = entry + 1.5R to trigger ProfitLock.
+            Dim bars   = RisingBarsTo(101.5D)
             Dim d = _scalper.Evaluate(slot, state, bars, 101.5D, cfg)
 
             Assert.Equal(StopPhase.ProfitLock, d.NewPhase)
@@ -194,8 +207,8 @@ Namespace TopStepTrader.Tests.Trading
             Dim slot   = MakeSlot("Sell", entryPrice:=100D, stopPrice:=101D)
             Dim state  = New ScalperState()
             Dim cfg    = New ScalperConfig()
-            Dim bars   = FallingBars()
-            ' Short profit at 1.5R when price = 100 - 1.5*1 = 98.5
+            ' Last closed bar at 98.5 = entry - 1.5R to trigger ProfitLock for short.
+            Dim bars   = FallingBarsTo(98.5D)
             Dim d = _scalper.Evaluate(slot, state, bars, 98.5D, cfg)
 
             Assert.Equal(StopPhase.ProfitLock, d.NewPhase)
@@ -210,14 +223,14 @@ Namespace TopStepTrader.Tests.Trading
             Dim state  = New ScalperState()
             Dim cfg    = New ScalperConfig()
 
-            Dim d1 = _scalper.Evaluate(slot, state, RisingBars(), 101.5D, cfg)
+            Dim d1 = _scalper.Evaluate(slot, state, RisingBarsTo(101.5D), 101.5D, cfg)
             Assert.Equal(StopPhase.ProfitLock, d1.NewPhase)
 
             slot.StopPrice = d1.NewStop
             slot.StopPhase = d1.NewPhase
 
-            ' Now feed FallingBars (BB lower will be lower) but keep current price safely above.
-            Dim d2 = _scalper.Evaluate(slot, state, FallingBars(), 101.5D, cfg)
+            ' Now feed FallingBars (BB lower will be lower) but keep current price safely above stop.
+            Dim d2 = _scalper.Evaluate(slot, state, FallingBarsTo(101.5D), 101.5D, cfg)
 
             Assert.True(d2.NewStop >= d1.NewStop, "ProfitLock SL must ratchet only.")
         End Sub
@@ -267,12 +280,13 @@ Namespace TopStepTrader.Tests.Trading
         Public Sub ScaredyCat_TightensBandComparedToNormalMode()
             Dim slot   = MakeSlot("Buy", entryPrice:=100D, stopPrice:=99D)
             Dim cfg    = New ScalperConfig()
-            Dim bars   = RisingBars()
-            Dim price  = 101.5D                ' Force ProfitLock so trail uses BB lower.
+            Dim bars   = RisingBarsTo(101.5D)  ' Last closed bar at 101.5 — forces ProfitLock.
+            Dim price  = 101.5D
 
             Dim normalState  As New ScalperState() With {.IsScaredyCatActive = False}
             Dim cautiousState As New ScalperState() With {.IsScaredyCatActive = True}
 
+            ' bars already end at 101.5 (RisingBarsTo above) — ProfitLock fires from closed bar.
             Dim dNormal   = _scalper.Evaluate(slot, normalState,   bars, price, cfg)
             Dim dCautious = _scalper.Evaluate(slot, cautiousState, bars, price, cfg)
 
@@ -320,7 +334,8 @@ Namespace TopStepTrader.Tests.Trading
             Dim slot   = MakeSlot("Sell", entryPrice:=100D, stopPrice:=101D)
             Dim state  = New ScalperState()
             Dim cfg    = New ScalperConfig()
-            Dim bars   = FallingBars()
+            ' Last closed bar at 99.7 — profit = 0.3R < 0.5R so phase stays Initial.
+            Dim bars   = FallingBarsTo(99.7D)
             Dim d = _scalper.Evaluate(slot, state, bars, 99.7D, cfg)
 
             Assert.Equal(StopPhase.Initial, d.NewPhase)
@@ -333,7 +348,8 @@ Namespace TopStepTrader.Tests.Trading
             Dim slot   = MakeSlot("Sell", entryPrice:=100D, stopPrice:=101D)
             Dim state  = New ScalperState()
             Dim cfg    = New ScalperConfig()
-            Dim bars   = FallingBars()
+            ' Last closed bar at 99.5 = entry - 0.5R to trigger short Breakeven.
+            Dim bars   = FallingBarsTo(99.5D)
             Dim d = _scalper.Evaluate(slot, state, bars, 99.5D, cfg)
 
             Assert.True(d.NewPhase >= StopPhase.Breakeven)

@@ -9,12 +9,14 @@ Imports Xunit
 Namespace TopStepTrader.Tests.ViewModels
 
     ''' <summary>
-    ''' BUG-51 (rewritten for FEAT-47): exit management must operate on the
-    ''' just-closed 15-second bar, not on a stale strategy-timeframe close.
-    ''' Under the new architecture, ScalperExitManager.Evaluate consumes the
-    ''' 15s bar list and uses its last close as currentPrice, so phase advances
-    ''' (Initial → Breakeven → ProfitLock) react to live 15s price movement.
-    ''' These tests pin that behaviour at the service contract.
+    ''' BUG-51 / follow-up fix: phase-ladder transitions (Initial → Breakeven → ProfitLock)
+    ''' must be driven by the last *closed* 15-second bar, NOT by the live price.
+    ''' Using the live price allowed intra-bar spikes to snap the SL to Breakeven within
+    ''' seconds of entry before any bar confirmed the move — causing premature exits.
+    ''' These tests pin the corrected behaviour at the ScalperExitManager service contract:
+    '''   • Phase advances when the last closed bar's close reaches the trigger.
+    '''   • A live price spike that does NOT appear in the last closed bar cannot advance phase.
+    '''   • The live currentPrice parameter is still used for the exit-cross check only.
     ''' </summary>
     Public Class SuperTrendPlusBug51Tests
 
@@ -63,16 +65,17 @@ Namespace TopStepTrader.Tests.ViewModels
             }
         End Function
 
-        ' ── Test 1: stale strategy-TF close (below BE trigger) keeps slot Initial ─
-        ' If we feed Evaluate a currentPrice = 104 (0.4R), the slot must stay in
-        ' Initial — the same outcome the old buggy code produced when it received
-        ' the stale strategy-TF bar close.
+        ' ── Test 1: closed-bar close below BE trigger keeps slot in Initial ─
+        ' Last bar close = 100 + 29*0.10 = 102.9 (0.29R) — below the BE trigger of 105 (0.5R).
+        ' currentPrice = 104 is ABOVE the bar close but must not affect the phase decision.
 
         <Fact>
         Public Sub Evaluate_StaleClose_KeepsSlotInInitial()
             Dim slot  = MakeLongSlot()
             Dim state As New ScalperState()
+            ' Bars end at 102.9 — below the Breakeven trigger (105 = entry+0.5R with R=10).
             Dim bars  = MakeUptrendBars(startPrice:=100D, stepSize:=0.10D, count:=30)
+            ' currentPrice above bar close — must be ignored for phase ladder.
             Dim staleClose As Decimal = 104D
 
             Dim decision = _scalper.Evaluate(slot, state, bars, staleClose, DefaultConfig())
@@ -80,16 +83,20 @@ Namespace TopStepTrader.Tests.ViewModels
             Assert.Equal(StopPhase.Initial, decision.NewPhase)
         End Sub
 
-        ' ── Test 2: live 15s close ≥ BE trigger advances slot to Breakeven ─
-        ' currentPrice = 106 (0.6R) crosses BreakevenTriggerR; the scalper must
-        ' advance the phase and pull the stop up to at least entry (100).
+        ' ── Test 2: closed-bar close ≥ BE trigger advances slot to Breakeven ─
+        ' Last bar close = 106 (0.6R above entry=100, R=10) crosses BreakevenTriggerR (0.5R=105).
+        ' The scalper must advance the phase and raise the stop to at least entry (100).
+        ' currentPrice is set LOWER than the trigger (104) to prove it is NOT what drives phase.
 
         <Fact>
         Public Sub Evaluate_LiveClose_AdvancesToBreakeven()
             Dim slot  = MakeLongSlot()
             Dim state As New ScalperState()
-            Dim bars  = MakeUptrendBars(startPrice:=100D, stepSize:=0.10D, count:=30)
-            Dim liveClose As Decimal = 106D
+            ' Bars end at 106 — last closed bar close is at the BE trigger.
+            ' startPrice chosen so that last bar = startPrice + 29*step = 106.
+            Dim bars  = MakeUptrendBars(startPrice:=103.1D, stepSize:=0.10D, count:=30)
+            ' currentPrice is BELOW the trigger to prove the phase is driven by the bar close.
+            Dim liveClose As Decimal = 104D
 
             Dim decision = _scalper.Evaluate(slot, state, bars, liveClose, DefaultConfig())
 
@@ -98,26 +105,32 @@ Namespace TopStepTrader.Tests.ViewModels
                         $"Breakeven stop {decision.NewStop} must be ≥ entry {slot.EntryPrice}.")
         End Sub
 
-        ' ── Test 3: stale vs live within the same bar set — different outcomes ─
-        ' Proves the only difference between the buggy and fixed paths is which
-        ' price reaches the scalper service.
+        ' ── Test 3: low closed-bar close stays Initial; high closed-bar close advances ─
+        ' Proves that only the last bar's close drives the phase ladder, not currentPrice.
+        ' Both calls receive an identical currentPrice (200D, far above any SL) so only
+        ' the bar close can explain the difference in outcome.
 
         <Fact>
         Public Sub Evaluate_StaleVsLive_OnSameBars_ProducesDifferentPhases()
-            Dim bars      = MakeUptrendBars(startPrice:=100D, stepSize:=0.10D, count:=30)
             Dim cfg       = DefaultConfig()
+            ' staleBars end at 103 (0.3R) — below BE trigger of 105.
+            Dim staleBars = MakeUptrendBars(startPrice:=100.1D, stepSize:=0.10D, count:=30)
+            ' liveBars end at 108 (0.8R) — above BE trigger of 105.
+            Dim liveBars  = MakeUptrendBars(startPrice:=105.1D, stepSize:=0.10D, count:=30)
             Dim staleSlot = MakeLongSlot()
             Dim liveSlot  = MakeLongSlot()
             Dim staleState As New ScalperState()
             Dim liveState  As New ScalperState()
+            ' currentPrice is the same for both — only the bar closes differ.
+            Dim commonPrice As Decimal = 200D
 
-            Dim staleResult = _scalper.Evaluate(staleSlot, staleState, bars, 103D, cfg)   ' 0.3R
-            Dim liveResult  = _scalper.Evaluate(liveSlot,  liveState,  bars, 108D, cfg)   ' 0.8R
+            Dim staleResult = _scalper.Evaluate(staleSlot, staleState, staleBars, commonPrice, cfg)
+            Dim liveResult  = _scalper.Evaluate(liveSlot,  liveState,  liveBars,  commonPrice, cfg)
 
             Assert.Equal(StopPhase.Initial,   staleResult.NewPhase)
             Assert.Equal(StopPhase.Breakeven, liveResult.NewPhase)
             Assert.True(liveResult.NewStop >= staleResult.NewStop,
-                        $"Live-price stop {liveResult.NewStop} must be ≥ stale-price stop {staleResult.NewStop}.")
+                        $"Live-bar stop {liveResult.NewStop} must be ≥ stale-bar stop {staleResult.NewStop}.")
         End Sub
 
         ' ── Test 4: ratchet-only invariant — stop never retreats across calls ─

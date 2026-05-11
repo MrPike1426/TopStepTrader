@@ -56,7 +56,9 @@ Namespace TopStepTrader.Services.Trading
         ''' <param name="slot">Open position slot (not mutated).</param>
         ''' <param name="state">Per-slot scalper state (mutated in place and returned on the decision).</param>
         ''' <param name="tickBars15s">Closed 15s bars, oldest first. Last element is the just-closed bar.</param>
-        ''' <param name="currentPrice">Most recent price (typically the just-closed bar's close).</param>
+        ''' <param name="currentPrice">Most recent live price — used only for the exit-cross check.
+        ''' Phase-ladder transitions are always driven by the last closed bar's close so that
+        ''' intra-bar live-price spikes cannot prematurely advance the stop phase.</param>
         ''' <param name="config">Scalper configuration thresholds.</param>
         Public Function Evaluate(slot As PositionSlot,
                                  state As ScalperState,
@@ -84,14 +86,20 @@ Namespace TopStepTrader.Services.Trading
             End If
 
             Dim n = tickBars15s.Count - 1
-            Dim highs   = tickBars15s.Select(Function(b) b.High).ToList()
-            Dim lows    = tickBars15s.Select(Function(b) b.Low).ToList()
-            Dim closes  = tickBars15s.Select(Function(b) b.Close).ToList()
+            Dim highs = tickBars15s.Select(Function(b) b.High).ToList()
+            Dim lows = tickBars15s.Select(Function(b) b.Low).ToList()
+            Dim closes = tickBars15s.Select(Function(b) b.Close).ToList()
 
-            Dim isLong  = slot.Side = "Buy"
-            Dim entry   = slot.EntryPrice
-            Dim R       = slot.InitialRisk
-            Dim profit  = If(isLong, currentPrice - entry, entry - currentPrice)
+            Dim isLong = slot.Side = "Buy"
+            Dim entry = slot.EntryPrice
+            Dim R = slot.InitialRisk
+
+            ' Phase-ladder transitions are based on the last *closed* bar's close, not the
+            ' live price. Using the live price caused intra-bar spikes to prematurely advance
+            ' the phase (e.g. a 0.5R tick spike snapping the SL to breakeven within seconds
+            ' of entry, before the move was confirmed on a closed bar).
+            Dim closedBarClose As Decimal = closes(n)
+            Dim profit = If(isLong, closedBarClose - entry, entry - closedBarClose)
 
             ' ── Indicators ───────────────────────────────────────────────────
             Dim st = TechnicalIndicators.SuperTrend(highs, lows, closes)
@@ -103,7 +111,7 @@ Namespace TopStepTrader.Services.Trading
             If Not state.IsScaredyCatActive AndAlso n >= config.ScaredyLookbackBars Then
                 Dim middleAgainst = True
                 For i = n - config.ScaredyLookbackBars + 1 To n
-                    Dim cur  = bb.Middle(i)
+                    Dim cur = bb.Middle(i)
                     Dim prev = bb.Middle(i - 1)
                     If Single.IsNaN(cur) OrElse Single.IsNaN(prev) Then
                         middleAgainst = False
@@ -137,9 +145,9 @@ Namespace TopStepTrader.Services.Trading
             End If
 
             ' ── Phase ladder (ratchet-only stop) ─────────────────────────────
-            Dim phase   = slot.StopPhase
+            Dim phase = slot.StopPhase
             Dim newStop = slot.StopPrice
-            Dim stLine  = If(n < st.Line.Length AndAlso Not Single.IsNaN(st.Line(n)),
+            Dim stLine = If(n < st.Line.Length AndAlso Not Single.IsNaN(st.Line(n)),
                              CDec(st.Line(n)), newStop)
 
             If profit >= config.ProfitLockTriggerR * R Then
@@ -177,16 +185,16 @@ Namespace TopStepTrader.Services.Trading
 
             state.LastEvaluatedBarTime = tickBars15s(n).Timestamp
 
-            decision.NewStop    = newStop
-            decision.NewPhase   = phase
+            decision.NewStop = newStop
+            decision.NewPhase = phase
             decision.ShouldExit = shouldExit
-            decision.Reason     = reason
-            decision.NewState   = state
+            decision.Reason = reason
+            decision.NewState = state
 
             _logger.LogInformation(
-                "Scalper [Slot {Idx}] {Contract} side={Side} profit={Profit:F2} R={R:F2} phase={Phase} stop={Stop:F2} scaredy={Scaredy} exit={Exit}",
+                "Scalper [Slot {Idx}] {Contract} side={Side} closedProfit={Profit:F2} R={R:F2} phase={Phase} stop={Stop:F2} livePrice={Live:F2} scaredy={Scaredy} exit={Exit}",
                 slot.SlotIndex, slot.Instrument, slot.Side, profit, R, phase, newStop,
-                state.IsScaredyCatActive, shouldExit)
+                currentPrice, state.IsScaredyCatActive, shouldExit)
 
             Return decision
         End Function

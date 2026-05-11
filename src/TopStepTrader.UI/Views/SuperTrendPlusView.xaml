@@ -384,7 +384,7 @@
                             <CheckBox Content="🐞 Debug Capture"
                                       IsChecked="{Binding IsDebugCaptureEnabled, Mode=TwoWay}"
                                       Foreground="#FFB74D" FontSize="12" VerticalAlignment="Center"
-                                      ToolTip="Records every 15-second tick + SL/AI/exit events for each open trade to debug_trades.db. Default OFF."/>
+                                      ToolTip="Records every 15-second tick + SL/AI/exit events for each open trade to TopStepTrader_Diagnostics\debug_trades.db. Default OFF."/>
                         </StackPanel>
                     </Grid>
 
