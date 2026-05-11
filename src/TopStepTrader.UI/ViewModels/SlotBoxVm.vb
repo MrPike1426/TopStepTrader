@@ -423,6 +423,18 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Private _livePriceSourceLabel As String = String.Empty
+        ''' <summary>FEAT-54: badge showing where the live price came from — "Quote" (sub-second
+        ''' MarketHub push), "Bar" (history-bar fallback), or empty (no live tick yet).</summary>
+        Public Property LivePriceSourceLabel As String
+            Get
+                Return _livePriceSourceLabel
+            End Get
+            Set(value As String)
+                SetProperty(_livePriceSourceLabel, value)
+            End Set
+        End Property
+
         Private _slDisplay As String = String.Empty
         ''' <summary>"SL: 1233.00" — current stop loss price.</summary>
         Public Property SlDisplay As String

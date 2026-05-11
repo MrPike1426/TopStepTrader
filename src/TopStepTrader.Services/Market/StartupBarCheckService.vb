@@ -88,7 +88,7 @@ Namespace TopStepTrader.Services.Market
                                 If(latest.HasValue, latest.Value.ToString("g"), "none"))
                             results.Add(New StartupBarCheckResult With {
                                 .ContractId = contract.PxContractId,
-                                .FriendlyName = contract.Name,
+                                .FriendlyName = If(String.IsNullOrWhiteSpace(contract.DisplayName), contract.Name, contract.DisplayName),
                                 .Timeframe = tf,
                                 .LatestBar = latest
                             })

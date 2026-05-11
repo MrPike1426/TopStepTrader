@@ -141,6 +141,15 @@
                                        FontFamily="Consolas" FontSize="12"/>
                             <TextBlock Text="{Binding LivePriceDisplay, Mode=OneWay}"
                                        Foreground="White" FontFamily="Consolas" FontSize="12" FontWeight="SemiBold"/>
+                            <!-- FEAT-54: Live price source badge ("Quote" / "Bar"). Collapsed when empty. -->
+                            <Border Margin="6,0,0,0" Padding="4,0" CornerRadius="2"
+                                    VerticalAlignment="Center" Background="#33FFFFFF"
+                                    Visibility="{Binding LivePriceSourceLabel, Mode=OneWay,
+                                                 Converter={StaticResource StringToVisibilityConverter}}">
+                                <TextBlock Text="{Binding LivePriceSourceLabel, Mode=OneWay}"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontFamily="Consolas" FontSize="10"/>
+                            </Border>
                         </StackPanel>
                         <!-- SL + $ risk -->
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">

@@ -1,4 +1,5 @@
 Imports TopStepTrader.Core.Enums
+Imports TopStepTrader.Core.Interfaces
 
 Namespace TopStepTrader.Core.Models
 
@@ -117,6 +118,21 @@ Namespace TopStepTrader.Core.Models
         ''' Slots with a sustained stale count surface a degraded health warning.
         ''' </summary>
         Public Property PriceStaleCount As Integer = 0
+
+        ''' <summary>
+        ''' FEAT-54: Runtime-only handle returned by <c>ILivePnLService.Subscribe</c>
+        ''' when this slot opens. Disposed by <c>SlotManager.EndLiveTracking</c> on
+        ''' slot release or before re-subscribing on side flip / contract delta.
+        ''' Not serialised — must be re-established on app restart.
+        ''' </summary>
+        Public Property LivePriceSubscription As IDisposable
+
+        ''' <summary>
+        ''' FEAT-54: Source of the most recent <see cref="LivePrice"/> tick — Quote (sub-second
+        ''' MarketHub push), Bar (2-second history-bar fallback), or None (no live tick yet
+        ''' or metadata-only correction). Drives the slot-card source badge.
+        ''' </summary>
+        Public Property LivePriceSource As LivePriceSource = LivePriceSource.None
 
     End Class
 

@@ -262,9 +262,16 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _marketHub As MarketHubClient
         Private _marketHubHandler As EventHandler(Of MarketQuoteEventArgs)
 
+        ''' <summary>FEAT-54: Per-slot live price/P&amp;L push stream. Replaces the slot-path
+        ''' <c>_lastQuotePrices</c> polling fallback for open positions — quotes and bar fallback
+        ''' arrive on a single push channel, with diagnostics surfaced via <c>GetDiagnostics</c>.</summary>
+        Private ReadOnly _livePnL As ILivePnLService
+
         ''' <summary>FEAT-52: per-instrument cache of the most recent last-trade price from
         ''' MarketHub.QuoteReceived. Keyed by resolved PX contract ID (e.g. "CON.F.US.MNQ.U26").
-        ''' Written by the SignalR callback thread; read by the timer + hub threads.</summary>
+        ''' Written by the SignalR callback thread; read by the timer + hub threads.
+        ''' FEAT-54: still drives the watchlist quote-cache (out-of-scope for this ticket);
+        ''' open-slot cards no longer read from this dictionary.</summary>
         Private ReadOnly _lastQuotePrices As New ConcurrentDictionary(Of String, Double)(
             StringComparer.OrdinalIgnoreCase)
 
@@ -559,7 +566,8 @@ Namespace TopStepTrader.UI.ViewModels
                        Optional configRepo As SuperTrendPlusConfigRepository = Nothing,
                        Optional debugCapture As Core.Interfaces.IDebugTradeCaptureService = Nothing,
                        Optional userHub As UserHubClient = Nothing,
-                       Optional marketHub As MarketHubClient = Nothing)
+                       Optional marketHub As MarketHubClient = Nothing,
+                       Optional livePnL As ILivePnLService = Nothing)
             _barService = barService
             _orderService = orderService
             _session = session
@@ -574,6 +582,7 @@ Namespace TopStepTrader.UI.ViewModels
             _scalper = scalper
             _userHub = userHub
             _marketHub = marketHub
+            _livePnL = livePnL
             Config = New SuperTrendPlusConfig()
             _slotManager = New SlotManager(Config)
             _exitEngine = New ExitSignalEngine(
@@ -790,6 +799,11 @@ Namespace TopStepTrader.UI.ViewModels
             End If
             _lastQuotePrices.Clear()
             _prevStDirByInstrument.Clear()
+            ' FEAT-54: dispose every active slot live-price subscription before resetting
+            ' slot state so we never leak a MarketHub ref-count past Stop Monitoring.
+            For Each s In _slotManager.Slots
+                _slotManager.EndLiveTracking(s)
+            Next
             For Each wRow In WatchlistItems
                 wRow.Arrow = "–"
                 wRow.AdxDisplay = "ADX:–"
@@ -1988,6 +2002,11 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
             End If
 
+            ' FEAT-54: Begin push-driven live price + P&L tracking for this slot. Replaces
+            ' the polling fallback path on the slot card. Uses the same MarketHub subscription
+            ' the watchlist uses (LivePnLService ref-counts internally).
+            BeginSlotLiveTracking(slot)
+
             ' ── Debug Capture: begin trade record (FEAT-39) ──────────────────────
             If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing Then
                 Dim newTradeId = Guid.NewGuid().ToString("D")
@@ -2199,27 +2218,25 @@ Namespace TopStepTrader.UI.ViewModels
 
                 Dim brokerVwap As Decimal = CDec(data.NetPrice)
                 Dim brokerNetPos As Integer = Math.Abs(data.NetPos)
+                Dim brokerSide As String = If(data.NetPos > 0, "Buy", "Sell")
 
                 ' Authoritatively sync EntryPrice/Contracts from broker VWAP — fixes the
                 ' scale-in drift bug where the original first-fill price was used for P&L.
                 _slotManager.SyncFromBrokerVwap(slot, brokerVwap, brokerNetPos)
 
+                ' FEAT-54: re-subscribe the live price stream only when the slot's signed size
+                ' has materially changed (side flip OR contracts delta). Pure EntryPrice drift
+                ' is absorbed by ILivePnLService.Subscribe's internal entry-price self-correction
+                ' so we do not churn the MarketHub ref-count on every VWAP fill.
+                If _slotManager.NeedsResubscribe(slot, brokerSide, brokerNetPos) Then
+                    BeginSlotLiveTracking(slot)
+                End If
+
                 Dim openPnl As Decimal = CDec(data.OpenPnL)
                 Dim derivedLivePrice As Decimal = slot.LivePrice
                 Dim haveBrokerPnl As Boolean = (openPnl <> 0D)
-                If Not haveBrokerPnl Then
-                    ' FEAT-52: when broker OpenPnL is 0 (futures REST snapshot), prefer the
-                    ' MarketHub quote-cache price over the older bar-close LivePrice for the
-                    ' card display. This keeps Live Price visibly fresh even on hub pushes
-                    ' that arrive between 5-second bar fetches.
-                    Dim fcQuoteHub = FavouriteContracts.TryGetBySymbolResolved(data.ContractId, _contractResolver)
-                    If fcQuoteHub IsNot Nothing AndAlso Not String.IsNullOrEmpty(fcQuoteHub.PxContractId) Then
-                        Dim quotePx As Double = 0D
-                        If _lastQuotePrices.TryGetValue(fcQuoteHub.PxContractId, quotePx) AndAlso quotePx > 0D Then
-                            derivedLivePrice = CDec(quotePx)
-                        End If
-                    End If
-                End If
+                ' FEAT-54: removed the _lastQuotePrices fallback for the slot card —
+                ' OnSlotLiveTick now drives slot.LivePrice from the push stream.
                 If haveBrokerPnl Then
                     slot.UnrealizedPnl = openPnl
                     ' Derive implied market price from broker P&L so the slot card's
@@ -2248,6 +2265,64 @@ Namespace TopStepTrader.UI.ViewModels
             Catch ex As Exception
                 ' Never let a hub-thread exception crash the SignalR connection.
                 _logger.LogWarning(ex, "ST+ OnHubPositionUpdated handler error")
+            End Try
+        End Sub
+
+        ''' <summary>
+        ''' FEAT-54: Per-slot push tick from <see cref="ILivePnLService"/>. Mirrors the semantics
+        ''' of <c>PriceTrackerViewModel.OnPnLTick</c>:
+        '''   • Always apply the broker-derived <c>UnrealisedPnL</c> — a metadata-only tick
+        '''     (<c>Source = None</c>) is the broker correcting our entry estimate, so its
+        '''     recomputed P&amp;L is authoritative.
+        '''   • Only update <c>LivePrice</c> / <c>LivePriceUtc</c> / <c>LivePriceSource</c>
+        '''     when the tick carries a real price (<c>Source &lt;&gt; None</c>).
+        ''' Marshals the slot-card refresh onto the dispatcher.
+        ''' </summary>
+        Private Sub OnSlotLiveTick(slot As PositionSlot, t As LivePnLTick)
+            If slot Is Nothing OrElse t Is Nothing OrElse Not slot.IsOpen Then Return
+            Dim hasPrice As Boolean = (t.Source <> LivePriceSource.None)
+
+            slot.UnrealizedPnl = t.UnrealisedPnL
+            If hasPrice Then
+                slot.LivePrice = t.Price
+                slot.LivePriceUtc = t.TimestampUtc
+                slot.LivePriceSource = t.Source
+                slot.PriceStaleCount = 0
+            End If
+
+            Dim box = BoxForSlot(slot)
+            Dim displayPrice As Decimal = slot.LivePrice
+            Dim displayPnl As Decimal = t.UnrealisedPnL
+            Dim sourceLabel As String = If(slot.LivePriceSource = LivePriceSource.None,
+                                           String.Empty, slot.LivePriceSource.ToString())
+            Application.Current?.Dispatcher?.BeginInvoke(
+                Sub()
+                    If box Is Nothing OrElse Not slot.IsOpen Then Return
+                    box.LivePriceSourceLabel = sourceLabel
+                    UpdatePositionDisplay(box, slot, displayPnl, displayPrice)
+                End Sub)
+        End Sub
+
+        ''' <summary>
+        ''' FEAT-54: Open or refresh the live-price subscription for a slot. Disposes any
+        ''' prior subscription before assigning the new one (handled by <c>SlotManager.AssignSubscription</c>).
+        ''' The callback captures <paramref name="slot"/> directly so we never have to re-walk
+        ''' slots from the tick's contract id.
+        ''' </summary>
+        Private Sub BeginSlotLiveTracking(slot As PositionSlot)
+            If _livePnL Is Nothing OrElse slot Is Nothing OrElse String.IsNullOrEmpty(slot.Instrument) Then Return
+            Try
+                Dim signed As Integer = If(String.Equals(slot.Side, "Buy", StringComparison.OrdinalIgnoreCase),
+                                           slot.Contracts, -slot.Contracts)
+                Dim accId As Long = slot.AccountId
+                Dim capturedSlot = slot
+                Dim handle = _livePnL.Subscribe(slot.Instrument, slot.EntryPrice, signed,
+                                                Sub(t) OnSlotLiveTick(capturedSlot, t),
+                                                accountId:=accId)
+                _slotManager.AssignSubscription(slot, handle)
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ [Slot {Idx}] BeginSlotLiveTracking failed for {Contract}",
+                                   slot.SlotIndex, slot.Instrument)
             End Try
         End Sub
 
@@ -2399,54 +2474,37 @@ Namespace TopStepTrader.UI.ViewModels
                 ' tens of dollars away from the broker's own Positions tab. The hub push
                 ' (OnHubPositionUpdated) is the primary live-price source; this remains as
                 ' a per-tick fallback when no hub event has arrived recently.
-                Dim currentClose As Decimal = CDec(closes(n))  ' fallback to strategy-TF close
+                ' FEAT-54: currentClose is now sourced from slot.LivePrice (push-driven by
+                ' ILivePnLService → OnSlotLiveTick), with the strategy-TF close as the ultimate
+                ' fallback when no live tick has arrived yet (first poll after slot open).
+                ' tickBars below is fed to the Scalper for indicator computation only — the
+                ' historic local-cache 5s bars (live:=False) are sufficient since price-based
+                ' decisions now flow from currentClose.
+                Dim currentClose As Decimal = If(slot.LivePrice > 0D, slot.LivePrice, CDec(closes(n)))
                 Dim tickBars As IList(Of MarketBar) = Nothing
                 Try
-                    Dim rawTickBars = Await _barService.GetLiveBarsAsync(slot.Instrument, BarTimeframe.FiveSecond, 20, live:=True)
+                    Dim rawTickBars = Await _barService.GetLiveBarsAsync(slot.Instrument, BarTimeframe.FiveSecond, 20, live:=False)
                     If rawTickBars IsNot Nothing AndAlso rawTickBars.Count > 0 Then
                         ' Strip the forming bar — act only on closed 5s bars.
                         Dim lastBarAge = (DateTime.UtcNow - rawTickBars(rawTickBars.Count - 1).Timestamp).TotalSeconds
                         tickBars = If(lastBarAge < 5 AndAlso rawTickBars.Count > 1,
                                       CType(rawTickBars.Take(rawTickBars.Count - 1).ToList(), IList(Of MarketBar)),
                                       rawTickBars)
-                        currentClose = CDec(tickBars(tickBars.Count - 1).Close)
-                        slot.LivePrice = currentClose
-                        slot.LivePriceUtc = DateTime.UtcNow
-                        slot.PriceStaleCount = 0
-                        _logger.LogDebug("ST+ [Slot {Idx}] {Contract} currentClose={Price} (5s live bar close)",
-                                         slot.SlotIndex, slot.Instrument, currentClose)
-                    Else
-                        slot.PriceStaleCount += 1
-                        _logger.LogWarning("ST+ [Slot {Idx}] {Contract} 5s live-bar fetch returned no bars (stale count={Stale})",
-                                           slot.SlotIndex, slot.Instrument, slot.PriceStaleCount)
                     End If
                 Catch ex As Exception
-                    ' Non-fatal: fall back to strategy-TF close already assigned above.
-                    ' Track stale-price ticks so a sustained outage surfaces a UI warning
-                    ' rather than freezing silently.
-                    slot.PriceStaleCount += 1
-                    _logger.LogWarning(ex, "ST+ [Slot {Idx}] {Contract} 5s live-bar fetch failed (stale count={Stale})",
-                                       slot.SlotIndex, slot.Instrument, slot.PriceStaleCount)
+                    ' Non-fatal: ScalperExitManager.Evaluate tolerates an empty tickBars.
+                    _logger.LogDebug(ex, "ST+ [Slot {Idx}] {Contract} 5s bar fetch (cache) failed — non-fatal",
+                                     slot.SlotIndex, slot.Instrument)
                 End Try
 
-                ' FEAT-52: prefer the sub-second MarketHub quote price over the 5-second bar
-                ' close when one has been received. The bar fetch above remains as the
-                ' fallback for the brief window between SubscribeContractAsync and the first
-                ' tick. currentClose flows into both the local P&L formula and the Scalper
-                ' stop ratchet, so quote-sourced prices propagate downstream automatically.
-                Dim fcQuote = FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
-                If fcQuote IsNot Nothing AndAlso Not String.IsNullOrEmpty(fcQuote.PxContractId) Then
-                    Dim quotePx As Double = 0D
-                    If _lastQuotePrices.TryGetValue(fcQuote.PxContractId, quotePx) AndAlso quotePx > 0D Then
-                        currentClose = CDec(quotePx)
-                        slot.LivePrice = currentClose
-                        slot.LivePriceUtc = DateTime.UtcNow
-                        slot.PriceStaleCount = 0
+                ' FEAT-54: stale-price detection now driven by ILivePnLService diagnostics,
+                ' not the local 5s bar fetch. Surface a Warning when the underlying bar-poll
+                ' fallback inside LivePnLService has been returning zero for ≥5 attempts.
+                If _livePnL IsNot Nothing Then
+                    Dim diag = _livePnL.GetDiagnostics(slot.Instrument)
+                    If diag.BarFetchZeroCount >= 5 AndAlso slot.Health = SlotHealth.Healthy Then
+                        slot.Health = SlotHealth.Warning
                     End If
-                End If
-
-                If slot.PriceStaleCount >= 2 AndAlso slot.Health = SlotHealth.Healthy Then
-                    slot.Health = SlotHealth.Warning
                 End If
 
                 ' Derive P&L locally from the freshest price (5s bar close).
@@ -3028,6 +3086,11 @@ Namespace TopStepTrader.UI.ViewModels
                         _timer = Nothing
                     End SyncLock
                 End If
+                ' FEAT-54: defensive — ensure no live-price subscription survives the VM,
+                ' even if StopMonitoring was never invoked (e.g. tab replaced before start).
+                For Each s In _slotManager.Slots
+                    _slotManager.EndLiveTracking(s)
+                Next
             End If
         End Sub
 

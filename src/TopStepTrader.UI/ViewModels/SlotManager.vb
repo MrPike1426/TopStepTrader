@@ -1,4 +1,5 @@
 Imports TopStepTrader.Core.Enums
+Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Settings
 
@@ -162,6 +163,7 @@ Namespace TopStepTrader.UI.ViewModels
         Public Sub CloseSlot(index As Integer)
             If index >= 0 AndAlso index < _slots.Length Then
                 Dim s = _slots(index)
+                EndLiveTracking(s)
                 s.IsOpen       = False
                 s.Health       = SlotHealth.Healthy
                 s.Instrument   = String.Empty
@@ -189,8 +191,53 @@ Namespace TopStepTrader.UI.ViewModels
                 s.LivePrice          = 0D
                 s.LivePriceUtc       = DateTime.MinValue
                 s.PriceStaleCount    = 0
+                s.LivePriceSource = LivePriceSource.None
             End If
         End Sub
+
+        ''' <summary>
+        ''' FEAT-54: Assigns the <see cref="ILivePnLService"/> subscription handle for a slot.
+        ''' Disposes any prior handle stored on the slot before assigning the new one so
+        ''' a re-subscription (side flip / contract delta) cannot leak the old subscription.
+        ''' Pass <c>Nothing</c> for <paramref name="subscription"/> to clear without disposing.
+        ''' </summary>
+        Public Sub AssignSubscription(slot As PositionSlot, subscription As IDisposable)
+            If slot Is Nothing Then Return
+            Dim prior = slot.LivePriceSubscription
+            If prior IsNot Nothing AndAlso Not Object.ReferenceEquals(prior, subscription) Then
+                Try : prior.Dispose() : Catch : End Try
+            End If
+            slot.LivePriceSubscription = subscription
+        End Sub
+
+        ''' <summary>
+        ''' FEAT-54: Disposes the slot's live-price subscription and clears the
+        ''' source tag. Safe to call repeatedly; no-op when nothing is attached.
+        ''' Invoked by <see cref="CloseSlot"/> and by the VM before re-subscribing.
+        ''' </summary>
+        Public Sub EndLiveTracking(slot As PositionSlot)
+            If slot Is Nothing Then Return
+            Dim existing = slot.LivePriceSubscription
+            If existing IsNot Nothing Then
+                Try : existing.Dispose() : Catch : End Try
+                slot.LivePriceSubscription = Nothing
+            End If
+            slot.LivePriceSource = LivePriceSource.None
+        End Sub
+
+        ''' <summary>
+        ''' FEAT-54: Returns True only when a re-subscription is required —
+        ''' the slot's <c>Side</c> has flipped, or its <c>Contracts</c> count differs
+        ''' from <paramref name="newContracts"/>. <c>EntryPrice</c> drift alone returns
+        ''' False because <see cref="ILivePnLService"/> self-corrects entry price internally
+        ''' and re-subscribing on every VWAP fill churns the MarketHub ref-count.
+        ''' </summary>
+        Public Function NeedsResubscribe(slot As PositionSlot, newSide As String, newContracts As Integer) As Boolean
+            If slot Is Nothing OrElse Not slot.IsOpen Then Return False
+            If Not String.Equals(slot.Side, newSide, StringComparison.OrdinalIgnoreCase) Then Return True
+            If slot.Contracts <> newContracts Then Return True
+            Return False
+        End Function
 
         Public Sub CloseAllForInstrument(instrument As String)
             For i = 0 To _slots.Length - 1

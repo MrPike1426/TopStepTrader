@@ -1,4 +1,5 @@
 Imports TopStepTrader.Core.Enums
+Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.UI.ViewModels
 Imports Xunit
@@ -219,6 +220,100 @@ Namespace TopStepTrader.Tests.ViewModels
             Dim slot = sm.TryOpenSlot("MCLE", "Buy", 65.0F, Bar1, 65.0D, 65.5D)
             sm.CloseSlot(slot.SlotIndex)
             Assert.Equal(0, sm.Slots(slot.SlotIndex).LastAdxBand)
+        End Sub
+
+        ' ── FEAT-54: live-subscription lifecycle ─────────────────────────────
+
+        Private NotInheritable Class CountingSubscription
+            Implements IDisposable
+            Public DisposeCount As Integer
+            Public Sub Dispose() Implements IDisposable.Dispose
+                DisposeCount += 1
+            End Sub
+        End Class
+
+        <Fact>
+        Public Sub AssignSubscription_DisposesPriorHandle()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 25.0F, Bar1, 65.0D, 65.5D)
+            Dim first = New CountingSubscription()
+            Dim second = New CountingSubscription()
+
+            sm.AssignSubscription(slot, first)
+            sm.AssignSubscription(slot, second)
+
+            Assert.Equal(1, first.DisposeCount)
+            Assert.Equal(0, second.DisposeCount)
+            Assert.Same(second, slot.LivePriceSubscription)
+        End Sub
+
+        <Fact>
+        Public Sub EndLiveTracking_DisposesAndClearsSource()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 25.0F, Bar1, 65.0D, 65.5D)
+            Dim sub1 = New CountingSubscription()
+            sm.AssignSubscription(slot, sub1)
+            slot.LivePriceSource = LivePriceSource.Quote
+
+            sm.EndLiveTracking(slot)
+
+            Assert.Equal(1, sub1.DisposeCount)
+            Assert.Null(slot.LivePriceSubscription)
+            Assert.Equal(LivePriceSource.None, slot.LivePriceSource)
+        End Sub
+
+        <Fact>
+        Public Sub EndLiveTracking_NoSubscription_DoesNotThrow()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 25.0F, Bar1, 65.0D, 65.5D)
+            sm.EndLiveTracking(slot)
+            sm.EndLiveTracking(slot) ' second call must be a no-op
+            Assert.Null(slot.LivePriceSubscription)
+        End Sub
+
+        <Fact>
+        Public Sub CloseSlot_DisposesLiveSubscription()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 25.0F, Bar1, 65.0D, 65.5D)
+            Dim sub1 = New CountingSubscription()
+            sm.AssignSubscription(slot, sub1)
+
+            sm.CloseSlot(slot.SlotIndex)
+
+            Assert.Equal(1, sub1.DisposeCount)
+            Assert.Null(sm.Slots(slot.SlotIndex).LivePriceSubscription)
+        End Sub
+
+        <Fact>
+        Public Sub NeedsResubscribe_SameSideAndContracts_ReturnsFalse()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 25.0F, Bar1, 65.0D, 65.5D)
+            slot.Contracts = 2
+            Assert.False(sm.NeedsResubscribe(slot, "Buy", 2))
+        End Sub
+
+        <Fact>
+        Public Sub NeedsResubscribe_SideFlip_ReturnsTrue()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 25.0F, Bar1, 65.0D, 65.5D)
+            slot.Contracts = 2
+            Assert.True(sm.NeedsResubscribe(slot, "Sell", 2))
+        End Sub
+
+        <Fact>
+        Public Sub NeedsResubscribe_ContractsDelta_ReturnsTrue()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 25.0F, Bar1, 65.0D, 65.5D)
+            slot.Contracts = 2
+            Assert.True(sm.NeedsResubscribe(slot, "Buy", 3))
+        End Sub
+
+        <Fact>
+        Public Sub NeedsResubscribe_ClosedSlot_ReturnsFalse()
+            Dim sm = New SlotManager(MakeConfig())
+            Dim slot = sm.TryOpenSlot("MCLE", "Buy", 25.0F, Bar1, 65.0D, 65.5D)
+            sm.CloseSlot(slot.SlotIndex)
+            Assert.False(sm.NeedsResubscribe(sm.Slots(slot.SlotIndex), "Buy", 1))
         End Sub
 
     End Class
