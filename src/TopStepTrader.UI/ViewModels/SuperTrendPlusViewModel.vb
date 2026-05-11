@@ -2552,9 +2552,22 @@ Namespace TopStepTrader.UI.ViewModels
                 ' Compute RSI-14 from bar closes
                 Dim rsiExit = TechnicalIndicators.RSI(closes, 14)
 
-                ' Set InitialRisk once EntryPrice is confirmed (after first snapshot)
+                ' Set InitialRisk once EntryPrice is confirmed (after first snapshot).
+                ' BUG-75: Floor R at the entry-bar ATR to prevent ProfitLock from triggering on
+                ' trivially small dollar moves.  At a SuperTrend flip the SL is placed right at
+                ' the ST line, which is always within 1–3 ticks of the close, so the raw
+                ' |EntryPrice - StopPrice| can be as small as $3 on MGC.  That makes 1.5R = ~$4.50,
+                ' and even a single tick in profit satisfies ProfitLock and snaps the SL to the
+                ' Bollinger-band trail.  By flooring R at EntryAtr (the ATR captured from the
+                ' primary-TF bars at signal time), we ensure the phase ladder uses a meaningful
+                ' baseline that reflects actual market volatility rather than the arbitrarily tight
+                ' ST-line distance at the flip bar.
                 If slot.InitialRisk = 0D AndAlso slot.EntryPrice <> 0D AndAlso slot.StopPrice <> 0D Then
-                    slot.InitialRisk = Math.Abs(slot.EntryPrice - slot.StopPrice)
+                    Dim rawRisk As Decimal = Math.Abs(slot.EntryPrice - slot.StopPrice)
+                    slot.InitialRisk = If(slot.EntryAtr > 0D, Math.Max(rawRisk, slot.EntryAtr), rawRisk)
+                    _logger.LogInformation(
+                        "ST+ [Slot {Idx}] InitialRisk stamped: raw={Raw:F4} atr={Atr:F4} final={Final:F4} (entry={Entry:F4} stop={Stop:F4})",
+                        slot.SlotIndex, rawRisk, slot.EntryAtr, slot.InitialRisk, slot.EntryPrice, slot.StopPrice)
                 End If
 
                 ' Always refresh current ADX for live display (independent of entry confirmation).
