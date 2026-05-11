@@ -32,7 +32,10 @@ Namespace TopStepTrader.Core.Trading
                 .PxRootSymbol = "MES",
                 .CommissionTickBuffer = 1,
                 .MultiConfluenceTimeframeMinutes = 5,
-                .RoundTripFee = 0.74D
+                .RoundTripFee = 0.74D,
+                .PhasedTrailMinInitialStopTicks = 24,
+                .PhasedTrailMaxInitialStopTicks = 80,
+                .PhasedTrailBreakevenMinTicks = 20
             })
 
             ' MNQ — Micro Nasdaq-100  [ProjectX symbolId: F.US.MNQ; roll: quarterly H/M/U/Z; U26=Sep 2026]
@@ -71,7 +74,10 @@ Namespace TopStepTrader.Core.Trading
                 .CommissionTickBuffer = 2,
                 .MultiConfluenceTimeframeMinutes = 10,
                 .RoundTripFee = 1.24D,
-                .RollLeadDays = 28
+                .RollLeadDays = 28,
+                .PhasedTrailMinInitialStopTicks = 10,
+                .PhasedTrailMaxInitialStopTicks = 30,
+                .PhasedTrailBreakevenMinTicks = 10
             })
 
             ' M6E — Micro EUR/USD  [ProjectX symbolId: F.US.M6E; roll: quarterly H/M/U/Z; U26=Sep 2026]
@@ -82,7 +88,10 @@ Namespace TopStepTrader.Core.Trading
                 .PxRootSymbol = "M6E",
                 .CommissionTickBuffer = 1,
                 .MultiConfluenceTimeframeMinutes = 10,
-                .RoundTripFee = 0.52D
+                .RoundTripFee = 0.52D,
+                .PhasedTrailMinInitialStopTicks = 6,
+                .PhasedTrailMaxInitialStopTicks = 16,
+                .PhasedTrailBreakevenMinTicks = 5
             })
 
             ' OIL — MCLE (Micro WTI Crude Oil)  [ProjectX symbolId: F.US.MCLE; roll: monthly; M26=Jun 2026 front-month]
@@ -93,7 +102,10 @@ Namespace TopStepTrader.Core.Trading
                 .CommissionTickBuffer = 2,
                 .MultiConfluenceTimeframeMinutes = 5,
                 .RoundTripFee = 1.04D,
-                .RollLeadDays = 28
+                .RollLeadDays = 28,
+                .PhasedTrailMinInitialStopTicks = 20,
+                .PhasedTrailMaxInitialStopTicks = 60,
+                .PhasedTrailBreakevenMinTicks = 15
             })
 
             ' MBT — Micro Bitcoin  [ProjectX symbolId: F.US.MBT; roll: quarterly H/M/U/Z; U26=Sep 2026]
@@ -107,7 +119,10 @@ Namespace TopStepTrader.Core.Trading
                 .CommissionTickBuffer = 1,
                 .MultiConfluenceTimeframeMinutes = 15,
                 .RoundTripFee = 2.34D,
-                .RollLeadDays = 7
+                .RollLeadDays = 7,
+                .PhasedTrailMinInitialStopTicks = 40,
+                .PhasedTrailMaxInitialStopTicks = 120,
+                .PhasedTrailBreakevenMinTicks = 30
             })
 
             Return list
@@ -241,6 +256,29 @@ Namespace TopStepTrader.Core.Trading
         ''' </summary>
         Public Property PxMaxBracketTicks As Integer = 1000
 
+        ''' <summary>
+        ''' Hard floor on the initial SL distance in ticks (Phase 1 — volatility buffer).
+        ''' The ATR-derived stop is clamped UP to this value if smaller. 0 = no floor.
+        ''' Article reference: 2× lower bound of typical 5-min ATR.
+        ''' </summary>
+        Public Property PhasedTrailMinInitialStopTicks As Integer = 0
+
+        ''' <summary>
+        ''' Hard cap on the initial SL distance in ticks (Phase 1 — prevents pathological
+        ''' over-wide stops on extreme-ATR bars). The ATR-derived stop is clamped DOWN
+        ''' to this value if larger. 0 = no cap.
+        ''' Article reference: 2× upper bound of typical 5-min ATR.
+        ''' </summary>
+        Public Property PhasedTrailMaxInitialStopTicks As Integer = 0
+
+        ''' <summary>
+        ''' Minimum favourable price movement (in ticks) before the Free Roll / breakeven
+        ''' trigger may arm — independent of the ATR-based BreakevenTriggerMultipleOfN.
+        ''' Whichever is larger (atr-derived OR this tick floor) wins. 0 = no floor.
+        ''' Article reference: "Suggested Breakeven Trigger" column.
+        ''' </summary>
+        Public Property PhasedTrailBreakevenMinTicks As Integer = 0
+
         Public Sub New(name As String, displayName As String,
                        pxContractId As String,
                        pxTickSz As Decimal,
@@ -268,13 +306,16 @@ Namespace TopStepTrader.Core.Trading
                 Me.Name, Me.DisplayName, liveContractId,
                 Me.PxTickSize, Me.PxTickValue, Me.PxPointValue,
                 Me.PxMinSlDistancePct, Me.PxMinStopDollars) With {
-                .PxRootSymbol                  = Me.PxRootSymbol,
-                .CommissionTickBuffer          = Me.CommissionTickBuffer,
-                .MultiConfluenceTimeframeMinutes = Me.MultiConfluenceTimeframeMinutes,
-                .RoundTripFee                  = Me.RoundTripFee,
-                .RollLeadDays                  = Me.RollLeadDays,
-                .IsCrypto                      = Me.IsCrypto,
-                .PxMaxBracketTicks             = Me.PxMaxBracketTicks
+                .PxRootSymbol                      = Me.PxRootSymbol,
+                .CommissionTickBuffer              = Me.CommissionTickBuffer,
+                .MultiConfluenceTimeframeMinutes    = Me.MultiConfluenceTimeframeMinutes,
+                .RoundTripFee                      = Me.RoundTripFee,
+                .RollLeadDays                      = Me.RollLeadDays,
+                .IsCrypto                          = Me.IsCrypto,
+                .PxMaxBracketTicks                 = Me.PxMaxBracketTicks,
+                .PhasedTrailMinInitialStopTicks     = Me.PhasedTrailMinInitialStopTicks,
+                .PhasedTrailMaxInitialStopTicks     = Me.PhasedTrailMaxInitialStopTicks,
+                .PhasedTrailBreakevenMinTicks       = Me.PhasedTrailBreakevenMinTicks
             }
             Return copy
         End Function

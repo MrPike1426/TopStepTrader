@@ -560,6 +560,8 @@ Namespace TopStepTrader.UI.ViewModels
                         .TimeframeMinutes = 5, .DurationHours = 8760,
                         .Quantity = 1,
                         .SlMultipleOfN = _slMultipleOfN, .TpMultipleOfN = _tpMultipleOfN,
+                        .BreakevenTriggerMultipleOfN = 1.2D, .TrailingStopMultipleOfN = 2.0D,
+                        .EndOfDayFlattenHourUtc = 20, .EndOfDayFlattenMinuteUtc = 0,
                         .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = _maxScaleIns,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
@@ -567,7 +569,7 @@ Namespace TopStepTrader.UI.ViewModels
                         .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
                         .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
-                Case 1  ' Multi-Confluence — 15-min; uses ATR tier SL/TP multiples
+                Case 1  ' Multi-Confluence
                     Return New StrategyDefinition With {
                         .Name = "Multi-Confluence", .ContractId = contractId, .AccountId = accountId,
                         .Indicator = StrategyIndicatorType.MultiConfluence,
@@ -577,6 +579,8 @@ Namespace TopStepTrader.UI.ViewModels
                         .TimeframeMinutes = 15, .DurationHours = 8760,
                         .Quantity = 1,
                         .SlMultipleOfN = _slMultipleOfN, .TpMultipleOfN = _tpMultipleOfN,
+                        .BreakevenTriggerMultipleOfN = 1.2D, .TrailingStopMultipleOfN = 2.0D,
+                        .EndOfDayFlattenHourUtc = 20, .EndOfDayFlattenMinuteUtc = 0,
                         .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = _maxScaleIns,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
@@ -584,7 +588,7 @@ Namespace TopStepTrader.UI.ViewModels
                         .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
                         .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
-                Case 2  ' LULT Divergence — 5-min; uses ATR tier SL/TP multiples, no scale-in
+                Case 2  ' LULT Divergence
                     Return New StrategyDefinition With {
                         .Name = "LULT Divergence", .ContractId = contractId, .AccountId = accountId,
                         .Indicator = StrategyIndicatorType.LultDivergence,
@@ -594,6 +598,8 @@ Namespace TopStepTrader.UI.ViewModels
                         .TimeframeMinutes = 5, .DurationHours = 8760,
                         .Quantity = 1,
                         .SlMultipleOfN = _slMultipleOfN, .TpMultipleOfN = _tpMultipleOfN,
+                        .BreakevenTriggerMultipleOfN = 1.2D, .TrailingStopMultipleOfN = 2.0D,
+                        .EndOfDayFlattenHourUtc = 20, .EndOfDayFlattenMinuteUtc = 0,
                         .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = 0,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
@@ -601,7 +607,7 @@ Namespace TopStepTrader.UI.ViewModels
                         .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
                         .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
-                Case 3  ' BB Squeeze Scalper — 5-min, SlN=0.8, TpN=1.6, no scale-in
+                Case 3  ' BB Squeeze Scalper
                     Return New StrategyDefinition With {
                         .Name = "BB Squeeze Scalper", .ContractId = contractId, .AccountId = accountId,
                         .Indicator = StrategyIndicatorType.BbSqueezeScalper,
@@ -611,6 +617,8 @@ Namespace TopStepTrader.UI.ViewModels
                         .TimeframeMinutes = 5, .DurationHours = 8760,
                         .Quantity = 1,
                         .SlMultipleOfN = _slMultipleOfN, .TpMultipleOfN = _tpMultipleOfN,
+                        .BreakevenTriggerMultipleOfN = 1.2D, .TrailingStopMultipleOfN = 2.0D,
+                        .EndOfDayFlattenHourUtc = 20, .EndOfDayFlattenMinuteUtc = 0,
                         .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = 0,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
@@ -618,7 +626,7 @@ Namespace TopStepTrader.UI.ViewModels
                         .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
                         .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
-                Case 4  ' VIDYA Cross — 15-min; uses ATR tier SL/TP multiples
+                Case 4  ' VIDYA Cross
                     Return New StrategyDefinition With {
                         .Name = "VIDYA Cross", .ContractId = contractId, .AccountId = accountId,
                         .Indicator = StrategyIndicatorType.Vidya,
@@ -628,6 +636,8 @@ Namespace TopStepTrader.UI.ViewModels
                         .TimeframeMinutes = 15, .DurationHours = 8760,
                         .Quantity = 1,
                         .SlMultipleOfN = _slMultipleOfN, .TpMultipleOfN = _tpMultipleOfN,
+                        .BreakevenTriggerMultipleOfN = 1.2D, .TrailingStopMultipleOfN = 2.0D,
+                        .EndOfDayFlattenHourUtc = 20, .EndOfDayFlattenMinuteUtc = 0,
                         .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = _maxScaleIns,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
@@ -635,7 +645,7 @@ Namespace TopStepTrader.UI.ViewModels
                         .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
                         .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
-                Case 5  ' Naked Trader — 5-min; uses ATR tier SL/TP multiples
+                Case 5  ' Naked Trader
                     Return New StrategyDefinition With {
                         .Name = "Naked Trader", .ContractId = contractId, .AccountId = accountId,
                         .Indicator = StrategyIndicatorType.NakedTrader,
@@ -645,6 +655,8 @@ Namespace TopStepTrader.UI.ViewModels
                         .TimeframeMinutes = 5, .DurationHours = 8760,
                         .Quantity = 1,
                         .SlMultipleOfN = _slMultipleOfN, .TpMultipleOfN = _tpMultipleOfN,
+                        .BreakevenTriggerMultipleOfN = 1.2D, .TrailingStopMultipleOfN = 2.0D,
+                        .EndOfDayFlattenHourUtc = 20, .EndOfDayFlattenMinuteUtc = 0,
                         .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = _maxScaleIns,
                         .MinConfidencePct = _minConfidencePct, .TickSize = tickSz, .TickValue = tickVal,
@@ -652,7 +664,7 @@ Namespace TopStepTrader.UI.ViewModels
                         .TrendingStrategyOverride = ParseRegimeOverride(_selectedTrendingOverrideName),
                         .RangingStrategyOverride = ParseRegimeOverride(_selectedRangingOverrideName)
                     }
-                Case 6  ' Double Bubble Butt — 5-min; inner BB 1.0 SD / outer BB 2.0 SD; FX micro (London+NY session)
+                Case 6  ' Double Bubble Butt
                     ' DBB was designed by Kathy Lien for FX on daily/4H charts.
                     ' Pin this slot to M6J (Micro USD/JPY) — the remaining FX micro in the instrument universe.
                     ' Trading window 07:00–20:00 UTC covers London open through NY close.
@@ -670,6 +682,8 @@ Namespace TopStepTrader.UI.ViewModels
                         .TradingStartHourUtc = 7, .TradingEndHourUtc = 20,
                         .Quantity = 1,
                         .SlMultipleOfN = _slMultipleOfN, .TpMultipleOfN = _tpMultipleOfN,
+                        .BreakevenTriggerMultipleOfN = 1.2D, .TrailingStopMultipleOfN = 2.0D,
+                        .EndOfDayFlattenHourUtc = 20, .EndOfDayFlattenMinuteUtc = 0,
                         .AdxThreshold = _adxThreshold,
                         .MaxScaleIns = 0,
                         .MinConfidencePct = _minConfidencePct, .TickSize = dbbTickSz, .TickValue = dbbTickVal,

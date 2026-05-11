@@ -159,6 +159,37 @@ Namespace TopStepTrader.Core.Models
         ''' </summary>
         Public Property RangingStrategyOverride As StrategyConditionType? = Nothing
 
+        ' ── STRAT-38: Phased ATR trail multipliers ───────────────────────────────
+        ''' <summary>
+        ''' Phase 2: Free Roll activation threshold as a multiple of N (ATR).
+        ''' Favourable price movement >= BreakevenTriggerMultipleOfN x ATR arms the Free Roll.
+        ''' The per-contract PhasedTrailBreakevenMinTicks supplies a hard floor.
+        ''' Article: 1.0-1.5; default 1.2.
+        ''' Setting 0 = use the legacy "50% of TP tick distance" gate.
+        ''' </summary>
+        Public Property BreakevenTriggerMultipleOfN As Decimal = 1.2D
+
+        ''' <summary>
+        ''' Phase 3: Chandelier trail distance as a multiple of N (ATR).
+        ''' After Free Roll arms, the SL is held at MAX(highestHigh_since_entry) -
+        ''' TrailingStopMultipleOfN x ATR (for longs; mirrored for shorts).
+        ''' Watermark is updated from bar OHLC each bar-check tick.
+        ''' Article: 2.0; default 2.0.
+        ''' </summary>
+        Public Property TrailingStopMultipleOfN As Decimal = 2.0D
+
+        ''' <summary>
+        ''' UTC hour of day at which all open positions are flattened and the engine refuses
+        ''' new entries for the rest of the session.
+        ''' Default 20 = 20:00 UTC = 15:00 CT, 10 min before TopStepX 20:10 UTC maintenance.
+        ''' Set to 0 with EndOfDayFlattenMinuteUtc=0 to disable the EOD flatten.
+        ''' Once fired, the engine stays flat until restart (no automatic daily re-arm).
+        ''' </summary>
+        Public Property EndOfDayFlattenHourUtc As Integer = 20
+
+        ''' <summary>UTC minute for the EOD flatten. Default 0.</summary>
+        Public Property EndOfDayFlattenMinuteUtc As Integer = 0
+
         ''' <summary>
         ''' When True, the engine calls Claude Haiku for a pre-trade macro/session sanity check
         ''' immediately before placing an entry order. A VETO response suppresses the trade and

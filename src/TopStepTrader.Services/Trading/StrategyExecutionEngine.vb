@@ -128,6 +128,14 @@ Namespace TopStepTrader.Services.Trading
         Private ReadOnly _lastConfidencePct As Integer = 0
         Private _lastTpPrice As Decimal = 0D
         Private _lastSlPrice As Decimal = 0D
+        ' Phase 3 (Chandelier) watermarks. Updated from completed bar OHLC each bar-check tick
+        ' when a position is open. Anchors the Chandelier trail to the highest high / lowest low
+        ' since entry rather than the live tick stream (STRAT-38).
+        ' 0 = no watermark established yet.
+        Private _highestHighSinceEntry As Decimal = 0D
+        Private _lowestLowSinceEntry As Decimal = 0D
+        ' True once a position is open AND at least one bar has been observed since _positionOpenedAt.
+        Private _watermarkSeeded As Boolean = False
         ' ATR-derived initial SL price (before minSlPoints clamp).  The trail is blocked
         ' until the new SL candidate moves strictly beyond this level — preventing the
         ' minSlPoints-clamp → first-bar jump → premature-stop failure mode.
@@ -637,6 +645,22 @@ Namespace TopStepTrader.Services.Trading
             Dim lastBar = bars.Last()
             _lastBarClose = CDec(lastBar.Close)
             RaiseEvent BarPriceUpdated(Me, CDec(lastBar.Close))
+
+            ' STRAT-38: update Chandelier watermarks from bar OHLC while a position is open
+            If _positionOpen AndAlso _positionOpenedAt > DateTimeOffset.MinValue Then
+                For Each b In bars
+                    If b.Timestamp < _positionOpenedAt Then Continue For
+                    Dim bh = CDec(b.High)
+                    Dim bl = CDec(b.Low)
+                    If _highestHighSinceEntry = 0D OrElse bh > _highestHighSinceEntry Then
+                        _highestHighSinceEntry = bh
+                    End If
+                    If _lowestLowSinceEntry = 0D OrElse bl < _lowestLowSinceEntry Then
+                        _lowestLowSinceEntry = bl
+                    End If
+                Next
+                _watermarkSeeded = True
+            End If
             If _positionOpen Then
                 Dim livePrice = Await _ingestionService.GetLatestPriceAsync(_strategy.ContractId, ct)
                 If livePrice > 0D Then
@@ -2253,34 +2277,50 @@ Namespace TopStepTrader.Services.Trading
             Dim tickSize = If(_strategy.TickSize > 0D, _strategy.TickSize, fav.PxTickSize)
             Dim tickValue = If(_strategy.TickValue > 0D, _strategy.TickValue, fav.PxTickValue)
 
-            ' ── OCO bracket: ATR-derived ticks when available, fixed preset as fallback ─
-            ' When the strategy carries non-zero ATR multiples and ATR(14) has been computed
-            ' from at least one bar check, derive tick counts from ATR so the initial bracket
-            ' reflects the configured Wide/Standard/Tight tier (e.g. Wide SL = 2.5 × ATR).
-            ' Falls back to DefaultSlTicks/DefaultTpTicks from appsettings.json on the very
-            ' first entry before any bar has been analysed (ATR = 0).
-            ' TopStepXInstrumentCatalog.ClampStopTicksAsync enforces the per-instrument minimum.
+            ' ── STRAT-38: OCO bracket with per-contract phased-trail clamps ──────────────
+            ' Phase 1: ATR-derived tick counts clamped to per-contract min/max from FavouriteContracts.
+            ' Falls back to DefaultSlTicks/DefaultTpTicks when ATR not yet warmed up.
             Dim initialStopTicks As Integer
             Dim initialTpTicks As Integer
             If _strategy.SlMultipleOfN > 0D AndAlso _currentAtrValue > 0D AndAlso tickSize > 0D Then
                 Dim atrSlTicks = CInt(Math.Floor(_strategy.SlMultipleOfN * _currentAtrValue / tickSize))
                 Dim tpMultiple = If(_strategy.TpMultipleOfN > 0D, _strategy.TpMultipleOfN, _strategy.SlMultipleOfN * 2D)
                 Dim atrTpTicks = CInt(Math.Floor(tpMultiple * _currentAtrValue / tickSize))
-                initialStopTicks = Math.Max(Math.Max(1, atrSlTicks), _pxSettings.DefaultSlTicks)
+
+                ' Per-contract phased-trail clamps (article table). 0 = no clamp.
+                Dim phaseMin = If(fav.PhasedTrailMinInitialStopTicks > 0, fav.PhasedTrailMinInitialStopTicks, 0)
+                Dim phaseMax = If(fav.PhasedTrailMaxInitialStopTicks > 0, fav.PhasedTrailMaxInitialStopTicks, Integer.MaxValue)
+                Dim hardFloor = Math.Max(_pxSettings.DefaultSlTicks, phaseMin)
+
+                initialStopTicks = Math.Min(phaseMax, Math.Max(hardFloor, Math.Max(1, atrSlTicks)))
                 initialTpTicks = Math.Max(Math.Max(1, atrTpTicks), _pxSettings.DefaultTpTicks)
-                Log($"📐 ATR bracket: SL={initialStopTicks}t ({_strategy.SlMultipleOfN:F2}×N) " &
+
+                Log($"📐 Phased bracket: SL={initialStopTicks}t (ATR={atrSlTicks}t clamped to [{hardFloor},{If(phaseMax = Integer.MaxValue, "∞", phaseMax.ToString())}]) " &
                     $"TP={initialTpTicks}t ({tpMultiple:F2}×N) [ATR={_currentAtrValue:F4} tickSz={tickSize}]")
             Else
-                initialStopTicks = Math.Max(1, _pxSettings.DefaultSlTicks)
+                Dim phaseMin = If(fav IsNot Nothing, fav.PhasedTrailMinInitialStopTicks, 0)
+                initialStopTicks = Math.Max(Math.Max(1, _pxSettings.DefaultSlTicks), phaseMin)
                 initialTpTicks = Math.Max(1, _pxSettings.DefaultTpTicks)
                 Log($"📐 Fixed bracket: SL={initialStopTicks}t TP={initialTpTicks}t " &
                     $"(${initialStopTicks * tickValue * contracts:F0} / ${initialTpTicks * tickValue * contracts:F0})" &
-                    If(_currentAtrValue <= 0D, " [ATR not ready — using preset]", String.Empty))
+                    If(_currentAtrValue <= 0D, " [ATR not ready — using preset + phased floor]", String.Empty))
             End If
 
-            ' ── Free Roll: store TP ticks and compute activation price (67% of TP distance) ─
+            ' ── STRAT-38 Phase 2: Free Roll activation gate ──────────────────────────────
+            ' BreakevenTriggerMultipleOfN x ATR or per-contract tick floor (whichever is larger).
+            ' Falls back to legacy 50%-of-TP gate when both new fields are 0.
             _initialTpTicks = initialTpTicks
-            Dim activationTicks = CInt(Math.Floor(initialTpTicks * FreeRollActivationFraction))
+            Dim atrTriggerTicks As Integer = 0
+            If _strategy.BreakevenTriggerMultipleOfN > 0D AndAlso _currentAtrValue > 0D AndAlso tickSize > 0D Then
+                atrTriggerTicks = CInt(Math.Ceiling(_strategy.BreakevenTriggerMultipleOfN * _currentAtrValue / tickSize))
+            End If
+            Dim minTriggerTicks = If(fav IsNot Nothing, fav.PhasedTrailBreakevenMinTicks, 0)
+            Dim activationTicks As Integer
+            If atrTriggerTicks > 0 OrElse minTriggerTicks > 0 Then
+                activationTicks = Math.Max(atrTriggerTicks, minTriggerTicks)
+            Else
+                activationTicks = CInt(Math.Floor(initialTpTicks * FreeRollActivationFraction))
+            End If
             Dim isBuyFutForActivation = (side = OrderSide.Buy)
 
             Log($"📊 Placing TopStepX {sideStr} {contracts} contract(s) {fav.PxContractId} | " &
@@ -2321,6 +2361,10 @@ Namespace TopStepTrader.Services.Trading
                 Log($"🎯 Free Roll gate: activation @ {_freeRollActivationPrice:F4} ({activationTicks}t = 67% of TP {initialTpTicks}t)")
                 _totalDollarPerPoint += CDec(contracts) * tickValue / tickSize
                 _positionOpenedAt = DateTimeOffset.UtcNow
+                ' STRAT-38: seed watermarks to entry price so Chandelier has a baseline before the first bar lands
+                _highestHighSinceEntry = priceUsed
+                _lowestLowSinceEntry = priceUsed
+                _watermarkSeeded = True
                 _lastApiPnl = 0D
                 _lastFinalAmount += CDec(contracts)  ' += accumulates scale-ins; ResetTrailState zeros on close
 
@@ -2870,6 +2914,14 @@ Namespace TopStepTrader.Services.Trading
             End If
 
             ' Phase-specific bracket management
+            ' STRAT-38: EOD flatten — close position and block further phases
+            If IsPastEndOfDayFlatten() AndAlso _tradePhase <> TradePhase.Closing Then
+                Log($"🕔 EOD flatten ({_strategy.EndOfDayFlattenHourUtc:00}:{_strategy.EndOfDayFlattenMinuteUtc:00} UTC reached) — closing {_strategy.ContractId}")
+                _tradePhase = TradePhase.Closing
+                Await DoNeutralFlattenAsync(ct)
+                Return
+            End If
+
             Select Case _tradePhase
                 Case TradePhase.HardStop
                     If _lastSlPrice <= 0D Then Return  ' bracket not placed yet (warm-up)
@@ -2979,17 +3031,26 @@ Namespace TopStepTrader.Services.Trading
         ''' <summary>
         ''' ATR-based SL trail used during TradePhase.FreeRoll.
         ''' No TP is sent (cancelled at Free Roll activation); the trailing SL closes the trade.
-        ''' Same ratchet logic as ApplyAtrTrailAsync but operates at 1-second resolution.
+        ''' STRAT-38 Phase 3: Chandelier trail. Anchors the SL to the highest-high (long) /
+        ''' lowest-low (short) since entry rather than the live tick stream, so the trail is
+        ''' independent of quote feed reliability. Watermarks are updated from bar OHLC in
+        ''' DoCheckAsync; this function runs at 2-second resolution but reads those bar values.
         ''' </summary>
         Private Async Function TrailFreeRollBracketAsync(currentPrice As Decimal, isBuy As Boolean,
                                                           tickSize As Decimal, ct As CancellationToken) As Task
             If _currentAtrValue <= 0D Then Return  ' ATR not ready (bar warmup)
+            If Not _watermarkSeeded Then Return    ' no bar OHLC observed since entry yet
 
-            Dim slMultiple = If(_strategy.SlMultipleOfN > 0D, _strategy.SlMultipleOfN, 1D)
-            Dim atrDistance = slMultiple * _currentAtrValue
-            Dim rawCandidate = If(isBuy, currentPrice - atrDistance, currentPrice + atrDistance)
+            Dim trailMultiple = If(_strategy.TrailingStopMultipleOfN > 0D, _strategy.TrailingStopMultipleOfN,
+                                    If(_strategy.SlMultipleOfN > 0D, _strategy.SlMultipleOfN, 2D))
+            Dim atrDistance = trailMultiple * _currentAtrValue
 
-            ' Snap to tick boundary (conservative: floor for longs, ceiling for shorts)
+            ' Chandelier: anchor to highest-high (long) / lowest-low (short) — NOT currentPrice.
+            Dim anchor As Decimal = If(isBuy, _highestHighSinceEntry, _lowestLowSinceEntry)
+            If anchor <= 0D Then Return
+            Dim rawCandidate = If(isBuy, anchor - atrDistance, anchor + atrDistance)
+
+            ' Snap to tick boundary (conservative: floor for longs = wider SL, ceiling for shorts)
             Dim newSlCandidate As Decimal
             If isBuy Then
                 newSlCandidate = CDec(Math.Floor(CDbl(rawCandidate / tickSize))) * tickSize
@@ -2997,7 +3058,7 @@ Namespace TopStepTrader.Services.Trading
                 newSlCandidate = CDec(Math.Ceiling(CDbl(rawCandidate / tickSize))) * tickSize
             End If
 
-            ' Ratchet: only advance toward profit
+            ' Ratchet: SL only moves toward profit
             Dim shouldUpdate = If(isBuy, newSlCandidate > _lastSlPrice, newSlCandidate < _lastSlPrice)
             If Not shouldUpdate Then Return
 
@@ -3006,12 +3067,11 @@ Namespace TopStepTrader.Services.Trading
 
             Dim isFreeRide = If(isBuy, newSlCandidate >= _lastEntryPrice, newSlCandidate <= _lastEntryPrice)
 
-            Log($"🏃 Free Roll trail [{If(isBuy, "BUY", "SELL")}]: " &
+            Log($"🏃 Chandelier trail [{If(isBuy, "BUY", "SELL")}]: " &
                 $"SL {_lastSlPrice:F4}→{newSlCandidate:F4} (+{improveTicks}t) " &
-                $"ATR={_currentAtrValue:F4}×{slMultiple:F2}N price={currentPrice:F4}" &
+                $"anchor={anchor:F4} ATR={_currentAtrValue:F4}×{trailMultiple:F2}N" &
                 If(isFreeRide, " 🔒 profit-locked", String.Empty))
 
-            ' TP = Nothing: keep the TP cancelled (broker ignores Nothing for unchanged brackets)
             Dim ok = Await _orderService.EditPositionSlTpAsync(_openPositionId.Value, newSlCandidate, Nothing, cancel:=ct)
             If ok Then
                 _lastSlPrice = newSlCandidate
@@ -3019,7 +3079,7 @@ Namespace TopStepTrader.Services.Trading
                 RaiseEvent TurtleBracketChanged(Me, New TurtleBracketChangedEventArgs(
                     0, newSlCandidate, 0D, isAdvance:=True, isFreeRide:=isFreeRide))
             Else
-                Log($"⚠️  Free Roll trail update failed for {_strategy.ContractId} — will retry next tick")
+                Log($"⚠️  Chandelier trail update failed for {_strategy.ContractId} — will retry next tick")
             End If
         End Function
 
@@ -3085,117 +3145,11 @@ Namespace TopStepTrader.Services.Trading
         ''' TopStepX: finds the resting stop bracket and modifies its stop price via EditPositionSlTpAsync.
         ''' </summary>
         Private Async Function ApplyAtrTrailAsync(currentPrice As Decimal, ct As CancellationToken) As Task
-            If Not _openPositionId.HasValue Then
-                Log($"📊 Trail skip — no positionId resolved yet (waiting for broker sync)")
-                Return
-            End If
-            If _currentAtrValue <= 0D Then
-                Log($"📊 Trail skip — ATR=0 (bars not yet analysed or indicator warming up)")
-                Return
-            End If
-            If _lastEntryPrice <= 0D Then
-                Log($"📊 Trail skip — entry price unknown")
-                Return
-            End If
-
-            Dim isBuy = (_lastEntrySide = OrderSide.Buy)
-            Dim slMultiple = If(_strategy.SlMultipleOfN > 0D, _strategy.SlMultipleOfN, 1D)
-            Dim tickSize = If(_strategy.TickSize > 0D, _strategy.TickSize, 0.01D)
-
-            ' SL candidate: SlMultipleOfN × ATR behind current price
-            Dim atrDistance = slMultiple * _currentAtrValue
-            Dim rawCandidate = If(isBuy, currentPrice - atrDistance, currentPrice + atrDistance)
-
-            ' Snap to tick boundary (floor for longs = conservative; ceiling for shorts = conservative)
-            Dim newSlCandidate As Decimal
-            If isBuy Then
-                newSlCandidate = CDec(Math.Floor(CDbl(rawCandidate / tickSize))) * tickSize
-            Else
-                newSlCandidate = CDec(Math.Ceiling(CDbl(rawCandidate / tickSize))) * tickSize
-            End If
-
-            ' Seed _lastSlPrice on first tick after entry (in case PlaceBracketOrdersAsync set it to 0)
-            If _lastSlPrice <= 0D Then
-                _lastSlPrice = newSlCandidate
-                Log($"📊 Trail baseline seeded — SL={newSlCandidate:F4} (ATR={_currentAtrValue:F4} × {slMultiple:F2}N) entry={_lastEntryPrice:F4}")
-                Return   ' nothing to ratchet yet; establish baseline
-            End If
-
-            ' ── Danger Zone: snap SL to breakeven ─────────────────────────────────
-            ' Set by the Asset Bassett coordinator when an opposing strategy fires.
-            ' Move SL to _lastEntryPrice once and hold; normal ATR trail is suspended
-            ' while this flag is True so the SL never retreats from breakeven.
-            If DangerZoneActive Then
-                Dim beCandidate = _lastEntryPrice
-                Dim beBetter = If(isBuy, beCandidate > _lastSlPrice, beCandidate < _lastSlPrice)
-                If beBetter Then
-                    Dim beTicks = Math.Abs(TickMath.TicksBetween(_lastSlPrice, beCandidate, tickSize))
-                    If beTicks >= 1 Then
-                        Log($"⚠️ DANGER ZONE: Snapping SL to breakeven {_lastEntryPrice:F4} (was {_lastSlPrice:F4})")
-                        Dim beOk = Await _orderService.EditPositionSlTpAsync(
-                            _openPositionId.Value, beCandidate, Nothing, cancel:=ct)
-                        If beOk Then
-                            _lastSlPrice = beCandidate
-                            RaiseEvent TurtleBracketChanged(Me, New TurtleBracketChangedEventArgs(
-                                0, beCandidate, _lastTpPrice, isAdvance:=True, isFreeRide:=True))
-                        End If
-                    End If
-                End If
-                Return   ' danger zone active — no further ATR trail this tick
-            End If
-
-            ' Ratchet guard: only advance in the profitable direction
-            Dim shouldUpdate = If(isBuy, newSlCandidate > _lastSlPrice, newSlCandidate < _lastSlPrice)
-            If Not shouldUpdate Then
-                Log($"📊 Trail hold [{If(isBuy, "BUY", "SELL")}]: price={currentPrice:F4} candidate SL={newSlCandidate:F4} ≤ current SL={_lastSlPrice:F4} — no advance | ATR={_currentAtrValue:F4} TP={_lastTpPrice:F4} entry={_lastEntryPrice:F4}")
-                Return
-            End If
-
-            ' Initial-SL guard: block trail until the candidate has cleared the ATR-derived
-            ' initial SL level.  When minSlPoints clamped the broker SL wider than ATR
-            ' suggested, the first favourable bar could otherwise jump the resting stop from
-            ' the clamped level to a tight ATR level — causing a premature close on any
-            ' normal pullback.  Only once the candidate strictly exceeds _initialSlPrice do
-            ' we know the trade has genuine profit beyond the natural entry risk.
-            If _initialSlPrice > 0D Then
-                Dim clearedInitial = If(isBuy,
-                    newSlCandidate > _initialSlPrice,
-                    newSlCandidate < _initialSlPrice)
-                If Not clearedInitial Then
-                    Log($"📊 Trail hold [{If(isBuy, "BUY", "SELL")}]: candidate SL={newSlCandidate:F4} hasn't cleared initial SL={_initialSlPrice:F4} — waiting for profit to extend | ATR={_currentAtrValue:F4}")
-                    Return
-                End If
-            End If
-
-            ' Require at least 1 tick improvement to avoid trivial API calls
-            Dim improveTicks = Math.Abs(TickMath.TicksBetween(_lastSlPrice, newSlCandidate, tickSize))
-            If improveTicks < 1 Then
-                Log($"📊 Trail hold [{If(isBuy, "BUY", "SELL")}]: candidate SL={newSlCandidate:F4} vs current={_lastSlPrice:F4} — <1 tick improvement ({improveTicks:F1}t) | ATR={_currentAtrValue:F4}")
-                Return
-            End If
-
-            Dim isFreeRide = If(isBuy, newSlCandidate >= _lastEntryPrice, newSlCandidate <= _lastEntryPrice)
-
-            Log($"🎯 ATR trail SL [{If(isBuy, "BUY", "SELL")}]: {_lastSlPrice:F4} → {newSlCandidate:F4} " &
-                $"(+{improveTicks}t) ATR={_currentAtrValue:F4} × {slMultiple:F2}N" &
-                If(isFreeRide, " 🔒 FREE RIDE", String.Empty))
-
-            ' TP is NOT trailed — it is fixed at placement time and only advanced by
-            ' ExtendTpIfClosedBeyondTargetAsync (on a bar-close beyond target) or by the
-            ' cloud-edge SL override at entry.  Chasing TP by currentPrice + N×ATR every
-            ' tick causes the target to recede as fast as price moves — it can never be hit.
-            ' Only the SL ratchet is updated here.
-            Dim ok = Await _orderService.EditPositionSlTpAsync(
-                _openPositionId.Value, newSlCandidate, Nothing, cancel:=ct)
-
-            If ok Then
-                _lastSlPrice = newSlCandidate
-                RaiseEvent TurtleBracketChanged(Me, New TurtleBracketChangedEventArgs(
-                    0, newSlCandidate, _lastTpPrice,
-                    isAdvance:=True, isFreeRide:=isFreeRide))
-            Else
-                Log($"⚠️  ATR trail update failed for {_strategy.ContractId} — will retry next tick")
-            End If
+            ' STRAT-38: this function is dead code — Phase 3 is now handled by the Chandelier
+            ' trail in TrailFreeRollBracketAsync. Retained to avoid breaking any lingering call
+            ' sites until they can be cleaned up.
+            _logger.LogDebug("[dead] ApplyAtrTrailAsync called — should not happen")
+            Await Task.CompletedTask
         End Function
 
         ''' <summary>
@@ -3288,6 +3242,18 @@ Namespace TopStepTrader.Services.Trading
         End Function
 
         ''' <summary>
+        ''' STRAT-38: True when wall-clock UTC has reached or passed the configured
+        ''' EndOfDayFlattenHourUtc/Minute. When both are 0 the EOD flatten is disabled.
+        ''' Once True, the engine stays flat until restart (no automatic daily re-arm).
+        ''' </summary>
+        Private Function IsPastEndOfDayFlatten() As Boolean
+            If _strategy.EndOfDayFlattenHourUtc = 0 AndAlso _strategy.EndOfDayFlattenMinuteUtc = 0 Then Return False
+            Dim now = DateTimeOffset.UtcNow
+            Return now.Hour > _strategy.EndOfDayFlattenHourUtc OrElse
+                   (now.Hour = _strategy.EndOfDayFlattenHourUtc AndAlso now.Minute >= _strategy.EndOfDayFlattenMinuteUtc)
+        End Function
+
+        ''' <summary>
         ''' Returns True when the current UTC time falls within the nullable minute-precise window.
         ''' When either property is Nothing the filter is disabled (always returns True).
         ''' </summary>
@@ -3309,6 +3275,17 @@ Namespace TopStepTrader.Services.Trading
         Private Async Function EvaluateConfidenceActionsAsync(upPct As Double, downPct As Double, side As OrderSide?, price As Decimal, isNewBar As Boolean, ct As CancellationToken) As Task
             ' ── 1. New-entry gate ──────────────────────────────────────────────────────
             If Not _positionOpen Then
+                ' STRAT-38: EOD flatten window — block new entries
+                If IsPastEndOfDayFlatten() Then
+                    Log($"🕔 EOD flatten window — no new entries for {_strategy.ContractId}")
+                    If _pendingDiagEntry IsNot Nothing Then
+                        _pendingDiagEntry.EventType = "REJECT"
+                        _pendingDiagEntry.RejectionReason = $"EOD flatten window ({_strategy.EndOfDayFlattenHourUtc:00}:{_strategy.EndOfDayFlattenMinuteUtc:00} UTC)"
+                        _diagLogger?.WriteEntry(_pendingDiagEntry)
+                        _pendingDiagEntry = Nothing
+                    End If
+                    Return
+                End If
                 If Not side.HasValue Then
                     ' No signal — flush any no-signal diag entry
                     If _pendingDiagEntry IsNot Nothing Then
