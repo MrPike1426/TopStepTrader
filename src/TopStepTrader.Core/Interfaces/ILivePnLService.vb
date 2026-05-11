@@ -4,6 +4,12 @@ Namespace TopStepTrader.Core.Interfaces
     ''' Source of the most recent price tick.
     ''' </summary>
     Public Enum LivePriceSource
+        ''' <summary>
+        ''' Metadata-only tick (e.g. entry-price correction emitted before any
+        ''' quote/bar has arrived). <c>Price = 0</c> and <c>AgeMs = 0</c> in this
+        ''' case — consumers MUST NOT overwrite their displayed price from such
+        ''' a tick. Use only the entry/size/P&amp;L fields.
+        ''' </summary>
         None = 0
         ''' <summary>MarketHub GatewayQuote (sub-second).</summary>
         Quote = 1
@@ -38,6 +44,34 @@ Namespace TopStepTrader.Core.Interfaces
     End Class
 
     ''' <summary>
+    ''' ARCH-07 — Failure-visibility surface for <see cref="ILivePnLService"/>.
+    ''' Returned by <see cref="ILivePnLService.GetDiagnostics(String)"/> so that
+    ''' a UI status strip can prove the feed is healthy (or surface exactly which
+    ''' layer has gone silent: hub disconnected, subscribe rejected, bar polls
+    ''' returning zero, etc.).
+    ''' </summary>
+    Public Class LivePnLDiagnostics
+        ''' <summary>SignalR HubConnectionState as a string, or "Unknown" if unavailable.</summary>
+        Public Property HubState As String = "Unknown"
+        ''' <summary>Last <c>SubscribeContractAsync</c> failure message, if any.</summary>
+        Public Property SubscribeError As String = String.Empty
+        ''' <summary>The PxContractId the service is currently subscribed to for this root, or empty.</summary>
+        Public Property SubscribedContractId As String = String.Empty
+        ''' <summary>Rolling 5-second quotes-per-second rate.</summary>
+        Public Property QuotesPerSec5s As Double = 0D
+        ''' <summary>UTC of the most recent quote received for this root (DateTime.MinValue if none).</summary>
+        Public Property LastQuoteUtc As DateTime = DateTime.MinValue
+        ''' <summary>UTC of the most recent successful (price &gt; 0) bar poll (DateTime.MinValue if none).</summary>
+        Public Property LastBarUtc As DateTime = DateTime.MinValue
+        ''' <summary>Consecutive bar polls that returned 0; reset by any &gt; 0 fetch.</summary>
+        Public Property BarFetchZeroCount As Integer = 0
+        ''' <summary>Short summary of the most recent bar-poll outcome (e.g. "BarFetch=2351.0", "BarFetch=0 (count=3)").</summary>
+        Public Property LastBarPollResult As String = String.Empty
+        ''' <summary>Recent diagnostic events (bar polls, subscribe errors). Capped at 200 entries.</summary>
+        Public Property RecentEvents As IReadOnlyList(Of String) = Array.Empty(Of String)()
+    End Class
+
+    ''' <summary>
     ''' Per-instrument live price + unrealised P&amp;L stream.
     ''' Subscribers receive ticks at SignalR cadence (sub-second when active),
     ''' falling back to a 2-second polled bar close if the socket is silent.
@@ -68,6 +102,13 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Function SubscribePrice(contractId As String,
                                 onTick As Action(Of LivePriceTick)) As IDisposable
+
+        ''' <summary>
+        ''' ARCH-07 — Returns a snapshot of feed health for the given root key
+        ''' (e.g. "MNQ"). Returns a <see cref="LivePnLDiagnostics"/> with default
+        ''' values when the root has no active state yet.
+        ''' </summary>
+        Function GetDiagnostics(rootKey As String) As LivePnLDiagnostics
 
     End Interface
 

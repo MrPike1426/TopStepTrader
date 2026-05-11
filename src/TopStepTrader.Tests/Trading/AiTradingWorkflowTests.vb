@@ -249,7 +249,8 @@ Namespace TopStepTrader.Tests.Trading
         Public Sub FavouriteContracts_AllSevenHaveNonZeroPxTickSpecs()
             Dim contracts = FavouriteContracts.GetDefaults()
 
-            Assert.Equal(7, contracts.Count)  ' OIL, GOLD, SILVER, SPX500, EURUSD, NQ, BTC (FEAT-27)
+            ' SPX500 (MES), NQ (MNQ), M2K, MYM, GOLD.24-7 (MGC), M6E, OIL (MCLE), MBT (FEAT-53).
+            Assert.Equal(8, contracts.Count)
             For Each c In contracts
                 Assert.True(c.PxTickSize > 0, $"{c.PxContractId}: PxTickSize must be > 0")
                 Assert.True(c.PxTickValue > 0, $"{c.PxContractId}: PxTickValue must be > 0")

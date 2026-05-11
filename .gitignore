@@ -44,6 +44,10 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
+# Runtime diagnostic outputs (jsonl/csv/db) — never committed
+TopStepTrader_Diagnostics/
+src/TopStepTrader.UI/TopStepTrader_Diagnostics/
+
 # Build outputs
 *.dll
 *.exe

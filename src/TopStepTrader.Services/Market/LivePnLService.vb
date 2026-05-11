@@ -85,14 +85,49 @@ Namespace TopStepTrader.Services.Market
                     If price > 0D Then
                         state.LastBarPrice = price
                         state.LastBarUtc = DateTime.UtcNow
+                        state.RecordBarPollResult(price)
                         EmitFromState(state)
+                    Else
+                        state.RecordBarPollResult(0D)
+                        ' ARCH-07 F6: surface bar-fallback silence at LogInformation while the
+                        ' root has at least one subscriber; rate-limit to once per second so a
+                        ' dead feed does not flood logs.
+                        If state.RefCount > 0 AndAlso state.ShouldLogBarZero(DateTime.UtcNow) Then
+                            _logger?.LogInformation(
+                                "LivePnLService: bar poll returned 0 for {Root} (zero-count={Count})",
+                                state.RootKey, state.BarFetchZeroCount)
+                        End If
                     End If
                 End Using
             Catch ex As OperationCanceledException
                 Throw
             Catch ex As Exception
+                state.RecordBarPollException(ex.Message)
                 _logger?.LogDebug(ex, "LivePnLService: bar fallback fetch failed for {Root}", state.RootKey)
             End Try
+        End Function
+
+        ' ── ARCH-07 F4 diagnostic surface ──────────────────────────────────────
+
+        Public Function GetDiagnostics(rootKey As String) As LivePnLDiagnostics _
+                                       Implements ILivePnLService.GetDiagnostics
+            Dim diag As New LivePnLDiagnostics()
+            Dim hubClient = TryCast(_feed, MarketHubClient)
+            If hubClient IsNot Nothing Then
+                diag.HubState = hubClient.State.ToString()
+            End If
+            Dim state As RootState = Nothing
+            If _roots.TryGetValue(NormalizeRoot(rootKey), state) Then
+                diag.SubscribedContractId = If(state.PxContractId, String.Empty)
+                diag.SubscribeError = If(state.SubscribeError, String.Empty)
+                diag.LastQuoteUtc = state.LastQuoteUtc
+                diag.LastBarUtc = state.LastBarUtc
+                diag.BarFetchZeroCount = state.BarFetchZeroCount
+                diag.LastBarPollResult = If(state.LastBarPollResult, String.Empty)
+                diag.QuotesPerSec5s = state.GetQuotesPerSec5s(DateTime.UtcNow)
+                diag.RecentEvents = state.SnapshotDiag()
+            End If
+            Return diag
         End Function
 
         ''' <summary>
@@ -127,7 +162,7 @@ Namespace TopStepTrader.Services.Market
                         _logger?.LogDebug(ex, "LivePnLService: entry correction failed for {Root}", state.RootKey)
                     End Try
                 Next
-                EmitFromState(state)
+                EmitFromState(state, reason:="EntryCorrected")
             Next
         End Function
 
@@ -176,11 +211,16 @@ Namespace TopStepTrader.Services.Market
             If Not state.MarketHubSubscribed AndAlso Not String.IsNullOrEmpty(state.PxContractId) Then
                 state.MarketHubSubscribed = True
                 Dim id = state.PxContractId
+                Dim capturedState = state
                 Task.Run(Async Function() As Task
                              Try
                                  Await _feed.SubscribeContractAsync(id)
+                                 capturedState.ClearSubscribeError()
                              Catch ex As Exception
-                                 _logger?.LogDebug(ex, "LivePnLService: SubscribeContractAsync failed for {Id}", id)
+                                 ' ARCH-07 F4 / Bug C: capture the failure so GetDiagnostics
+                                 ' surfaces it on screen (was a silent LogDebug before).
+                                 capturedState.SetSubscribeError(ex.Message)
+                                 _logger?.LogWarning(ex, "LivePnLService: SubscribeContractAsync failed for {Id}", id)
                              End Try
                          End Function)
             End If
@@ -226,11 +266,22 @@ Namespace TopStepTrader.Services.Market
                 If price <= 0D Then Continue For
 
                 state.SetQuotePrice(price)
+                state.RecordQuoteTime(DateTime.UtcNow)
                 EmitFromState(state)
             Next
         End Sub
 
-        Private Sub EmitFromState(state As RootState)
+        ''' <summary>
+        ''' Push a tick to all subscribers of <paramref name="state"/>.
+        ''' </summary>
+        ''' <param name="reason">
+        ''' Optional emit reason. When equal to <c>"EntryCorrected"</c>, a
+        ''' metadata-only tick (<see cref="LivePriceSource.None"/>, Price = 0)
+        ''' is emitted to PnL subscribers even when no quote or bar has arrived
+        ''' yet, so the consumer can pick up the corrected entry price
+        ''' immediately. Price-only subscribers are not notified in that case.
+        ''' </param>
+        Private Sub EmitFromState(state As RootState, Optional reason As String = Nothing)
             Dim now = DateTime.UtcNow
             Dim quotePrice = state.GetQuotePrice()
             Dim quoteUtc = state.LastQuoteUtc
@@ -242,6 +293,7 @@ Namespace TopStepTrader.Services.Market
             Dim price As Decimal = 0D
             Dim source As LivePriceSource = LivePriceSource.None
             Dim ts As DateTime = now
+            Dim metadataOnly As Boolean = False
             If usingQuote Then
                 price = quotePrice
                 source = LivePriceSource.Quote
@@ -255,14 +307,21 @@ Namespace TopStepTrader.Services.Market
                 price = quotePrice
                 source = LivePriceSource.Quote
                 ts = quoteUtc
+            ElseIf String.Equals(reason, "EntryCorrected", StringComparison.Ordinal) Then
+                ' No price yet — emit metadata-only tick so the consumer sees the corrected entry.
+                metadataOnly = True
+                price = 0D
+                source = LivePriceSource.None
+                ts = now
             Else
                 Return ' nothing to emit yet
             End If
 
-            Dim ageMs = CLng(Math.Max(0, (now - ts).TotalMilliseconds))
+            Dim ageMs As Long = If(metadataOnly, 0L,
+                                   CLng(Math.Max(0, (now - ts).TotalMilliseconds)))
             Dim subs = state.SnapshotSubscriptions()
             For Each subItem In subs
-                If subItem.PriceCallback IsNot Nothing Then
+                If subItem.PriceCallback IsNot Nothing AndAlso Not metadataOnly Then
                     Dim t As New LivePriceTick With {
                         .ContractId = state.RootKey,
                         .Price = price,
@@ -359,6 +418,17 @@ Namespace TopStepTrader.Services.Market
             Private _barTimer As Timer
             Private _entryTimer As Timer
 
+            ' ── ARCH-07 F4/F6 diagnostic state ─────────────────────────────────
+            Public Property BarFetchZeroCount As Integer = 0
+            Public Property LastBarPollResult As String = String.Empty
+            Public Property SubscribeError As String = String.Empty
+            Private _lastZeroLogUtc As DateTime = DateTime.MinValue
+            Private ReadOnly _diagBuffer As New Queue(Of String)()
+            Private ReadOnly _diagLock As New Object()
+            Private Const DiagBufferSize As Integer = 200
+            Private ReadOnly _quoteTimes As New Queue(Of DateTime)()
+            Private ReadOnly _quoteTimesLock As New Object()
+
             Public Sub New(rootKey As String, fav As FavouriteContract)
                 Me.RootKey = rootKey
                 If fav IsNot Nothing Then
@@ -426,6 +496,83 @@ Namespace TopStepTrader.Services.Market
                 _barTimer = Nothing
                 _entryTimer?.Dispose()
                 _entryTimer = Nothing
+            End Sub
+
+            ' ── ARCH-07 F4/F6 diagnostic helpers ───────────────────────────────
+
+            Public Sub RecordBarPollResult(price As Decimal)
+                Dim msg As String
+                If price > 0D Then
+                    BarFetchZeroCount = 0
+                    msg = $"BarFetch={price}"
+                Else
+                    BarFetchZeroCount = BarFetchZeroCount + 1
+                    msg = $"BarFetch=0 (count={BarFetchZeroCount})"
+                End If
+                LastBarPollResult = msg
+                AppendDiag(msg)
+            End Sub
+
+            Public Sub RecordBarPollException(reason As String)
+                LastBarPollResult = $"BarFetch error: {reason}"
+                AppendDiag(LastBarPollResult)
+            End Sub
+
+            Public Function ShouldLogBarZero(now As DateTime) As Boolean
+                SyncLock _diagLock
+                    If (now - _lastZeroLogUtc).TotalSeconds >= 1.0 Then
+                        _lastZeroLogUtc = now
+                        Return True
+                    End If
+                    Return False
+                End SyncLock
+            End Function
+
+            Public Sub RecordQuoteTime(now As DateTime)
+                SyncLock _quoteTimesLock
+                    _quoteTimes.Enqueue(now)
+                    Dim cutoff = now.AddSeconds(-5)
+                    While _quoteTimes.Count > 0 AndAlso _quoteTimes.Peek() < cutoff
+                        _quoteTimes.Dequeue()
+                    End While
+                End SyncLock
+            End Sub
+
+            Public Function GetQuotesPerSec5s(now As DateTime) As Double
+                SyncLock _quoteTimesLock
+                    Dim cutoff = now.AddSeconds(-5)
+                    While _quoteTimes.Count > 0 AndAlso _quoteTimes.Peek() < cutoff
+                        _quoteTimes.Dequeue()
+                    End While
+                    Return _quoteTimes.Count / 5.0
+                End SyncLock
+            End Function
+
+            Public Sub SetSubscribeError(msg As String)
+                SubscribeError = If(msg, String.Empty)
+                AppendDiag($"SubscribeError: {SubscribeError}")
+            End Sub
+
+            Public Sub ClearSubscribeError()
+                If String.IsNullOrEmpty(SubscribeError) Then Return
+                SubscribeError = String.Empty
+                AppendDiag("Subscribed OK")
+            End Sub
+
+            Public Function SnapshotDiag() As String()
+                SyncLock _diagLock
+                    Return _diagBuffer.ToArray()
+                End SyncLock
+            End Function
+
+            Private Sub AppendDiag(msg As String)
+                Dim line = $"{DateTime.UtcNow:HH:mm:ss.fff} {msg}"
+                SyncLock _diagLock
+                    _diagBuffer.Enqueue(line)
+                    While _diagBuffer.Count > DiagBufferSize
+                        _diagBuffer.Dequeue()
+                    End While
+                End SyncLock
             End Sub
         End Class
 

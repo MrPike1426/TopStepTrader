@@ -161,9 +161,12 @@ Namespace TopStepTrader.Services.Market
         End Function
 
         ''' <summary>
-        ''' Returns the most recent bar close price via a 2-second bar query (no DB write).
-        ''' Used exclusively for live P&amp;L calculation during active positions.
-        ''' The 2-second cadence matches the position management timer period (BUG-22).
+        ''' Returns the most recent close price via a 5-second bar query with
+        ''' <c>includePartialBar=true</c> (no DB write). Used exclusively for live
+        ''' P&amp;L calculation and stop-loss ratcheting during active positions —
+        ''' the partial bar's close tracks the latest print, so when the WebSocket
+        ''' quote feed stalls the fallback loses at most the LivePnLService poll
+        ''' interval of freshness rather than a full bar period.
         ''' Returns 0 on any failure so callers fall back gracefully.
         ''' </summary>
         Public Async Function GetLatestPriceAsync(contractId As String,
@@ -174,15 +177,16 @@ Namespace TopStepTrader.Services.Market
                 Dim resolved = Await _catalog.GetResolvedContractIdAsync(fav, cancel)
                 Dim pxId = If(Not String.IsNullOrEmpty(resolved), resolved, fav.PxContractId)
                 Dim response = Await _pxHistoryClient.RetrieveBarsAsync(
-                    pxId, unit:=1, unitNumber:=2, limit:=5,
-                    live:=False, startTime:=DateTimeOffset.UtcNow.AddMinutes(-2),
-                    endTime:=DateTimeOffset.UtcNow, cancel:=cancel)
+                    pxId, unit:=1, unitNumber:=5, limit:=1,
+                    live:=False, startTime:=DateTimeOffset.UtcNow.AddMinutes(-5),
+                    endTime:=DateTimeOffset.UtcNow, cancel:=cancel,
+                    includePartialBar:=True)
                 If response Is Nothing OrElse response.Bars Is Nothing OrElse response.Bars.Count = 0 Then
                     Return 0D
                 End If
                 Return CDec(response.Bars.Last().Close)
             Catch ex As Exception
-                _logger.LogDebug(ex, "GetLatestPriceAsync: 15-second bar fetch failed for {Id}", contractId)
+                _logger.LogDebug(ex, "GetLatestPriceAsync: partial-bar fetch failed for {Id}", contractId)
                 Return 0D
             End Try
         End Function

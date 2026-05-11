@@ -10,6 +10,7 @@ Imports TopStepTrader.Core.Events
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Trading
+Imports TopStepTrader.Data.Debug
 Imports TopStepTrader.Data.Repositories
 
 Namespace TopStepTrader.Services.Trading
@@ -484,16 +485,14 @@ Namespace TopStepTrader.Services.Trading
 
         ''' <summary>
         ''' Writes a timestamped line to DebugLog (UI execution log) and appends it to
-        ''' Documents\TopStepTrader_Diagnostics\flatten_debug.txt for offline inspection.
+        ''' <solution-root>\TopStepTrader_Diagnostics\flatten_debug.txt for offline inspection.
         ''' </summary>
         Private Shared Sub FlattenDiag(message As String)
             Dim ts = DateTimeOffset.UtcNow.ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture)
             Dim line = $"[FLATTEN {ts}] {message}"
             Try : Core.Logging.DebugLog.Log(line) : Catch : End Try
             Try
-                Dim dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                                       "TopStepTrader_Diagnostics")
-                Directory.CreateDirectory(dir)
+                Dim dir = DebugTradeDbContext.ResolveDiagnosticsFolder()
                 File.AppendAllText(Path.Combine(dir, "flatten_debug.txt"),
                                    line & Environment.NewLine)
             Catch

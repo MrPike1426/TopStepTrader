@@ -56,6 +56,7 @@
                 <Button Content="🔑  API Keys"     Tag="ApiKeys"     Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="🧫  Test Trade"   Tag="TestTrade"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}" Opacity="0.5"/>
                 <Button Content="🧪  Scalper Test" Tag="ScalperTest" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                <Button Content="📈  Price Tracker" Tag="PriceTracker" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
 
 
                 <!-- Connection Status -->

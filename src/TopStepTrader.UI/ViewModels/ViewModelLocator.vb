@@ -73,6 +73,12 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        Public ReadOnly Property PriceTrackerView As PriceTrackerView
+            Get
+                Return Resolve(Of PriceTrackerView)("PriceTracker")
+            End Get
+        End Property
+
         Public ReadOnly Property SniperView As SniperView
             Get
                 Return Resolve(Of SniperView)("Sniper")

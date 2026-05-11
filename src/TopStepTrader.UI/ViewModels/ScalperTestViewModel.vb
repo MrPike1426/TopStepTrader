@@ -2,6 +2,9 @@ Imports System.Collections.ObjectModel
 Imports System.Threading
 Imports System.Threading.Tasks
 Imports System.Windows
+Imports System.Windows.Threading
+Imports Microsoft.AspNetCore.SignalR.Client
+Imports TopStepTrader.API.Hubs
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
@@ -30,18 +33,34 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _accountService As IAccountService
         Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _livePnL As ILivePnLService
+        Private ReadOnly _marketHub As MarketHubClient
 
         Private _activeSubscription As IDisposable
+        Private _activeContractId As String
         Private _disposed As Boolean = False
+        Private _diagTimer As DispatcherTimer
+        Private _brokerTimer As DispatcherTimer
+        Private _lastBrokerSnapshotUtc As DateTime = DateTime.MinValue
+
+        ''' <summary>
+        ''' Number of <see cref="IOrderService.GetLivePositionSnapshotAsync"/> attempts after
+        ''' <see cref="IOrderService.PlaceOrderAsync"/> returns. Mirrors the engine's
+        ''' <c>_syncMissCount</c> retry pattern so seedEntry never falls back to a
+        ''' (potentially zero) <c>placed.FillPrice</c>.
+        ''' </summary>
+        Private Const SeedSnapshotAttempts As Integer = 3
+        Private Shared ReadOnly SeedSnapshotDelay As TimeSpan = TimeSpan.FromMilliseconds(500)
 
         Public Sub New(orderService As IOrderService,
                        accountService As IAccountService,
                        session As ITradingSessionContext,
-                       livePnL As ILivePnLService)
+                       livePnL As ILivePnLService,
+                       Optional marketHub As MarketHubClient = Nothing)
             _orderService = orderService
             _accountService = accountService
             _session = session
             _livePnL = livePnL
+            _marketHub = marketHub
 
             Contracts = New ObservableCollection(Of String) From {"MNQ", "MES", "MGC", "M6E", "OIL"}
             SelectedContract = "MNQ"
@@ -103,16 +122,6 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
             Set(value As Integer)
                 SetProperty(_slTicks, Math.Max(1, value))
-            End Set
-        End Property
-
-        Private _tpTicks As Integer = 40
-        Public Property TpTicks As Integer
-            Get
-                Return _tpTicks
-            End Get
-            Set(value As Integer)
-                SetProperty(_tpTicks, Math.Max(1, value))
             End Set
         End Property
 
@@ -199,6 +208,173 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── ARCH-07 F4: Hub status strip bindings ────────────────────────────
+
+        Private _hubStateText As String = "Unknown"
+        Public Property HubStateText As String
+            Get
+                Return _hubStateText
+            End Get
+            Set(value As String)
+                SetProperty(_hubStateText, value)
+            End Set
+        End Property
+
+        Private _subscribedContractIdText As String = "—"
+        Public Property SubscribedContractIdText As String
+            Get
+                Return _subscribedContractIdText
+            End Get
+            Set(value As String)
+                SetProperty(_subscribedContractIdText, value)
+            End Set
+        End Property
+
+        Private _quotesPerSecText As String = "0.0/s"
+        Public Property QuotesPerSecText As String
+            Get
+                Return _quotesPerSecText
+            End Get
+            Set(value As String)
+                SetProperty(_quotesPerSecText, value)
+            End Set
+        End Property
+
+        Private _lastQuoteAgeText As String = "—"
+        Public Property LastQuoteAgeText As String
+            Get
+                Return _lastQuoteAgeText
+            End Get
+            Set(value As String)
+                SetProperty(_lastQuoteAgeText, value)
+            End Set
+        End Property
+
+        Private _lastBarAgeText As String = "—"
+        Public Property LastBarAgeText As String
+            Get
+                Return _lastBarAgeText
+            End Get
+            Set(value As String)
+                SetProperty(_lastBarAgeText, value)
+            End Set
+        End Property
+
+        Private _barZeroCount As Integer = 0
+        Public Property BarZeroCount As Integer
+            Get
+                Return _barZeroCount
+            End Get
+            Set(value As Integer)
+                If SetProperty(_barZeroCount, value) Then
+                    NotifyPropertyChanged(NameOf(IsStaleFeed))
+                End If
+            End Set
+        End Property
+
+        Public ReadOnly Property IsStaleFeed As Boolean
+            Get
+                Return _barZeroCount >= 5
+            End Get
+        End Property
+
+        ' ── ARCH-07 F7: Broker reference panel bindings ──────────────────────
+
+        Private _brokerOpenRate As Decimal = 0D
+        Public Property BrokerOpenRate As Decimal
+            Get
+                Return _brokerOpenRate
+            End Get
+            Set(value As Decimal)
+                If SetProperty(_brokerOpenRate, value) Then NotifyPropertyChanged(NameOf(BrokerOpenRateText))
+            End Set
+        End Property
+
+        Private _brokerUnits As Decimal = 0D
+        Public Property BrokerUnits As Decimal
+            Get
+                Return _brokerUnits
+            End Get
+            Set(value As Decimal)
+                If SetProperty(_brokerUnits, value) Then NotifyPropertyChanged(NameOf(BrokerUnitsText))
+            End Set
+        End Property
+
+        Private _brokerIsBuy As Boolean = True
+        Public Property BrokerIsBuy As Boolean
+            Get
+                Return _brokerIsBuy
+            End Get
+            Set(value As Boolean)
+                If SetProperty(_brokerIsBuy, value) Then NotifyPropertyChanged(NameOf(BrokerSideText))
+            End Set
+        End Property
+
+        Private _brokerUnrealisedPnL As Decimal = 0D
+        Public Property BrokerUnrealisedPnL As Decimal
+            Get
+                Return _brokerUnrealisedPnL
+            End Get
+            Set(value As Decimal)
+                If SetProperty(_brokerUnrealisedPnL, value) Then NotifyPropertyChanged(NameOf(BrokerPnLText))
+            End Set
+        End Property
+
+        Private _brokerSnapshotAgeSec As Integer = 0
+        Public Property BrokerSnapshotAgeSec As Integer
+            Get
+                Return _brokerSnapshotAgeSec
+            End Get
+            Set(value As Integer)
+                If SetProperty(_brokerSnapshotAgeSec, value) Then NotifyPropertyChanged(NameOf(BrokerSnapshotAgeText))
+            End Set
+        End Property
+
+        Private _hasBrokerSnapshot As Boolean = False
+        Public Property HasBrokerSnapshot As Boolean
+            Get
+                Return _hasBrokerSnapshot
+            End Get
+            Set(value As Boolean)
+                SetProperty(_hasBrokerSnapshot, value)
+            End Set
+        End Property
+
+        Public ReadOnly Property BrokerOpenRateText As String
+            Get
+                If Not HasBrokerSnapshot OrElse BrokerOpenRate <= 0D Then Return "—"
+                Return BrokerOpenRate.ToString(PriceFormat())
+            End Get
+        End Property
+
+        Public ReadOnly Property BrokerUnitsText As String
+            Get
+                If Not HasBrokerSnapshot Then Return "—"
+                Return BrokerUnits.ToString("0.##")
+            End Get
+        End Property
+
+        Public ReadOnly Property BrokerSideText As String
+            Get
+                If Not HasBrokerSnapshot Then Return "—"
+                Return If(BrokerIsBuy, "LONG", "SHORT")
+            End Get
+        End Property
+
+        Public ReadOnly Property BrokerPnLText As String
+            Get
+                If Not HasBrokerSnapshot Then Return "—"
+                Return $"{If(BrokerUnrealisedPnL >= 0D, "+", "")}${BrokerUnrealisedPnL:F2}"
+            End Get
+        End Property
+
+        Public ReadOnly Property BrokerSnapshotAgeText As String
+            Get
+                If Not HasBrokerSnapshot Then Return "—"
+                Return $"{BrokerSnapshotAgeSec}s ago"
+            End Get
+        End Property
+
         ' ── Display projections ──────────────────────────────────────────────
 
         Public ReadOnly Property CurrentPriceText As String
@@ -269,6 +445,38 @@ Namespace TopStepTrader.UI.ViewModels
             Catch ex As Exception
                 Dispatch(Sub() Log($"Account load error: {ex.Message}"))
             End Try
+
+            ' ── ARCH-07 F5: eager warmup ─────────────────────────────────────
+            ' Pre-resolve every favourite contract in the picker so the catalog
+            ' is hot when BUY is clicked (mirrors HydraViewModel/AssetBassettViewModel
+            ' warmup), then bring up MarketHubClient if it hasn't started yet.
+            Try
+                If Contracts IsNot Nothing Then
+                    For Each sym In Contracts
+                        Try
+                            FavouriteContracts.TryGetBySymbolResolved(sym)
+                        Catch ex As Exception
+                            ' Non-fatal — log and continue with the rest of the list.
+                            Dispatch(Sub() Log($"Catalog warmup failed for {sym}: {ex.Message}"))
+                        End Try
+                    Next
+                End If
+                If _marketHub IsNot Nothing AndAlso _marketHub.State <> HubConnectionState.Connected Then
+                    Dispatch(Sub() Log($"MarketHub state={_marketHub.State}; starting..."))
+                    Try
+                        Await _marketHub.StartAsync()
+                        Dispatch(Sub() Log($"MarketHub state={_marketHub.State}"))
+                    Catch ex As Exception
+                        Dispatch(Sub() Log($"MarketHub start error: {ex.Message}"))
+                    End Try
+                End If
+            Catch ex As Exception
+                Dispatch(Sub() Log($"Warmup error: {ex.Message}"))
+            End Try
+
+            ' Start the diagnostic poll once warmup is done so the user can see hub
+            ' state on the status strip even before the first BUY click.
+            Dispatch(AddressOf StartDiagnosticTimer)
         End Function
 
         ' ── Trade placement ──────────────────────────────────────────────────
@@ -297,11 +505,10 @@ Namespace TopStepTrader.UI.ViewModels
                           fav.PxContractId, SelectedContract)
             Dim qty = Math.Max(1, Size)
             Dim sl = Math.Max(1, SlTicks)
-            Dim tp = Math.Max(1, TpTicks)
             Dim sideLabel = side.ToString().ToUpperInvariant()
 
             Dispatch(Sub()
-                         Status = $"Placing {sideLabel} {qty}x {pxId} (SL={sl}t TP={tp}t)..."
+                         Status = $"Placing {sideLabel} {qty}x {pxId} (SL={sl}t)..."
                          Log(Status)
                      End Sub)
 
@@ -313,7 +520,7 @@ Namespace TopStepTrader.UI.ViewModels
                 .Quantity = qty,
                 .OrderType = OrderType.Market,
                 .InitialStopTicks = sl,
-                .InitialTakeProfitTicks = tp,
+                .InitialTakeProfitTicks = Nothing,
                 .Status = OrderStatus.Pending,
                 .PlacedAt = DateTimeOffset.UtcNow,
                 .Notes = $"Scalper Test — {sideLabel}"
@@ -329,8 +536,28 @@ Namespace TopStepTrader.UI.ViewModels
             End If
 
             Dim signed = If(side = OrderSide.Buy, qty, -qty)
-            Dim seedEntry = If(placed.FillPrice.HasValue AndAlso placed.FillPrice.Value > 0D,
-                               placed.FillPrice.Value, CurrentPrice)
+
+            ' Seed entry from the broker, not from placed.FillPrice (which TopStepX REST
+            ' returns as null on PlaceOrder). Mirrors the StrategyExecutionEngine
+            ' _syncMissCount pattern: poll GetLivePositionSnapshotAsync up to N times.
+            Dim seedEntry = Await ResolveSeedEntryFromBrokerAsync(SelectedAccount.Id, pxId)
+
+            ' Track the placement contract so CLOSE can flatten even if no subscription
+            ' was started (e.g. the snapshot retries timed out) or if the user changes
+            ' SelectedContract afterwards.
+            _activeContractId = pxId
+
+            If seedEntry <= 0D Then
+                Dispatch(Sub()
+                             Status = "Position not yet visible — retry"
+                             Log(Status)
+                             HasActivePosition = True
+                             EntryPrice = 0D
+                             EntryCorrected = False
+                         End Sub)
+                Return
+            End If
+
             BeginLiveSubscription(seedEntry, signed)
             Dispatch(Sub()
                          Status = $"Open: {sideLabel} {qty}x  Order #{placed.ExternalOrderId}"
@@ -339,6 +566,32 @@ Namespace TopStepTrader.UI.ViewModels
                          EntryPrice = seedEntry
                          EntryCorrected = False
                      End Sub)
+        End Function
+
+        ''' <summary>
+        ''' Polls the broker for the post-fill <c>OpenRate</c>, retrying up to
+        ''' <see cref="SeedSnapshotAttempts"/> times. Returns 0 if every attempt
+        ''' returns null or a non-positive rate — caller treats that as
+        ''' "do not start the live subscription".
+        ''' </summary>
+        Friend Async Function ResolveSeedEntryFromBrokerAsync(accountId As Long,
+                                                              pxId As String,
+                                                              Optional delayOverride As TimeSpan? = Nothing) As Task(Of Decimal)
+            Dim delay = If(delayOverride.HasValue, delayOverride.Value, SeedSnapshotDelay)
+            For attempt = 1 To SeedSnapshotAttempts
+                Dim attemptNo = attempt ' local copy for the lambda closure
+                Try
+                    Dim snap = Await _orderService.GetLivePositionSnapshotAsync(accountId, pxId)
+                    If snap IsNot Nothing AndAlso snap.OpenRate > 0D Then Return snap.OpenRate
+                Catch ex As Exception
+                    Dim msg = ex.Message
+                    Dispatch(Sub() Log($"Seed snapshot attempt {attemptNo}/{SeedSnapshotAttempts} error: {msg}"))
+                End Try
+                If attempt < SeedSnapshotAttempts AndAlso delay > TimeSpan.Zero Then
+                    Await Task.Delay(delay)
+                End If
+            Next
+            Return 0D
         End Function
 
         Private Sub CloseFireAndForget()
@@ -353,14 +606,18 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Async Function CloseAsync() As Task
             If SelectedAccount Is Nothing Then Return
-            Dim fav = FavouriteContracts.TryGetBySymbolResolved(SelectedContract)
-            Dim pxId = If(fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId),
+            Dim pxId = _activeContractId
+            If String.IsNullOrEmpty(pxId) Then
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(SelectedContract)
+                pxId = If(fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxContractId),
                           fav.PxContractId, SelectedContract)
+            End If
             Dispatch(Sub() Log($"Flatten {pxId}..."))
             Try
                 Await _orderService.FlattenContractAsync(SelectedAccount.Id, pxId)
             Finally
                 EndLiveSubscription()
+                _activeContractId = Nothing
                 Dispatch(Sub()
                              HasActivePosition = False
                              Status = "Flat"
@@ -377,6 +634,7 @@ Namespace TopStepTrader.UI.ViewModels
             _activeSubscription = _livePnL.Subscribe(SelectedContract, seedEntry, signedSize,
                                                      AddressOf OnLiveTick,
                                                      accountId:=acctId)
+            Dispatch(AddressOf StartBrokerTimer)
         End Sub
 
         Private Sub EndLiveSubscription()
@@ -384,21 +642,119 @@ Namespace TopStepTrader.UI.ViewModels
             If s IsNot Nothing Then
                 Try : s.Dispose() : Catch : End Try
             End If
+            Dispatch(Sub()
+                         StopBrokerTimer()
+                         HasBrokerSnapshot = False
+                     End Sub)
+        End Sub
+
+        ' ── ARCH-07 F4 / F7: status & broker reference timers ───────────────
+
+        Private Sub StartDiagnosticTimer()
+            If _diagTimer IsNot Nothing Then Return
+            _diagTimer = New DispatcherTimer With {.Interval = TimeSpan.FromSeconds(1)}
+            AddHandler _diagTimer.Tick, AddressOf OnDiagTick
+            _diagTimer.Start()
+            ' One immediate tick so the strip populates right away.
+            OnDiagTick(Nothing, EventArgs.Empty)
+        End Sub
+
+        Private Sub StopDiagnosticTimer()
+            If _diagTimer Is Nothing Then Return
+            _diagTimer.Stop()
+            RemoveHandler _diagTimer.Tick, AddressOf OnDiagTick
+            _diagTimer = Nothing
+        End Sub
+
+        Private Sub OnDiagTick(sender As Object, e As EventArgs)
+            Dim diag = _livePnL.GetDiagnostics(SelectedContract)
+            HubStateText = If(String.IsNullOrEmpty(diag.SubscribeError),
+                              diag.HubState,
+                              $"{diag.HubState} — Subscribe failed: {diag.SubscribeError}")
+            SubscribedContractIdText = If(String.IsNullOrEmpty(diag.SubscribedContractId), "—", diag.SubscribedContractId)
+            QuotesPerSecText = $"{diag.QuotesPerSec5s:0.0}/s"
+            LastQuoteAgeText = FormatAge(diag.LastQuoteUtc)
+            LastBarAgeText = FormatAge(diag.LastBarUtc)
+            BarZeroCount = diag.BarFetchZeroCount
+        End Sub
+
+        Private Shared Function FormatAge(utc As DateTime) As String
+            If utc = DateTime.MinValue Then Return "—"
+            Dim ms = (DateTime.UtcNow - utc).TotalMilliseconds
+            If ms < 0 Then ms = 0
+            If ms < 1000 Then Return $"{CInt(ms)} ms"
+            Return $"{ms / 1000.0:0.0} s"
+        End Function
+
+        Private Sub StartBrokerTimer()
+            If _brokerTimer IsNot Nothing Then Return
+            _brokerTimer = New DispatcherTimer With {.Interval = TimeSpan.FromSeconds(5)}
+            AddHandler _brokerTimer.Tick, AddressOf OnBrokerTick
+            _brokerTimer.Start()
+            ' Kick off an immediate fetch so the panel populates without a 5 s lag.
+            OnBrokerTick(Nothing, EventArgs.Empty)
+        End Sub
+
+        Private Sub StopBrokerTimer()
+            If _brokerTimer Is Nothing Then Return
+            _brokerTimer.Stop()
+            RemoveHandler _brokerTimer.Tick, AddressOf OnBrokerTick
+            _brokerTimer = Nothing
+        End Sub
+
+        Private Sub OnBrokerTick(sender As Object, e As EventArgs)
+            ' Refresh "snapshot age" on every tick even if no new fetch lands.
+            If HasBrokerSnapshot AndAlso _lastBrokerSnapshotUtc <> DateTime.MinValue Then
+                BrokerSnapshotAgeSec = CInt(Math.Max(0, (DateTime.UtcNow - _lastBrokerSnapshotUtc).TotalSeconds))
+            End If
+            If Not HasActivePosition Then Return
+            Dim acctId = If(SelectedAccount IsNot Nothing, SelectedAccount.Id, 0L)
+            Dim pxId = _activeContractId
+            If acctId = 0 OrElse String.IsNullOrEmpty(pxId) Then Return
+            Task.Run(Async Function() As Task
+                         Try
+                             Dim snap = Await _orderService.GetLivePositionSnapshotAsync(acctId, pxId)
+                             Dispatch(Sub() ApplyBrokerSnapshot(snap))
+                         Catch ex As Exception
+                             Dispatch(Sub() Log($"Broker snapshot error: {ex.Message}"))
+                         End Try
+                     End Function)
+        End Sub
+
+        Private Sub ApplyBrokerSnapshot(snap As LivePositionSnapshot)
+            If snap Is Nothing Then
+                HasBrokerSnapshot = False
+                Return
+            End If
+            BrokerOpenRate = snap.OpenRate
+            BrokerUnits = snap.Units
+            BrokerIsBuy = snap.IsBuy
+            BrokerUnrealisedPnL = snap.UnrealizedPnlUsd
+            _lastBrokerSnapshotUtc = DateTime.UtcNow
+            BrokerSnapshotAgeSec = 0
+            HasBrokerSnapshot = True
         End Sub
 
         Private Sub OnLiveTick(t As LivePnLTick)
             Dim corrected = (t.EntryPrice <> EntryPrice AndAlso EntryPrice > 0D)
+            Dim metadataOnly = (t.Source = LivePriceSource.None)
             Dispatch(Sub()
-                         CurrentPrice = t.Price
                          If corrected Then
                              Log($"📌 Entry corrected {EntryPrice:F5} -> {t.EntryPrice:F5}")
                              EntryCorrected = True
                          End If
                          EntryPrice = t.EntryPrice
                          UnrealisedPnL = t.UnrealisedPnL
-                         PriceSource = t.Source.ToString()
-                         PriceAgeMs = t.AgeMs
-                         Log($"[{t.Source}] price={t.Price.ToString(PriceFormat())} age={t.AgeMs}ms pnl=${t.UnrealisedPnL:F2}")
+                         If metadataOnly Then
+                             ' Metadata-only tick (entry correction before any quote/bar):
+                             ' do NOT overwrite the displayed price/source/age.
+                             Log($"[None] entry={t.EntryPrice.ToString(PriceFormat())} pnl=${t.UnrealisedPnL:F2}")
+                         Else
+                             CurrentPrice = t.Price
+                             PriceSource = t.Source.ToString()
+                             PriceAgeMs = t.AgeMs
+                             Log($"[{t.Source}] price={t.Price.ToString(PriceFormat())} age={t.AgeMs}ms pnl=${t.UnrealisedPnL:F2}")
+                         End If
                      End Sub)
         End Sub
 
@@ -434,6 +790,10 @@ Namespace TopStepTrader.UI.ViewModels
             If _disposed Then Return
             _disposed = True
             EndLiveSubscription()
+            Dispatch(Sub()
+                         StopDiagnosticTimer()
+                         StopBrokerTimer()
+                     End Sub)
         End Sub
 
     End Class

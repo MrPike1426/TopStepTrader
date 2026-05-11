@@ -37,6 +37,12 @@ Namespace TopStepTrader.API.Http.ProjectX
         ''' <param name="unitNumber">Same value as unit (required by API)</param>
         ''' <param name="limit">Max bars to return per call</param>
         ''' <param name="live">False = simulated/paper data</param>
+        ''' <param name="includePartialBar">
+        ''' True returns the still-forming current bar as the most recent entry — the bar's
+        ''' <c>Close</c> tracks the latest print rather than the prior fully-closed bar.
+        ''' Used by the live P&amp;L bar fallback so a stalled WebSocket loses at most one
+        ''' polling interval of price freshness instead of up to one full bar period.
+        ''' </param>
         Public Function RetrieveBarsAsync(
             contractId As String,
             unit As Integer,
@@ -45,7 +51,8 @@ Namespace TopStepTrader.API.Http.ProjectX
             Optional live As Boolean = False,
             Optional startTime As DateTimeOffset? = Nothing,
             Optional endTime As DateTimeOffset? = Nothing,
-            Optional cancel As CancellationToken = Nothing) As Task(Of BarResponse)
+            Optional cancel As CancellationToken = Nothing,
+            Optional includePartialBar As Boolean = False) As Task(Of BarResponse)
 
             Dim request As New PXRetrieveBarsRequest With {
                 .ContractId = contractId,
@@ -54,7 +61,8 @@ Namespace TopStepTrader.API.Http.ProjectX
                 .Limit = limit,
                 .Live = live,
                 .StartTime = If(startTime.HasValue, startTime.Value.ToString("O"), Nothing),
-                .EndTime = If(endTime.HasValue, endTime.Value.ToString("O"), Nothing)
+                .EndTime = If(endTime.HasValue, endTime.Value.ToString("O"), Nothing),
+                .IncludePartialBar = includePartialBar
             }
 
             Dim endpoint = $"{_settings.RestBaseUrl}/api/History/retrieveBars"

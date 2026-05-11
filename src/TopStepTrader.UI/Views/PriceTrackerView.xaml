@@ -1,0 +1,211 @@
+<UserControl x:Class="TopStepTrader.UI.Views.PriceTrackerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="#070C14">
+
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="C_Bg"          Color="#070C14"/>
+        <SolidColorBrush x:Key="C_Card"        Color="#111D30"/>
+        <SolidColorBrush x:Key="C_Border"      Color="#1E3050"/>
+        <SolidColorBrush x:Key="C_Blue"        Color="#00C8F0"/>
+        <SolidColorBrush x:Key="C_Amber"       Color="#F0A030"/>
+        <SolidColorBrush x:Key="C_Green"       Color="#00DF7A"/>
+        <SolidColorBrush x:Key="C_Red"         Color="#F03355"/>
+        <SolidColorBrush x:Key="C_Text"        Color="#C0D0E8"/>
+        <SolidColorBrush x:Key="C_TextDim"     Color="#506080"/>
+
+        <Style TargetType="TextBlock" x:Key="LabelStyle">
+            <Setter Property="Foreground" Value="{StaticResource C_TextDim}"/>
+            <Setter Property="FontSize"   Value="10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin"     Value="0,0,0,4"/>
+        </Style>
+
+        <Style TargetType="Button" x:Key="ActionCaptureStyle">
+            <Setter Property="Background"   Value="{StaticResource C_Green}"/>
+            <Setter Property="Foreground"   Value="#001810"/>
+            <Setter Property="FontWeight"   Value="Bold"/>
+            <Setter Property="FontSize"     Value="14"/>
+            <Setter Property="Padding"      Value="20,10"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Margin"       Value="0,0,8,0"/>
+            <!-- Custom template so the button stays readable when disabled
+                 (default WPF chrome overrides Background/Foreground in disabled state). -->
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"
+                                              TextElement.FontWeight="{TemplateBinding FontWeight}"
+                                              TextElement.FontSize="{TemplateBinding FontSize}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.85"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.35"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="Button" x:Key="ActionResetStyle" BasedOn="{StaticResource ActionCaptureStyle}">
+            <Setter Property="Background"   Value="{StaticResource C_Amber}"/>
+            <Setter Property="Foreground"   Value="#181000"/>
+            <Setter Property="FontSize"     Value="12"/>
+            <Setter Property="Padding"      Value="14,8"/>
+            <Setter Property="Margin"       Value="8,0,0,0"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock Grid.Row="0"
+                   Text="📈 PRICE TRACKER — MBT live-price validation"
+                   Foreground="{StaticResource C_Blue}"
+                   FontSize="16" FontWeight="Bold"
+                   Margin="0,0,0,16"/>
+
+        <!-- DIAGNOSTIC STRIP -->
+        <Border Grid.Row="1" Background="{StaticResource C_Card}"
+                BorderBrush="{StaticResource C_Border}" BorderThickness="1"
+                CornerRadius="4" Padding="10,6" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="HUB:" Foreground="{StaticResource C_TextDim}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding HubStateText}" FontSize="11" FontWeight="SemiBold"
+                           Margin="6,0,16,0" VerticalAlignment="Center" Foreground="{StaticResource C_Blue}"/>
+                <TextBlock Text="CONTRACT:" Foreground="{StaticResource C_TextDim}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding SubscribedContractIdText}" FontSize="11" FontWeight="SemiBold"
+                           Margin="6,0,16,0" VerticalAlignment="Center" Foreground="{StaticResource C_Text}"/>
+                <TextBlock Text="QUOTES:" Foreground="{StaticResource C_TextDim}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding QuotesPerSecText}" FontSize="11" FontWeight="SemiBold"
+                           Margin="6,0,16,0" VerticalAlignment="Center" Foreground="{StaticResource C_Text}"/>
+                <TextBlock Text="Δ QUOTE:" Foreground="{StaticResource C_TextDim}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding LastQuoteAgeText}" FontSize="11" FontWeight="SemiBold"
+                           Margin="6,0,16,0" VerticalAlignment="Center" Foreground="{StaticResource C_Text}"/>
+                <TextBlock Text="Δ BAR:" Foreground="{StaticResource C_TextDim}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding LastBarAgeText}" FontSize="11" FontWeight="SemiBold"
+                           Margin="6,0,16,0" VerticalAlignment="Center" Foreground="{StaticResource C_Text}"/>
+                <Border Background="{StaticResource C_Red}" CornerRadius="3" Padding="6,2"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding IsStaleFeed, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                    <TextBlock FontSize="10" FontWeight="Bold" Foreground="#180005">
+                        <Run Text="STALE FEED ×"/>
+                        <Run Text="{Binding BarZeroCount, Mode=OneWay}"/>
+                    </TextBlock>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- LIVE PANEL -->
+        <Border Grid.Row="2" Background="{StaticResource C_Card}"
+                BorderBrush="{StaticResource C_Border}" BorderThickness="1"
+                CornerRadius="4" Padding="16" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="CURRENT PRICE" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding CurrentPriceText}"
+                               Foreground="{StaticResource C_Blue}"
+                               FontSize="36" FontWeight="Bold"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="ENTRY PRICE" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding EntryPriceText}"
+                               Foreground="{StaticResource C_Text}"
+                               FontSize="36" FontWeight="Bold"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="UNREALISED P&amp;L" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding UnrealisedPnLText}"
+                               FontSize="36" FontWeight="Bold">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource C_Green}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsPnLPositive}" Value="False">
+                                        <Setter Property="Foreground" Value="{StaticResource C_Red}"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding HasEntry}" Value="False">
+                                        <Setter Property="Foreground" Value="{StaticResource C_TextDim}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+
+                <!-- Δ ticks cross-check (hidden when no entry captured) -->
+                <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,8,0,0"
+                            Visibility="{Binding HasEntry, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                    <TextBlock Text="Δ ticks: " Foreground="{StaticResource C_TextDim}" FontSize="12"/>
+                    <TextBlock Text="{Binding TickDeltaText}" Foreground="{StaticResource C_Text}"
+                               FontSize="12" FontWeight="SemiBold"/>
+                    <TextBlock Text="    (cross-check: pnl ≈ Δ × $0.50)"
+                               Foreground="{StaticResource C_TextDim}" FontSize="11"
+                               Margin="8,0,0,0"/>
+                </StackPanel>
+
+                <!-- Source / Age line -->
+                <StackPanel Grid.Row="2" Grid.ColumnSpan="3" Orientation="Horizontal" Margin="0,12,0,0">
+                    <TextBlock Text="Source: " Foreground="{StaticResource C_TextDim}" FontSize="11"/>
+                    <TextBlock Text="{Binding PriceSource}" FontSize="11" FontWeight="SemiBold">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource C_Blue}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding PriceSource}" Value="Bar">
+                                        <Setter Property="Foreground" Value="{StaticResource C_Amber}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Text="   |   Age: " Foreground="{StaticResource C_TextDim}" FontSize="11"/>
+                    <TextBlock Text="{Binding PriceAgeMs}" Foreground="{StaticResource C_Text}" FontSize="11"/>
+                    <TextBlock Text=" ms" Foreground="{StaticResource C_TextDim}" FontSize="11"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ACTIONS -->
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,12">
+            <Button Content="GET CURRENT PRICE" Style="{StaticResource ActionCaptureStyle}"
+                    Command="{Binding CaptureEntryCommand}" MinWidth="200"/>
+            <Button Content="RESET" Style="{StaticResource ActionResetStyle}"
+                    Command="{Binding ResetCommand}" MinWidth="100"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

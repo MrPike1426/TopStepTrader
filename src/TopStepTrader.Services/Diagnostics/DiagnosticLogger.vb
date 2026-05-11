@@ -4,6 +4,7 @@ Imports System.Text.Json
 Imports System.Text.Json.Serialization
 Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.Core.Models.Diagnostics
+Imports TopStepTrader.Data.Debug
 
 Namespace TopStepTrader.Services.Diagnostics
 
@@ -13,7 +14,7 @@ Namespace TopStepTrader.Services.Diagnostics
     '''
     ''' File format: one JSON object per line.  Lines starting with '#' are comments.
     ''' Filename pattern: diag_YYYY-MM-DD_HH-mm-ss_{CONTRACT}_{SESSION}.jsonl
-    ''' Output folder:    [My Documents]\TopStepTrader_Diagnostics\
+    ''' Output folder:    <solution-root>\TopStepTrader_Diagnostics\ (resolved via DebugTradeDbContext.ResolveDiagnosticsFolder)
     '''
     ''' Thread-safe: all writes are serialised via SyncLock.
     ''' AutoFlush enabled so no data is lost if the process crashes.
@@ -121,11 +122,7 @@ Namespace TopStepTrader.Services.Diagnostics
                 Dim invalidChars = Path.GetInvalidFileNameChars()
                 Dim safeContract = String.Join("-", contractId.Split(invalidChars))
 
-                Dim dir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-                    "TopStepTrader_Diagnostics")
-
-                Directory.CreateDirectory(dir)
+                Dim dir = DebugTradeDbContext.ResolveDiagnosticsFolder()
 
                 _filePath = Path.Combine(dir, $"diag_{ts}_{safeContract}_{_sessionId}.jsonl")
 

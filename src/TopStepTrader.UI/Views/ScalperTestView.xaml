@@ -67,6 +67,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -77,13 +78,43 @@
                    FontSize="16" FontWeight="Bold"
                    Margin="0,0,0,16"/>
 
-        <!-- CONFIG -->
+        <!-- STATUS STRIP (ARCH-07 F4) -->
         <Border Grid.Row="1" Background="{StaticResource C_Card}"
+                BorderBrush="{StaticResource C_Border}" BorderThickness="1"
+                CornerRadius="4" Padding="10,6" Margin="0,0,0,8">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="HUB:" Foreground="{StaticResource C_TextDim}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding HubStateText}" FontSize="11" FontWeight="SemiBold"
+                           Margin="6,0,16,0" VerticalAlignment="Center" Foreground="{StaticResource C_Blue}"/>
+                <TextBlock Text="CONTRACT:" Foreground="{StaticResource C_TextDim}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding SubscribedContractIdText}" FontSize="11" FontWeight="SemiBold"
+                           Margin="6,0,16,0" VerticalAlignment="Center" Foreground="{StaticResource C_Text}"/>
+                <TextBlock Text="QUOTES:" Foreground="{StaticResource C_TextDim}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding QuotesPerSecText}" FontSize="11" FontWeight="SemiBold"
+                           Margin="6,0,16,0" VerticalAlignment="Center" Foreground="{StaticResource C_Text}"/>
+                <TextBlock Text="Δ QUOTE:" Foreground="{StaticResource C_TextDim}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding LastQuoteAgeText}" FontSize="11" FontWeight="SemiBold"
+                           Margin="6,0,16,0" VerticalAlignment="Center" Foreground="{StaticResource C_Text}"/>
+                <TextBlock Text="Δ BAR:" Foreground="{StaticResource C_TextDim}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding LastBarAgeText}" FontSize="11" FontWeight="SemiBold"
+                           Margin="6,0,16,0" VerticalAlignment="Center" Foreground="{StaticResource C_Text}"/>
+                <Border Background="{StaticResource C_Red}" CornerRadius="3" Padding="6,2"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding IsStaleFeed, Converter={StaticResource BoolToVisibilityConverter}, FallbackValue=Collapsed}">
+                    <TextBlock FontSize="10" FontWeight="Bold" Foreground="#180005">
+                        <Run Text="STALE FEED ×"/>
+                        <Run Text="{Binding BarZeroCount, Mode=OneWay}"/>
+                    </TextBlock>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- CONFIG -->
+        <Border Grid.Row="2" Background="{StaticResource C_Card}"
                 BorderBrush="{StaticResource C_Border}" BorderThickness="1"
                 CornerRadius="4" Padding="16" Margin="0,0,0,12">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
@@ -114,17 +145,12 @@
                     <TextBox Style="{StaticResource InputStyle}" Text="{Binding Size, Mode=TwoWay}"/>
                 </StackPanel>
 
-                <StackPanel Grid.Column="3" Margin="0,0,8,0">
+                <StackPanel Grid.Column="3">
                     <TextBlock Text="SL (ticks)" Style="{StaticResource LabelStyle}"/>
                     <TextBox Style="{StaticResource InputStyle}" Text="{Binding SlTicks, Mode=TwoWay}"/>
                 </StackPanel>
 
-                <StackPanel Grid.Column="4">
-                    <TextBlock Text="TP (ticks)" Style="{StaticResource LabelStyle}"/>
-                    <TextBox Style="{StaticResource InputStyle}" Text="{Binding TpTicks, Mode=TwoWay}"/>
-                </StackPanel>
-
-                <TextBlock Grid.Row="1" Grid.ColumnSpan="5"
+                <TextBlock Grid.Row="1" Grid.ColumnSpan="4"
                            Foreground="{StaticResource C_TextDim}"
                            FontSize="11" Margin="0,8,0,0"
                            Text="{Binding TickSizeHint}"/>
@@ -132,7 +158,7 @@
         </Border>
 
         <!-- ACTIONS -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,12">
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,0,0,12">
             <Button Content="BUY"   Style="{StaticResource ActionBuyStyle}"   Command="{Binding BuyCommand}"   MinWidth="120"/>
             <Button Content="SELL"  Style="{StaticResource ActionSellStyle}"  Command="{Binding SellCommand}"  MinWidth="120"/>
             <Button Content="CLOSE" Style="{StaticResource ActionCloseStyle}" Command="{Binding CloseCommand}" MinWidth="120"/>
@@ -143,7 +169,7 @@
         </StackPanel>
 
         <!-- LIVE PANEL -->
-        <Border Grid.Row="3" Background="{StaticResource C_Card}"
+        <Border Grid.Row="4" Background="{StaticResource C_Card}"
                 BorderBrush="{StaticResource C_Border}" BorderThickness="1"
                 CornerRadius="4" Padding="16" Margin="0,0,0,12">
             <Grid>
@@ -153,6 +179,8 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -214,11 +242,59 @@
                     <TextBlock Text="{Binding PriceAgeMs}" Foreground="{StaticResource C_Text}" FontSize="11"/>
                     <TextBlock Text=" ms" Foreground="{StaticResource C_TextDim}" FontSize="11"/>
                 </StackPanel>
+
+                <!-- BROKER REFERENCE (ARCH-07 F7) — divergence visible at a glance -->
+                <Border Grid.Row="3" Grid.ColumnSpan="3" Margin="0,12,0,0"
+                        Background="#080E1A" BorderBrush="{StaticResource C_Border}"
+                        BorderThickness="1" CornerRadius="3" Padding="10,6">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="BROKER:" Foreground="{StaticResource C_Amber}"
+                                   FontSize="10" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="OpenRate " Foreground="{StaticResource C_TextDim}" FontSize="11"/>
+                            <TextBlock Text="{Binding BrokerOpenRateText}" Foreground="{StaticResource C_Text}" FontSize="11" FontWeight="SemiBold"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Units " Foreground="{StaticResource C_TextDim}" FontSize="11"/>
+                            <TextBlock Text="{Binding BrokerUnitsText}" Foreground="{StaticResource C_Text}" FontSize="11" FontWeight="SemiBold"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Side " Foreground="{StaticResource C_TextDim}" FontSize="11"/>
+                            <TextBlock Text="{Binding BrokerSideText}" FontSize="11" FontWeight="SemiBold">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource C_Green}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding BrokerIsBuy}" Value="False">
+                                                <Setter Property="Foreground" Value="{StaticResource C_Red}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="P&amp;L " Foreground="{StaticResource C_TextDim}" FontSize="11"/>
+                            <TextBlock Text="{Binding BrokerPnLText}" Foreground="{StaticResource C_Text}" FontSize="11" FontWeight="SemiBold"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="5" Text="{Binding BrokerSnapshotAgeText}"
+                                   Foreground="{StaticResource C_TextDim}" FontSize="10"
+                                   VerticalAlignment="Center"/>
+                    </Grid>
+                </Border>
             </Grid>
         </Border>
 
         <!-- DIAGNOSTIC LOG -->
-        <Border Grid.Row="4" Background="{StaticResource C_Card}"
+        <Border Grid.Row="5" Background="{StaticResource C_Card}"
                 BorderBrush="{StaticResource C_Border}" BorderThickness="1"
                 CornerRadius="4" Padding="12">
             <Grid>
@@ -243,3 +319,4 @@
         </Border>
     </Grid>
 </UserControl>
+

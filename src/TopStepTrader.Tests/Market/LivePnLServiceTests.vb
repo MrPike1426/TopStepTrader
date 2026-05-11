@@ -30,9 +30,14 @@ Namespace TopStepTrader.Tests.Market
 
             Public ReadOnly Subscribed As New ConcurrentBag(Of String)
             Public ReadOnly Unsubscribed As New ConcurrentBag(Of String)
+            ''' <summary>When set, SubscribeContractAsync throws this exception (Bug C regression).</summary>
+            Public SubscribeException As Exception = Nothing
 
             Public Function SubscribeContractAsync(contractId As String,
                                                     Optional cancel As CancellationToken = Nothing) As Task Implements IMarketQuoteFeed.SubscribeContractAsync
+                If SubscribeException IsNot Nothing Then
+                    Return Task.FromException(SubscribeException)
+                End If
                 Subscribed.Add(contractId)
                 Return Task.CompletedTask
             End Function
@@ -209,6 +214,39 @@ Namespace TopStepTrader.Tests.Market
             End Using
         End Function
 
+        ''' <summary>
+        ''' ARCH-07 Bug B regression: <see cref="LivePnLService.CheckEntryCorrectionsAsync"/>
+        ''' fires before any quote/bar has arrived. The pre-fix
+        ''' <c>EmitFromState</c> early-returned ("nothing to emit yet") so the
+        ''' consumer never saw the corrected entry. After the fix it emits a
+        ''' metadata-only tick (Source = None, Price = 0) carrying the corrected
+        ''' EntryPrice.
+        ''' </summary>
+        <Fact>
+        Public Async Function EntryCorrection_NoQuoteOrBarYet_EmitsMetadataOnlyTickWithCorrectedEntry() As Task
+            Using h As New TestHarness()
+                h.OrderSvc.Setup(Function(o) o.GetLivePositionSnapshotAsync(
+                                    It.IsAny(Of Long), It.IsAny(Of String),
+                                    It.IsAny(Of Long?), It.IsAny(Of CancellationToken))).
+                          ReturnsAsync(New LivePositionSnapshot With {.OpenRate = 1.1782D, .IsBuy = True, .Units = 1})
+
+                Dim received As LivePnLTick = Nothing
+                ' entry=0, no quotes, no bars — the initial Subscribe-time emit is suppressed
+                ' because price is 0; only the post-correction emit should land.
+                Dim sub_ = h.Service.Subscribe("M6E", 0D, 1, Sub(t) received = t, accountId:=42L)
+                Assert.Null(received)
+
+                Await h.Service.CheckEntryCorrectionsAsync()
+
+                Assert.NotNull(received)
+                Assert.Equal(LivePriceSource.None, received.Source)
+                Assert.Equal(0D, received.Price)
+                Assert.Equal(0L, received.AgeMs)
+                Assert.Equal(1.1782D, received.EntryPrice)
+                sub_.Dispose()
+            End Using
+        End Function
+
         <Fact>
         Public Async Function Dispose_LastSubscriber_DetachesMarketHub() As Task
             Using h As New TestHarness()
@@ -219,6 +257,53 @@ Namespace TopStepTrader.Tests.Market
                 Await Task.Delay(50)
                 Assert.Contains("CON.F.US.MGC.M26", h.Feed.Unsubscribed)
                 Assert.False(h.Service.HasSubscribers("MGC"))
+            End Using
+        End Function
+
+        ''' <summary>
+        ''' ARCH-07 Bug C regression: when <see cref="IMarketQuoteFeed.SubscribeContractAsync"/>
+        ''' throws, <see cref="LivePnLService.GetDiagnostics"/> must surface the failure
+        ''' (was a silent <c>LogDebug</c> before — UI showed no signal that quotes were
+        ''' never wired up).
+        ''' </summary>
+        <Fact>
+        Public Async Function GetDiagnostics_SubscribeThrows_SurfacesSubscribeError() As Task
+            Using h As New TestHarness()
+                h.Feed.SubscribeException = New InvalidOperationException("hub auth failed")
+                Dim sub_ = h.Service.Subscribe("MGC", 2350D, 1, Sub(t) Exit Sub)
+                ' Subscribe runs the underlying SubscribeContractAsync via Task.Run; let it land.
+                Await Task.Delay(100)
+                Dim diag = h.Service.GetDiagnostics("MGC")
+                Assert.False(String.IsNullOrEmpty(diag.SubscribeError),
+                             "SubscribeError should be populated when the feed throws")
+                Assert.Contains("hub auth failed", diag.SubscribeError)
+                sub_.Dispose()
+            End Using
+        End Function
+
+        ''' <summary>
+        ''' ARCH-07 Bug D regression: when the bar fallback returns 0 repeatedly,
+        ''' diagnostics must reflect the consecutive zero-count and the ring buffer
+        ''' must contain one <c>BarFetch=0</c> entry per failing poll. The pre-fix
+        ''' service swallowed price = 0 silently — the harness sat blank for 3 minutes.
+        ''' </summary>
+        <Fact>
+        Public Async Function GetDiagnostics_FiveZeroBarPolls_ZeroCountIsFiveAndRingBufferContainsEntries() As Task
+            Using h As New TestHarness()
+                h.BarSvc.Setup(Function(b) b.GetLatestPriceAsync("MGC", It.IsAny(Of CancellationToken))).
+                         ReturnsAsync(0D)
+
+                Dim sub_ = h.Service.Subscribe("MGC", 2350D, 1, Sub(t) Exit Sub)
+                For i = 1 To 5
+                    Await h.Service.PollBarFallbackAsync("MGC")
+                Next
+
+                Dim diag = h.Service.GetDiagnostics("MGC")
+                Assert.Equal(5, diag.BarFetchZeroCount)
+                Dim zeroEntries = Enumerable.Count(diag.RecentEvents,
+                                                   Function(s) s.Contains("BarFetch=0"))
+                Assert.Equal(5, zeroEntries)
+                sub_.Dispose()
             End Using
         End Function
 

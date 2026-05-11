@@ -96,6 +96,20 @@ Namespace TopStepTrader.Core.Trading
                 .RollLeadDays = 28
             })
 
+            ' MBT — Micro Bitcoin  [ProjectX symbolId: F.US.MBT; roll: quarterly H/M/U/Z; U26=Sep 2026]
+            ' Tick = 5.0 BTC pts = $0.50 → $0.10/point.
+            ' PxMinStopDollars=$30: 60 ticks × $0.50.
+            ' RoundTripFee=$2.34: 2 × $1.17/side (per IBacktestService.vb:137).
+            ' Note: spot BTC trades 24/7 but the MBT futures contract follows TopStepX session hours.
+            list.Add(New FavouriteContract("MBT", "BTC", "CON.F.US.MBT.U26", 5D, 0.5D, 0.1D, 0D, 30D) With {
+                .PxRootSymbol = "MBT",
+                .IsCrypto = True,
+                .CommissionTickBuffer = 1,
+                .MultiConfluenceTimeframeMinutes = 15,
+                .RoundTripFee = 2.34D,
+                .RollLeadDays = 7
+            })
+
             Return list
         End Function
 
