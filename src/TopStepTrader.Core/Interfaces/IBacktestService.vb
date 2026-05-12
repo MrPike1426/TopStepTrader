@@ -43,7 +43,6 @@ Namespace TopStepTrader.Core.Interfaces
         ''' <summary>
         ''' Which entry condition to evaluate during backtest replay.
         ''' Defaults to EmaRsiWeightedScore to preserve existing behaviour.
-        ''' Set to TripleEmaCascade for Sniper backtests.
         ''' </summary>
         Public Property StrategyCondition As StrategyConditionType = StrategyConditionType.EmaRsiWeightedScore
 
@@ -52,7 +51,6 @@ Namespace TopStepTrader.Core.Interfaces
         ''' 0 (default) = gate disabled — every bar meeting the confidence threshold is traded,
         '''              regardless of trend strength. Useful for exploring raw signal frequency.
         ''' 25          = matches live StrategyExecutionEngine behaviour (strong-trend-only entries).
-        ''' Ignored for TripleEmaCascade (which has no ADX gate).
         ''' </summary>
         Public Property MinAdxThreshold As Single = 0.0F
 
@@ -232,51 +230,6 @@ Namespace TopStepTrader.Core.Interfaces
 
         ''' <summary>When True, Tier C extension adds are permitted.</summary>
         Public Property ExtensionAllowed As Boolean = False
-
-        ''' <summary>
-        ''' Maximum cumulative heat in ticks (tick-risk × qty per bracket) across all open legs.
-        ''' A scale-in that would exceed this cap is skipped.
-        ''' </summary>
-        Public Property MaxRiskHeatTicks As Integer = 100
-
-        ' ── Sniper trailing stop fields (FEAT-21) ────────────────────────────────────
-
-        ''' <summary>
-        ''' Initial stop-loss distance in ticks from entry.
-        ''' Used by the per-bracket trailing stop in <c>SniperBacktestEngine</c>.
-        ''' Mirrors <c>SniperExecutionEngine._stopLossTicks</c>.
-        ''' Default 10 (typical MES/MNQ value).
-        ''' </summary>
-        Public Property StopLossTicks As Integer = 10
-
-        ''' <summary>
-        ''' Initial take-profit distance in ticks from average entry.
-        ''' Used by <c>SniperBacktestEngine</c> when <see cref="UseAtrMode"/> is False.
-        ''' 0 (default) disables tick-based TP — falls back to ATR mode if active.
-        ''' </summary>
-        Public Property TakeProfitTicks As Integer = 0
-
-        ' ── Sniper Structure-Fail Exit fields (FEAT-22) ──────────────────────────────
-
-        ''' <summary>
-        ''' When True, the Sniper backtest exits early when price breaks EMA21 by more
-        ''' than <see cref="Ema21BreakTicks"/> ticks after holding at least
-        ''' <see cref="MinBarsBeforeExit"/> bars.  Mirrors live <c>SniperExecutionEngine</c>.
-        ''' Default False.
-        ''' </summary>
-        Public Property EnableStructureFailExit As Boolean = False
-
-        ''' <summary>
-        ''' Number of ticks price must close beyond EMA21 to trigger a structure-fail exit.
-        ''' Only used when <see cref="EnableStructureFailExit"/> is True.  Default 5.
-        ''' </summary>
-        Public Property Ema21BreakTicks As Integer = 5
-
-        ''' <summary>
-        ''' Minimum number of bars a position must be held before a structure-fail exit
-        ''' can trigger.  Prevents premature exits on the entry bar.  Default 5.
-        ''' </summary>
-        Public Property MinBarsBeforeExit As Integer = 5
 
         ' ── SuperTrend+ TP multiple (STRAT-33) ─────────────────────────────────
 

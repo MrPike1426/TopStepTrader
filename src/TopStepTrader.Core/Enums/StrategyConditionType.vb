@@ -23,13 +23,6 @@ Namespace TopStepTrader.Core.Enums
         ''' </summary>
         EmaRsiWeightedScore = 6
         ''' <summary>
-        ''' 3-EMA Cascade (Sniper): EMA8/EMA21/EMA50 on 1-minute bars.
-        ''' Long when EMA8 crosses above EMA21 AND price is above rising EMA50.
-        ''' Short when EMA8 crosses below EMA21 AND price is below falling EMA50.
-        ''' Supports pyramiding scale-in up to 10 contracts.
-        ''' </summary>
-        TripleEmaCascade = 7
-        ''' <summary>
         ''' Multi-Confluence Engine: Ichimoku Cloud (9/26/52) + EMA21/50 + MACD(12/26/9) +
         ''' Stochastic RSI(14) + DMI/ADX(14). Designed for 15-minute commodity bars.
         ''' ALL seven long conditions must align for a Long; all seven short conditions for a Short.

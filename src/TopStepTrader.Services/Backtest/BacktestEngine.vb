@@ -127,14 +127,6 @@ Namespace TopStepTrader.Services.Backtest
                     $"Got {config.PointValue}. Set the correct point value (e.g. MES=$5, MGC=$10, MCL=$100).")
             End If
 
-            ' ── Sniper (TripleEmaCascade): isolated pyramid simulation (FEAT-20) ──────
-            ' The generic single-contract loop below is NOT used for this strategy.
-            If config.StrategyCondition = StrategyConditionType.TripleEmaCascade Then
-                Dim pyramidTrades = SniperBacktestEngine.RunPyramidReplay(
-                    config, filteredBars, indicators, warmUp)
-                Return BacktestMetrics.BuildResult(config, pyramidTrades, config.InitialCapital, 0D)
-            End If
-
             ' State: open DoubleBubbleButt exit level
             Dim dbbIsLong As Boolean = True          ' DoubleBubbleButt position direction
             Dim dbbInner1SdExit As Decimal = 0D     ' inner 1-SD band level at entry (neutral-zone exit trigger)
@@ -685,11 +677,6 @@ Namespace TopStepTrader.Services.Backtest
             Dim rsi14Series = TechnicalIndicators.RSI(allCloses, 14)
             Dim adx14Series = TechnicalIndicators.DMI(allHighs, allLows, allCloses).ADX
 
-            Dim ema8Series As Single() = Nothing
-            If config.StrategyCondition = StrategyConditionType.TripleEmaCascade Then
-                ema8Series = TechnicalIndicators.EMA(allCloses, 8)
-            End If
-
             Dim universalAtr14 As Single() = Nothing
             If config.UseAtrMode AndAlso
                config.StrategyCondition <> StrategyConditionType.MultiConfluence Then
@@ -904,8 +891,6 @@ Namespace TopStepTrader.Services.Backtest
                 .Ema21 = ema21Series,
                 .Ema50 = ema50Series
             }
-            If ema8Series IsNot Nothing Then indicators.Ema8 = ema8Series
-
             Select Case config.StrategyCondition
                 Case StrategyConditionType.MultiConfluence
                     indicators.IchiTenkan = mcIchiTenkan

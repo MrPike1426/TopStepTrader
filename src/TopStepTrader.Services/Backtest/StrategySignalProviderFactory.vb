@@ -17,7 +17,6 @@ Namespace TopStepTrader.Services.Backtest
                 Case StrategyConditionType.EmaRsiWeightedScore : Return New EmaRsiSignalProvider()
                 Case StrategyConditionType.MultiConfluence      : Return New MultiConfluenceSignalProvider()
                 ' ARCH-01c
-                Case StrategyConditionType.TripleEmaCascade     : Return New TripleEmaCascadeSignalProvider()
                 Case StrategyConditionType.BbSqueezeScalper     : Return New BbSqueezeSignalProvider()
                 Case StrategyConditionType.LultDivergence       : Return New LultDivergenceSignalProvider()
                 Case StrategyConditionType.VidyaCross           : Return New VidyaCrossSignalProvider()
