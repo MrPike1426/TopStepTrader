@@ -6,7 +6,6 @@ Imports TopStepTrader.Data.Repositories
 Imports TopStepTrader.Services.AI
 Imports TopStepTrader.Services.Auth
 Imports TopStepTrader.Services.Background
-Imports TopStepTrader.Services.Backtest
 Imports TopStepTrader.Services.Debug
 Imports TopStepTrader.Services.Diagnostics
 Imports TopStepTrader.Services.Market
@@ -24,8 +23,6 @@ Namespace TopStepTrader.Services
 
             ' ── Repositories (Data layer, registered as Scoped by DataServiceExtensions)
             ' BarRepository, SignalRepository, OrderRepository registered by AddDataServices()
-            ' BacktestRepository not yet registered there — add it here as Scoped
-            services.AddScoped(Of BacktestRepository)()
             services.AddScoped(Of SuperTrendPlusConfigRepository)()
 
             ' ── API key store — Singleton: one file-backed store for the session lifetime
@@ -49,7 +46,7 @@ Namespace TopStepTrader.Services
             ' ── Market
             ' TopStepX — live trading bar source for all live views
             services.AddScoped(Of IBarIngestionService, TopStepXBarIngestionService)()
-            ' TICKET-006: bar download + caching for the Backtest page
+            ' Bar download + caching used by the startup gap-fill flow
             services.AddScoped(Of IBarCollectionService, BarCollectionService)()
             ' Startup bar gap check + backfill for all favourite contracts (past 60 days)
             services.AddScoped(Of IStartupBarCheckService, StartupBarCheckService)()
@@ -76,9 +73,6 @@ Namespace TopStepTrader.Services
             ' ── AI-Assisted Trading
             services.AddScoped(Of StrategyParserService)()
             services.AddScoped(Of IClaudeReviewService, ClaudeReviewService)()
-
-            ' ── Backtest
-            services.AddScoped(Of IBacktestService, BacktestEngine)()
 
             ' ── Trade history recording (Singleton — called from Transient VMs)
             services.AddSingleton(Of ITradeRecordService, TradeRecordService)()

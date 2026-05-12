@@ -48,7 +48,7 @@ Namespace TopStepTrader.ML.Prediction
                 _predictor.LoadModel(modelPath, _mlContext)
             Else
                 _logger.LogWarning(
-                    "Model file not found at {Path}. Run training first via Backtest → Train Model.",
+                    "Model file not found at {Path}. Train the model before enabling predictions.",
                     modelPath)
             End If
 

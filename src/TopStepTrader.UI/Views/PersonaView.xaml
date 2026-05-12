@@ -15,7 +15,7 @@
                        Margin="0,0,0,4"/>
             <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
                        FontSize="12" Margin="0,0,0,20" TextWrapping="Wrap">
-                Edit risk parameters for each trading persona. Changes take effect the next time a persona is applied on Hydra, Bassett, or Backtest.
+                Edit risk parameters for each trading persona. Changes take effect the next time a persona is applied.
                 Use <Bold>Reset to Defaults</Bold> to restore the original appsettings.json values.
             </TextBlock>
 

@@ -3,7 +3,7 @@
 
     <!--
         ═══════════════════════════════════════════════════════════════════════
-        Strategy card body templates — shared across HydraView, BacktestView,
+        Strategy card body templates — shared across HydraView
         and any future view that presents strategy selection tiles.
 
         Usage in each view:

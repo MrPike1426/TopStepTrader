@@ -33,7 +33,7 @@ Namespace TopStepTrader.Services.Market
     Public Class BarCollectionService
         Implements IBarCollectionService
 
-        ' BacktestEngine requires at least 50 bars; reject below this threshold
+        ' Historical bar fetches require at least 50 bars; reject below this threshold
         Private Const MinBarsForBacktest As Integer = 50
         Private Const PageSize As Integer = 5000
 

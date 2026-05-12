@@ -27,7 +27,6 @@
 
                 <Button Content="📊  Dashboard"    Tag="Dashboard"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="📈  SuperTrend+" Tag="SuperTrendPlus" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
-                <Button Content="🔬  Backtest"     Tag="Backtest"    Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="📋  Orders"       Tag="Orders"      Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
 
                 <!-- Archive Section Separator -->

@@ -1,6 +1,6 @@
 # TopStepTrader — AI-Augmented Futures Trader
 
-A WPF desktop application for live and simulated trading on **TopStepX (CME Micro Futures)**, with AI-augmented signals, automated strategy engines, multi-asset monitoring, and historical backtesting.
+A WPF desktop application for live and simulated trading on **TopStepX (CME Micro Futures)**, with AI-augmented signals, automated strategy engines, and multi-asset monitoring.
 
 ---
 
@@ -14,7 +14,6 @@ A WPF desktop application for live and simulated trading on **TopStepX (CME Micr
    - [Hydra](#2-hydra-)
    - [Pump-n-Dump](#3-pump-n-dump-)
    - [CryptoJoe](#4-cryptojoe-)
-   - [Backtest](#5-backtest-)
    - [SuperTrend+ Autopilot](#6-supertrend-autopilot-)
    - [Trade History](#7-trade-history-)
    - [Test Trade](#8-test-trade-)
@@ -43,7 +42,7 @@ src/
 ├── TopStepTrader.API/          # HTTP/SignalR clients for TopStepX/ProjectX and Yahoo Finance
 ├── TopStepTrader.Data/         # EF Core + SQLite; order and bar repositories
 ├── TopStepTrader.ML/           # ML model loading, technical indicators
-├── TopStepTrader.Services/     # Business logic — engines, market data, backtest, workers
+├── TopStepTrader.Services/     # Business logic — engines, market data, workers
 ├── TopStepTrader.UI/           # WPF MVVM desktop app
 │   ├── Views/                  # XAML views (one per page)
 │   ├── ViewModels/             # MVVM ViewModels
@@ -177,7 +176,7 @@ Each button pre-configures indicator periods, TP/SL, and leverage for the whole 
 
 #### ATR Tier Buttons
 
-ATR tiers control backtest bracket sizing (`SlMultipleOfN` / `TpMultipleOfN`) only. **Live orders always use fixed ClaudeTrader ticks** (`DefaultSlTicks = 50`, `DefaultTpTicks = 25` from `appsettings.json`).
+ATR tiers control bracket sizing (`SlMultipleOfN` / `TpMultipleOfN`) only. **Live orders always use fixed ClaudeTrader ticks** (`DefaultSlTicks = 50`, `DefaultTpTicks = 25` from `appsettings.json`).
 
 | Tier | SL multiple | TP multiple | Use case |
 |---|---|---|---|
@@ -268,33 +267,7 @@ ATR tiers control backtest bracket sizing (`SlMultipleOfN` / `TpMultipleOfN`) on
 
 ### 5. Backtest 🔬
 
-**Purpose:** General-purpose strategy backtesting against downloaded historical bar data. Supports four pre-configured strategy templates with customisable contract, date range, capital, and timeframe.
-
-#### How It Works
-
-1. Click a strategy card to select the strategy.
-2. Set the contract, date range, initial capital, quantity, and bar timeframe.
-3. Click "Run Backtest". The engine downloads any missing bars from Yahoo Finance.
-4. Results are displayed once complete: win rate, total P&L, max drawdown, average P&L per trade, Sharpe ratio, and a scrollable trade list.
-5. Click "Export CSV" to save the trade list to a file.
-
-#### Strategy Cards
-
-| Card | Type | Typical Win Rate | Sharpe |
-|---|---|---|---|
-| Connors RSI-2 | Mean Reversion | 67–72% | 1.0–1.5 |
-| SuperTrend | Trend-Following | 40–52% | 0.7–1.05 |
-| Donchian Breakout | Turtle/Breakout | 30–40% | 0.4–0.8 |
-| BB + RSI Reversion | Mean Reversion | 55–65% | 0.6–1.2 |
-
-Win-rate and Sharpe ranges on the cards are reference figures from historical research, not live calculations.
-
-#### Notes
-
-- Selecting a new strategy card or changing the contract clears previous results.
-- Backtests can be cancelled mid-run.
-- Max 500 trade rows are displayed in the grid; the CSV export matches this cap.
-- Win rate colour: green ≥ 55%, yellow ≥ 40%, red < 40%. Max Drawdown is always shown in red.
+_Removed (ARCH-17). The Backtest tab, Maximum Effort runner and Pinned Trades have been deleted; live SuperTrend+ Autopilot is the supported research/trading workflow._
 
 ---
 
@@ -398,7 +371,7 @@ A scrolling log below the slot boxes records every AI pre-trade and mid-trade ch
 
 - On start, the engine scans open broker positions and onboards any live positions that match a watchlist instrument into the appropriate slot (orphan recovery).
 - Re-entry cooldown: after a slot closes, the instrument is blocked from re-entering until at least one full bar has elapsed.
-- **Monday morning HTF gate (FEAT-37):** On Monday before 08:00 UK local time (BST-aware), a new entry is only allowed if the 1-hour SuperTrend direction agrees with the signal direction. This filters gap-driven phantom trends caused by thin liquidity and price gaps from the Sunday open. The gate degrades gracefully — if 1H bar data is unavailable, the entry is allowed. Controlled by `SuperTrendPlusConfig.MondayMorningHtfFilterEnabled` (default `True`). The same filter is applied in the backtest engine using pre-computed 1H ST direction series.
+- **Monday morning HTF gate (FEAT-37):** On Monday before 08:00 UK local time (BST-aware), a new entry is only allowed if the 1-hour SuperTrend direction agrees with the signal direction. This filters gap-driven phantom trends caused by thin liquidity and price gaps from the Sunday open. The gate degrades gracefully — if 1H bar data is unavailable, the entry is allowed. Controlled by `SuperTrendPlusConfig.MondayMorningHtfFilterEnabled` (default `True`).
 - AI VETO suppresses the instrument from new checks for 15 minutes to avoid repeatedly calling the API on a blocked setup.
 - Scale-in: when a slot advances to ADX L2, the engine adds +1 contract; at L3 it adds +2 contracts on top of the initial position.
 
@@ -549,7 +522,6 @@ On every app startup, `TradeRecordService.RecoverOpenTradesAsync` scans `TradeHi
 | `PositionSlot` | `Core/Trading` | Plain state object for a single open slot (entry, SL, TP, health, stop phase) |
 | `SuperTrendPlusConfig` | `Core/Settings` | All configurable thresholds (ADX bands, stop-phase R multiples, degradation weights) |
 | `TradeRecordService` | `Services/Trades` | Records every engine-placed trade to `TradeHistory.db`; resolves TopStepX trade IDs and performs crash recovery on startup |
-| `BacktestService` | `Services` | Runs historical strategy simulations |
 | `BarIngestionWorker` | `Services` | Background worker that polls and persists bar data to SQLite |
 | `TokenRefreshWorker` | `Services` | Proactively refreshes the ProjectX JWT token before expiry |
 

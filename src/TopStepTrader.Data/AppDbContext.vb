@@ -14,8 +14,6 @@ Namespace TopStepTrader.Data
         Public Property Bars As DbSet(Of BarEntity)
         Public Property Signals As DbSet(Of SignalEntity)
         Public Property Orders As DbSet(Of OrderEntity)
-        Public Property BacktestRuns As DbSet(Of BacktestRunEntity)
-        Public Property BacktestTrades As DbSet(Of BacktestTradeEntity)
         Public Property RiskEvents As DbSet(Of RiskEventEntity)
         Public Property TradeOutcomes As DbSet(Of TradeOutcomeEntity)
         Public Property TradeSetupSnapshots As DbSet(Of TradeSetupSnapshotEntity)
@@ -49,17 +47,8 @@ Namespace TopStepTrader.Data
                 .HasIndex(Function(o) New With {o.AccountId, o.PlacedAt}) _
                 .HasDatabaseName("IX_Orders_AccountId_PlacedAt")
 
-            ' BacktestTrades — index for run lookup
-            modelBuilder.Entity(Of BacktestTradeEntity)() _
-                .HasIndex(Function(t) t.BacktestRunId) _
-                .HasDatabaseName("IX_BacktestTrades_RunId")
-
-            ' BacktestTrades → BacktestRun cascade delete
-            modelBuilder.Entity(Of BacktestRunEntity)() _
-                .HasMany(Function(r) r.Trades) _
-                .WithOne(Function(t) t.BacktestRun) _
-                .HasForeignKey(Function(t) t.BacktestRunId) _
-                .OnDelete(DeleteBehavior.Cascade)
+            ' BacktestRuns / BacktestTrades entities removed (ARCH-17). The tables are
+            ' dropped on startup by EnsureSchemaCurrent for backwards-compatibility.
 
             ' Orders → Signal (optional FK, no cascade)
             modelBuilder.Entity(Of OrderEntity)() _
@@ -141,44 +130,6 @@ Namespace TopStepTrader.Data
                          ""CreatedAt""         TEXT    NOT NULL DEFAULT '')",
                     "CREATE INDEX IF NOT EXISTS ""IX_TradeOutcomes_IsOpen_EntryTime"" ON ""TradeOutcomes"" (""IsOpen"", ""EntryTime"")",
                     "CREATE INDEX IF NOT EXISTS ""IX_TradeOutcomes_SignalId"" ON ""TradeOutcomes"" (""SignalId"")",
-                    "CREATE TABLE IF NOT EXISTS ""BacktestRuns"" (
-                         ""Id""                  INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                         ""RunName""              TEXT    NOT NULL DEFAULT '',
-                         ""ContractId""           TEXT    NOT NULL DEFAULT '',
-                         ""Timeframe""            INTEGER NOT NULL DEFAULT 0,
-                         ""StartDate""            TEXT    NOT NULL DEFAULT '',
-                         ""EndDate""              TEXT    NOT NULL DEFAULT '',
-                         ""InitialCapital""       TEXT    NOT NULL DEFAULT '0',
-                         ""ModelVersion""         TEXT,
-                         ""ParametersJson""       TEXT,
-                         ""TotalTrades""          INTEGER NOT NULL DEFAULT 0,
-                         ""WinningTrades""        INTEGER NOT NULL DEFAULT 0,
-                         ""LosingTrades""         INTEGER NOT NULL DEFAULT 0,
-                         ""TotalPnL""             TEXT    NOT NULL DEFAULT '0',
-                         ""FinalCapital""         TEXT    NOT NULL DEFAULT '0',
-                         ""MaxDrawdown""          TEXT    NOT NULL DEFAULT '0',
-                         ""AveragePnLPerTrade""   TEXT    NOT NULL DEFAULT '0',
-                         ""SharpeRatio""          REAL,
-                         ""WinRate""              REAL,
-                         ""Status""               INTEGER NOT NULL DEFAULT 0,
-                         ""CompletedAt""          TEXT,
-                         ""CreatedAt""            TEXT    NOT NULL DEFAULT '')",
-                    "CREATE TABLE IF NOT EXISTS ""BacktestTrades"" (
-                         ""Id""               INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-                         ""BacktestRunId""    INTEGER NOT NULL,
-                         ""EntryTime""        TEXT    NOT NULL DEFAULT '',
-                         ""ExitTime""         TEXT,
-                         ""Side""             TEXT    NOT NULL DEFAULT '',
-                         ""EntryPrice""       TEXT    NOT NULL DEFAULT '0',
-                         ""ExitPrice""        TEXT,
-                         ""Quantity""         INTEGER NOT NULL DEFAULT 1,
-                         ""PnL""              TEXT,
-                         ""ExitReason""       TEXT,
-                         ""SignalConfidence""  REAL,
-                         CONSTRAINT ""FK_BacktestTrades_BacktestRuns_BacktestRunId""
-                             FOREIGN KEY (""BacktestRunId"")
-                             REFERENCES ""BacktestRuns"" (""Id"") ON DELETE CASCADE)",
-                    "CREATE INDEX IF NOT EXISTS ""IX_BacktestTrades_RunId"" ON ""BacktestTrades"" (""BacktestRunId"")",
                     "CREATE TABLE IF NOT EXISTS ""RiskEvents"" (
                          ""Id""              INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
                          ""OccurredAt""      TEXT    NOT NULL DEFAULT '',
@@ -273,30 +224,28 @@ Namespace TopStepTrader.Data
                 If mustCloseP Then conn.Close()
             End Try
 
-            ' ── Scale-in support: add PositionGroupId to BacktestTrades ─────────
-            ' Groups all legs of the same position (initial entry + scale-ins).
-            ' Idempotent: "duplicate column name" errors are silently swallowed.
-            Dim mustClose3 = (conn.State <> ConnectionState.Open)
-            If mustClose3 Then conn.Open()
+            ' ── ARCH-17: drop legacy backtest tables from existing user databases ──────
+            ' BacktestRuns / BacktestTrades and the entire backtest subsystem were
+            ' removed (ARCH-17). Idempotent DROP IF EXISTS keeps existing DBs clean.
+            Dim mustCloseDrop = (conn.State <> ConnectionState.Open)
+            If mustCloseDrop Then conn.Open()
             Try
-                Dim tradeAlters = New String() {
-                    "ALTER TABLE ""BacktestTrades"" ADD COLUMN ""PositionGroupId"" INTEGER NOT NULL DEFAULT 0"
+                For Each ddl In New String() {
+                    "DROP TABLE IF EXISTS ""BacktestTrades""",
+                    "DROP TABLE IF EXISTS ""BacktestRuns"""
                 }
-                For Each ddl In tradeAlters
-                    Try
-                        Using cmd = conn.CreateCommand()
-                            cmd.CommandText = ddl
-                            cmd.ExecuteNonQuery()
-                        End Using
-                    Catch ex As Exception
-                        If Not ex.Message.Contains("duplicate column") Then Throw
-                    End Try
+                    Using cmd = conn.CreateCommand()
+                        cmd.CommandText = ddl
+                        cmd.ExecuteNonQuery()
+                    End Using
                 Next
             Finally
-                If mustClose3 Then conn.Close()
+                If mustCloseDrop Then conn.Close()
             End Try
 
-            ' ── FEAT-01: extend TradeOutcomes + new tables ───────────────────────
+            ' ── Scale-in support placeholder (legacy column add no longer needed) ─────
+
+            ' ── FEAT-01: extend TradeOutcomes + new tables ────────────────────
             ' Idempotent ALTER TABLE columns; "duplicate column name" is swallowed.
             Dim mustClose5 = (conn.State <> ConnectionState.Open)
             If mustClose5 Then conn.Open()

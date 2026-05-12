@@ -8,7 +8,7 @@ Imports TopStepTrader.Core.Trading
 Namespace TopStepTrader.UI.Controls
 
     ''' <summary>
-    ''' Reusable instrument selector for AI Trade, Backtest and Test Trade pages.
+    ''' Reusable instrument selector for AI Trade and Test Trade pages.
     ''' Shows 6 TopStepX favourites at the top; supports live API search for other instruments.
     '''
     ''' ContractId  DP → ticker symbol string, e.g. "GOLD"  (bound to VM string properties)

@@ -48,12 +48,6 @@ Namespace TopStepTrader.UI.ViewModels
         End Property
 
 
-        Public ReadOnly Property BacktestView As BacktestView
-            Get
-                Return Resolve(Of BacktestView)("Backtest")
-            End Get
-        End Property
-
         Public ReadOnly Property SettingsView As SettingsView
             Get
                 Return Resolve(Of SettingsView)("Settings")

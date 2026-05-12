@@ -171,63 +171,6 @@ Namespace TopStepTrader.Services.AI
             End Try
         End Function
 
-        ''' <summary>
-        ''' Sends a formatted backtest-results table to Claude Haiku and returns a concise analysis:
-        ''' top 3 combinations, overfitting warnings, and one live-trade recommendation.
-        ''' </summary>
-        Public Async Function AnalyseBacktestResultsAsync(resultsSummary As String,
-                                                           Optional cancel As CancellationToken = Nothing) As Task(Of String) Implements IClaudeReviewService.AnalyseBacktestResultsAsync
-            Dim apiKey = ResolveApiKey()
-            If String.IsNullOrWhiteSpace(apiKey) Then
-                Return "⚠️  Claude API key not configured — add it on the API Keys page."
-            End If
-
-            Const analysisSystemPrompt As String =
-                "You are a quantitative trading analyst specialising in retail futures and CFD trading. " &
-                "You are given backtest results across multiple instruments, strategies, and timeframes. " &
-                "Your job is to: " &
-                "(1) Identify the top 3 most promising instrument/strategy/timeframe combinations and briefly explain why. " &
-                "(2) Flag any results that look suspiciously perfect — very high win rate with high trade count often indicates overfitting or look-ahead bias. " &
-                "(3) Give one clear recommendation: which single combination should be prioritised for live trading and why. " &
-                "Be specific, direct, and concise — under 300 words total."
-
-            Try
-                Dim requestBody = New ClaudeRequest With {
-                    .Model = "claude-haiku-4-5-20251001",
-                    .MaxTokens = 700,
-                    .System = analysisSystemPrompt,
-                    .Messages = New List(Of ClaudeMessage) From {
-                        New ClaudeMessage With {.Role = "user", .Content = resultsSummary}
-                    }
-                }
-
-                Using request As New HttpRequestMessage(HttpMethod.Post, AnthropicMessagesUrl)
-                    request.Headers.Add("x-api-key", apiKey)
-                    request.Headers.Add("anthropic-version", AnthropicVersion)
-                    request.Content = JsonContent.Create(requestBody)
-
-                    Dim response = Await _http.SendAsync(request, cancel)
-
-                    If Not response.IsSuccessStatusCode Then
-                        Dim errorBody = Await response.Content.ReadAsStringAsync(cancel)
-                        _logger.LogWarning("Claude API returned {Status}: {Body}", response.StatusCode, errorBody)
-                        Return $"⚠️  Claude API error {CInt(response.StatusCode)} — check your API key on the API Keys page."
-                    End If
-
-                    Dim result = Await response.Content.ReadFromJsonAsync(Of ClaudeResponse)(cancellationToken:=cancel)
-                    Dim text = result?.Content?.FirstOrDefault()?.Text
-                    Return If(Not String.IsNullOrWhiteSpace(text), text, "⚠️  Claude returned an empty response.")
-
-                End Using
-
-            Catch ex As TaskCanceledException
-                Return "⚠️  Request timed out."
-            Catch ex As Exception
-                _logger.LogError(ex, "ClaudeReviewService.AnalyseBacktestResultsAsync error")
-                Return $"⚠️  Unexpected error: {ex.Message}"
-            End Try
-        End Function
-
         Private Const PreTradeSystemPrompt As String =
             "You are a pre-trade risk filter for an automated futures trading system. " &
             "A fully automated strategy has passed all its technical gates (ADX, confidence, ATR sizing) " &

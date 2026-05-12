@@ -11,9 +11,6 @@ Namespace TopStepTrader.Services.Trading
     ''' and returns a <see cref="MultiConfluenceResult"/>.
     '''
     ''' The live path (<see cref="MultiConfluenceStrategy"/>) builds inputs from raw bar arrays.
-    ''' The backtest path (<c>MultiConfluenceSignalProvider</c>) builds inputs from
-    ''' <c>StrategyIndicators</c> sliced at the current bar index.
-    ''' No condition logic lives in two places.
     ''' </summary>
     Public NotInheritable Class MultiConfluenceEvaluator
         Implements IMultiConfluenceEvaluator

@@ -8,6 +8,7 @@
 - SuperTrend+ Autopilot uses the **Position Slot model** (FEAT-23/24/25) — there are no personas (Joe/Damian/Lewis) in this view. Use `PositionSlot`, `SlotManager`, `SuperTrendPlusConfig`, and `ExitSignalEngine` instead.
 - `FavouriteContracts.GetDefaults()` includes: SPX500 (MES), NQ (MNQ), M2K, MBT (Bitcoin), GOLD (MGC), M6E (EUR/USD), OIL (MCLE) — 7 instruments. SIL and MYM removed.
 - `SuperTrendPlusViewModel.Instruments` is derived from `FavouriteContracts.GetDefaults()` — do not maintain a parallel hard-coded list.
+- The Backtest tab, Maximum Effort runner and Pinned Trades have been removed (ARCH-17). Do not re-introduce `IBacktestService`, `BacktestEngine`, `BacktestRepository`, `BacktestRunEntity`, `BacktestResult`, `RegimeClassifier`, `MaxEffortViewModel`, `PinnedResultsViewModel`, `SuperTrendPlusBacktestViewModel`, `BacktestViewModel`, `BacktestRunViewModel`, `PreviousRunsViewModel`, or any `Backtest/Strategies/*SignalProvider` shim.
 
 ## Ticket Workflow
 See `CLAUDE.md § Ticket & Issue Tracking` for the authoritative workflow — that is the single source of truth.

@@ -80,7 +80,6 @@ Namespace TopStepTrader.UI.Infrastructure
                         ' ViewModels — Transient; resolved from per-view scope inside Locator
                         services.AddTransient(Of DashboardViewModel)()
                         services.AddTransient(Of OrderBookViewModel)()
-                        services.AddTransient(Of BacktestViewModel)()
                         services.AddTransient(Of SettingsViewModel)()
 
                         services.AddTransient(Of ApiKeysViewModel)()
@@ -88,7 +87,6 @@ Namespace TopStepTrader.UI.Infrastructure
                         ' Views
                         services.AddTransient(Of DashboardView)()
                         services.AddTransient(Of OrderBookView)()
-                        services.AddTransient(Of BacktestView)()
                         services.AddTransient(Of SettingsView)()
 
                         services.AddTransient(Of SuperTrendPlusView)()
