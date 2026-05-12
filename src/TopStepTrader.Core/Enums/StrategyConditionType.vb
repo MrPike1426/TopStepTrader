@@ -84,14 +84,6 @@ Namespace TopStepTrader.Core.Enums
         OpeningRangeBreakout = 18
 
         ''' <summary>
-        ''' Pump-n-Dump: 3 consecutive 1-minute bars all closing in the same direction.
-        ''' Long  when the last 3 bars all have Close &gt; Open (3 green bars → momentum pump).
-        ''' Short when the last 3 bars all have Close &lt; Open (3 red bars  → momentum dump).
-        ''' SL/TP are ATR-based (SlAtrMultiple / TpAtrMultiple on BacktestConfiguration).
-        ''' </summary>
-        PumpNDump = 19
-
-        ''' <summary>
         ''' VWAP Mean Reversion: institutional midday strategy (10am–2pm ET window).
         ''' Session-anchored VWAP ± 1.5 and 2.0 standard deviations define the reversion zones.
         ''' Long  when close ≤ VWAP − 1.5 SD (oversold vs institutional average cost).

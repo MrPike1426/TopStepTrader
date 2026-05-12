@@ -12,7 +12,7 @@ Namespace TopStepTrader.Services.Market
 
     ''' <summary>
     ''' Fetches historical OHLCV bars from TopStepX (ProjectX) and persists them to SQLite.
-    ''' Used exclusively by live trading views: Hydra, Asset Bassett, Test Trade, and PumpNDump.
+    ''' Used exclusively by live trading views: Hydra, Asset Bassett, and Test Trade.
     ''' Accepts TopStepX PX contract IDs directly (e.g. "CON.F.US.MCLE.K26").
     ''' POST /api/History/retrieveBars — rate-limited by the shared RateLimiter (50 req/30 s).
     ''' </summary>

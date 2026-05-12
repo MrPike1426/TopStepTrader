@@ -105,19 +105,6 @@ Namespace TopStepTrader.Core.Events
         End Sub
     End Class
 
-    ''' <summary>Raised by PumpNDumpExecutionEngine to report consecutive same-direction bar count.</summary>
-    Public Class BarCountEventArgs
-        Inherits EventArgs
-        ''' <summary>Number of consecutive same-direction bars (0-3).</summary>
-        Public ReadOnly Property Count As Integer
-        ''' <summary>True for green bars (bullish), False for red bars (bearish).</summary>
-        Public ReadOnly Property IsGreen As Boolean
-        Public Sub New(count As Integer, isGreen As Boolean)
-            Me.Count = count
-            Me.IsGreen = isGreen
-        End Sub
-    End Class
-
     ''' <summary>
     ''' Raised by StrategyExecutionEngine on every 30-second tick while a position is open.
     ''' Carries API-authoritative P&amp;L and the broker positionId (which may have been resolved

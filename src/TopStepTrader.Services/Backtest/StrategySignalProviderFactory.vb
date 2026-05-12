@@ -24,8 +24,6 @@ Namespace TopStepTrader.Services.Backtest
                 Case StrategyConditionType.DoubleBubbleButt     : Return New DoubleBubbleButtSignalProvider()
                 ' STRAT-29
                 Case StrategyConditionType.OpeningRangeBreakout : Return New OrbSignalProvider()
-                ' TEST-10
-                Case StrategyConditionType.PumpNDump : Return New PumpNDumpSignalProvider()
                 ' STRAT-31
                 Case StrategyConditionType.VwapMeanReversion : Return New VwapMeanReversionSignalProvider()
                 ' FEAT-19

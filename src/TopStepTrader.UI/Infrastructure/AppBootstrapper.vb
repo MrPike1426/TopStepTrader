@@ -83,7 +83,6 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of BacktestViewModel)()
                         services.AddTransient(Of SettingsViewModel)()
 
-                        services.AddTransient(Of PumpNDumpViewModel)()
                         services.AddTransient(Of ApiKeysViewModel)()
                         services.AddTransient(Of PersonaViewModel)()
                         ' Views
@@ -92,8 +91,6 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of BacktestView)()
                         services.AddTransient(Of SettingsView)()
 
-                        services.AddTransient(Of IPumpNDumpExecutionEngine, PumpNDumpExecutionEngine)()
-                        services.AddTransient(Of PumpNDumpView)()
                         services.AddTransient(Of SuperTrendPlusView)()
                         services.AddTransient(Of SuperTrendPlusViewModel)()
                         services.AddTransient(Of ApiKeysView)()

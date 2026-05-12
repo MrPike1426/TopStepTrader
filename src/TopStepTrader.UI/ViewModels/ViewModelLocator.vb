@@ -61,12 +61,6 @@ Namespace TopStepTrader.UI.ViewModels
         End Property
 
 
-        Public ReadOnly Property PumpNDumpView As Views.PumpNDumpView
-            Get
-                Return Resolve(Of Views.PumpNDumpView)("PumpNDump")
-            End Get
-        End Property
-
         Public ReadOnly Property SuperTrendPlusView As Views.SuperTrendPlusView
             Get
                 Return Resolve(Of Views.SuperTrendPlusView)("SuperTrendPlus")

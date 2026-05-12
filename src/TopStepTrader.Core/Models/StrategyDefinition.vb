@@ -201,7 +201,7 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>
         ''' Alias for <see cref="UsePreTradeAiCheck"/>. When False, the pre-trade Haiku call is
         ''' skipped entirely — no log line, no API call. Set False for sub-second strategies
-        ''' (PumpNDump) where the gate latency is unacceptable.
+        ''' where the gate latency is unacceptable.
         ''' </summary>
         Public Property UseAiPreTradeGate As Boolean = True
 
