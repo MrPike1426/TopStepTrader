@@ -51,6 +51,15 @@ Namespace TopStepTrader.Core.Settings
         ''' </summary>
         Public Property EntryExitScoreBlockThreshold As Integer = 4
 
+        ' ── ARCH-15: Mid-trade exit-signal threshold ─────────────────────────────
+        ''' <summary>
+        ''' Minimum ExitSignalEngine score (E1–E9) that triggers a discretionary
+        ''' exit on an open position (in addition to the always-immediate E1 flip).
+        ''' Default 7 — fires on combinations like DI crossover (E5=4) + price
+        ''' rejection (E6=2) + ADX decline (E3=2) = 8.
+        ''' </summary>
+        Public Property ExitScoreThreshold As Integer = 7
+
     End Class
 
 End Namespace

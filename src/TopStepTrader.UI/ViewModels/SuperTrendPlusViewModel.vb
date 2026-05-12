@@ -290,8 +290,6 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _approachHistory As New Dictionary(Of String, ApproachState)
         Private ReadOnly _prevStDirByInstrument As New Dictionary(Of String, Single)()
         Private ReadOnly _exitEngine As ExitSignalEngine
-        Private ReadOnly _scalper As ScalperExitManager
-        Private ReadOnly _scalperStates As New Dictionary(Of Integer, ScalperState)()
         ''' <summary>Instruments whose slot has been released at least once this monitoring session.
         ''' Cleared on Start. Used to enforce the 15s BB-middle re-entry sense-check (FEAT-47).</summary>
         Private ReadOnly _instrumentsReleasedThisSession As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
@@ -562,7 +560,7 @@ Namespace TopStepTrader.UI.ViewModels
                        claudeService As IClaudeReviewService,
                        logger As ILogger(Of SuperTrendPlusViewModel),
                        tradeRecordService As Core.Interfaces.ITradeRecordService,
-                       scalper As ScalperExitManager,
+                       exitEngine As ExitSignalEngine,
                        Optional configRepo As SuperTrendPlusConfigRepository = Nothing,
                        Optional debugCapture As Core.Interfaces.IDebugTradeCaptureService = Nothing,
                        Optional userHub As UserHubClient = Nothing,
@@ -579,14 +577,12 @@ Namespace TopStepTrader.UI.ViewModels
             _tradeRecordService = tradeRecordService
             _configRepo = configRepo
             _debugCapture = debugCapture
-            _scalper = scalper
             _userHub = userHub
             _marketHub = marketHub
             _livePnL = livePnL
             Config = New SuperTrendPlusConfig()
             _slotManager = New SlotManager(Config)
-            _exitEngine = New ExitSignalEngine(
-                Microsoft.Extensions.Logging.Abstractions.NullLogger(Of ExitSignalEngine).Instance)
+            _exitEngine = exitEngine
             StartStopCommand = New RelayCommand(AddressOf OnStartStop)
             AiCheckSlot1Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot1))
             AiCheckSlot2Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot2))
@@ -743,7 +739,6 @@ Namespace TopStepTrader.UI.ViewModels
             IsHowItWorksExpanded = False
             IsMonitoring = True
             _instrumentsReleasedThisSession.Clear()
-            _scalperStates.Clear()
             ' BUG-72: subscribe to the SignalR UserHub real-time position stream so P&L
             ' and entry-price VWAP arrive immediately rather than waiting on the
             ' 15-second poll (which sourced stale paper-feed prices and could freeze
@@ -2477,25 +2472,9 @@ Namespace TopStepTrader.UI.ViewModels
                 ' FEAT-54: currentClose is now sourced from slot.LivePrice (push-driven by
                 ' ILivePnLService → OnSlotLiveTick), with the strategy-TF close as the ultimate
                 ' fallback when no live tick has arrived yet (first poll after slot open).
-                ' tickBars below is fed to the Scalper for indicator computation only — the
-                ' historic local-cache 5s bars (live:=False) are sufficient since price-based
-                ' decisions now flow from currentClose.
+                ' ARCH-15: ExitSignalEngine consumes the strategy-TF bar series
+                ' computed below — no separate 15s tickBars fetch is required.
                 Dim currentClose As Decimal = If(slot.LivePrice > 0D, slot.LivePrice, CDec(closes(n)))
-                Dim tickBars As IList(Of MarketBar) = Nothing
-                Try
-                    Dim rawTickBars = Await _barService.GetLiveBarsAsync(slot.Instrument, BarTimeframe.FifteenSecond, 20, live:=False)
-                    If rawTickBars IsNot Nothing AndAlso rawTickBars.Count > 0 Then
-                        ' Strip the forming bar — act only on closed 15s bars.
-                        Dim lastBarAge = (DateTime.UtcNow - rawTickBars(rawTickBars.Count - 1).Timestamp).TotalSeconds
-                        tickBars = If(lastBarAge < 15 AndAlso rawTickBars.Count > 1,
-                                      CType(rawTickBars.Take(rawTickBars.Count - 1).ToList(), IList(Of MarketBar)),
-                                      rawTickBars)
-                    End If
-                Catch ex As Exception
-                    ' Non-fatal: ScalperExitManager.Evaluate tolerates an empty tickBars.
-                    _logger.LogDebug(ex, "ST+ [Slot {Idx}] {Contract} 15s bar fetch (cache) failed — non-fatal",
-                                     slot.SlotIndex, slot.Instrument)
-                End Try
 
                 ' FEAT-54: stale-price detection now driven by ILivePnLService diagnostics,
                 ' not the local 5s bar fetch. Surface a Warning when the underlying bar-poll
@@ -2553,15 +2532,15 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim rsiExit = TechnicalIndicators.RSI(closes, 14)
 
                 ' Set InitialRisk once EntryPrice is confirmed (after first snapshot).
-                ' BUG-75: Floor R at the entry-bar ATR to prevent ProfitLock from triggering on
+                ' BUG-75 / ARCH-15: Floor R at the entry-bar ATR to prevent the phased-stop ladder
+                ' (Breakeven 1R → ProfitTrail 1.5R → Harvest 2R → FreeRide 3R) from triggering on
                 ' trivially small dollar moves.  At a SuperTrend flip the SL is placed right at
                 ' the ST line, which is always within 1–3 ticks of the close, so the raw
-                ' |EntryPrice - StopPrice| can be as small as $3 on MGC.  That makes 1.5R = ~$4.50,
-                ' and even a single tick in profit satisfies ProfitLock and snaps the SL to the
-                ' Bollinger-band trail.  By flooring R at EntryAtr (the ATR captured from the
-                ' primary-TF bars at signal time), we ensure the phase ladder uses a meaningful
-                ' baseline that reflects actual market volatility rather than the arbitrarily tight
-                ' ST-line distance at the flip bar.
+                ' |EntryPrice - StopPrice| can be as small as $3 on MGC.  That makes 1R = ~$3,
+                ' and even a single tick in profit would advance the ladder.  By flooring R at
+                ' EntryAtr (the ATR captured from the primary-TF bars at signal time), we ensure
+                ' the phase ladder uses a meaningful baseline that reflects actual market
+                ' volatility rather than the arbitrarily tight ST-line distance at the flip bar.
                 If slot.InitialRisk = 0D AndAlso slot.EntryPrice <> 0D AndAlso slot.StopPrice <> 0D Then
                     Dim rawRisk As Decimal = Math.Abs(slot.EntryPrice - slot.StopPrice)
                     slot.InitialRisk = If(slot.EntryAtr > 0D, Math.Max(rawRisk, slot.EntryAtr), rawRisk)
@@ -2599,30 +2578,39 @@ Namespace TopStepTrader.UI.ViewModels
                     End If
                 End If
 
-                ' FEAT-47: Delegate exit management to the reusable Scalper service.
-                ' All open-position decisions (phase ladder, BB trail, ScaredyCat, exit)
-                ' are owned by ScalperExitManager. This view only handles entries.
-                Dim scalperState As ScalperState = Nothing
-                If Not _scalperStates.TryGetValue(slot.SlotIndex, scalperState) Then
-                    scalperState = New ScalperState()
-                    _scalperStates(slot.SlotIndex) = scalperState
-                End If
+                ' ARCH-15: Single source of truth for trailing stop, phase ladder,
+                ' and discretionary exits is ExitSignalEngine — implements the PDF
+                ' spec (1R Breakeven → 1.5R ProfitTrail (ATR×1) → 2R Harvest →
+                ' 3R FreeRide). E1 SuperTrend flip → ImmediateExit. The legacy
+                ' BB trail + 0.5R breakeven engine was retired.
+                Dim closesDec = closes.Select(Function(c) CDec(c)).ToList()
+                Dim highsDec = highs.Select(Function(h) CDec(h)).ToList()
+                Dim lowsDec = lows.Select(Function(l) CDec(l)).ToList()
+                Dim plusDIArr = Enumerable.Range(0, bars.Count).Select(Function(i) dmiForExit.PlusDI(i)).ToArray()
+                Dim minusDIArr = Enumerable.Range(0, bars.Count).Select(Function(i) dmiForExit.MinusDI(i)).ToArray()
+                Dim adxArr = Enumerable.Range(0, bars.Count).Select(Function(i) dmiForExit.ADX(i)).ToArray()
+                Dim eval = _exitEngine.Evaluate(slot,
+                                                highsDec, lowsDec, closesDec,
+                                                st.Line, st.Direction,
+                                                plusDIArr, minusDIArr, adxArr,
+                                                atr14Exit,
+                                                vwapExit, rsiExit)
 
-                Dim scalperCfg As New ScalperConfig()
-                Dim scalperDecision = _scalper.Evaluate(slot, scalperState, tickBars, currentClose, scalperCfg)
-                _scalperStates(slot.SlotIndex) = scalperDecision.NewState
-
-                If scalperDecision.ShouldExit Then
-                    Await ReleaseSlotAsync(slot, If(String.IsNullOrEmpty(scalperDecision.Reason), "Scalper Exit", scalperDecision.Reason))
+                ' Exit triggers: E1 SuperTrend flip OR cumulative score above threshold.
+                If eval.ImmediateExit Then
+                    Await ReleaseSlotAsync(slot, "ExitEngine: SuperTrend flip")
+                    Return
+                ElseIf eval.Score >= Config.ExitScoreThreshold Then
+                    Await ReleaseSlotAsync(slot, $"ExitEngine: score={eval.Score} signals=[{String.Join(",", eval.ContributingSignals)}]")
                     Return
                 End If
 
                 ' Skip stop edits during early-mode grace — bracket SL handles downside
                 ' until ST confirms direction.
                 If Not slot.IsEarlyModeEntry Then
-                    Dim newStop As Decimal = scalperDecision.NewStop
+                    Dim newStop As Decimal = eval.PhasedStopPrice
                     Dim oldStopPhase = slot.StopPhase
-                    slot.StopPhase = scalperDecision.NewPhase
+                    slot.StopPhase = eval.StopPhase
 
                     Dim isPrimaryForEdit As Boolean =
                         Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
@@ -2647,7 +2635,7 @@ Namespace TopStepTrader.UI.ViewModels
                                     }
                                     _debugCapture.RecordSnapshot(slSnap)
                                 End If
-                                _logger.LogInformation("ST+ Scalper SL phase={Phase} trail->{Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
+                                _logger.LogInformation("ST+ ExitEngine SL phase={Phase} trail->{Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
                                                        slot.StopPhase, newStop,
                                                        If(tpArg.HasValue, tpArg.Value.ToString("F2"), "none"),
                                                        slot.SlotIndex, slot.Instrument)
@@ -2659,7 +2647,7 @@ Namespace TopStepTrader.UI.ViewModels
                             _logger.LogWarning(ex, "ST+ EditPositionSlTpAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
                         End Try
                     ElseIf Not isPrimaryForEdit Then
-                        _logger.LogInformation("ST+ Scalper SL ratchet deferred for scale-in [Slot {Idx}] on {Contract} — primary slot owns bracket",
+                        _logger.LogInformation("ST+ ExitEngine SL ratchet deferred for scale-in [Slot {Idx}] on {Contract} — primary slot owns bracket",
                                                slot.SlotIndex, slot.Instrument)
                     End If
 
@@ -2725,8 +2713,6 @@ Namespace TopStepTrader.UI.ViewModels
             If Not String.IsNullOrEmpty(slot.Instrument) Then
                 _instrumentsReleasedThisSession.Add(slot.Instrument)
             End If
-            ' Drop any cached scalper state for this slot.
-            _scalperStates.Remove(slot.SlotIndex)
             If slot.AccountId <> 0 AndAlso Not String.IsNullOrEmpty(slot.Instrument) Then
                 Try
                     Await _orderService.FlattenContractAsync(slot.AccountId, slot.Instrument)
@@ -2895,39 +2881,53 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         ''' <summary>
-        ''' Computes a one-line "Next phase" label for the Scalper exit ladder.
-        ''' e.g.  "Next: Breakeven in 0.5R = $28.75"
+        ''' Computes a one-line "Next phase" label for the ExitSignalEngine PDF ladder (ARCH-15).
+        ''' e.g.  "Next: Breakeven in 1.0R = $57.50"
         ''' </summary>
         Private Shared Function NextPhaseDisplay(slot As PositionSlot, currentPnl As Decimal) As String
             If slot.InitialRiskDollars <= 0D Then Return String.Empty
             Dim ir = slot.InitialRiskDollars
-            Const beR As Decimal = 0.5D    ' ScalperConfig.BreakevenTriggerR default
-            Const plR As Decimal = 1.5D    ' ScalperConfig.ProfitLockTriggerR default
+            Const beR As Decimal = 1.0D    ' ExitSignalEngine.ComputePhasedStop Breakeven trigger
+            Const ptR As Decimal = 1.5D    ' ExitSignalEngine.ComputePhasedStop ProfitTrail trigger
+            Const hvR As Decimal = 2.0D    ' ExitSignalEngine.ComputePhasedStop Harvest trigger
+            Const frR As Decimal = 3.0D    ' ExitSignalEngine.ComputePhasedStop FreeRide trigger
             Select Case slot.StopPhase
                 Case StopPhase.Initial
                     Dim dollarTarget = Math.Round(ir * beR, 2)
                     Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
                     Return $"Next: Breakeven in {beR:F1}R = ${remaining:F2}"
                 Case StopPhase.Breakeven
-                    Dim dollarTarget = Math.Round(ir * plR, 2)
+                    Dim dollarTarget = Math.Round(ir * ptR, 2)
                     Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
-                    Return $"Next: ProfitLock in {plR:F1}R = ${remaining:F2}"
-                Case StopPhase.ProfitLock
-                    Return "Riding BB trail — ScaredyCat armed"
+                    Return $"Next: ProfitTrail in {ptR:F1}R = ${remaining:F2}"
+                Case StopPhase.ProfitTrail
+                    Dim dollarTarget = Math.Round(ir * hvR, 2)
+                    Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
+                    Return $"Next: Harvest in {hvR:F1}R = ${remaining:F2}"
+                Case StopPhase.Harvest
+                    Dim dollarTarget = Math.Round(ir * frR, 2)
+                    Dim remaining = Math.Max(0D, dollarTarget - currentPnl)
+                    Return $"Next: FreeRide in {frR:F1}R = ${remaining:F2}"
+                Case StopPhase.FreeRide
+                    Return "FreeRide — SL locked at entry + 2R"
                 Case Else
                     Return String.Empty
             End Select
         End Function
 
-        ''' <summary>Returns a human-readable phase label for the Scalper exit ladder.</summary>
+        ''' <summary>Returns a human-readable phase label for the ExitSignalEngine PDF ladder (ARCH-15).</summary>
         Private Shared Function PhaseLabel(phase As StopPhase, cfg As SuperTrendPlusConfig) As String
             Select Case phase
                 Case StopPhase.Initial
-                    Return "Initial: SL trails 15s SuperTrend line (ratchet)"
+                    Return "Initial: SL trails SuperTrend line (ratchet)"
                 Case StopPhase.Breakeven
-                    Return "Breakeven: SL locked at entry price"
-                Case StopPhase.ProfitLock
-                    Return "ProfitLock: SL trails 15s BB lower/upper band"
+                    Return "Breakeven: SL = entry + 0.5R (1R reached)"
+                Case StopPhase.ProfitTrail
+                    Return "ProfitTrail: SL trails ATR×1 (1.5R reached)"
+                Case StopPhase.Harvest
+                    Return "Harvest: SL = entry + 1.5R (2R reached)"
+                Case StopPhase.FreeRide
+                    Return "FreeRide: SL = entry + 2R (3R reached)"
                 Case Else
                     Return phase.ToString()
             End Select
