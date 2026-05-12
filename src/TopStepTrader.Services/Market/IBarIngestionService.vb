@@ -7,7 +7,7 @@ Namespace TopStepTrader.Services.Market
     ''' <summary>
     ''' Abstraction over bar ingestion sources.
     ''' <see cref="TopStepXBarIngestionService"/> is the sole implementation, used for all
-    ''' views: live trading (Hydra, Asset Bassett, CryptoJoe, Test Trade, PumpNDump)
+    ''' views: live trading (Hydra, Asset Bassett, Test Trade, PumpNDump)
     ''' and historical backtest bar fetches.
     ''' </summary>
     Public Interface IBarIngestionService

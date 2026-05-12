@@ -28,7 +28,6 @@
                 <Button Content="📊  Dashboard"    Tag="Dashboard"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="📈  SuperTrend+" Tag="SuperTrendPlus" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="💥  Pump-n-Dump" Tag="PumpNDump"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
-                <Button Content="☕  CryptoJoe"    Tag="CryptoJoe"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}" Visibility="Collapsed"/>
                 <Button Content="🔬  Backtest"     Tag="Backtest"    Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="📋  Orders"       Tag="Orders"      Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
 
@@ -51,7 +50,6 @@
                 <Button Content="🔑  API Keys"     Tag="ApiKeys"     Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="🧫  Test Trade"   Tag="TestTrade"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}" Opacity="0.5"/>
                 <Button Content="🧪  Scalper Test" Tag="ScalperTest" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
-                <Button Content="📈  Price Tracker" Tag="PriceTracker" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
 
 
                 <!-- Connection Status -->

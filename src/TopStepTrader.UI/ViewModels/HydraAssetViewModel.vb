@@ -589,18 +589,9 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         ''' <summary>
-        ''' Crypto assets that trade 24/7 — always considered open regardless of day-of-week.
-        ''' Add new tickers here as the universe expands.
-        ''' </summary>
-        Private Shared ReadOnly CryptoSymbols As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {
-            "BTC", "ETH", "XRP", "SOL", "BNB", "ADA", "DOGE", "AVAX", "MATIC", "DOT"
-        }
-
-        ''' <summary>
         ''' Recomputes IsMarketOpen from the current time expressed in US Central Time (America/Chicago).
         ''' Rules:
-        '''   Crypto symbols (BTC, ETH, ...) -> always open (24/7).
-        '''   All other assets (indices, OIL, GOLD, EUR/USD M6E, ...) follow CME Globex hours
+        '''   All assets (indices, OIL, GOLD, EUR/USD M6E, ...) follow CME Globex hours
         '''   evaluated in CT so DST transitions are handled correctly:
         '''     - Closed all day Saturday (CT).
         '''     - Closed Sunday before 17:00 CT  (CME reopens 5:00 PM CT).
@@ -609,35 +600,31 @@ Namespace TopStepTrader.UI.ViewModels
         ''' </summary>
         Public Sub RefreshMarketStatus()
             Dim open As Boolean
-            If CryptoSymbols.Contains(Symbol) Then
-                open = True
-            Else
-                ' Convert UTC to US Central Time. "Central Standard Time" is the Windows TZ ID
-                ' for America/Chicago and handles CDT (UTC-5) and CST (UTC-6) DST automatically.
-                ' Evaluating CME schedule in CT avoids the 1-hour shift that previously caused all
-                ' assets to show CLOSED at 21:00 UTC in winter (= 3 PM CST = active trading hours).
-                Dim centralTz As TimeZoneInfo
-                Try
-                    centralTz = TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time")
-                Catch
-                    centralTz = TimeZoneInfo.Utc  ' safe fallback on non-Windows hosts
-                End Try
-                Dim ctNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, centralTz)
-                Dim day = ctNow.DayOfWeek
-                Dim hour = ctNow.Hour
+            ' Convert UTC to US Central Time. "Central Standard Time" is the Windows TZ ID
+            ' for America/Chicago and handles CDT (UTC-5) and CST (UTC-6) DST automatically.
+            ' Evaluating CME schedule in CT avoids the 1-hour shift that previously caused all
+            ' assets to show CLOSED at 21:00 UTC in winter (= 3 PM CST = active trading hours).
+            Dim centralTz As TimeZoneInfo
+            Try
+                centralTz = TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time")
+            Catch
+                centralTz = TimeZoneInfo.Utc  ' safe fallback on non-Windows hosts
+            End Try
+            Dim ctNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, centralTz)
+            Dim day = ctNow.DayOfWeek
+            Dim hour = ctNow.Hour
 
-                ' Closed all day Saturday
-                If day = DayOfWeek.Saturday Then
-                    open = False
-                ' Closed Sunday before 17:00 CT (CME reopens 5:00 PM CT)
-                ElseIf day = DayOfWeek.Sunday AndAlso hour < 17 Then
-                    open = False
-                ' Closed daily during CME maintenance 16:00-17:00 CT (4:00-5:00 PM CT)
-                ElseIf hour = 16 Then
-                    open = False
-                Else
-                    open = True
-                End If
+            ' Closed all day Saturday
+            If day = DayOfWeek.Saturday Then
+                open = False
+            ' Closed Sunday before 17:00 CT (CME reopens 5:00 PM CT)
+            ElseIf day = DayOfWeek.Sunday AndAlso hour < 17 Then
+                open = False
+            ' Closed daily during CME maintenance 16:00-17:00 CT (4:00-5:00 PM CT)
+            ElseIf hour = 16 Then
+                open = False
+            Else
+                open = True
             End If
             IsMarketOpen = open
         End Sub

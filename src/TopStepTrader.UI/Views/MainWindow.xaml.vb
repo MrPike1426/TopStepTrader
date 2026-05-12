@@ -81,17 +81,12 @@ Namespace TopStepTrader.UI
                     MainContent.Content = _viewModelLocator.TestTradeView
                 Case "ScalperTest"
                     MainContent.Content = _viewModelLocator.ScalperTestView
-                Case "PriceTracker"
-                    MainContent.Content = _viewModelLocator.PriceTrackerView
-
                 Case "Backtest"
                     MainContent.Content = _viewModelLocator.BacktestView
                 Case "PumpNDump"
                     MainContent.Content = _viewModelLocator.PumpNDumpView
                 Case "SuperTrendPlus"
                     MainContent.Content = _viewModelLocator.SuperTrendPlusView
-                Case "CryptoJoe"
-                    NavigateToTradingView(_viewModelLocator.CryptoJoeView)
                 Case "Settings"
                     MainContent.Content = _viewModelLocator.SettingsView
                 Case "DebugTradeViewer"

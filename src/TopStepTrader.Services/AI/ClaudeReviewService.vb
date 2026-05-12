@@ -27,7 +27,7 @@ Namespace TopStepTrader.Services.AI
         Private Const AnthropicVersion As String = "2023-06-01"
 
         Private Const SystemPrompt As String =
-            "You are an expert futures and crypto trading strategy advisor. " &
+            "You are an expert futures trading strategy advisor. " &
             "Analyze the following trading strategy and give 2-4 concise, " &
             "actionable improvement suggestions covering: entry logic, exit " &
             "placement (take-profit / stop-loss), risk sizing, and timing " &
@@ -376,7 +376,7 @@ Namespace TopStepTrader.Services.AI
             Dim h = utc.Hour + utc.Minute / 60.0
             Select Case utc.DayOfWeek
                 Case DayOfWeek.Saturday, DayOfWeek.Sunday
-                    Return "Weekend — equity/futures markets closed (crypto only)"
+                    Return "Weekend — equity/futures markets closed"
             End Select
             If h >= 12.0 AndAlso h < 16.5 Then Return "London/New York overlap (12:00–16:30 UTC) — peak liquidity"
             If h >= 7.0 AndAlso h < 16.5 Then Return "London session (07:00–16:30 UTC)"

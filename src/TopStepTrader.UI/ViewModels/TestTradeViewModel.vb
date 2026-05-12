@@ -1550,12 +1550,6 @@ Namespace TopStepTrader.UI.ViewModels
                 fav = FavouriteContracts.TryGetBySymbolResolved(_testTradeContractId)
                 TestTradeContractDisplay = If(fav IsNot Nothing, fav.Name, _testTradeContractId)
             End If
-            ' MBT (Micro Bitcoin): 20t default is far too tight — BTC moves 500+ pts in minutes and the
-            ' TopStepX minimum-stop floor for MBT is 60t ($30). Use 100t SL / 200t TP (2:1 R:R, $50 risk).
-            If IsTopStepX AndAlso fav IsNot Nothing AndAlso fav.PxRootSymbol = "MBT" Then
-                TestTradeStopLoss = "100"
-                TestTradeTakeProfit = "200"
-            End If
             NotifyPropertyChanged(NameOf(TickSizeHintText))
         End Sub
 

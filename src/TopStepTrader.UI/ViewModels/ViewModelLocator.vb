@@ -73,12 +73,6 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
-        Public ReadOnly Property PriceTrackerView As PriceTrackerView
-            Get
-                Return Resolve(Of PriceTrackerView)("PriceTracker")
-            End Get
-        End Property
-
         Public ReadOnly Property PumpNDumpView As Views.PumpNDumpView
             Get
                 Return Resolve(Of Views.PumpNDumpView)("PumpNDump")
@@ -88,12 +82,6 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property SuperTrendPlusView As Views.SuperTrendPlusView
             Get
                 Return Resolve(Of Views.SuperTrendPlusView)("SuperTrendPlus")
-            End Get
-        End Property
-
-        Public ReadOnly Property CryptoJoeView
-            Get
-                Return Resolve(Of Views.CryptoJoeView)("CryptoJoe")
             End Get
         End Property
 

@@ -108,23 +108,6 @@ Namespace TopStepTrader.Core.Trading
                 .PhasedTrailBreakevenMinTicks = 15
             })
 
-            ' MBT — Micro Bitcoin  [ProjectX symbolId: F.US.MBT; roll: quarterly H/M/U/Z; U26=Sep 2026]
-            ' Tick = 5.0 BTC pts = $0.50 → $0.10/point.
-            ' PxMinStopDollars=$30: 60 ticks × $0.50.
-            ' RoundTripFee=$2.34: 2 × $1.17/side (per IBacktestService.vb:137).
-            ' Note: spot BTC trades 24/7 but the MBT futures contract follows TopStepX session hours.
-            list.Add(New FavouriteContract("MBT", "BTC", "CON.F.US.MBT.U26", 5D, 0.5D, 0.1D, 0D, 30D) With {
-                .PxRootSymbol = "MBT",
-                .IsCrypto = True,
-                .CommissionTickBuffer = 1,
-                .MultiConfluenceTimeframeMinutes = 15,
-                .RoundTripFee = 2.34D,
-                .RollLeadDays = 7,
-                .PhasedTrailMinInitialStopTicks = 40,
-                .PhasedTrailMaxInitialStopTicks = 120,
-                .PhasedTrailBreakevenMinTicks = 30
-            })
-
             Return list
         End Function
 
@@ -175,10 +158,7 @@ Namespace TopStepTrader.Core.Trading
         ''' <summary>Human-readable display name shown in the UI watchlist (e.g. "S&P 500", "Gold").</summary>
         Public Property DisplayName As String = String.Empty
 
-        ''' <summary>True for crypto instruments (BTC, ETH, XRP, SOL, BNB).</summary>
-        Public Property IsCrypto As Boolean = False
-
-        ' ── TopStepX / ProjectX fields ───────────────────────────────────────────────
+        ' ── TopStepX / ProjectX fields ────────────────────────────────────────────
         ''' <summary>ProjectX contract ID string, e.g. "CON.F.US.MGC.J26".</summary>
         Public Property PxContractId As String = String.Empty
         ''' <summary>
@@ -194,7 +174,6 @@ Namespace TopStepTrader.Core.Trading
         ''' Defaults to 5 (5-minute bars). Override per instrument in GetDefaults():
         '''   Oil/MES: 5 min — highly liquid intraday, 5-min bar noise acceptable.
         '''   Gold/M6E: 10 min — slightly wider bars filter micro-chop on these instruments.
-        '''   BTC/MBT: 15 min — crypto volatility requires wider bars to avoid false signals.
         ''' </summary>
         Public Property MultiConfluenceTimeframeMinutes As Integer = 5
         Public Property PxTickSize As Decimal
@@ -311,7 +290,6 @@ Namespace TopStepTrader.Core.Trading
                 .MultiConfluenceTimeframeMinutes    = Me.MultiConfluenceTimeframeMinutes,
                 .RoundTripFee                      = Me.RoundTripFee,
                 .RollLeadDays                      = Me.RollLeadDays,
-                .IsCrypto                          = Me.IsCrypto,
                 .PxMaxBracketTicks                 = Me.PxMaxBracketTicks,
                 .PhasedTrailMinInitialStopTicks     = Me.PhasedTrailMinInitialStopTicks,
                 .PhasedTrailMaxInitialStopTicks     = Me.PhasedTrailMaxInitialStopTicks,

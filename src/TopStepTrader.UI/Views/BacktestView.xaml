@@ -1039,7 +1039,7 @@
                         <!-- Contracts and strategies enumerated -->
                         <TextBlock FontSize="10" FontFamily="Consolas" Margin="0,2,0,0"
                                    Foreground="{StaticResource TextSecondaryBrush}"
-                                   Text="Instruments: Oil (MCLE) · Gold (MGC) · S&amp;P 500 (MES) · EUR/USD (M6E) · Bitcoin (MBT)"/>
+                                   Text="Instruments: Oil (MCLE) · Gold (MGC) · S&amp;P 500 (MES) · EUR/USD (M6E)"/>
                         <TextBlock FontSize="10" FontFamily="Consolas" Margin="0,2,0,0"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    Text="Strategies: EMA/RSI Combined · Multi-Confluence · BB Squeeze Scalper · VIDYA Cross · Naked Trader · LULT Divergence"/>
