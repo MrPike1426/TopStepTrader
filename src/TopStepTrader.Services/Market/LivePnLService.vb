@@ -11,8 +11,8 @@ Namespace TopStepTrader.Services.Market
     ''' <summary>
     ''' ARCH-06 — Singleton, per-instrument live price + unrealised P&amp;L feed.
     '''
-    ''' Consolidates the three view-local copies of MarketHub plumbing
-    ''' (StrategyExecutionEngine, SuperTrendPlusViewModel, TestTradeViewModel) behind
+    ''' Consolidates the view-local copies of MarketHub plumbing
+    ''' (StrategyExecutionEngine, SuperTrendPlusViewModel) behind
     ''' one shared service.  Internals:
     '''
     '''  • One <see cref="IMarketQuoteFeed.QuoteReceived"/> handler at the service level,

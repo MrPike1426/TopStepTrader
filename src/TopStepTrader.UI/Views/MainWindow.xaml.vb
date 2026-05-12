@@ -77,10 +77,6 @@ Namespace TopStepTrader.UI
                     MainContent.Content = _viewModelLocator.DashboardView
                 Case "Orders"
                     MainContent.Content = _viewModelLocator.OrderBookView
-                Case "TestTrade"
-                    MainContent.Content = _viewModelLocator.TestTradeView
-                Case "ScalperTest"
-                    MainContent.Content = _viewModelLocator.ScalperTestView
                 Case "Backtest"
                     MainContent.Content = _viewModelLocator.BacktestView
                 Case "PumpNDump"

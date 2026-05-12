@@ -61,18 +61,6 @@ Namespace TopStepTrader.UI.ViewModels
         End Property
 
 
-        Public ReadOnly Property TestTradeView As TestTradeView
-            Get
-                Return Resolve(Of TestTradeView)("TestTrade")
-            End Get
-        End Property
-
-        Public ReadOnly Property ScalperTestView As ScalperTestView
-            Get
-                Return Resolve(Of ScalperTestView)("ScalperTest")
-            End Get
-        End Property
-
         Public ReadOnly Property PumpNDumpView As Views.PumpNDumpView
             Get
                 Return Resolve(Of Views.PumpNDumpView)("PumpNDump")
