@@ -448,8 +448,7 @@ Namespace TopStepTrader.UI.ViewModels
 
             ' ── ARCH-07 F5: eager warmup ─────────────────────────────────────
             ' Pre-resolve every favourite contract in the picker so the catalog
-            ' is hot when BUY is clicked (mirrors HydraViewModel/AssetBassettViewModel
-            ' warmup), then bring up MarketHubClient if it hasn't started yet.
+            ' is hot when BUY is clicked, then bring up MarketHubClient if it hasn't started yet.
             Try
                 If Contracts IsNot Nothing Then
                     For Each sym In Contracts
@@ -538,8 +537,7 @@ Namespace TopStepTrader.UI.ViewModels
             Dim signed = If(side = OrderSide.Buy, qty, -qty)
 
             ' Seed entry from the broker, not from placed.FillPrice (which TopStepX REST
-            ' returns as null on PlaceOrder). Mirrors the StrategyExecutionEngine
-            ' _syncMissCount pattern: poll GetLivePositionSnapshotAsync up to N times.
+            ' returns as null on PlaceOrder). Poll GetLivePositionSnapshotAsync up to N times.
             Dim seedEntry = Await ResolveSeedEntryFromBrokerAsync(SelectedAccount.Id, pxId)
 
             ' Track the placement contract so CLOSE can flatten even if no subscription

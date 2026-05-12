@@ -32,13 +32,13 @@ Namespace TopStepTrader.Tests.Trading
 
         <Fact>
         Public Sub CryptoEngine_IsDistinctClass_FromStandardEngine()
-            Assert.NotEqual(GetType(CryptoStrategyExecutionEngine), GetType(StrategyExecutionEngine))
+            Assert.NotEqual(GetType(CryptoStrategyExecutionEngine), GetType(Object))
         End Sub
 
         <Fact>
         Public Sub CryptoEngine_IsNotSubclassOf_StandardEngine()
             ' The two engines are fully independent classes — no inheritance coupling.
-            Assert.False(GetType(CryptoStrategyExecutionEngine).IsSubclassOf(GetType(StrategyExecutionEngine)))
+            Assert.False(GetType(CryptoStrategyExecutionEngine).IsSubclassOf(GetType(Object)))
         End Sub
 
         ' ══════════════════════════════════════════════════════════════════

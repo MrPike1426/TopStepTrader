@@ -30,9 +30,8 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _personaService As IPersonaService
         Private ReadOnly _pinnedResults As ObservableCollection(Of MaxEffortRowVm)
         Private ReadOnly _runVm As BacktestRunViewModel
-        Private ReadOnly _slotStore As ProTraderSlotStore
 
-        Private _cancelSource As CancellationTokenSource
+        Private _cancelSource
 
         ' ══════════════════════════════════════════════════════════════════════
         ' COMMANDS
@@ -161,15 +160,15 @@ Namespace TopStepTrader.UI.ViewModels
 
         ''' <param name="pinnedResults">Shared reference to the shell's PinnedResults collection — the Pin button appends here.</param>
         ''' <param name="runVm">Tab 1 VM — ForceClose settings are read from here at run time.</param>
-        ''' <param name="slotStore">Optional — when set, pinning a row also adds a slot to Pro-Trader.</param>
+        ''' <param name="pinnedResults">Shared reference to the shell's PinnedResults collection — the Pin button appends here.</param>
+        ''' <param name="runVm">Tab 1 VM — ForceClose settings are read from here at run time.</param>
         Public Sub New(backtestService As IBacktestService,
                        barCollectionService As IBarCollectionService,
                        claudeReviewService As IClaudeReviewService,
                        session As ITradingSessionContext,
                        personaService As IPersonaService,
                        pinnedResults As ObservableCollection(Of MaxEffortRowVm),
-                       runVm As BacktestRunViewModel,
-                       Optional slotStore As ProTraderSlotStore = Nothing)
+                       runVm As BacktestRunViewModel)
 
             _backtestService = backtestService
             _barCollectionService = barCollectionService
@@ -178,7 +177,6 @@ Namespace TopStepTrader.UI.ViewModels
             _personaService = personaService
             _pinnedResults = pinnedResults
             _runVm = runVm
-            _slotStore = slotStore
 
             MaximumEffortCommand = New RelayCommand(AddressOf ExecuteMaximumEffort, Function() Not _isRunning)
             MaximumEffortCancelCommand = New RelayCommand(Sub() _cancelSource?.Cancel(), Function() _isRunning)
@@ -188,13 +186,6 @@ Namespace TopStepTrader.UI.ViewModels
                     Dim row = TryCast(param, MaxEffortRowVm)
                     If row IsNot Nothing AndAlso Not _pinnedResults.Contains(row) Then
                         _pinnedResults.Add(row)
-                        If _slotStore IsNot Nothing AndAlso row.ContractIdRaw <> "" Then
-                            Dim slot = New ProTraderSlotVm(
-                                row.ContractIdRaw, row.Contract,
-                                row.StrategyTypeRaw, row.TimeframeRaw,
-                                row.Persona, row.SlAtrMultiple, row.TpAtrMultiple)
-                            _slotStore.AddSlot(slot)
-                        End If
                     End If
                 End Sub,
                 Function(param) param IsNot Nothing)

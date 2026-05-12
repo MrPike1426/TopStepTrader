@@ -74,10 +74,7 @@ Namespace TopStepTrader.UI.Infrastructure
                         ' ── Contract resolution cache (daily, SQLite-backed) ───────────
                         services.AddSingleton(Of IContractResolutionService, ContractResolutionService)()
 
-                        ' Singleton store that wires MaxEffort pin → Pro-Trader slot grid
-                        services.AddSingleton(Of ProTraderSlotStore)()
-
-                        ' ViewModelLocator — Singleton (creates per-view scopes internally)
+                        ' ViewModelLocator
                         services.AddSingleton(Of ViewModelLocator)()
 
                         ' ViewModels — Transient; resolved from per-view scope inside Locator
@@ -89,14 +86,10 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of TestTradeViewModel)()
                         services.AddTransient(Of SniperViewModel)()
                         services.AddTransient(Of PumpNDumpViewModel)()
-                        services.AddTransient(Of HydraViewModel)()
-                        services.AddTransient(Of AssetBassettViewModel)()
                         services.AddTransient(Of CryptoJoeViewModel)()
                         services.AddTransient(Of ApiKeysViewModel)()
                         services.AddTransient(Of PersonaViewModel)()
-                        services.AddTransient(Of ProTraderViewModel)()
-
-                        ' Views — Transient; resolved from per-view scope inside Locator
+                        ' Views
                         services.AddTransient(Of DashboardView)()
                         services.AddTransient(Of OrderBookView)()
                         services.AddTransient(Of BacktestView)()
@@ -113,12 +106,9 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of IPumpNDumpExecutionEngine, PumpNDumpExecutionEngine)()
                         services.AddTransient(Of SuperTrendPlusView)()
                         services.AddTransient(Of SuperTrendPlusViewModel)()
-                        services.AddTransient(Of HydraView)()
-                        services.AddTransient(Of AssetBassettView)()
                         services.AddTransient(Of CryptoJoeView)()
                         services.AddTransient(Of ApiKeysView)()
                         services.AddTransient(Of PersonaView)()
-                        services.AddTransient(Of ProTraderView)()
                         services.AddTransient(Of DebugTradeViewerViewModel)()
                         services.AddTransient(Of DebugTradeViewerView)()
 

@@ -97,19 +97,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
-        Public ReadOnly Property HydraView As Views.HydraView
-            Get
-                Return Resolve(Of Views.HydraView)("Hydra")
-            End Get
-        End Property
-
-        Public ReadOnly Property AssetBassettView As Views.AssetBassettView
-            Get
-                Return Resolve(Of Views.AssetBassettView)("AssetBassett")
-            End Get
-        End Property
-
-        Public ReadOnly Property CryptoJoeView As Views.CryptoJoeView
+        Public ReadOnly Property CryptoJoeView
             Get
                 Return Resolve(Of Views.CryptoJoeView)("CryptoJoe")
             End Get
@@ -127,13 +115,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
-        Public ReadOnly Property ProTraderView As Views.ProTraderView
-            Get
-                Return Resolve(Of Views.ProTraderView)("ProTrader")
-            End Get
-        End Property
-
-        Public ReadOnly Property DebugTradeViewerView As Views.DebugTradeViewerView
+        Public ReadOnly Property DebugTradeViewerView
             Get
                 Return Resolve(Of Views.DebugTradeViewerView)("DebugTradeViewer")
             End Get

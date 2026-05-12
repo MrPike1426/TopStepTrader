@@ -40,9 +40,6 @@
                            FontSize="10" FontWeight="SemiBold"
                            Margin="16,4,16,8" Opacity="0.55"/>
 
-                <Button Content="🐙  Hydra"        Tag="Hydra"       Click="NavButton_Click" Style="{StaticResource NavButtonStyle}" Opacity="0.6"/>
-                <Button Content="🐕  Bassett"      Tag="AssetBassett" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}" Opacity="0.6"/>
-
                 <!-- Config Section Separator -->
                 <Border Margin="16,16,16,8" Height="1" Background="{StaticResource BorderBrush}" Opacity="0.4"/>
                 <TextBlock Text="  CONFIG"
@@ -51,7 +48,6 @@
                            Margin="16,4,16,8" Opacity="0.55"/>
 
                 <Button Content="&#x1F50D;  Debug Viewer" Tag="DebugTradeViewer" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
-                <Button Content="&#x1F50C;  Pro-Trader"   Tag="ProTrader"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="👤  Personas"     Tag="Persona"     Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="🔑  API Keys"     Tag="ApiKeys"     Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="🧫  Test Trade"   Tag="TestTrade"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}" Opacity="0.5"/>
