@@ -829,15 +829,6 @@ Namespace TopStepTrader.Services.Backtest
                 stPlusAdxSeries = dmiStPlus.ADX
             End If
 
-            ' -- Opening Range Breakout: ATR(14), VolMa20
-            Dim orbVolMa20 As Single() = Nothing
-            Dim orbAtr14 As Single() = Nothing
-            If config.StrategyCondition = StrategyConditionType.OpeningRangeBreakout Then
-                Dim allVols = filteredBars.Select(Function(b) CDec(b.Volume)).ToList()
-                orbVolMa20 = TechnicalIndicators.SMA(allVols, 20)
-                orbAtr14 = TechnicalIndicators.ATR(allHighs, allLows, allCloses, 14)
-            End If
-
             ' -- VWAP Mean Reversion: session-anchored VWAP, rolling stddev bands (1.5 SD and 2.0 SD), ATR(14)
             Dim vmrVwap As Single() = Nothing
             Dim vmrUpper2Sd As Single() = Nothing
@@ -954,9 +945,6 @@ Namespace TopStepTrader.Services.Backtest
                     indicators.Rsi = If(emaRsiPeriod = 14, rsi14Series, TechnicalIndicators.RSI(allCloses, emaRsiPeriod))
                     indicators.Adx = adx14Series
                     indicators.Atr = universalAtr14
-                Case StrategyConditionType.OpeningRangeBreakout
-                    indicators.Atr    = orbAtr14
-                    indicators.VolMa20 = orbVolMa20
                 Case StrategyConditionType.VwapMeanReversion
                     indicators.Vwap    = vmrVwap
                     indicators.BbUpper  = vmrUpper2Sd

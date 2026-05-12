@@ -3,10 +3,11 @@
 ## Project Guidelines
 - The correct GitHub remote repository for this project is https://github.com/MrPike1426/TopStepTrader.git. The old eToroTrader repository no longer exists and should never be referenced.
 - All eToro-era fields (`EToroContractId`, `BrokerType.eToro`, `IsTradableOn`, `GetDefaults(broker)`) have been removed (ARCH-05). Do not re-introduce them.
-- Crypto futures (MBT and any BTC/ETH variant) are **NOT** traded on TopStepX due to high fees. `CryptoJoeView`, `CryptoJoeViewModel`, `CryptoStrategyExecutionEngine`, `PriceTrackerView`, `PriceTrackerViewModel`, and the MBT contract have been removed (ARCH-13). Do not re-introduce them.
+- The crypto-specific UI (`CryptoJoeView`, `CryptoJoeViewModel`, `CryptoStrategyExecutionEngine`, `PriceTrackerView`, `PriceTrackerViewModel`) has been removed (ARCH-13). Do not re-introduce those views.
+- **MBT (Micro Bitcoin) is re-instated as a SuperTrend+ watchlist instrument — ARCH-13's MBT exclusion is overruled.** MBT is treated as a pure technical-analysis intraday futures slot by the unified SuperTrend+ engine (no crypto-specific code path).
 - SuperTrend+ Autopilot uses the **Position Slot model** (FEAT-23/24/25) — there are no personas (Joe/Damian/Lewis) in this view. Use `PositionSlot`, `SlotManager`, `SuperTrendPlusConfig`, and `ExitSignalEngine` instead.
-- `FavouriteContracts.GetDefaults()` includes: OIL (MCLE), GOLD (MGC), SPX500 (MES), NQ (MNQ), M2K, MYM, M6E (EUR/USD), SIL (Micro Silver) — no crypto/MBT (ARCH-13).
-- `SuperTrendPlusViewModel.Instruments` = `{"MCLE","MGC","SIL","MES","MNQ","M6E"}` — 6 watchlist rows (FEAT-27 updated by ARCH-13).
+- `FavouriteContracts.GetDefaults()` includes: SPX500 (MES), NQ (MNQ), M2K, MBT (Bitcoin), GOLD (MGC), M6E (EUR/USD), OIL (MCLE) — 7 instruments. SIL and MYM removed.
+- `SuperTrendPlusViewModel.Instruments` is derived from `FavouriteContracts.GetDefaults()` — do not maintain a parallel hard-coded list.
 
 ## Ticket Workflow
 See `CLAUDE.md § Ticket & Issue Tracking` for the authoritative workflow — that is the single source of truth.

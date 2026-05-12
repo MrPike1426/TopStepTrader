@@ -4,7 +4,11 @@ Namespace TopStepTrader.Core.Trading
 
     ''' <summary>
     ''' Master list of TopStepX favourite instruments.
-    ''' SuperTrend+ watchlist: MES, MNQ, M2K, MYM, MGC, M6E, MCL (OIL reserve).
+    ''' SuperTrend+ watchlist: MES, MNQ, M2K, MBT, MGC, M6E, MCL (OIL reserve).
+    ''' MYM dropped — ~0.94 correlation with MES made it a redundant equity slot.
+    ''' MBT re-introduced (overrules ARCH-13) now that crypto-specific UI is gone and
+    ''' Bitcoin is treated purely as an uncorrelated technical-analysis intraday futures
+    ''' instrument by the SuperTrend+ engine.
     ''' </summary>
     Public Class FavouriteContracts
 
@@ -24,28 +28,8 @@ Namespace TopStepTrader.Core.Trading
         ''' <summary>Full list of all favourite instruments with both broker specs.</summary>
         Public Shared Function GetDefaults() As List(Of FavouriteContract)
             ' CME Globex tick specs: MGC tick=0.10/$1, MCLE tick=0.01/$1, MES tick=0.25/$1.25
+            ' Ordered alphabetically by PxRootSymbol: M2K, M6E, MBT, MCLE, MES, MGC, MNQ
             Dim list As New List(Of FavouriteContract)
-
-            ' MES — Micro E-mini S&P 500  [ProjectX symbolId: F.US.MES; roll: quarterly H/M/U/Z; U26=Sep 2026]
-            ' PxMinStopDollars=$20: 16 ticks × $1.25 = 4 S&P points minimum
-            list.Add(New FavouriteContract("SPX500", "S&P 500", "CON.F.US.MES.U26", 0.25D, 1.25D, 5D, 0.3D, 20D) With {
-                .PxRootSymbol = "MES",
-                .CommissionTickBuffer = 1,
-                .MultiConfluenceTimeframeMinutes = 5,
-                .RoundTripFee = 0.74D,
-                .PhasedTrailMinInitialStopTicks = 24,
-                .PhasedTrailMaxInitialStopTicks = 80,
-                .PhasedTrailBreakevenMinTicks = 20
-            })
-
-            ' MNQ — Micro Nasdaq-100  [ProjectX symbolId: F.US.MNQ; roll: quarterly H/M/U/Z; U26=Sep 2026]
-            ' PxMinStopDollars=$25: 50 ticks × $0.50 = 12.5 NQ points minimum
-            list.Add(New FavouriteContract("NQ", "NQ", "CON.F.US.MNQ.U26", 0.25D, 0.5D, 2.0D, 0.3D, 25D) With {
-                .PxRootSymbol = "MNQ",
-                .CommissionTickBuffer = 1,
-                .MultiConfluenceTimeframeMinutes = 5,
-                .RoundTripFee = 0.74D
-            })
 
             ' M2K — Micro Russell 2000  [ProjectX symbolId: F.US.M2K; roll: quarterly H/M/U/Z; U26=Sep 2026]
             ' Contract: $5 × Russell 2000 index. Tick = 0.10 pts = $0.50.
@@ -55,29 +39,6 @@ Namespace TopStepTrader.Core.Trading
                 .CommissionTickBuffer = 1,
                 .MultiConfluenceTimeframeMinutes = 5,
                 .RoundTripFee = 0.74D
-            })
-
-            ' MYM — Micro Dow Jones  [ProjectX symbolId: F.US.MYM; roll: quarterly H/M/U/Z; U26=Sep 2026]
-            ' Contract: $0.50 × DJIA. Tick = 1 DJIA point = $0.50.
-            ' PxMinStopDollars=$15: 30 ticks × $0.50 = 30 Dow points minimum
-            list.Add(New FavouriteContract("MYM", "Dow", "CON.F.US.MYM.U26", 1.0D, 0.5D, 0.5D, 0.3D, 15D) With {
-                .PxRootSymbol = "MYM",
-                .CommissionTickBuffer = 1,
-                .MultiConfluenceTimeframeMinutes = 5,
-                .RoundTripFee = 0.74D
-            })
-
-            ' MGC — Micro Gold  [ProjectX symbolId: F.US.MGC; roll: even months G/J/M/Q/V/Z; M26=Jun 2026]
-            ' PxMinStopDollars=$20: 20 ticks × $1.00 = 2 pts — gold moves ~$5-15/min; 2pt floor is prudent
-            list.Add(New FavouriteContract("GOLD.24-7", "Gold", "CON.F.US.MGC.M26", 0.1D, 1.0D, 10D, 0.2D, 20D) With {
-                .PxRootSymbol = "MGC",
-                .CommissionTickBuffer = 2,
-                .MultiConfluenceTimeframeMinutes = 10,
-                .RoundTripFee = 1.24D,
-                .RollLeadDays = 28,
-                .PhasedTrailMinInitialStopTicks = 10,
-                .PhasedTrailMaxInitialStopTicks = 30,
-                .PhasedTrailBreakevenMinTicks = 10
             })
 
             ' M6E — Micro EUR/USD  [ProjectX symbolId: F.US.M6E; roll: quarterly H/M/U/Z; U26=Sep 2026]
@@ -94,9 +55,26 @@ Namespace TopStepTrader.Core.Trading
                 .PhasedTrailBreakevenMinTicks = 5
             })
 
+            ' MBT — Micro Bitcoin  [ProjectX symbolId: F.US.MBT; roll: quarterly H/M/U/Z; H26=Mar 2026]
+            ' Contract: 0.1 BTC. Tick = $5.00 per BTC = $0.50 per contract.
+            ' Replaces MYM (FEAT-XX): MYM was ~0.94 correlated with MES, MBT is uncorrelated and
+            ' adds a true diversifier. ARCH-13 (MBT exclusion) explicitly overruled — the crypto-
+            ' specific UI is gone and MBT is now a pure technical-analysis intraday slot.
+            ' PxMinStopDollars=$25: 50 ticks × $0.50 = $250 worth of BTC movement minimum.
+            list.Add(New FavouriteContract("MBT", "Bitcoin", "CON.F.US.MBT.H26", 5.0D, 0.5D, 0.1D, 0.3D, 25D) With {
+                .PxRootSymbol = "MBT",
+                .CommissionTickBuffer = 1,
+                .MultiConfluenceTimeframeMinutes = 5,
+                .RoundTripFee = 2.10D,
+                .PhasedTrailMinInitialStopTicks = 30,
+                .PhasedTrailMaxInitialStopTicks = 200,
+                .PhasedTrailBreakevenMinTicks = 20
+            })
+
             ' OIL — MCLE (Micro WTI Crude Oil)  [ProjectX symbolId: F.US.MCLE; roll: monthly; M26=Jun 2026 front-month]
             ' Reserve/momentum slot. PxMinStopDollars=$15: 15 ticks × $1.00.
             ' Note: resolved via root-symbol lookup — "MCL" is embedded in "MCLE" contract ID.
+            ' Watchlist displays as "MCL" (the industry-standard abbreviation).
             list.Add(New FavouriteContract("OIL", "Oil", "CON.F.US.MCLE.M26", 0.01D, 1.0D, 100D, 0.3D, 15D) With {
                 .PxRootSymbol = "MCLE",
                 .CommissionTickBuffer = 2,
@@ -106,6 +84,40 @@ Namespace TopStepTrader.Core.Trading
                 .PhasedTrailMinInitialStopTicks = 20,
                 .PhasedTrailMaxInitialStopTicks = 60,
                 .PhasedTrailBreakevenMinTicks = 15
+            })
+
+            ' MES — Micro E-mini S&P 500  [ProjectX symbolId: F.US.MES; roll: quarterly H/M/U/Z; U26=Sep 2026]
+            ' PxMinStopDollars=$20: 16 ticks × $1.25 = 4 S&P points minimum
+            list.Add(New FavouriteContract("SPX500", "S&P 500", "CON.F.US.MES.U26", 0.25D, 1.25D, 5D, 0.3D, 20D) With {
+                .PxRootSymbol = "MES",
+                .CommissionTickBuffer = 1,
+                .MultiConfluenceTimeframeMinutes = 5,
+                .RoundTripFee = 0.74D,
+                .PhasedTrailMinInitialStopTicks = 24,
+                .PhasedTrailMaxInitialStopTicks = 80,
+                .PhasedTrailBreakevenMinTicks = 20
+            })
+
+            ' MGC — Micro Gold  [ProjectX symbolId: F.US.MGC; roll: even months G/J/M/Q/V/Z; M26=Jun 2026]
+            ' PxMinStopDollars=$20: 20 ticks × $1.00 = 2 pts — gold moves ~$5-15/min; 2pt floor is prudent
+            list.Add(New FavouriteContract("GOLD.24-7", "Gold", "CON.F.US.MGC.M26", 0.1D, 1.0D, 10D, 0.2D, 20D) With {
+                .PxRootSymbol = "MGC",
+                .CommissionTickBuffer = 2,
+                .MultiConfluenceTimeframeMinutes = 10,
+                .RoundTripFee = 1.24D,
+                .RollLeadDays = 28,
+                .PhasedTrailMinInitialStopTicks = 10,
+                .PhasedTrailMaxInitialStopTicks = 30,
+                .PhasedTrailBreakevenMinTicks = 10
+            })
+
+            ' MNQ — Micro Nasdaq-100  [ProjectX symbolId: F.US.MNQ; roll: quarterly H/M/U/Z; U26=Sep 2026]
+            ' PxMinStopDollars=$25: 50 ticks × $0.50 = 12.5 NQ points minimum
+            list.Add(New FavouriteContract("NQ", "Nasdaq", "CON.F.US.MNQ.U26", 0.25D, 0.5D, 2.0D, 0.3D, 25D) With {
+                .PxRootSymbol = "MNQ",
+                .CommissionTickBuffer = 1,
+                .MultiConfluenceTimeframeMinutes = 5,
+                .RoundTripFee = 0.74D
             })
 
             Return list

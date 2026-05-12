@@ -225,7 +225,6 @@ Namespace TopStepTrader.UI.ViewModels
                 ("Naked Trader",       StrategyConditionType.NakedTrader),
                 ("LULT Divergence",    StrategyConditionType.LultDivergence),
                 ("Double Bubble Butt", StrategyConditionType.DoubleBubbleButt),
-                ("ORB",                StrategyConditionType.OpeningRangeBreakout),
                 ("VWAP Mean Reversion", StrategyConditionType.VwapMeanReversion),
                 ("SuperTrend+",        StrategyConditionType.SuperTrendPlus)
             }

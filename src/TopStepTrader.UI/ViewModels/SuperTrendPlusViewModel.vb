@@ -54,6 +54,7 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
             Set(value As String)
                 SetProperty(_arrow, value)
+                NotifyPropertyChanged(NameOf(SignalDisplay))
             End Set
         End Property
 
@@ -74,7 +75,16 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
             Set(value As String)
                 SetProperty(_signal, value)
+                NotifyPropertyChanged(NameOf(SignalDisplay))
             End Set
+        End Property
+
+        Public ReadOnly Property SignalDisplay As String
+            Get
+                Return If(String.IsNullOrEmpty(_arrow) OrElse _arrow = "–",
+                          _signal,
+                          _arrow & "  " & _signal)
+            End Get
         End Property
 
         Private _rowColor As Brush = Brushes.White
@@ -131,37 +141,54 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
             Set(value As String)
                 SetProperty(_diDisplay, value)
+                NotifyPropertyChanged(NameOf(DiDominance))
+                NotifyPropertyChanged(NameOf(DiSpreadColor))
             End Set
         End Property
 
-        Private _orbSignal As String = ""
-        Public Property OrbSignal As String
+        ''' <summary>Direction label + spread, e.g. "▲ BULL  Δ25" or "▼ BEAR  Δ6" or "— NEUT  Δ1"</summary>
+        Public ReadOnly Property DiDominance As String
             Get
-                Return _orbSignal
+                Dim m = System.Text.RegularExpressions.Regex.Match(
+                    _diDisplay, "\+DI:(\d+)\s+-DI:(\d+)")
+                If Not m.Success Then Return "—"
+                Dim plus As Integer = Integer.Parse(m.Groups(1).Value)
+                Dim minus As Integer = Integer.Parse(m.Groups(2).Value)
+                Dim delta As Integer = Math.Abs(plus - minus)
+                Dim label As String
+                If delta < 5 Then
+                    label = "— NEUT"
+                ElseIf plus > minus Then
+                    label = "▲ BULL"
+                Else
+                    label = "▼ BEAR"
+                End If
+                Return String.Format("{0}   Δ {1}", label, delta)
             End Get
-            Set(value As String)
-                SetProperty(_orbSignal, value)
-            End Set
         End Property
 
-        Private _orbRangeDisplay As String = ""
-        Public Property OrbRangeDisplay As String
+        ''' <summary>Colour driven by DI spread strength and direction.</summary>
+        Public ReadOnly Property DiSpreadColor As Brush
             Get
-                Return _orbRangeDisplay
+                Dim m = System.Text.RegularExpressions.Regex.Match(
+                    _diDisplay, "\+DI:(\d+)\s+-DI:(\d+)")
+                If Not m.Success Then Return Brushes.Gray
+                Dim plus As Integer = Integer.Parse(m.Groups(1).Value)
+                Dim minus As Integer = Integer.Parse(m.Groups(2).Value)
+                Dim delta As Integer = Math.Abs(plus - minus)
+                If delta < 5 Then Return Brushes.Gray
+                Dim isBull As Boolean = plus > minus
+                If delta >= 20 Then
+                    Return If(isBull, New SolidColorBrush(Color.FromRgb(&H66, &HBB, &H6A)),  ' bright green
+                                      New SolidColorBrush(Color.FromRgb(&HEF, &H53, &H50))) ' bright red
+                ElseIf delta >= 10 Then
+                    Return If(isBull, New SolidColorBrush(Color.FromRgb(&H43, &HA0, &H47)),  ' medium green
+                                      New SolidColorBrush(Color.FromRgb(&HC6, &H28, &H28))) ' medium red
+                Else
+                    Return If(isBull, New SolidColorBrush(Color.FromRgb(&H2E, &H7D, &H32)),  ' dim green
+                                      New SolidColorBrush(Color.FromRgb(&H8B, &H1A, &H1A))) ' dim red
+                End If
             End Get
-            Set(value As String)
-                SetProperty(_orbRangeDisplay, value)
-            End Set
-        End Property
-
-        Private _orbRowColor As Brush = Brushes.Transparent
-        Public Property OrbRowColor As Brush
-            Get
-                Return _orbRowColor
-            End Get
-            Set(value As Brush)
-                SetProperty(_orbRowColor, value)
-            End Set
         End Property
 
     End Class
@@ -227,7 +254,12 @@ Namespace TopStepTrader.UI.ViewModels
         Private Shared ReadOnly _stDefaults As IReadOnlyList(Of Core.Trading.FavouriteContract) =
             Core.Trading.FavouriteContracts.GetDefaults().Where(Function(f) Not String.IsNullOrEmpty(f.PxRootSymbol)).ToList()
         Private Shared ReadOnly Instruments As String() = _stDefaults.Select(Function(f) f.PxRootSymbol).ToArray()
-        Private Shared ReadOnly InstrumentLabels As String() = _stDefaults.Select(Function(f) If(String.IsNullOrWhiteSpace(f.DisplayName), f.PxRootSymbol, f.DisplayName)).ToArray()
+        Private Shared ReadOnly InstrumentLabels As String() = _stDefaults.Select(
+            Function(f)
+                Dim root = If(f.PxRootSymbol = "MCLE", "MCL", f.PxRootSymbol).ToUpperInvariant()
+                Dim name = If(String.IsNullOrWhiteSpace(f.DisplayName), f.PxRootSymbol, f.DisplayName).ToUpperInvariant()
+                Return root & ": " & name
+            End Function).ToArray()
         Private Const BarsToFetch As Integer = 60
         Private Const EntryStaggerMs As Integer = 5000
         Private Const SlotUpdateStaggerMs As Integer = 2000
@@ -514,27 +546,6 @@ Namespace TopStepTrader.UI.ViewModels
 
         ''' <summary>Scrolling history of all AI checks, newest first.</summary>
         Public ReadOnly Property AiHistoryLog As New ObservableCollection(Of AiLogEntryVm)()
-
-        ' ── ORB banner (XAML bindings) ──────────────────────────────────────────────
-        Private _isOrbBannerVisible As Boolean = False
-        Public Property IsOrbBannerVisible As Boolean
-            Get
-                Return _isOrbBannerVisible
-            End Get
-            Set(value As Boolean)
-                SetProperty(_isOrbBannerVisible, value)
-            End Set
-        End Property
-
-        Private _orbPhaseLabel As String = String.Empty
-        Public Property OrbPhaseLabel As String
-            Get
-                Return _orbPhaseLabel
-            End Get
-            Set(value As String)
-                SetProperty(_orbPhaseLabel, value)
-            End Set
-        End Property
 
         Private Sub AddAiLogEntry(indicator As String, checkResult As String)
             Dim entry As New AiLogEntryVm With {
@@ -906,15 +917,6 @@ Namespace TopStepTrader.UI.ViewModels
 
             Application.Current?.Dispatcher?.Invoke(
                 Sub()
-                    ' ORB banner: visible 09:00–17:00 ET on weekdays
-                    Dim etNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow,
-                        TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"))
-                    Dim isWeekday = etNow.DayOfWeek <> DayOfWeek.Saturday AndAlso etNow.DayOfWeek <> DayOfWeek.Sunday
-                    Dim etTod = etNow.TimeOfDay
-                    IsOrbBannerVisible = isWeekday AndAlso etTod >= TimeSpan.FromHours(9) AndAlso etTod < TimeSpan.FromHours(17)
-                    If IsOrbBannerVisible Then
-                        OrbPhaseLabel = $"📐  ORB  —  {GetOrbPhaseLabel(etTod)}"
-                    End If
                     StatusText = String.Format("In Progress: Updated {0:HH:mm:ss}", DateTime.Now)
                     FlashStatusAsync()
                     ' Pulse idle text on empty boxes and refresh their timestamp
@@ -1017,33 +1019,33 @@ Namespace TopStepTrader.UI.ViewModels
                     strength = "ADX: --"
                     signalReason = "Waiting for data..."
                 ElseIf adxVal >= Config.AdxStrongThreshold Then
-                    strength = String.Format("ADX:{0:D2} L3: Espresso", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} L3: Espresso", CInt(Math.Floor(adxVal)))
                     signalReason = If(signal = "BULL", "Strong uptrend — bot will open 3 positions.",
                                   If(signal = "BEAR", "Strong downtrend — bot will open 3 positions.",
                                      "Strong trend forming — waiting for direction alignment."))
                 ElseIf adxVal >= Config.AdxModerateThreshold Then
-                    strength = String.Format("ADX:{0:D2} L2: Latte", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} L2: Latte", CInt(Math.Floor(adxVal)))
                     signalReason = If(signal = "BULL", "Moderate uptrend — bot will open 2 positions.",
                                   If(signal = "BEAR", "Moderate downtrend — bot will open 2 positions.",
                                      "Trending — waiting for +DI/-DI to align with SuperTrend."))
                 ElseIf adxVal >= Config.AdxWeakThreshold Then
-                    strength = String.Format("ADX:{0:D2} L1: Mellow Birds", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} L1: Latte", CInt(Math.Floor(adxVal)))
                     signalReason = If(signal = "BULL", "Uptrend active — bot will open 1 position.",
                                    If(signal = "BEAR", "Downtrend active — bot will open 1 position.",
                                       "Trending — waiting for +DI/-DI to align with SuperTrend."))
                 ElseIf adxVal >= 15 Then
-                    strength = String.Format("ADX:{0:D2} L0: Decaff", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} L0: Decaff", CInt(Math.Floor(adxVal)))
                     signalReason = "Trend is weak — watching for momentum to build before entering."
                 Else
-                    strength = String.Format("ADX:{0:D2} Cat Piss", CInt(adxVal))
+                    strength = String.Format("ADX:{0:D2} Cat Piss", CInt(Math.Floor(adxVal)))
                     signalReason = "Market is choppy with no clear trend — standing aside to avoid false signals."
                 End If
 
                 Dim adxStr As String = If(Single.IsNaN(adxVal), "ADX:--",
-                                          If(adxVal >= Config.AdxStrongThreshold, String.Format("ADX:{0:D2} L3: Espresso", CInt(adxVal)),
-                                          If(adxVal >= Config.AdxModerateThreshold, String.Format("ADX:{0:D2} L2: Latte", CInt(adxVal)),
-                                          If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L0: Decaff", CInt(adxVal)),
-                                             String.Format("ADX:{0:D2}", CInt(adxVal))))))
+                                           If(adxVal >= Config.AdxStrongThreshold, String.Format("ADX:{0:D2} L3: Espresso", CInt(Math.Floor(adxVal))),
+                                           If(adxVal >= Config.AdxModerateThreshold, String.Format("ADX:{0:D2} L2: Cappuccino", CInt(Math.Floor(adxVal))),
+                                           If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L1: Latte", CInt(Math.Floor(adxVal))),
+                                              String.Format("ADX:{0:D2}", CInt(Math.Floor(adxVal)))))))
                 Dim diStr As String = If(Single.IsNaN(plusDi) OrElse Single.IsNaN(minusDi),
                                         "+DI:-- -DI:--",
                                         String.Format("+DI:{0:D2} -DI:{1:D2}", CInt(plusDi), CInt(minusDi)))
@@ -1059,7 +1061,7 @@ Namespace TopStepTrader.UI.ViewModels
                         Dim bbConflict As Boolean = (isLongSignal AndAlso scanBbSlope < 0F) OrElse
                                                     (isShortSignal AndAlso scanBbSlope > 0F)
                         If bbConflict Then
-                            signalReason = "⚠ BB trend conflict — median slope opposes signal; entry blocked.  " & signalReason
+                            signalReason = "⚠ BB trend conflict — median slope opposes signal; entry blocked."
                         End If
                     End If
                 End If
@@ -1110,24 +1112,6 @@ Namespace TopStepTrader.UI.ViewModels
             Await Task.Delay(400)
             StatusBackground = Brushes.Transparent
         End Sub
-
-        ''' <summary>
-        ''' Returns a human-readable ORB phase label for the given Eastern Time-of-day.
-        ''' Pre-market: before 09:30; Building opening range: 09:30–10:00;
-        ''' Entry window open: 10:00–12:45; Entry window closed: 12:45–16:00; Session closed: after 16:00.
-        ''' </summary>
-        Friend Shared Function GetOrbPhaseLabel(etTimeOfDay As TimeSpan) As String
-            Dim sessionOpen = TimeSpan.FromHours(9).Add(TimeSpan.FromMinutes(30))
-            Dim rangeEnd = TimeSpan.FromHours(10)
-            Dim entryCutoff = TimeSpan.FromHours(12).Add(TimeSpan.FromMinutes(45))
-            Dim marketClose = TimeSpan.FromHours(16)
-
-            If etTimeOfDay < sessionOpen Then Return "Pre-market"
-            If etTimeOfDay < rangeEnd Then Return "Building opening range"
-            If etTimeOfDay < entryCutoff Then Return "Entry window open"
-            If etTimeOfDay < marketClose Then Return "Entry window closed"
-            Return "Session closed"
-        End Function
 
         Private Function UpdateApproachHistory(contractId As String, stDir As Integer, distance As Double) As Boolean
             Dim state As ApproachState = Nothing
@@ -1262,10 +1246,10 @@ Namespace TopStepTrader.UI.ViewModels
                     contractId, stDir, adxVal, plusDi, minusDi, isLong, isShort, isFlip, isActive, isFavourable)
 
                 Dim adxStr = If(Single.IsNaN(adxVal), "ADX:--",
-                               If(adxVal >= Config.AdxStrongThreshold, String.Format("ADX:{0:D2} L3: Espresso", CInt(adxVal)),
-                               If(adxVal >= Config.AdxModerateThreshold, String.Format("ADX:{0:D2} L2: Latte", CInt(adxVal)),
-                               If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L1: Mellow Birds", CInt(adxVal)),
-                                   String.Format("ADX:{0:D2}", CInt(adxVal))))))
+                               If(adxVal >= Config.AdxStrongThreshold, String.Format("ADX:{0:D2} L3: Espresso", CInt(Math.Floor(adxVal))),
+                               If(adxVal >= Config.AdxModerateThreshold, String.Format("ADX:{0:D2} L2: Cappuccino", CInt(Math.Floor(adxVal))),
+                               If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L1: Latte", CInt(Math.Floor(adxVal))),
+                                   String.Format("ADX:{0:D2}", CInt(Math.Floor(adxVal)))))))
 
                 If Not isFavourable Then
                     UpdateSlotSymbolRows(i, "--", adxStr, "flat", Brushes.White)
@@ -1544,8 +1528,8 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim side As String = If(anticipatedLong, "Buy", "Sell")
                 Dim adxStr As String = If(Single.IsNaN(adxVal), "ADX:--",
                                           If(adxVal >= Config.AdxStrongThreshold, String.Format("ADX:{0:D2} L3: Espresso", CInt(adxVal)),
-                                          If(adxVal >= Config.AdxModerateThreshold, String.Format("ADX:{0:D2} L2: Latte", CInt(adxVal)),
-                                          If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L1: Mellow Birds", CInt(adxVal)),
+                                          If(adxVal >= Config.AdxModerateThreshold, String.Format("ADX:{0:D2} L2: Cappuccino", CInt(adxVal)),
+                                          If(adxVal >= Config.AdxWeakThreshold, String.Format("ADX:{0:D2} L1: Latte", CInt(adxVal)),
                                              String.Format("ADX:{0:D2}", CInt(adxVal))))))
                 Dim signalLabel As String = If(earlySignal, "EARLY", "flat")
                 Dim sigColor As Brush = If(earlySignal, Brushes.Goldenrod, Brushes.White)
@@ -1713,7 +1697,7 @@ Namespace TopStepTrader.UI.ViewModels
                 If currentAdx >= Config.AdxStrongThreshold Then
                     extraContracts = 2   ' L3: Espresso
                 ElseIf currentAdx >= Config.AdxModerateThreshold Then
-                    extraContracts = 1   ' L2: Latte
+                    extraContracts = 1   ' L2: Cappuccino
                 End If
 
                 If extraContracts > 0 Then
@@ -1750,7 +1734,7 @@ Namespace TopStepTrader.UI.ViewModels
                         _logger.LogInformation(
                             "ST+ Reconcile [{Contract}] scale-in +{Extra} contracts (ADX {Band}). Total contracts now {Total} fillPx={Px}",
                             contractId, extraContracts,
-                            If(currentAdx >= Config.AdxStrongThreshold, "L3: Espresso", "L2: Latte"),
+                            If(currentAdx >= Config.AdxStrongThreshold, "L3: Espresso", "L2: Cappuccino"),
                             s2.Contracts,
                             If(addFillPrice > 0D, addFillPrice.ToString("F4"), "n/a"))
                     Else
@@ -2875,8 +2859,8 @@ Namespace TopStepTrader.UI.ViewModels
         Private Function AdxBandLabel(adx As Single) As String
             If adx <= 0F Then Return String.Empty
             If adx >= Config.AdxStrongThreshold Then Return "Espresso"
-            If adx >= Config.AdxModerateThreshold Then Return "Latte"
-            If adx >= Config.AdxWeakThreshold Then Return "Mellow Birds"
+            If adx >= Config.AdxModerateThreshold Then Return "Cappuccino"
+            If adx >= Config.AdxWeakThreshold Then Return "Latte"
             Return "Decaff"
         End Function
 

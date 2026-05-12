@@ -22,8 +22,6 @@ Namespace TopStepTrader.Services.Backtest
                 Case StrategyConditionType.VidyaCross           : Return New VidyaCrossSignalProvider()
                 Case StrategyConditionType.NakedTrader          : Return New NakedTraderSignalProvider()
                 Case StrategyConditionType.DoubleBubbleButt     : Return New DoubleBubbleButtSignalProvider()
-                ' STRAT-29
-                Case StrategyConditionType.OpeningRangeBreakout : Return New OrbSignalProvider()
                 ' STRAT-31
                 Case StrategyConditionType.VwapMeanReversion : Return New VwapMeanReversionSignalProvider()
                 ' FEAT-19

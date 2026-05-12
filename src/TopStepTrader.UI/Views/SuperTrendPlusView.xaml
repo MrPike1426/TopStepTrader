@@ -104,7 +104,7 @@
                                             <TextBlock Text="Lewis" Foreground="#42A5F5" FontSize="12" FontWeight="Bold" Margin="0,0,0,4"/>
                                             <TextBlock Text="Risk-Averse" Foreground="#90CAF9" FontSize="12" Margin="0,0,0,6"/>
                                             <TextBlock Foreground="#8090A0" FontSize="12" LineHeight="16">
-                                                <Run Foreground="White" FontWeight="SemiBold">Min ADX</Run>  40+&#xA;<Run Foreground="White" FontWeight="SemiBold">ST mult</Run>    3.5×&#xA;<Run Foreground="White" FontWeight="SemiBold">RR target</Run>  0.75&#xA;<Run Foreground="White" FontWeight="SemiBold">Entries</Run>    Latte / Espresso
+                                                <Run Foreground="White" FontWeight="SemiBold">Min ADX</Run>  40+&#xA;<Run Foreground="White" FontWeight="SemiBold">ST mult</Run>    3.5×&#xA;<Run Foreground="White" FontWeight="SemiBold">RR target</Run>  0.75&#xA;<Run Foreground="White" FontWeight="SemiBold">Entries</Run>    Cappuccino / Espresso
                                             </TextBlock>
                                             <Border Background="#0A1520" CornerRadius="3" Padding="6,4" Margin="0,6,0,0">
                                                 <TextBlock TextWrapping="Wrap" Foreground="White" FontSize="12" LineHeight="15">Fewer, higher-conviction entries. Tight selectivity with capital preservation as the primary goal.</TextBlock>
@@ -206,7 +206,7 @@
 
                                     <Border Grid.Column="0" Background="#1A2440" CornerRadius="4" Padding="10,8" BorderBrush="#2A3A5A" BorderThickness="1">
                                         <StackPanel>
-                                            <TextBlock Text="L1  Mellow Birds" Foreground="#90CAF9" FontSize="11" FontWeight="Bold" Margin="0,0,0,3"/>
+                                            <TextBlock Text="L1  Latte" Foreground="#90CAF9" FontSize="11" FontWeight="Bold" Margin="0,0,0,3"/>
                                             <TextBlock Text="ADX 25 – 39" Foreground="White" FontSize="12" Margin="0,0,0,5"/>
                                             <Border Background="#0D1520" CornerRadius="3" Padding="8,5">
                                                 <TextBlock Text="1 contract" Foreground="White" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center"/>
@@ -217,7 +217,7 @@
 
                                     <Border Grid.Column="2" Background="#1A2440" CornerRadius="4" Padding="10,8" BorderBrush="#1565C0" BorderThickness="1">
                                         <StackPanel>
-                                            <TextBlock Text="L2  Latte" Foreground="#42A5F5" FontSize="11" FontWeight="Bold" Margin="0,0,0,3"/>
+                                            <TextBlock Text="L2  Cappuccino" Foreground="#42A5F5" FontSize="11" FontWeight="Bold" Margin="0,0,0,3"/>
                                             <TextBlock Text="ADX 40 – 59" Foreground="White" FontSize="12" Margin="0,0,0,5"/>
                                             <Border Background="#0D1520" CornerRadius="3" Padding="8,5">
                                                 <TextBlock Text="2 contracts" Foreground="White" FontSize="13" FontWeight="Bold" HorizontalAlignment="Center"/>
@@ -288,52 +288,6 @@
                                 <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17">
                                     Exit fires when a closed 15s bar crosses the latest stop. After a release, the same instrument cannot re-enter until the closed 15s bar agrees with the new direction relative to the BB middle (length 10, mult 2.0).
                                 </TextBlock>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- ── ORB — Opening Range Breakout ── -->
-                        <Border Background="#16213A" CornerRadius="6" Padding="14,10" Margin="0,8,0,0">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                                    <TextBlock Text="&#x1F4D0;" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                    <TextBlock Text="ORB — Opening Range Breakout" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
-                                    <TextBlock Text="  (equity index futures only: MES · MNQ · M2K · MYM)" Foreground="#8090A0" FontSize="12" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17" Margin="0,0,0,8">The ORB strategy uses the first 30 minutes of the regular US equity session to define a range, then trades breakouts from that range during the first half of the session only. It runs on <Run Foreground="White" FontWeight="SemiBold">5-minute bars</Run> regardless of the timeframe selected above.</TextBlock>
-
-                                <Border Background="#1A2440" CornerRadius="4" Padding="10,8" Margin="0,0,0,8">
-                                    <StackPanel>
-                                        <Grid Margin="0,0,0,4">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="Phase" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
-                                            <TextBlock Grid.Column="1" Text="What happens" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
-                                        </Grid>
-                                        <Rectangle Height="1" Fill="#2A3A5A" Margin="0,0,0,4"/>
-                                        <Grid Margin="0,0,0,3">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="Pre-market" Foreground="#8090A0" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="Before 09:30 ET — watching, no signal" Foreground="#8090A0" FontSize="12"/>
-                                        </Grid>
-                                        <Grid Margin="0,0,0,3">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="09:30 – 10:00" Foreground="Gold" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="Opening range builds — high and low of the first 6 bars define the OR" Foreground="#8090A0" FontSize="12"/>
-                                        </Grid>
-                                        <Grid Margin="0,0,0,3">
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="10:00 – 12:45" Foreground="#66BB6A" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="Entry window — breakout signals evaluated each tick" Foreground="#8090A0" FontSize="12"/>
-                                        </Grid>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="120"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="After 12:45" Foreground="#8090A0" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="Window closed — late entries suppressed to avoid choppy afternoon action" Foreground="#8090A0" FontSize="12"/>
-                                        </Grid>
-                                    </StackPanel>
-                                </Border>
-
-                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17" Margin="0,0,0,6">A <Run Foreground="White" FontWeight="SemiBold">BULL</Run> signal fires when the bar close exceeds the OR high <Run FontStyle="Italic">and</Run> volume is ≥ 1.2× its 20-bar average. A <Run Foreground="White" FontWeight="SemiBold">BEAR</Run> signal fires when the close falls below the OR low with the same volume confirmation. <Run Foreground="White" FontWeight="SemiBold">WAIT</Run> means a breakout occurred without sufficient volume. <Run Foreground="White" FontWeight="SemiBold">WIDE</Run> means the OR exceeded 2× ATR(14) — the range is too large to offer a reliable R:R and is skipped.</TextBlock>
-                                <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17">Stop = opposite extreme of the OR. Target = 1.5× OR width (minimum 1:1.5 R:R). <Run Foreground="White" FontWeight="SemiBold">This view shows signals only</Run> — ORB order placement is a separate feature.</TextBlock>
                             </StackPanel>
                         </Border>
 
@@ -553,23 +507,6 @@
             </Border>
 
 
-            <!-- ORB phase banner (visible 09:00-17:00 ET on weekdays) -->
-            <Border Margin="0,8,0,0" CornerRadius="6" Padding="10,7"
-                    Background="#16213A" BorderBrush="#3A5A8A" BorderThickness="1">
-                <Border.Style>
-                    <Style TargetType="Border">
-                        <Setter Property="Visibility" Value="Collapsed"/>
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsOrbBannerVisible}" Value="True">
-                                <Setter Property="Visibility" Value="Visible"/>
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
-                </Border.Style>
-                <TextBlock Text="{Binding OrbPhaseLabel}"
-                           Foreground="#90CAF9" FontSize="12" FontWeight="SemiBold"
-                           VerticalAlignment="Center"/>
-            </Border>
             <!-- â”€â”€ Watchlist panel â”€â”€ -->
             <Border Background="{StaticResource SurfaceBrush}"
                     CornerRadius="6" Padding="14,10" Margin="0,10,0,0"
@@ -583,19 +520,17 @@
                     <!-- column header -->
                     <Grid Grid.Row="0" Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="110"/>
-                            <ColumnDefinition Width="50"/>
-                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="160"/>
+                            <ColumnDefinition Width="100"/>
                             <ColumnDefinition Width="160"/>
                             <ColumnDefinition Width="130"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Text="Symbol"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="1" Text="Trend"     Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="2" Text="Signal"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="3" Text="Strength"  Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="4" Text="+DI / -DI" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
-                        <TextBlock Grid.Column="5" Text="What this means" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="1" Text="Signal"    Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="2" Text="Strength"  Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="3" Text="DI Direction / Δ" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
+                        <TextBlock Grid.Column="4" Text="What this means" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" FontWeight="SemiBold"/>
                     </Grid>
 
                     <!-- rows -->
@@ -604,9 +539,8 @@
                             <DataTemplate>
                                 <Grid Margin="0,3">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="110"/>
-                                        <ColumnDefinition Width="50"/>
-                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="160"/>
+                                        <ColumnDefinition Width="100"/>
                                         <ColumnDefinition Width="160"/>
                                         <ColumnDefinition Width="130"/>
                                         <ColumnDefinition Width="*"/>
@@ -616,22 +550,20 @@
                                                Foreground="White"
                                                FontFamily="Consolas" FontSize="12" FontWeight="SemiBold"/>
                                     <TextBlock Grid.Column="1"
-                                               Text="{Binding Arrow, Mode=OneWay}"
+                                               Text="{Binding SignalDisplay, Mode=OneWay}"
                                                Foreground="{Binding RowColor}"
-                                               FontFamily="Consolas" FontSize="13" FontWeight="Bold"/>
+                                               FontFamily="Consolas" FontSize="12" FontWeight="Bold"/>
                                     <TextBlock Grid.Column="2"
-                                               Text="{Binding Signal, Mode=OneWay}"
-                                               Foreground="{Binding RowColor}"
-                                               FontFamily="Consolas" FontSize="12"/>
-                                    <TextBlock Grid.Column="3"
                                                Text="{Binding TrendStrength, Mode=OneWay}"
                                                Foreground="{Binding StrengthColor, Mode=OneWay}"
                                                FontFamily="Consolas" FontSize="12"/>
+                                    <TextBlock Grid.Column="3"
+                                               Text="{Binding DiDominance, Mode=OneWay}"
+                                               Foreground="{Binding DiSpreadColor, Mode=OneWay}"
+                                               FontFamily="Consolas" FontSize="12" FontWeight="Bold"
+                                               ToolTip="{Binding DiDisplay, Mode=OneWay}"
+                                               VerticalAlignment="Center"/>
                                     <TextBlock Grid.Column="4"
-                                               Text="{Binding DiDisplay, Mode=OneWay}"
-                                               Foreground="{Binding RowColor}"
-                                               FontFamily="Consolas" FontSize="12"/>
-                                    <TextBlock Grid.Column="5"
                                                Text="{Binding SignalReason, Mode=OneWay}"
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                FontSize="11" TextWrapping="NoWrap"

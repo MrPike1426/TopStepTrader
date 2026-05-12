@@ -73,17 +73,6 @@ Namespace TopStepTrader.Core.Enums
         DoubleBubbleButt = 17
 
         ''' <summary>
-        ''' Opening Range Breakout (ORB): first 30 minutes of the regular session establish the
-        ''' opening range high and low.
-        ''' Long  when bar closes above OR high with volume ≥ 1.2× 20-bar average.
-        ''' Short when bar closes below OR low  with volume ≥ 1.2× 20-bar average.
-        ''' SL = opposite extreme of the opening range; TP = 1.5× OR width (1:1.5 R:R minimum).
-        ''' No-trade filters: OR width &gt; 2× ATR(14) (too wide), or past the session midpoint.
-        ''' Best instruments: MNQ, MES (NY open momentum), MGC (Gold 08:20–10:30 ET window).
-        ''' </summary>
-        OpeningRangeBreakout = 18
-
-        ''' <summary>
         ''' VWAP Mean Reversion: institutional midday strategy (10am–2pm ET window).
         ''' Session-anchored VWAP ± 1.5 and 2.0 standard deviations define the reversion zones.
         ''' Long  when close ≤ VWAP − 1.5 SD (oversold vs institutional average cost).
