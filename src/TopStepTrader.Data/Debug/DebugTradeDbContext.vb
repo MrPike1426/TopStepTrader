@@ -37,7 +37,7 @@ Namespace TopStepTrader.Data.Debug
                 Dim hops = 0
                 While current IsNot Nothing AndAlso hops < 8
                     If Directory.GetFiles(current.FullName, "*.sln").Length > 0 Then
-                        Dim diagnosticsDir = Path.Combine(current.FullName, "TopStepTrader_Diagnostics")
+                        Dim diagnosticsDir = Path.Combine(current.FullName, "Diagnostics")
                         Try
                             Directory.CreateDirectory(diagnosticsDir)
                             Return diagnosticsDir

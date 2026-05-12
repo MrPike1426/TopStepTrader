@@ -14,7 +14,7 @@ Namespace TopStepTrader.Data
         Public Sub AddDataServices(services As IServiceCollection, configuration As IConfiguration)
 
             ' Resolve DB path — if the connection string is a bare filename, place it
-            ' in the TopStepTrader_Diagnostics folder at solution root.
+            ' in the Diagnostics folder at solution root.
             Dim raw = configuration.GetConnectionString("DefaultConnection") ' e.g. "TopStepTrader.db"
             Dim dbPath As String
             If raw IsNot Nothing AndAlso Not raw.StartsWith("Data Source", StringComparison.OrdinalIgnoreCase) Then

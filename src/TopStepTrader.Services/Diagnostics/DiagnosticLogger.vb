@@ -14,7 +14,7 @@ Namespace TopStepTrader.Services.Diagnostics
     '''
     ''' File format: one JSON object per line.  Lines starting with '#' are comments.
     ''' Filename pattern: diag_YYYY-MM-DD_HH-mm-ss_{CONTRACT}_{SESSION}.jsonl
-    ''' Output folder:    <solution-root>\TopStepTrader_Diagnostics\ (resolved via DebugTradeDbContext.ResolveDiagnosticsFolder)
+    ''' Output folder:    <solution-root>\Diagnostics\ (resolved via DebugTradeDbContext.ResolveDiagnos
     '''
     ''' Thread-safe: all writes are serialised via SyncLock.
     ''' AutoFlush enabled so no data is lost if the process crashes.

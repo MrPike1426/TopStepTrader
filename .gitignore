@@ -47,6 +47,7 @@ bld/
 # Runtime diagnostic outputs (jsonl/csv/db) — never committed
 TopStepTrader_Diagnostics/
 src/TopStepTrader.UI/TopStepTrader_Diagnostics/
+Diagnostics/
 
 # Build outputs
 *.dll
