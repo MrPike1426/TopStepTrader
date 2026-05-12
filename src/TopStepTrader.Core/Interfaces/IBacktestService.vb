@@ -208,7 +208,7 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Public Property TrainTestSplit As Double = 0.0
 
-        ' ── Sniper Pyramid fields (FEAT-20) ──────────────────────────────────────────
+        ' ── Pyramid fields ────────────────────────────────────────────────────────────
 
         ''' <summary>Maximum total contracts to build up to across all pyramid tiers.</summary>
         Public Property TargetTotalSize As Integer = 1

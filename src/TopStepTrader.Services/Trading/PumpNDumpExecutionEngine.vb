@@ -90,7 +90,7 @@ Namespace TopStepTrader.Services.Trading
         Public Event ExecutionStopped As EventHandler(Of String) Implements IPumpNDumpExecutionEngine.ExecutionStopped
         Public Event TradeOpened As EventHandler(Of TradeOpenedEventArgs) Implements IPumpNDumpExecutionEngine.TradeOpened
         Public Event TradeClosed As EventHandler(Of TradeClosedEventArgs) Implements IPumpNDumpExecutionEngine.TradeClosed
-        Public Event PositionChanged As EventHandler(Of SniperPositionEventArgs) Implements IPumpNDumpExecutionEngine.PositionChanged
+        Public Event PositionChanged As EventHandler(Of PumpNDumpPositionEventArgs) Implements IPumpNDumpExecutionEngine.PositionChanged
         Public Event BarCountChanged As EventHandler(Of BarCountEventArgs) Implements IPumpNDumpExecutionEngine.BarCountChanged
 
         Public Sub New(ingestionService As IBarIngestionService,
@@ -1235,7 +1235,7 @@ Namespace TopStepTrader.Services.Trading
         End Function
 
         Private Sub RaisePositionChanged()
-            RaiseEvent PositionChanged(Me, New SniperPositionEventArgs(
+            RaiseEvent PositionChanged(Me, New PumpNDumpPositionEventArgs(
                 _currentQty, _averageEntry, _freeRideActive, CalculateCurrentHeat()))
         End Sub
 

@@ -41,7 +41,7 @@ Namespace TopStepTrader.Core.Models
         Public Property PnL As Decimal?
         Public Property ExitReason As String = String.Empty
         Public Property SignalConfidence As Single
-        ''' <summary>For Sniper pyramid legs: the add index (0 = initial entry, 1+ = scale-ins).</summary>
+        ''' <summary>For pyramid legs: the add index (0 = initial entry, 1+ = scale-ins).</summary>
         Public Property PyramidAddIndex As Integer? = Nothing
         ''' <summary>Average entry price across all legs at the time this leg was added.</summary>
         Public Property AverageEntryAtFill As Decimal? = Nothing

@@ -1724,7 +1724,7 @@ Namespace TopStepTrader.UI.ViewModels
                 _slOrderId = Nothing
 
                 Dispatch(Sub() AddDebugMessage("Strategy: Trade Closed."))
-                ' Here we should cancel the other bracket if not filled (OCO simulation) -> Should be handled by Sniper engine or order service typically but here we do basic.
+                ' Cancel the other bracket if not filled (OCO simulation) — handled by order service; basic reset here.
                 ' For now, just reset state.
             End If
         End Sub

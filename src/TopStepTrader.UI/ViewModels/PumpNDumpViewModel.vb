@@ -529,7 +529,7 @@ Namespace TopStepTrader.UI.ViewModels
                      End Sub)
         End Sub
 
-        Private Sub OnPositionChanged(sender As Object, e As SniperPositionEventArgs)
+        Private Sub OnPositionChanged(sender As Object, e As PumpNDumpPositionEventArgs)
             Dispatch(Sub()
                          PositionDisplay = $"Contracts: {e.CurrentQty} / {TargetTotalSize}"
                          AverageEntryDisplay = If(e.CurrentQty > 0, e.AverageEntry.ToString("F2"), "—")

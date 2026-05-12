@@ -20,7 +20,7 @@ Namespace TopStepTrader.Services.Trading
         Event ExecutionStopped As EventHandler(Of String)
         Event TradeOpened As EventHandler(Of TradeOpenedEventArgs)
         Event TradeClosed As EventHandler(Of TradeClosedEventArgs)
-        Event PositionChanged As EventHandler(Of SniperPositionEventArgs)
+        Event PositionChanged As EventHandler(Of PumpNDumpPositionEventArgs)
         Event BarCountChanged As EventHandler(Of BarCountEventArgs)
 
         Sub Start(contractId As String,

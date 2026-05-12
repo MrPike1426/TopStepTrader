@@ -12,14 +12,13 @@ A WPF desktop application for live and simulated trading on **TopStepX (CME Micr
 4. [Views](#views)
    - [Dashboard](#1-dashboard-)
    - [Hydra](#2-hydra-)
-   - [Sniper](#3-sniper-)
-   - [Pump-n-Dump](#4-pump-n-dump-)
-   - [CryptoJoe](#5-cryptojoe-)
-   - [Backtest](#6-backtest-)
-   - [SuperTrend+ Autopilot](#7-supertrend-autopilot-)
-   - [Trade History](#8-trade-history-)
-   - [Test Trade](#9-test-trade-)
-   - [API Keys](#10-api-keys-)
+   - [Pump-n-Dump](#3-pump-n-dump-)
+   - [CryptoJoe](#4-cryptojoe-)
+   - [Backtest](#5-backtest-)
+   - [SuperTrend+ Autopilot](#6-supertrend-autopilot-)
+   - [Trade History](#7-trade-history-)
+   - [Test Trade](#8-test-trade-)
+   - [API Keys](#9-api-keys-)
 5. [Services Reference](#services-reference)
 
 ---
@@ -195,65 +194,7 @@ ATR tiers control backtest bracket sizing (`SlMultipleOfN` / `TpMultipleOfN`) on
 
 ---
 
-### 3. Sniper 🎯
-
-**Purpose:** 3-EMA Cascade momentum trading engine with pyramiding (scaled-in entries), free-ride risk management, and a built-in backtest tab. Best suited for directional trend-following on a single instrument.
-
-#### Strategy Logic
-
-Entry triggers when EMA8 > EMA21 > EMA50 (long) or EMA8 < EMA21 < EMA50 (short). The engine builds a position in tiers:
-
-- **Core entries**: Split the initial position across `CoreAddsCount` orders, each separated by an ATR multiple.
-- **Momentum adds**: Additional contracts when momentum continues.
-- **Extension adds**: Optional single-contract adds for extended trends (gated by a checkbox).
-- **Free-ride lock**: When enough contracts are profitable, all SLs advance to average entry.
-- **Structure-fail exit** (optional): If price breaks below EMA21 (long) by more than a configurable buffer, all positions flatten.
-
-#### Live Tab — Key Parameters
-
-| Parameter | Description |
-|---|---|
-| Initial TP / SL ($) | Dollar values converted to ticks using the instrument's tick value |
-| Scale-In Trigger (k) | ATR multiplier that determines how far price must move before adding the next tier |
-| Max Risk Heat Ticks | Cumulative tick risk cap across all open contracts; no new adds if breached |
-| Target Total Size | Maximum contracts to accumulate across all pyramid tiers |
-| Core Size Fraction | Fraction of total size reserved for the initial core entries (0.0–1.0) |
-| Core Adds Count | Number of sub-entries the core is split across |
-| Duration (hours) | Auto-flattens all positions and stops the engine after this many hours |
-
-#### Backtest Tab
-
-- Select contract, date range, TP/SL, then click "Run Backtest".
-- Downloads 1-min bars from the history API if not already cached locally.
-- Returns: Total Trades, Win Rate, Net P&L, Max Drawdown, Average P&L/Trade, Sharpe Ratio.
-- Trade list (up to 500 rows) shows entry/exit times, prices, reasons, and P&L.
-
-#### Notes
-
-- Win rate colour thresholds: green ≥ 55%, yellow ≥ 40%, red < 40%.
-- Win/Loss counters reset when "Start Sniper" is clicked.
-- Log entries accumulate for the session; no auto-clear.
-
-#### Safety Monitor (Client-Side P&L Backstop)
-
-The Sniper places TP and SL as **broker-side bracket orders**. On ProjectX (TopStepX) there is a documented case (`UAT-BUG-008`) where bracket orders can be silently rejected.
-
-To guard against an unprotected position, the engine runs a **client-side safety monitor loop** in parallel with the main timer from the moment the first fill is confirmed:
-
-| Behaviour | Detail |
-|---|---|
-| Poll interval | Every 3 seconds via `GetLivePositionSnapshotAsync` |
-| SL trigger | Unrealised P&L ≤ −(`stopLossTicks × tickSize × tickValue × qty`) |
-| TP trigger | Unrealised P&L ≥ `takeProfitTicks × tickSize × tickValue × qty` |
-| Action | Calls `StopAsync` with a descriptive reason; logs `🛡 Safety monitor:…` |
-| Guard | Re-entrancy flag prevents double-firing |
-| Lifecycle | Starts after first fill; stops when the position goes flat or the engine stops |
-
-The monitor is **additive only** — it does not replace the broker bracket. In the normal case the bracket fires first and the monitor sees `_currentQty = 0` on its next poll and exits cleanly. It only takes action if the bracket was silently dropped.
-
----
-
-### 4. Pump-n-Dump 💥
+### 3. Pump-n-Dump 💥
 
 **Purpose:** 3-bar price-action scalping engine. Enters on three consecutive bullish or bearish bars, then scales in as momentum continues. Dynamically tightens TP as momentum fades to lock in profits before the reversal.
 
@@ -285,7 +226,7 @@ The monitor is **additive only** — it does not replace the broker bracket. In 
 
 ---
 
-### 5. CryptoJoe ☕
+### 4. CryptoJoe ☕
 
 **Purpose:** Two-asset CME crypto futures monitoring and trading. Runs two independent execution engines (MBT — Micro Bitcoin, GMET — Micro Ether) in isolated DI scopes, sharing the same strategy template. Designed to run 24/7 without expiry.
 
@@ -325,7 +266,7 @@ The monitor is **additive only** — it does not replace the broker bracket. In 
 
 ---
 
-### 6. Backtest 🔬
+### 5. Backtest 🔬
 
 **Purpose:** General-purpose strategy backtesting against downloaded historical bar data. Supports four pre-configured strategy templates with customisable contract, date range, capital, and timeframe.
 
@@ -357,7 +298,7 @@ Win-rate and Sharpe ranges on the cards are reference figures from historical re
 
 ---
 
-### 7. SuperTrend+ Autopilot 📈
+### 6. SuperTrend+ Autopilot 📈
 
 **Purpose:** Multi-asset automated trading engine driven by the SuperTrend indicator, ADX trend-strength, and Directional Indicators. Monitors up to all instruments in `FavouriteContracts` simultaneously, manages up to three concurrent position slots (one trade per instrument at a time), and advances each open position through a six-phase stop management system.
 
@@ -463,7 +404,7 @@ A scrolling log below the slot boxes records every AI pre-trade and mid-trade ch
 
 ---
 
-### 8. Trade History 📋
+### 7. Trade History 📋
 
 **Purpose:** Scrollable log of every trade placed by the strategy engines. Mirrors the TopStepX Trades panel with full trade lifecycle data (entry, exit, P&L, commission, fees). Read-only — order placement is not available here (use Test Trade for manual orders).
 
@@ -516,7 +457,7 @@ On every app startup, `TradeRecordService.RecoverOpenTradesAsync` scans `TradeHi
 
 ---
 
-### 9. Test Trade 🧪
+### 8. Test Trade 🧪
 
 **Purpose:** Diagnostic test page for validating that order placement, bracket submission, and API connectivity work correctly. **This is not a live trading management tool** — it does not monitor or adjust the position after entry.
 
@@ -563,7 +504,7 @@ On every app startup, `TradeRecordService.RecoverOpenTradesAsync` scans `TradeHi
 
 ---
 
-### 10. API Keys 🔑
+### 9. API Keys 🔑
 
 **Purpose:** Credential management for all connected services. Stores keys for TopStepX, Claude AI, Binance, and future broker slots.
 
@@ -600,7 +541,6 @@ On every app startup, `TradeRecordService.RecoverOpenTradesAsync` scans `TradeHi
 | `FavouriteContracts` | `Core/Trading` | Master instrument list with TopStepX specs (tick sizes, tick values, minimum stops) |
 | `TickMath` | `Core/Trading` | Tick↔price conversions, min-stop clamping |
 | `StrategyExecutionEngine` | `Services/Trading` | Hydra / Asset Bassett engine |
-| `SniperExecutionEngine` | `Services/Trading` | Sniper engine (3-EMA Cascade + pyramiding) |
 | `CryptoStrategyExecutionEngine` | `Services/Trading` | CryptoJoe per-asset engine (MBT, GMET) |
 | `PumpNDumpExecutionEngine` | `Services/Trading` | 3-bar scalping engine |
 | `SuperTrendPlusViewModel` | `UI/ViewModels` | SuperTrend+ Autopilot — multi-asset monitoring, slot allocation, stop phasing, AI gate |

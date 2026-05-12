@@ -10,7 +10,7 @@ Namespace TopStepTrader.Core.Enums
         EMA = 3
         ''' <summary>Combined EMA21/EMA50/RSI14 weighted scoring — same signals as Test Trade tab.</summary>
         EmaRsiCombined = 4
-        ''' <summary>Triple EMA cascade (EMA8/EMA21/EMA50) on 1-minute bars — Sniper strategy.</summary>
+        ''' <summary>Triple EMA cascade (EMA8/EMA21/EMA50) on 1-minute bars.</summary>
         TripleEma = 5
         ''' <summary>
         ''' Multi-Confluence Engine: Ichimoku Cloud + EMA21/50 + MACD + Stochastic RSI + DMI/ADX.
