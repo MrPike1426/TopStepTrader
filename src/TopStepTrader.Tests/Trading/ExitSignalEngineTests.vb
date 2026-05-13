@@ -262,6 +262,57 @@ Namespace TopStepTrader.Tests.Trading
             Assert.Equal(StopPhase.Initial, result.Phase)
         End Sub
 
+        ' ──────────────────────────────────────────────────────────────────────
+        '  BUG-81 — Early-mode grace must NOT suppress E1 (SuperTrend flip)
+        '  Documents the contract that ExitSignalEngine.Evaluate is independent
+        '  of IsEarlyModeEntry: an opposite-side ST direction at the latest bar
+        '  always produces ImmediateExit. Suppression (if any) is the caller's
+        '  responsibility — and per BUG-81 the caller must auto-clear the flag
+        '  after EarlyModeMaxAgeMinutes regardless.
+        ' ──────────────────────────────────────────────────────────────────────
+
+        <Fact>
+        Public Sub E1_FiresOnOppositeFlip_EvenWhenEarlyModeFlagSet()
+            Dim engine = MakeEngine()
+            Dim slot = MakeSlot("Sell", entryPrice:=100D, initialRisk:=2D,
+                                stopPrice:=102D, phase:=StopPhase.Initial)
+            slot.IsEarlyModeEntry = True   ' BUG-81: must not suppress engine-side E1
+
+            ' 15 closed bars (engine requires n >= 14 indices for some signals,
+            ' but E1 only needs n >= 0; pad to a safe length).
+            Dim highs As New List(Of Decimal)
+            Dim lows As New List(Of Decimal)
+            Dim closes As New List(Of Decimal)
+            For i = 0 To 14
+                highs.Add(101D)
+                lows.Add(99D)
+                closes.Add(100D)
+            Next
+
+            Dim n = closes.Count - 1
+            Dim stLines(n) As Single
+            Dim stDirs(n) As Single
+            Dim plusDIs(n) As Single
+            Dim minusDIs(n) As Single
+            Dim adx(n) As Single
+            Dim atr(n) As Single
+            For i = 0 To n
+                stLines(i) = 100.0F
+                stDirs(i) = -1.0F      ' previous bars: short-confirming
+                plusDIs(i) = Single.NaN
+                minusDIs(i) = Single.NaN
+                adx(i) = Single.NaN
+                atr(i) = Single.NaN
+            Next
+            stDirs(n) = 1.0F           ' latest bar: opposite-side flip vs Sell slot
+
+            Dim eval = engine.Evaluate(slot, highs, lows, closes,
+                                        stLines, stDirs, plusDIs, minusDIs, adx, atr)
+
+            Assert.True(eval.ImmediateExit, "E1 must fire on opposite-side ST flip regardless of IsEarlyModeEntry")
+            Assert.Contains("E1:8", eval.ContributingSignals)
+        End Sub
+
     End Class
 
 End Namespace

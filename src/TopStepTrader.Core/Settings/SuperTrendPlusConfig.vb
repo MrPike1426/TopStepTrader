@@ -60,6 +60,15 @@ Namespace TopStepTrader.Core.Settings
         ''' </summary>
         Public Property ExitScoreThreshold As Integer = 7
 
+        ' ── BUG-81: Early-mode grace cap ─────────────────────────────────────────
+        ''' <summary>
+        ''' Maximum age (in minutes) that <see cref="PositionSlot.IsEarlyModeEntry"/>
+        ''' may remain True without explicit ST-direction confirmation. After this
+        ''' window elapses the flag is auto-cleared so a stuck early-mode flag can
+        ''' never suppress downstream exit logic indefinitely. Default 30.
+        ''' </summary>
+        Public Property EarlyModeMaxAgeMinutes As Integer = 30
+
     End Class
 
 End Namespace

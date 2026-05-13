@@ -2552,6 +2552,29 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
                 If bars Is Nothing OrElse bars.Count < 14 Then Return
 
+                ' BUG-81: Strategy-bar freshness guard.
+                ' HandleOpenPositionAsync deliberately fetches with live:=False (BUG-72) so
+                ' indicators stay aligned with the practice fill engine. If the paper feed
+                ' freezes, the new closed bar that should produce a SuperTrend flip is
+                ' never seen and E1 cannot fire. If the latest bar is older than 2× the
+                ' strategy timeframe, fall back to a live fetch and degrade health.
+                Dim tfMinutes As Integer = Math.Max(1, CInt(tf))
+                Dim latestBarAge As TimeSpan = DateTimeOffset.UtcNow - bars(bars.Count - 1).Timestamp
+                If latestBarAge.TotalMinutes > 2.0 * tfMinutes Then
+                    _logger.LogWarning(
+                        "ST+ [Slot {Idx}] {Contract} stale strategy bars (latest={Ts:o} age={AgeMin:F1}m tf={TfMin}m) — falling back to live feed",
+                        slot.SlotIndex, slot.Instrument, bars(bars.Count - 1).Timestamp, latestBarAge.TotalMinutes, tfMinutes)
+                    Try
+                        Dim liveBars = Await _barService.GetLiveBarsAsync(slot.Instrument, tf, BarsToFetch, live:=True)
+                        If liveBars IsNot Nothing AndAlso liveBars.Count >= 14 Then
+                            bars = liveBars
+                        End If
+                    Catch ex As Exception
+                        _logger.LogWarning(ex, "ST+ [Slot {Idx}] {Contract} live-fallback bar fetch failed", slot.SlotIndex, slot.Instrument)
+                    End Try
+                    If slot.Health = SlotHealth.Healthy Then slot.Health = SlotHealth.Warning
+                End If
+
                 Dim highs = bars.Select(Function(b) b.High).ToList()
                 Dim lows = bars.Select(Function(b) b.Low).ToList()
                 Dim closes = bars.Select(Function(b) b.Close).ToList()
@@ -2615,11 +2638,22 @@ Namespace TopStepTrader.UI.ViewModels
                 ' Checked AFTER live P&L is refreshed but BEFORE any engine exit
                 ' logic so a breach short-circuits the normal stop ladder. When
                 ' both thresholds are Off the guard is a no-op.
-                ' NOTE: latestPnl is per-slot unrealised P&L. A future enhancement
-                ' will switch this to total broker-reported P&L (see ticket
-                ' BUG-PNLGUARD-TOTAL).
+                ' BUG-78: aggregate unrealised P&L across all open slots on the
+                ' same instrument so the guard fires on total per-instrument P&L
+                ' rather than a single slot's contribution. Flatten is also
+                ' per-instrument (ReleaseSlotAsync is called for each breaching
+                ' slot via the loop above), so per-instrument aggregation is the
+                ' correct scope.
                 If slot.IsOpen AndAlso slot.EntryPrice <> 0D AndAlso PnLGuard.IsActive Then
-                    If PnLGuard.ShouldFlatten(latestPnl) Then
+                    Dim aggregatedPnl As Decimal = _slotManager.Slots.
+                        Where(Function(s) s.IsOpen AndAlso
+                                          String.Equals(s.Instrument, slot.Instrument, StringComparison.OrdinalIgnoreCase)).
+                        Sum(Function(s) s.UnrealizedPnl)
+                    If PnLGuard.ShouldFlatten(aggregatedPnl) Then
+                        _logger.LogInformation(
+                            "ST+ [Slot {Idx}] {Contract} P&L Guard breach — aggregated={Agg:F2} (slot={Slot:F2}) tp={Tp} sl={Sl}",
+                            slot.SlotIndex, slot.Instrument, aggregatedPnl, latestPnl,
+                            PnLGuard.TakeProfitThreshold, PnLGuard.StopLossThreshold)
                         Await ReleaseSlotAsync(slot, PnLGuardSettings.ExitReasonText)
                         Return
                     End If
@@ -2637,8 +2671,30 @@ Namespace TopStepTrader.UI.ViewModels
                     If (slot.Side = "Buy" AndAlso stDirN > 0) OrElse (slot.Side = "Sell" AndAlso stDirN < 0) Then
                         slot.IsEarlyModeEntry = False
                         _logger.LogInformation("ST+ [Slot {Idx}] Early entry confirmed — E1 now active", slot.SlotIndex)
+                    ElseIf Config.EarlyModeMaxAgeMinutes > 0 AndAlso slot.EntryTime <> DateTime.MinValue Then
+                        ' BUG-81: Auto-clear early-mode grace once the configured cap elapses,
+                        ' regardless of confirmation. Without this an early-mode slot whose
+                        ' SuperTrend never confirms (and instead flips the *opposite* way) would
+                        ' have E1 suppressed for the entire life of the trade.
+                        Dim graceAge = DateTime.Now - slot.EntryTime
+                        If graceAge.TotalMinutes >= Config.EarlyModeMaxAgeMinutes Then
+                            slot.IsEarlyModeEntry = False
+                            _logger.LogWarning(
+                                "ST+ [Slot {Idx}] Early-mode grace expired after {AgeMin:F1}m (cap={CapMin}m) — E1 now active without ST confirmation",
+                                slot.SlotIndex, graceAge.TotalMinutes, Config.EarlyModeMaxAgeMinutes)
+                        End If
                     End If
                 End If
+
+                ' BUG-81: Per-tick visibility of the SuperTrend direction state for every open
+                ' slot. Without this the only logged ST event is the post-flip "ExitEngine:
+                ' SuperTrend flip" line, which makes it impossible to diagnose why E1 did not
+                ' fire when it should have (e.g. early-mode suppression, stale bar feed).
+                Dim stDirNow = st.Direction(n)
+                Dim stDirPrev = If(n > 0, st.Direction(n - 1), stDirNow)
+                _logger.LogInformation(
+                    "ST+ [Slot {Idx}] {Contract} barTs={Ts:o} stDir(n-1)={Prev} stDir(n)={Curr} side={Side} earlyMode={Early}",
+                    slot.SlotIndex, slot.Instrument, bars(n).Timestamp, stDirPrev, stDirNow, slot.Side, slot.IsEarlyModeEntry)
 
                 ' Compute VWAP from bar volumes (anchored at start of cached series)
                 Dim volumes = bars.Select(Function(b) b.Volume).ToList()
