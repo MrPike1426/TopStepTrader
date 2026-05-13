@@ -2499,6 +2499,16 @@ Namespace TopStepTrader.UI.ViewModels
                     End If
                 End If
 
+                ' BUG-80: Per-tick bracket-presence verification. The initial bracket SL
+                ' submitted with the entry can be silently rejected by TopStepX (or later
+                ' cancelled by a partial flatten / contract roll) leaving the position
+                ' unprotected. Verify a resting Stop (type=4) exists on every snapshot tick
+                ' once entry is confirmed; if absent for 2 consecutive ticks, flatten.
+                If Not skipSnapshot AndAlso slot.IsOpen AndAlso slot.EntryPrice <> 0D Then
+                    Await VerifyBracketStopAsync(slot)
+                    If Not slot.IsOpen Then Return
+                End If
+
                 ' Use snapshot P&L as a fallback; will be overridden below once bar close is available.
                 Dim latestPnl = snapshot.UnrealizedPnlUsd
                 slot.UnrealizedPnl = latestPnl
@@ -2782,6 +2792,91 @@ Namespace TopStepTrader.UI.ViewModels
                                                                 End Sub)
                     End If
                 End If
+            End If
+        End Function
+
+        ''' <summary>
+        ''' BUG-80: Verifies a resting Stop bracket order (type=4) exists on the broker for
+        ''' this slot's contract. When absent, attempts to re-create the protective stop
+        ''' from the last known <c>StopPrice</c>; if the protective stop is still missing
+        ''' on the next tick, the slot is flattened with reason "Bracket SL missing" to
+        ''' prevent unmanaged risk. Slot health is degraded to Warning while missing.
+        ''' </summary>
+        Private Async Function VerifyBracketStopAsync(slot As PositionSlot) As Task
+            Dim bracketStop As Decimal? = Nothing
+            Try
+                bracketStop = Await _orderService.TryGetBracketStopPriceAsync(slot.AccountId, slot.Instrument)
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ [Slot {Idx}] BracketState verify lookup failed for {Contract}",
+                                   slot.SlotIndex, slot.Instrument)
+                Return
+            End Try
+
+            If bracketStop.HasValue AndAlso bracketStop.Value > 0D Then
+                If slot.BracketMissingTickCount > 0 Then
+                    _logger.LogInformation(
+                        "ST+ [Slot {Idx}] {Contract} BracketState=Restored stop={Stop:F2}",
+                        slot.SlotIndex, slot.Instrument, bracketStop.Value)
+                End If
+                slot.BracketMissingTickCount = 0
+                Return
+            End If
+
+            slot.BracketMissingTickCount += 1
+            _logger.LogWarning(
+                "ST+ [Slot {Idx}] {Contract} BracketState=Missing tickCount={Count} positionId={PosId} entryOrderId={OId} cachedStop={Stop:F2}",
+                slot.SlotIndex, slot.Instrument, slot.BracketMissingTickCount,
+                If(slot.PositionId.HasValue, slot.PositionId.Value.ToString(), "n/a"),
+                If(slot.EntryOrderId.HasValue, slot.EntryOrderId.Value.ToString(), "n/a"),
+                slot.StopPrice)
+
+            If slot.Health = SlotHealth.Healthy Then
+                slot.Health = SlotHealth.Warning
+            End If
+
+            ' Attempt re-creation via EditPositionSlTpAsync first — if a resting Stop was
+            ' cancelled but a new one can be edited in (race), the helper will succeed.
+            ' If it returns False (no resting SL), submit a stand-alone protective Stop order.
+            Dim restored As Boolean = False
+            If slot.PositionId.HasValue AndAlso slot.StopPrice <> 0D Then
+                Try
+                    restored = Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, slot.StopPrice, Nothing)
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ [Slot {Idx}] BracketState=Missing edit-restore failed for {Contract}",
+                                       slot.SlotIndex, slot.Instrument)
+                End Try
+            End If
+
+            If Not restored AndAlso slot.StopPrice <> 0D Then
+                Try
+                    ' Submit a stand-alone Stop Market order on the opposing side to protect the position.
+                    Dim protectSide As OrderSide = If(slot.Side = "Buy", OrderSide.Sell, OrderSide.Buy)
+                    Dim stopOrder As New Order With {
+                        .AccountId = slot.AccountId,
+                        .ContractId = slot.Instrument,
+                        .Side = protectSide,
+                        .Quantity = slot.Contracts,
+                        .OrderType = OrderType.StopOrder,
+                        .StopPrice = slot.StopPrice
+                    }
+                    Dim placed = Await _orderService.PlaceOrderAsync(stopOrder)
+                    restored = placed IsNot Nothing AndAlso
+                               (placed.Status = OrderStatus.Working OrElse placed.Status = OrderStatus.Filled)
+                    _logger.LogWarning(
+                        "ST+ [Slot {Idx}] {Contract} BracketState=Missing stand-alone Stop submit ok={Ok} stop={Stop:F2}",
+                        slot.SlotIndex, slot.Instrument, restored, slot.StopPrice)
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ [Slot {Idx}] BracketState=Missing stand-alone Stop submit failed for {Contract}",
+                                       slot.SlotIndex, slot.Instrument)
+                End Try
+            End If
+
+            ' Escalate to flatten when still unprotected after 2 consecutive ticks.
+            If slot.BracketMissingTickCount >= 2 Then
+                _logger.LogError(
+                    "ST+ [Slot {Idx}] {Contract} BracketState=Missing for {Count} ticks — flattening (Bracket SL missing)",
+                    slot.SlotIndex, slot.Instrument, slot.BracketMissingTickCount)
+                Await ReleaseSlotAsync(slot, "Bracket SL missing")
             End If
         End Function
 

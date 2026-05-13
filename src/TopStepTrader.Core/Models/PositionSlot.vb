@@ -120,6 +120,14 @@ Namespace TopStepTrader.Core.Models
         Public Property PriceStaleCount As Integer = 0
 
         ''' <summary>
+        ''' BUG-80: Number of consecutive monitoring ticks where the broker-side
+        ''' resting Stop bracket (type=4) for this slot's contract was absent.
+        ''' Resets to 0 once a resting Stop is observed again. The slot is flattened
+        ''' (reason "Bracket SL missing") once this reaches 2 consecutive ticks.
+        ''' </summary>
+        Public Property BracketMissingTickCount As Integer = 0
+
+        ''' <summary>
         ''' FEAT-54: Runtime-only handle returned by <c>ILivePnLService.Subscribe</c>
         ''' when this slot opens. Disposed by <c>SlotManager.EndLiveTracking</c> on
         ''' slot release or before re-subscribing on side flip / contract delta.
