@@ -30,13 +30,15 @@ Namespace TopStepTrader.Data.Debug
         Private Shared ReadOnly _diagnosticsFolder As New Lazy(Of String)(AddressOf ComputeDiagnosticsFolder)
 
         Private Shared Function ComputeDiagnosticsFolder() As String
-            ' Walk up from AppContext.BaseDirectory to find the .sln (dev builds).
+            ' Walk up from AppContext.BaseDirectory to find the solution root (dev builds).
+            ' Matches both legacy .sln and the newer .slnx format.
             Try
                 Dim baseDir = AppContext.BaseDirectory
                 Dim current = New DirectoryInfo(baseDir)
                 Dim hops = 0
-                While current IsNot Nothing AndAlso hops < 8
-                    If Directory.GetFiles(current.FullName, "*.sln").Length > 0 Then
+                While current IsNot Nothing AndAlso hops < 10
+                    If Directory.GetFiles(current.FullName, "*.sln").Length > 0 OrElse
+                       Directory.GetFiles(current.FullName, "*.slnx").Length > 0 Then
                         Dim diagnosticsDir = Path.Combine(current.FullName, "Diagnostics")
                         Try
                             Directory.CreateDirectory(diagnosticsDir)

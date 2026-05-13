@@ -300,9 +300,11 @@
                     BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,2">
                 <StackPanel>
 
-                    <!-- Row 1: Account, Timeframe, Entry Mode -->
+                    <!-- Row 1: Account, Timeframe, P&L Guard, Entry Mode -->
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="16"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="16"/>
                             <ColumnDefinition Width="Auto"/>
@@ -322,27 +324,22 @@
                                   SelectedItem="{Binding SelectedTimeframe}"
                                   Width="90" VerticalAlignment="Center"/>
 
-                        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock Text="Entry on Trend Arrow reversal — "
+                        <controls:PnLGuardControl Grid.Column="4"
+                                                  Settings="{Binding PnLGuard}"
+                                                  VerticalAlignment="Center"/>
+
+                        <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Enter on:"
                                        Foreground="{StaticResource TextSecondaryBrush}"
-                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                            <RadioButton Content="On Bar Close"
-                                         IsChecked="{Binding UseEarlyMode, Converter={StaticResource BoolInverseConverter}}"
-                                         Foreground="White" FontSize="12" Margin="0,0,8,0"
-                                         ToolTip="Wait for the bar to fully close before entering. More conservative — avoids false flips mid-bar."/>
-                            <RadioButton Content="Pre-emptive early entry"
-                                         IsChecked="{Binding UseEarlyMode}"
-                                         Foreground="Gold" FontSize="12" Margin="0,0,0,0"
-                                         ToolTip="Enter before bar close using multi-timeframe reversal anticipation (5min + 15min + 1hr alignment). Higher reward potential but more exposure to mid-bar noise."/>
-                            <Border Width="1" Background="#3A5A8A" Margin="12,2,12,2"/>
-                            <CheckBox Content="🐞 Debug Capture"
-                                      IsChecked="{Binding IsDebugCaptureEnabled, Mode=TwoWay}"
-                                      Foreground="#FFB74D" FontSize="12" VerticalAlignment="Center"
-                                      ToolTip="Records every 15-second tick + SL/AI/exit events for each open trade to TopStepTrader_Diagnostics\debug_trades.db. Default OFF."/>
+                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ComboBox ItemsSource="{Binding EntryModes}"
+                                      SelectedItem="{Binding SelectedEntryMode}"
+                                      Width="160" VerticalAlignment="Center"
+                                      ToolTip="Bar Close = wait for the bar to fully close before entering (conservative). Pre-emptive Entry = enter before bar close using multi-timeframe reversal anticipation (5min + 15min + 1hr)."/>
                         </StackPanel>
                     </Grid>
 
-                    <!-- Row 2: Persona buttons, AI toggle, Start/Stop, status -->
+                    <!-- Row 2: Persona buttons, AI toggle, Debug toggle, Start/Stop, status -->
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>  <!-- 0  Lewis -->
@@ -353,9 +350,11 @@
                             <ColumnDefinition Width="12"/>    <!-- 5  gap -->
                             <ColumnDefinition Width="Auto"/>  <!-- 6  AI toggle -->
                             <ColumnDefinition Width="8"/>     <!-- 7  gap -->
-                            <ColumnDefinition Width="Auto"/>  <!-- 8  Start/Stop -->
-                            <ColumnDefinition Width="*"/>     <!-- 9  stretch -->
-                            <ColumnDefinition Width="Auto"/>  <!-- 10 Status badge -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 8  Debug toggle -->
+                            <ColumnDefinition Width="8"/>     <!-- 9  gap -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 10 Start/Stop -->
+                            <ColumnDefinition Width="*"/>     <!-- 11 stretch -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 12 Status badge -->
                         </Grid.ColumnDefinitions>
 
                         <!-- Lewis persona button -->
@@ -483,15 +482,70 @@
                             </StackPanel>
                         </ToggleButton>
 
+                        <!-- Debug Capture On/Off toggle -->
+                        <ToggleButton Grid.Column="8"
+                                      IsChecked="{Binding IsDebugCaptureEnabled, Mode=TwoWay}"
+                                      ToolTip="Records every 15-second tick + SL/AI/exit events for each open trade to TopStepTrader_Diagnostics\debug_trades.db. Default OFF."
+                                      Padding="10,6" VerticalAlignment="Center">
+                            <ToggleButton.Style>
+                                <Style TargetType="ToggleButton">
+                                    <Setter Property="Background"   Value="#1565C0"/>
+                                    <Setter Property="BorderBrush"  Value="#1976D2"/>
+                                    <Setter Property="Foreground"   Value="White"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="Cursor"       Value="Hand"/>
+                                    <Setter Property="Opacity"      Value="0.55"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="3"
+                                                        Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter Property="Background"  Value="#2E7D32"/>
+                                            <Setter Property="BorderBrush" Value="#43A047"/>
+                                            <Setter Property="Opacity"     Value="1.0"/>
+                                        </Trigger>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Opacity" Value="0.85"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ToggleButton.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#x1F41E;" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="White"/>
+                                <TextBlock VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="White">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Debug Off"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsDebugCaptureEnabled}" Value="True">
+                                                    <Setter Property="Text" Value="Debug On"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </ToggleButton>
+
                         <!-- Start / Stop button -->
-                        <Button Grid.Column="8"
+                        <Button Grid.Column="10"
                                 Content="{Binding StartStopLabel}"
                                 Command="{Binding StartStopCommand}"
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 Padding="14,6" VerticalAlignment="Center"/>
 
                         <!-- Status badge -->
-                        <Border Grid.Column="10"
+                        <Border Grid.Column="12"
                                 Background="{Binding StatusBackground}"
                                 CornerRadius="4" Margin="8,0,0,0"
                                 Visibility="{Binding StatusVisibility}"

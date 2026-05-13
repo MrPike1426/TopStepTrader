@@ -1,0 +1,26 @@
+﻿<UserControl x:Class="TopStepTrader.UI.Controls.PnLGuardControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="30" d:DesignWidth="320">
+    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <TextBlock Text="Take Profit:"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+        <ComboBox x:Name="TakeProfitCombo"
+                  Width="70"
+                  VerticalAlignment="Center"
+                  SelectionChanged="OnTakeProfitChanged"
+                  ToolTip="Flatten the position when unrealised profit reaches this dollar value. Off = engine rules apply."/>
+        <TextBlock Text="Max Loss:"
+                   Foreground="{StaticResource TextSecondaryBrush}"
+                   FontSize="12" VerticalAlignment="Center" Margin="10,0,4,0"/>
+        <ComboBox x:Name="StopLossCombo"
+                  Width="70"
+                  VerticalAlignment="Center"
+                  SelectionChanged="OnStopLossChanged"
+                  ToolTip="Flatten the position when unrealised loss reaches this dollar value. Off = engine rules apply."/>
+    </StackPanel>
+</UserControl>

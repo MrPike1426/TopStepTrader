@@ -331,6 +331,14 @@ Namespace TopStepTrader.UI.ViewModels
         ''' Prevents same-tick re-entry after a position is closed.</summary>
         Private _releasedThisTick As Boolean = False
 
+        ''' <summary>API-budget optimisation: slot indices whose live-position snapshot REST call
+        ''' should be skipped on the next tick (alternating-tick cadence in steady state).
+        ''' UserHub push events keep <see cref="LivePnLService"/> P&amp;L fresh between snapshots.
+        ''' Snapshots are still forced when the slot is in backfill/MissCount/Warning states.
+        ''' TODO: replace with a dedicated per-minute slot-refresh job (one snapshot per slot per
+        ''' minute) once a small scheduler exists; this set is the interim mechanism.</summary>
+        Private ReadOnly _skipSnapshotNextTick As New HashSet(Of Integer)()
+
         ''' <summary>Instruments suppressed from AI pre-trade checks until the stored DateTimeOffset (15-min block on NO).</summary>
         Private ReadOnly _aiSuppression As New Dictionary(Of String, DateTimeOffset)(StringComparer.OrdinalIgnoreCase)
 
@@ -367,6 +375,33 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
             Set(value As Boolean)
                 SetProperty(_useEarlyMode, value)
+            End Set
+        End Property
+
+        ' ── P&L Guard (re-usable take-profit / max-loss override) ───────────────
+        ''' <summary>Per-session P&L Guard settings (defaults: TP $50, SL $100).
+        ''' When either threshold is breached the slot is flattened with reason
+        ''' "P&L Close". When both are Off the engine's normal trade-management
+        ''' rules (ATR-based stop ladder) apply unchanged.</summary>
+        Public ReadOnly Property PnLGuard As New PnLGuardSettings()
+
+        ' ── Entry mode selector (combobox replacement of legacy radios) ─────────
+        Public Const EntryModeBarClose As String = "Bar Close"
+        Public Const EntryModePreemptive As String = "Pre-emptive Entry"
+
+        Public ReadOnly Property EntryModes As String() = {EntryModeBarClose, EntryModePreemptive}
+
+        Public Property SelectedEntryMode As String
+            Get
+                Return If(_useEarlyMode, EntryModePreemptive, EntryModeBarClose)
+            End Get
+            Set(value As String)
+                Dim early = String.Equals(value, EntryModePreemptive, StringComparison.OrdinalIgnoreCase)
+                If early <> _useEarlyMode Then
+                    _useEarlyMode = early
+                    NotifyPropertyChanged(NameOf(SelectedEntryMode))
+                    NotifyPropertyChanged(NameOf(UseEarlyMode))
+                End If
             End Set
         End Property
 
@@ -890,7 +925,7 @@ Namespace TopStepTrader.UI.ViewModels
                     If Not isFirstSlotUpdate Then
                         Await Task.Delay(SlotUpdateStaggerMs)
                     End If
-                    Await HandleOpenPositionAsync(slot, tf)
+                    Await HandleOpenPositionAsync(slot, tf, barCache)
                     isFirstSlotUpdate = False
                 End If
             Next
@@ -2327,17 +2362,63 @@ Namespace TopStepTrader.UI.ViewModels
             If price > 0D Then _lastQuotePrices(e.Quote.ContractId) = price
         End Sub
 
-        Private Async Function HandleOpenPositionAsync(slot As PositionSlot, tf As BarTimeframe) As Task
+        Private Async Function HandleOpenPositionAsync(slot As PositionSlot,
+                                                       tf As BarTimeframe,
+                                                       Optional barCache As Dictionary(Of Integer, IList(Of MarketBar)) = Nothing) As Task
             If slot.AccountId = 0 AndAlso _session.SelectedAccount IsNot Nothing Then
                 slot.AccountId = _session.SelectedAccount.Id
             End If
+
+            ' API-budget optimisation: skip the per-slot REST snapshot on alternating ticks
+            ' once the slot is in steady state (entry resolved, healthy, no recent miss).
+            ' UserHub pushes via LivePnLService keep displayed P&L fresh in the gap.
+            ' Always run when:
+            '   - we still need to backfill EntryPrice / PositionId (first tick after entry),
+            '   - the previous tick recorded a miss (snapshot null or threw),
+            '   - the slot is degraded (Warning/Exiting), or
+            '   - a release happened this tick.
+            Dim mustSnapshot As Boolean =
+                slot.EntryPrice = 0D OrElse
+                Not slot.PositionId.HasValue OrElse
+                slot.MissCount > 0 OrElse
+                slot.Health <> SlotHealth.Healthy OrElse
+                _releasedThisTick
+            Dim skipSnapshot As Boolean = False
+            If Not mustSnapshot Then
+                If _skipSnapshotNextTick.Contains(slot.SlotIndex) Then
+                    skipSnapshot = True
+                    _skipSnapshotNextTick.Remove(slot.SlotIndex)
+                Else
+                    _skipSnapshotNextTick.Add(slot.SlotIndex)
+                End If
+            Else
+                _skipSnapshotNextTick.Remove(slot.SlotIndex)
+            End If
+
             Dim snapshot As LivePositionSnapshot = Nothing
-            Try
-                snapshot = Await _orderService.GetLivePositionSnapshotAsync(
-                    slot.AccountId, slot.Instrument, slot.PositionId)
-            Catch ex As Exception
-                _logger.LogWarning(ex, "ST+ GetLivePositionSnapshotAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
-            End Try
+            If skipSnapshot Then
+                ' Synthesise a "still-open" sentinel from the in-memory slot so downstream
+                ' code paths (P&L update, exit-engine evaluation, phased-stop ratchet) keep
+                ' running unchanged. The PnL value is filled below from the strategy bars
+                ' / live-tick price; OpenRate matches the confirmed EntryPrice so the
+                ' EntryPrice = 0 backfill branch stays inert.
+                snapshot = New LivePositionSnapshot With {
+                    .PositionId = If(slot.PositionId, 0L),
+                    .OpenRate = slot.EntryPrice,
+                    .Units = slot.Contracts,
+                    .Amount = slot.Contracts,
+                    .IsBuy = (slot.Side = "Buy"),
+                    .UnrealizedPnlUsd = slot.UnrealizedPnl,
+                    .PositionCount = 1
+                }
+            Else
+                Try
+                    snapshot = Await _orderService.GetLivePositionSnapshotAsync(
+                        slot.AccountId, slot.Instrument, slot.PositionId)
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ GetLivePositionSnapshotAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
+                End Try
+            End If
 
             If snapshot Is Nothing Then
                 slot.MissCount += 1
@@ -2422,23 +2503,43 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim latestPnl = snapshot.UnrealizedPnlUsd
                 slot.UnrealizedPnl = latestPnl
 
-                Dim bars As IList(Of MarketBar)
-                Try
-                    ' Strategy-evaluation bars MUST stay on the simulated/paper feed
-                    ' (live:=False) because indicator state is computed against the
-                    ' practice-account fill engine. Switching this to live would cause
-                    ' SuperTrend / DMI / ATR to disagree with the bar series the
-                    ' practice account is filling against (BUG-72).
-                    bars = Await _barService.GetLiveBarsAsync(slot.Instrument, tf, BarsToFetch, live:=False)
-                Catch ex As Exception
-                    _logger.LogWarning(ex, "ST+ [Slot {Idx}] {Contract} strategy-TF bar fetch failed (tf={Tf})",
-                                       slot.SlotIndex, slot.Instrument, tf)
-                    slot.PriceStaleCount += 1
-                    If slot.PriceStaleCount >= 2 AndAlso slot.Health = SlotHealth.Healthy Then
-                        slot.Health = SlotHealth.Warning
-                    End If
-                    Return
-                End Try
+                Dim bars As IList(Of MarketBar) = Nothing
+                ' API-budget optimisation: reuse the strategy-TF bars already fetched by
+                ' ScanWatchlistAsync this tick. The watchlist scan calls GetLiveBarsAsync
+                ' on the live feed (live:=True) for every favourite instrument; reusing
+                ' that result here avoids a second REST call per open slot every 15 s.
+                ' Falls back to a fresh fetch only when no cache entry exists for the
+                ' slot's instrument (e.g. session-close window, or instrument not in
+                ' the favourites list).
+                If barCache IsNot Nothing Then
+                    For idx = 0 To Instruments.Length - 1
+                        If String.Equals(Instruments(idx), slot.Instrument, StringComparison.OrdinalIgnoreCase) Then
+                            Dim cached As IList(Of MarketBar) = Nothing
+                            If barCache.TryGetValue(idx, cached) AndAlso cached IsNot Nothing AndAlso cached.Count >= 14 Then
+                                bars = cached
+                            End If
+                            Exit For
+                        End If
+                    Next
+                End If
+                If bars Is Nothing Then
+                    Try
+                        ' Strategy-evaluation bars MUST stay on the simulated/paper feed
+                        ' (live:=False) because indicator state is computed against the
+                        ' practice-account fill engine. Switching this to live would cause
+                        ' SuperTrend / DMI / ATR to disagree with the bar series the
+                        ' practice account is filling against (BUG-72).
+                        bars = Await _barService.GetLiveBarsAsync(slot.Instrument, tf, BarsToFetch, live:=False)
+                    Catch ex As Exception
+                        _logger.LogWarning(ex, "ST+ [Slot {Idx}] {Contract} strategy-TF bar fetch failed (tf={Tf})",
+                                           slot.SlotIndex, slot.Instrument, tf)
+                        slot.PriceStaleCount += 1
+                        If slot.PriceStaleCount >= 2 AndAlso slot.Health = SlotHealth.Healthy Then
+                            slot.Health = SlotHealth.Warning
+                        End If
+                        Return
+                    End Try
+                End If
                 If bars Is Nothing OrElse bars.Count < 14 Then Return
 
                 Dim highs = bars.Select(Function(b) b.High).ToList()
@@ -2499,6 +2600,21 @@ Namespace TopStepTrader.UI.ViewModels
                 Application.Current?.Dispatcher?.Invoke(Sub()
                                                             If boxForDisplay IsNot Nothing Then UpdatePositionDisplay(boxForDisplay, slot, latestPnl, currentClose)
                                                         End Sub)
+
+                ' ── P&L Guard override (re-usable feature) ────────────────────
+                ' Checked AFTER live P&L is refreshed but BEFORE any engine exit
+                ' logic so a breach short-circuits the normal stop ladder. When
+                ' both thresholds are Off the guard is a no-op.
+                ' NOTE: latestPnl is per-slot unrealised P&L. A future enhancement
+                ' will switch this to total broker-reported P&L (see ticket
+                ' BUG-PNLGUARD-TOTAL).
+                If slot.IsOpen AndAlso slot.EntryPrice <> 0D AndAlso PnLGuard.IsActive Then
+                    If PnLGuard.ShouldFlatten(latestPnl) Then
+                        Await ReleaseSlotAsync(slot, PnLGuardSettings.ExitReasonText)
+                        Return
+                    End If
+                End If
+
                 Dim st = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=_stMultiplier)
                 Dim dmiForExit = TechnicalIndicators.DMI(highs, lows, closes, period:=14)
                 Dim atr14Exit = TechnicalIndicators.ATR(highs, lows, closes, period:=14)
