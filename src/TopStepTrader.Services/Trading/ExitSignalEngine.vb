@@ -298,7 +298,7 @@ Namespace TopStepTrader.Services.Trading
         ''' Compute the phased stop price.  The stop only ratchets — never retreats.
         ''' R = initial risk = |entryPrice - stopPrice at entry|
         ''' </summary>
-        Private Function ComputePhasedStop(slot As PositionSlot,
+        Friend Function ComputePhasedStop(slot As PositionSlot,
                                            currentPrice As Decimal,
                                            stLine As Decimal,
                                            currentAtr As Decimal) As (NewStop As Decimal, Phase As StopPhase)
