@@ -576,13 +576,13 @@ Namespace TopStepTrader.UI.ViewModels
             End If
 
             If score = 0 Then
-                TrendHealthLabel = "✅ Trend holding (2m)"
+                TrendHealthLabel = "✅ Holding: ADX/DI/ST stable (2 min)"
                 TrendHealthBrush = Brushes.LimeGreen
             ElseIf score = 1 Then
-                TrendHealthLabel = "⚠ Softening (2m)"
+                TrendHealthLabel = "⚠ Softening: ADX/DI cooling (2 min)"
                 TrendHealthBrush = New SolidColorBrush(Color.FromRgb(&HFF, &HCC, &H00))
             Else
-                TrendHealthLabel = "🔴 Weakening (2m)"
+                TrendHealthLabel = "🔴 Weakening: trend losing thrust (2 min)"
                 TrendHealthBrush = Brushes.OrangeRed
             End If
         End Sub

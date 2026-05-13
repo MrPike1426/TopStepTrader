@@ -1021,18 +1021,24 @@ Namespace TopStepTrader.UI.ViewModels
                 ElseIf adxVal >= Config.AdxStrongThreshold Then
                     strength = String.Format("ADX:{0:D2} L3: Espresso", CInt(Math.Floor(adxVal)))
                     signalReason = If(signal = "BULL", "Strong uptrend — bot will open 3 positions.",
-                                  If(signal = "BEAR", "Strong downtrend — bot will open 3 positions.",
-                                     "Strong trend forming — waiting for direction alignment."))
+                                   If(signal = "BEAR", "Strong downtrend — bot will open 3 positions.",
+                                      "Strong trend forming — waiting for direction alignment."))
                 ElseIf adxVal >= Config.AdxModerateThreshold Then
                     strength = String.Format("ADX:{0:D2} L2: Latte", CInt(Math.Floor(adxVal)))
                     signalReason = If(signal = "BULL", "Moderate uptrend — bot will open 2 positions.",
-                                  If(signal = "BEAR", "Moderate downtrend — bot will open 2 positions.",
-                                     "Trending — waiting for +DI/-DI to align with SuperTrend."))
+                                   If(signal = "BEAR", "Moderate downtrend — bot will open 2 positions.",
+                                      "Trending — waiting for +DI/-DI to align with SuperTrend."))
                 ElseIf adxVal >= Config.AdxWeakThreshold Then
                     strength = String.Format("ADX:{0:D2} L1: Latte", CInt(Math.Floor(adxVal)))
                     signalReason = If(signal = "BULL", "Uptrend active — bot will open 1 position.",
                                    If(signal = "BEAR", "Downtrend active — bot will open 1 position.",
                                       "Trending — waiting for +DI/-DI to align with SuperTrend."))
+                    ' Persona-gate override: ADX may be in a tradeable band but below the
+                    ' active persona's MinEntryAdx — be honest that no slot will open.
+                    If (signal = "BULL" OrElse signal = "BEAR") AndAlso adxVal < Config.MinEntryAdx Then
+                        signalReason = String.Format("Trending — waiting for ADX ≥ {0:D2} ({1} gate).",
+                                                     CInt(Math.Ceiling(Config.MinEntryAdx)), Config.ActivePersona)
+                    End If
                 ElseIf adxVal >= 15 Then
                     strength = String.Format("ADX:{0:D2} L0: Decaff", CInt(Math.Floor(adxVal)))
                     signalReason = "Trend is weak — watching for momentum to build before entering."
@@ -2821,7 +2827,7 @@ Namespace TopStepTrader.UI.ViewModels
             box.PnlTextBrush = If(pnl > 0D, Brushes.LimeGreen, If(pnl < 0D, Brushes.Red, Brushes.Gray))
             box.PnlBrush = Brushes.White
             box.PnlBorderBrush = If(pnl > 0D, Brushes.LimeGreen, If(pnl < 0D, Brushes.Red, Brushes.Gray))
-            box.StopPhaseLabel = PhaseLabel(slot.StopPhase, Config)
+            box.StopPhaseLabel = PhaseLabel(slot.StopPhase, Config, _selectedTimeframe)
             box.SizeLabel = $"Size {slot.Contracts}x"
 
             ' ── Row 3: P&L, Target, and Next Phase ────────────────────────────
@@ -2900,10 +2906,17 @@ Namespace TopStepTrader.UI.ViewModels
         End Function
 
         ''' <summary>Returns a human-readable phase label for the ExitSignalEngine PDF ladder (ARCH-15).</summary>
-        Private Shared Function PhaseLabel(phase As StopPhase, cfg As SuperTrendPlusConfig) As String
+        ''' <remarks>
+        ''' Initial-phase label includes the chart timeframe so users know which ST line
+        ''' the stop is ratcheting against. STRAT-39 will replace the underlying engine
+        ''' with an ATR(5m) Chandelier-based ladder per the HLD docs.
+        ''' </remarks>
+        Private Shared Function PhaseLabel(phase As StopPhase, cfg As SuperTrendPlusConfig, timeframe As String) As String
+            Dim tfShort As String = If(String.IsNullOrEmpty(timeframe), "chart",
+                                       timeframe.Replace("min", "m").Replace("hr", "h"))
             Select Case phase
                 Case StopPhase.Initial
-                    Return "Initial: SL trails SuperTrend line (ratchet)"
+                    Return $"Initial: SL = {tfShort} SuperTrend"
                 Case StopPhase.Breakeven
                     Return "Breakeven: SL = entry + 0.5R (1R reached)"
                 Case StopPhase.ProfitTrail
@@ -2969,7 +2982,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Using cts = New System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10))
                     Dim result = Await _claudeService.MidTradeCheckAsync(
                         slot.Instrument, slot.Side, adx, pdi, mdi,
-                        PhaseLabel(slot.StopPhase, Config),
+                        PhaseLabel(slot.StopPhase, Config, _selectedTimeframe),
                         slot.UnrealizedPnl,
                         If(bars IsNot Nothing, CType(bars, IReadOnlyList(Of MarketBar)), New List(Of MarketBar)()),
                         cts.Token)

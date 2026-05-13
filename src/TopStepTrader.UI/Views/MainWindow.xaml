@@ -27,14 +27,7 @@
 
                 <Button Content="📊  Dashboard"    Tag="Dashboard"   Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="📈  SuperTrend+" Tag="SuperTrendPlus" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
-                <Button Content="📋  Orders"       Tag="Orders"      Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
-
-                <!-- Archive Section Separator -->
-                <Border Margin="16,16,16,8" Height="1" Background="{StaticResource BorderBrush}" Opacity="0.4"/>
-                <TextBlock Text="  ARCHIVE"
-                           Foreground="{StaticResource TextSecondaryBrush}"
-                           FontSize="10" FontWeight="SemiBold"
-                           Margin="16,4,16,8" Opacity="0.55"/>
+                <Button Content="&#x1F50D;  Trade Post-Mortem" Tag="TradePostMortem" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
 
                 <!-- Config Section Separator -->
                 <Border Margin="16,16,16,8" Height="1" Background="{StaticResource BorderBrush}" Opacity="0.4"/>
@@ -43,7 +36,6 @@
                            FontSize="10" FontWeight="SemiBold"
                            Margin="16,4,16,8" Opacity="0.55"/>
 
-                <Button Content="&#x1F50D;  Debug Viewer" Tag="DebugTradeViewer" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="👤  Personas"     Tag="Persona"     Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="🔑  API Keys"     Tag="ApiKeys"     Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
 

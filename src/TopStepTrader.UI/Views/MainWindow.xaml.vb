@@ -75,13 +75,11 @@ Namespace TopStepTrader.UI
             Select Case section
                 Case "Dashboard"
                     MainContent.Content = _viewModelLocator.DashboardView
-                Case "Orders"
-                    MainContent.Content = _viewModelLocator.OrderBookView
                 Case "SuperTrendPlus"
                     MainContent.Content = _viewModelLocator.SuperTrendPlusView
                 Case "Settings"
                     MainContent.Content = _viewModelLocator.SettingsView
-                Case "DebugTradeViewer"
+                Case "TradePostMortem"
                     MainContent.Content = _viewModelLocator.DebugTradeViewerView
                 Case "Persona"
                     MainContent.Content = _viewModelLocator.PersonaView

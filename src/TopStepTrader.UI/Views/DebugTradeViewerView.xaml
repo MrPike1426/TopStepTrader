@@ -32,7 +32,7 @@
         <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}"
                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="20,12">
             <DockPanel>
-                <TextBlock Text="&#x1F50D;  Debug Trade Viewer"
+                <TextBlock Text="&#x1F50D;  Trade Post-Mortem"
                            Style="{StaticResource PageTitleStyle}"
                            VerticalAlignment="Center"
                            DockPanel.Dock="Left"/>

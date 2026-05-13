@@ -41,13 +41,6 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
-        Public ReadOnly Property OrderBookView As OrderBookView
-            Get
-                Return Resolve(Of OrderBookView)("Orders")
-            End Get
-        End Property
-
-
         Public ReadOnly Property SettingsView As SettingsView
             Get
                 Return Resolve(Of SettingsView)("Settings")

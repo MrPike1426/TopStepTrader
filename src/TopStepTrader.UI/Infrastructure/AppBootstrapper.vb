@@ -79,14 +79,12 @@ Namespace TopStepTrader.UI.Infrastructure
 
                         ' ViewModels — Transient; resolved from per-view scope inside Locator
                         services.AddTransient(Of DashboardViewModel)()
-                        services.AddTransient(Of OrderBookViewModel)()
                         services.AddTransient(Of SettingsViewModel)()
 
                         services.AddTransient(Of ApiKeysViewModel)()
                         services.AddTransient(Of PersonaViewModel)()
                         ' Views
                         services.AddTransient(Of DashboardView)()
-                        services.AddTransient(Of OrderBookView)()
                         services.AddTransient(Of SettingsView)()
 
                         services.AddTransient(Of SuperTrendPlusView)()
@@ -95,9 +93,6 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of PersonaView)()
                         services.AddTransient(Of DebugTradeViewerViewModel)()
                         services.AddTransient(Of DebugTradeViewerView)()
-
-                        ' FEAT-51: Trade detail popup
-                        services.AddTransient(Of TradeDetailViewModel)()
 
                         ' Main window
                         services.AddSingleton(Of MainWindow)()
