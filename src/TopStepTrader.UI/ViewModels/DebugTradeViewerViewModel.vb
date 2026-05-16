@@ -13,6 +13,8 @@ Imports TopStepTrader.UI.ViewModels.Base
 Namespace TopStepTrader.UI.ViewModels
 
     Public Class DebugTradeRowViewModel
+        Inherits ViewModelBase
+
         Public Property TradeId As String
         Public Property Instrument As String
         Public Property Persona As String
@@ -25,6 +27,20 @@ Namespace TopStepTrader.UI.ViewModels
         Public Property ReconciliationStatus As String
         Public Property ExitReason As String
         Public Property Record As DebugTradeRecord
+
+        ' BUG-82 F4: derived flag — true when the loaded action set is missing the
+        ' opening rows (OrderPlaced / EntryFilled) or its earliest entry is
+        ' substantially later than EntryTime, indicating debug capture was off
+        ' for part of the trade and the timeline is therefore incomplete.
+        Private _hasIncompleteTimeline As Boolean = False
+        Public Property HasIncompleteTimeline As Boolean
+            Get
+                Return _hasIncompleteTimeline
+            End Get
+            Set(value As Boolean)
+                SetProperty(_hasIncompleteTimeline, value)
+            End Set
+        End Property
     End Class
 
     Public Class DebugActionRowViewModel
@@ -236,6 +252,7 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim trade = _selectedTrade?.Record
                 If trade IsNot Nothing Then
                     ConfigJson = FormatJson(trade.SuperTrendConfigJson)
+                    _selectedTrade.HasIncompleteTimeline = ComputeTimelineIncomplete(trade, acts)
                 End If
 
                 Application.Current.Dispatcher.Invoke(Sub()
@@ -248,6 +265,37 @@ Namespace TopStepTrader.UI.ViewModels
                 StatusMessage = $"Error loading actions: {ex.Message}"
             End Try
         End Sub
+
+        ' BUG-82 F4: a trade's timeline is "incomplete" when the action set is missing
+        ' the standard opening events (OrderPlaced + EntryFilled) — these are always
+        ' emitted when capture is enabled at entry, so their absence implies capture
+        ' was toggled on mid-trade. Pure read-side check, cannot affect the hot path.
+        Private Const IncompleteTimelineGraceSeconds As Double = 30.0
+
+        Private Shared Function ComputeTimelineIncomplete(trade As DebugTradeRecord,
+                                                          acts As IList(Of DebugTradeAction)) As Boolean
+            If trade Is Nothing OrElse acts Is Nothing OrElse acts.Count = 0 Then Return False
+
+            Dim localActs = acts.Where(Function(a) String.IsNullOrEmpty(a.Source) OrElse
+                                                   String.Equals(a.Source, "Local", StringComparison.OrdinalIgnoreCase)).ToList()
+            If localActs.Count = 0 Then Return True
+
+            Dim hasOpening = localActs.Any(Function(a) String.Equals(a.ActionType, "OrderPlaced", StringComparison.OrdinalIgnoreCase) OrElse
+                                                       String.Equals(a.ActionType, "EntryFilled", StringComparison.OrdinalIgnoreCase))
+            If Not hasOpening Then Return True
+
+            Dim entryDt As DateTime
+            If DateTime.TryParse(trade.EntryTime, Nothing, Globalization.DateTimeStyles.RoundtripKind, entryDt) Then
+                Dim firstTs As DateTime
+                Dim firstStr = localActs.Select(Function(a) a.TimestampUtc).FirstOrDefault()
+                If Not String.IsNullOrEmpty(firstStr) AndAlso
+                   DateTime.TryParse(firstStr, Nothing, Globalization.DateTimeStyles.RoundtripKind, firstTs) Then
+                    If (firstTs - entryDt).TotalSeconds > IncompleteTimelineGraceSeconds Then Return True
+                End If
+            End If
+
+            Return False
+        End Function
 
         Private Shared Function MapActionRow(a As DebugTradeAction, idx As Integer) As DebugActionRowViewModel
             Return New DebugActionRowViewModel With {

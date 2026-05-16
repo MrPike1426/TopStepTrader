@@ -2482,12 +2482,16 @@ Namespace TopStepTrader.UI.ViewModels
                     ' Pull the initial stop price from the live Stop Market bracket order.
                     ' This is the Stop Price shown on the Orders tab and is more accurate than
                     ' the ST-line estimate that was stored at signal time.
+                    ' BUG-82 F1: capture the prior bracket stop so we can record the SL
+                    '            re-sync delta on the debug timeline.
+                    Dim priorBracketStop As Decimal? = Nothing
                     Try
                         Dim bracketStop = Await _orderService.TryGetBracketStopPriceAsync(slot.AccountId, slot.Instrument)
                         If bracketStop.HasValue AndAlso bracketStop.Value > 0D Then
                             _logger.LogInformation(
                                 "ST+ [Slot {Idx}] {Contract} StopPrice from bracket order: {Stop:F2}",
                                 slot.SlotIndex, slot.Instrument, bracketStop.Value)
+                            priorBracketStop = bracketStop.Value
                             slot.StopPrice = bracketStop.Value
                         End If
                     Catch ex As Exception
@@ -2502,6 +2506,22 @@ Namespace TopStepTrader.UI.ViewModels
                             Dim syncOk = Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, slot.StopPrice, Nothing)
                             _logger.LogInformation("ST+ [Slot {Idx}] initial SL sync → {Stop:F2} ok={Ok}",
                                                    slot.SlotIndex, slot.StopPrice, syncOk)
+                            ' BUG-82 F1: surface the initial SL re-sync on the action timeline so any
+                            ' gap-open discrepancy between the bracket SL and the ST-line is visible.
+                            If syncOk AndAlso _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
+                               Not String.IsNullOrEmpty(slot.DebugTradeId) Then
+                                _debugCapture.RecordAction(New DebugTradeAction With {
+                                    .TradeId = slot.DebugTradeId,
+                                    .TimestampUtc = DateTime.UtcNow.ToString("O"),
+                                    .ActionType = "StopLossModified",
+                                    .OldValue = priorBracketStop,
+                                    .NewValue = slot.StopPrice,
+                                    .Reason = If(priorBracketStop.HasValue,
+                                                 "Initial SL sync to ST-line after fill",
+                                                 "Initial SL sync to ST-line after fill (prior bracket SL unknown)"),
+                                    .Source = "Local"
+                                })
+                            End If
                         Catch ex As Exception
                             _logger.LogWarning(ex, "ST+ [Slot {Idx}] initial SL sync failed for {Contract}", slot.SlotIndex, slot.Instrument)
                         End Try
@@ -2932,13 +2952,31 @@ Namespace TopStepTrader.UI.ViewModels
             ' cancelled but a new one can be edited in (race), the helper will succeed.
             ' If it returns False (no resting SL), submit a stand-alone protective Stop order.
             Dim restored As Boolean = False
+            Dim restoredVia As String = Nothing
             If slot.PositionId.HasValue AndAlso slot.StopPrice <> 0D Then
                 Try
                     restored = Await _orderService.EditPositionSlTpAsync(slot.PositionId.Value, slot.StopPrice, Nothing)
+                    If restored Then restoredVia = "edit"
                 Catch ex As Exception
                     _logger.LogWarning(ex, "ST+ [Slot {Idx}] BracketState=Missing edit-restore failed for {Contract}",
                                        slot.SlotIndex, slot.Instrument)
                 End Try
+            End If
+
+            If restored AndAlso restoredVia = "edit" Then
+                ' BUG-82 F2: surface the edit-restore on the timeline.
+                If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
+                   Not String.IsNullOrEmpty(slot.DebugTradeId) Then
+                    _debugCapture.RecordAction(New DebugTradeAction With {
+                        .TradeId = slot.DebugTradeId,
+                        .TimestampUtc = DateTime.UtcNow.ToString("O"),
+                        .ActionType = "StopLossModified",
+                        .OldValue = Nothing,
+                        .NewValue = slot.StopPrice,
+                        .Reason = "Bracket re-protect (edit)",
+                        .Source = "Local"
+                    })
+                End If
             End If
 
             If Not restored AndAlso slot.StopPrice <> 0D Then
@@ -2959,6 +2997,20 @@ Namespace TopStepTrader.UI.ViewModels
                     _logger.LogWarning(
                         "ST+ [Slot {Idx}] {Contract} BracketState=Missing stand-alone Stop submit ok={Ok} stop={Stop:F2}",
                         slot.SlotIndex, slot.Instrument, restored, slot.StopPrice)
+                    ' BUG-82 F2: surface the stand-alone Stop placement on the timeline.
+                    If restored AndAlso _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
+                       Not String.IsNullOrEmpty(slot.DebugTradeId) Then
+                        _debugCapture.RecordAction(New DebugTradeAction With {
+                            .TradeId = slot.DebugTradeId,
+                            .TimestampUtc = DateTime.UtcNow.ToString("O"),
+                            .ActionType = "StopLossPlaced",
+                            .Price = slot.StopPrice,
+                            .Quantity = slot.Contracts,
+                            .OrderId = placed?.ExternalOrderId,
+                            .Reason = "Bracket re-protect (stand-alone Stop)",
+                            .Source = "Local"
+                        })
+                    End If
                 Catch ex As Exception
                     _logger.LogWarning(ex, "ST+ [Slot {Idx}] BracketState=Missing stand-alone Stop submit failed for {Contract}",
                                        slot.SlotIndex, slot.Instrument)
@@ -2976,21 +3028,26 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private Async Function ReleaseSlotAsync(slot As PositionSlot,
                                                   Optional exitReason As String = "Signal") As Task
+            ' ── BUG-82 F3: compute engine-derived exit price once and reuse for both
+            '    the persisted trade record close and the debug "Closed" action so the
+            '    timeline records the actual exit fill (or — when unknown) rather
+            '    than `slot.StopPrice` which is only correct for SL-hit exits.
+            Dim exitPx As Decimal? = Nothing
+            If slot.EntryPrice <> 0D Then
+                Dim fcExit = FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
+                If fcExit IsNot Nothing AndAlso fcExit.PxTickSize > 0D Then
+                    Dim ticks = slot.UnrealizedPnl / (fcExit.PxTickValue * slot.Contracts)
+                    Dim direction = If(slot.Side = "Buy", 1D, -1D)
+                    exitPx = Math.Round(slot.EntryPrice + direction * ticks * fcExit.PxTickSize, 6)
+                End If
+            End If
+
             ' ── Persist close record before flattening (while slot data is still valid) ──
             If slot.TradeRecordId > 0 Then
                 Try
-                    Dim exitPx As Decimal = 0D
-                    If slot.EntryPrice <> 0D Then
-                        Dim fcExit = FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
-                        If fcExit IsNot Nothing AndAlso fcExit.PxTickSize > 0D Then
-                            Dim ticks = slot.UnrealizedPnl / (fcExit.PxTickValue * slot.Contracts)
-                            Dim direction = If(slot.Side = "Buy", 1D, -1D)
-                            exitPx = Math.Round(slot.EntryPrice + direction * ticks * fcExit.PxTickSize, 6)
-                        End If
-                    End If
                     Await _tradeRecordService.CloseTradeAsync(slot.TradeRecordId,
                                                               DateTimeOffset.UtcNow,
-                                                              exitPx,
+                                                              If(exitPx.HasValue, exitPx.Value, 0D),
                                                               slot.UnrealizedPnl,
                                                               exitReason)
                 Catch ex As Exception
@@ -3053,10 +3110,12 @@ Namespace TopStepTrader.UI.ViewModels
                     .TradeId = slot.DebugTradeId,
                     .TimestampUtc = DateTime.UtcNow.ToString("O"),
                     .ActionType = "Closed",
-                    .Price = slot.StopPrice,
+                    .Price = exitPx,
                     .Quantity = slot.Contracts,
                     .NewValue = slot.UnrealizedPnl,
-                    .Reason = exitReason,
+                    .Reason = If(exitPx.HasValue,
+                                 exitReason & " (engine-derived from PnL)",
+                                 exitReason & " (exit price unknown — engine derivation failed)"),
                     .Source = "Local"
                 })
                 _debugCapture.EndTrade(slot.DebugTradeId, DateTime.UtcNow, slot.UnrealizedPnl)
