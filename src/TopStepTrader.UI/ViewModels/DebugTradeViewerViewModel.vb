@@ -7,6 +7,7 @@ Imports System.Windows
 Imports Microsoft.Win32
 Imports TopStepTrader.Core.Models.Debug
 Imports TopStepTrader.Data.Debug
+Imports TopStepTrader.Services.Debug
 Imports TopStepTrader.UI.ViewModels.Base
 
 Namespace TopStepTrader.UI.ViewModels
@@ -21,51 +22,37 @@ Namespace TopStepTrader.UI.ViewModels
         Public Property ContractCount As Integer
         Public Property FinalPnL As String
         Public Property Status As String
+        Public Property ReconciliationStatus As String
+        Public Property ExitReason As String
         Public Property Record As DebugTradeRecord
     End Class
 
-    Public Class DebugSnapshotRowViewModel
+    Public Class DebugActionRowViewModel
         Public Property Id As Integer
         Public Property Timestamp As String
-        Public Property EventType As String
-        Public Property LastPrice As String
-        Public Property CurrentSL As String
-        Public Property SuperTrendValue As String
-        Public Property UnrealizedPnLDollars As String
-        Public Property StopPhase As String
-        Public Property Notes As String
-        Public Property Record As DebugSnapshotRecord
-    End Class
-
-    Public Class ChartPoint
-        Public Property Timestamp As DateTime
-        Public Property LastPrice As Double
-        Public Property CurrentSL As Double
-        Public Property SuperTrendValue As Double
-        Public Property IsMarker As Boolean
-        Public Property MarkerLabel As String
+        Public Property ActionType As String
+        Public Property Detail As String
+        Public Property Source As String
+        Public Property Record As DebugTradeAction
     End Class
 
     Public Class DebugTradeViewerViewModel
         Inherits ViewModelBase
 
         Private ReadOnly _db As DebugTradeDbContext
+        Private ReadOnly _reconciliation As IDebugTradeReconciliationService
 
         Private _allTrades As List(Of DebugTradeRowViewModel) = New List(Of DebugTradeRowViewModel)()
         Private _trades As ObservableCollection(Of DebugTradeRowViewModel) = New ObservableCollection(Of DebugTradeRowViewModel)()
         Private _selectedTrade As DebugTradeRowViewModel
-        Private _allSnapshots As List(Of DebugSnapshotRowViewModel) = New List(Of DebugSnapshotRowViewModel)()
-        Private _snapshots As ObservableCollection(Of DebugSnapshotRowViewModel) = New ObservableCollection(Of DebugSnapshotRowViewModel)()
-        Private _chartPoints As ObservableCollection(Of ChartPoint) = New ObservableCollection(Of ChartPoint)()
-        Private _selectedEventFilter As String = "All"
+        Private _allActions As List(Of DebugActionRowViewModel) = New List(Of DebugActionRowViewModel)()
+        Private _actions As ObservableCollection(Of DebugActionRowViewModel) = New ObservableCollection(Of DebugActionRowViewModel)()
         Private _configJson As String = String.Empty
         Private _isConfigExpanded As Boolean = False
         Private _isLoading As Boolean = False
         Private _isEmpty As Boolean = False
         Private _statusMessage As String = String.Empty
-
-        Public ReadOnly Property EventFilterOptions As List(Of String) =
-            New List(Of String) From {"All", "Heartbeat", "BarClose", "SlAdjust", "AiCheck", "PartialFill", "Exit"}
+        Private _isReconciling As Boolean = False
 
         Public ReadOnly Property Trades As ObservableCollection(Of DebugTradeRowViewModel)
             Get
@@ -80,38 +67,20 @@ Namespace TopStepTrader.UI.ViewModels
             Set(value As DebugTradeRowViewModel)
                 If SetProperty(_selectedTrade, value) Then
                     If value IsNot Nothing Then
-                        LoadSnapshotsAsync(value.TradeId)
+                        LoadActionsAsync(value.TradeId)
                     Else
-                        _allSnapshots.Clear()
-                        _snapshots.Clear()
-                        _chartPoints.Clear()
+                        _allActions.Clear()
+                        _actions.Clear()
                         ConfigJson = String.Empty
                     End If
                 End If
             End Set
         End Property
 
-        Public ReadOnly Property Snapshots As ObservableCollection(Of DebugSnapshotRowViewModel)
+        Public ReadOnly Property Actions As ObservableCollection(Of DebugActionRowViewModel)
             Get
-                Return _snapshots
+                Return _actions
             End Get
-        End Property
-
-        Public ReadOnly Property ChartPoints As ObservableCollection(Of ChartPoint)
-            Get
-                Return _chartPoints
-            End Get
-        End Property
-
-        Public Property SelectedEventFilter As String
-            Get
-                Return _selectedEventFilter
-            End Get
-            Set(value As String)
-                If SetProperty(_selectedEventFilter, value) Then
-                    ApplySnapshotFilter()
-                End If
-            End Set
         End Property
 
         Public Property ConfigJson As String
@@ -159,14 +128,26 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Public Property IsReconciling As Boolean
+            Get
+                Return _isReconciling
+            End Get
+            Set(value As Boolean)
+                SetProperty(_isReconciling, value)
+            End Set
+        End Property
+
         Public ReadOnly Property RefreshCommand As RelayCommand
+        Public ReadOnly Property ReconcileCommand As RelayCommand
         Public ReadOnly Property ExportCsvCommand As RelayCommand
         Public ReadOnly Property ExportJsonCommand As RelayCommand
         Public ReadOnly Property OpenInExcelCommand As RelayCommand
 
-        Public Sub New(db As DebugTradeDbContext)
+        Public Sub New(db As DebugTradeDbContext, reconciliation As IDebugTradeReconciliationService)
             _db = db
+            _reconciliation = reconciliation
             RefreshCommand = New RelayCommand(Sub() LoadDataAsync())
+            ReconcileCommand = New RelayCommand(Sub() ReconcileAsync(), Function() Not _isReconciling)
             ExportCsvCommand = New RelayCommand(AddressOf ExportCsv, Function() _selectedTrade IsNot Nothing)
             ExportJsonCommand = New RelayCommand(AddressOf ExportJson, Function() _selectedTrade IsNot Nothing)
             OpenInExcelCommand = New RelayCommand(AddressOf OpenInExcel, Function() _selectedTrade IsNot Nothing)
@@ -177,6 +158,18 @@ Namespace TopStepTrader.UI.ViewModels
             StatusMessage = "Loading trades…"
             Try
                 Await _db.EnsureSchemaAsync()
+
+                ' FEAT-56: auto-reconcile open trades on first load so the post-mortem
+                ' is authoritative even if the engine missed an exit callback.
+                Try
+                    Dim updated = Await _reconciliation.ReconcileOpenTradesAsync()
+                    If updated > 0 Then
+                        StatusMessage = $"Reconciled {updated} open trade(s) from broker."
+                    End If
+                Catch ex As Exception
+                    StatusMessage = $"Reconciliation skipped: {ex.Message}"
+                End Try
+
                 Dim rows = Await _db.GetAllTradesAsync()
                 Dim vms = rows.Select(AddressOf MapTradeRow).ToList()
                 _allTrades = vms
@@ -187,11 +180,30 @@ Namespace TopStepTrader.UI.ViewModels
                     Next
                 End Sub)
                 IsEmpty = (vms.Count = 0)
-                StatusMessage = If(IsEmpty, "No captured trades found. Enable debug capture on the SuperTrend+ page to start recording.", $"{vms.Count} trade(s) loaded.")
+                If IsEmpty Then
+                    StatusMessage = "No captured trades found. Enable debug capture on the SuperTrend+ page to start recording."
+                ElseIf String.IsNullOrEmpty(StatusMessage) OrElse Not StatusMessage.StartsWith("Reconcil") Then
+                    StatusMessage = $"{vms.Count} trade(s) loaded."
+                End If
             Catch ex As Exception
                 StatusMessage = $"Error loading trades: {ex.Message}"
             Finally
                 IsLoading = False
+            End Try
+        End Sub
+
+        Private Async Sub ReconcileAsync()
+            If _isReconciling Then Return
+            IsReconciling = True
+            StatusMessage = "Reconciling open trades with TopStepX…"
+            Try
+                Dim updated = Await _reconciliation.ReconcileOpenTradesAsync()
+                StatusMessage = $"Reconciliation complete — {updated} trade(s) updated."
+                LoadDataAsync()
+            Catch ex As Exception
+                StatusMessage = $"Reconciliation failed: {ex.Message}"
+            Finally
+                IsReconciling = False
             End Try
         End Sub
 
@@ -209,15 +221,17 @@ Namespace TopStepTrader.UI.ViewModels
                 .ContractCount = r.ContractCount,
                 .FinalPnL = pnlStr,
                 .Status = If(String.IsNullOrEmpty(r.ClosedAt), "Open", "Closed"),
+                .ReconciliationStatus = If(String.IsNullOrEmpty(r.ReconciliationStatus), "—", r.ReconciliationStatus),
+                .ExitReason = If(String.IsNullOrEmpty(r.ExitReason), "", r.ExitReason),
                 .Record = r
             }
         End Function
 
-        Private Async Sub LoadSnapshotsAsync(tradeId As String)
+        Private Async Sub LoadActionsAsync(tradeId As String)
             Try
-                Dim snaps = Await _db.GetSnapshotsAsync(tradeId)
-                Dim vms = snaps.Select(Function(s, i) MapSnapshotRow(s, i + 1)).ToList()
-                _allSnapshots = vms
+                Dim acts = Await _db.GetActionsAsync(tradeId)
+                Dim vms = acts.Select(Function(a, i) MapActionRow(a, i + 1)).ToList()
+                _allActions = vms
 
                 Dim trade = _selectedTrade?.Record
                 If trade IsNot Nothing Then
@@ -225,56 +239,40 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
 
                 Application.Current.Dispatcher.Invoke(Sub()
-                    ApplySnapshotFilter()
-                    BuildChartPoints(snaps)
+                    _actions.Clear()
+                    For Each a In vms
+                        _actions.Add(a)
+                    Next
                 End Sub)
             Catch ex As Exception
-                StatusMessage = $"Error loading snapshots: {ex.Message}"
+                StatusMessage = $"Error loading actions: {ex.Message}"
             End Try
         End Sub
 
-        Private Shared Function MapSnapshotRow(s As DebugSnapshotRecord, idx As Integer) As DebugSnapshotRowViewModel
-            Return New DebugSnapshotRowViewModel With {
+        Private Shared Function MapActionRow(a As DebugTradeAction, idx As Integer) As DebugActionRowViewModel
+            Return New DebugActionRowViewModel With {
                 .Id = idx,
-                .Timestamp = s.Timestamp,
-                .EventType = s.EventType,
-                .LastPrice = If(s.LastPrice.HasValue, s.LastPrice.Value.ToString("F4"), ""),
-                .CurrentSL = If(s.CurrentSL.HasValue, s.CurrentSL.Value.ToString("F4"), ""),
-                .SuperTrendValue = If(s.SuperTrendValue.HasValue, s.SuperTrendValue.Value.ToString("F4"), ""),
-                .UnrealizedPnLDollars = If(s.UnrealizedPnLDollars.HasValue, $"${s.UnrealizedPnLDollars.Value:F2}", ""),
-                .StopPhase = If(s.StopPhase IsNot Nothing, s.StopPhase, ""),
-                .Notes = If(s.Notes IsNot Nothing, s.Notes, ""),
-                .Record = s
+                .Timestamp = a.TimestampUtc,
+                .ActionType = a.ActionType,
+                .Detail = FormatActionDetail(a),
+                .Source = If(String.IsNullOrEmpty(a.Source), "Local", a.Source),
+                .Record = a
             }
         End Function
 
-        Private Sub ApplySnapshotFilter()
-            _snapshots.Clear()
-            Dim filtered = If(_selectedEventFilter = "All",
-                              _allSnapshots,
-                              _allSnapshots.Where(Function(s) s.EventType = _selectedEventFilter).ToList())
-            For Each s In filtered
-                _snapshots.Add(s)
-            Next
-        End Sub
-
-        Private Sub BuildChartPoints(snaps As List(Of DebugSnapshotRecord))
-            _chartPoints.Clear()
-            For Each s In snaps
-                If Not s.LastPrice.HasValue Then Continue For
-                Dim ts As DateTime
-                If Not DateTime.TryParse(s.Timestamp, ts) Then Continue For
-                Dim isMarker = (s.EventType = "SlAdjust" OrElse s.EventType = "AiCheck" OrElse s.EventType = "Exit")
-                _chartPoints.Add(New ChartPoint With {
-                    .Timestamp = ts,
-                    .LastPrice = CDbl(s.LastPrice.Value),
-                    .CurrentSL = If(s.CurrentSL.HasValue, CDbl(s.CurrentSL.Value), 0),
-                    .SuperTrendValue = If(s.SuperTrendValue.HasValue, CDbl(s.SuperTrendValue.Value), 0),
-                    .IsMarker = isMarker,
-                    .MarkerLabel = If(isMarker, s.EventType, String.Empty)
-                })
-            Next
-        End Sub
+        Private Shared Function FormatActionDetail(a As DebugTradeAction) As String
+            Dim parts As New List(Of String)()
+            If a.Price.HasValue Then parts.Add($"price={a.Price.Value:F4}")
+            If a.OldValue.HasValue OrElse a.NewValue.HasValue Then
+                Dim oldS = If(a.OldValue.HasValue, a.OldValue.Value.ToString("F4"), "—")
+                Dim newS = If(a.NewValue.HasValue, a.NewValue.Value.ToString("F4"), "—")
+                parts.Add($"{oldS} → {newS}")
+            End If
+            If a.Quantity.HasValue Then parts.Add($"qty={a.Quantity.Value}")
+            If a.OrderId.HasValue Then parts.Add($"order={a.OrderId.Value}")
+            If Not String.IsNullOrEmpty(a.Reason) Then parts.Add(a.Reason)
+            Return String.Join("  ", parts)
+        End Function
 
         Private Shared Function FormatJson(raw As String) As String
             If String.IsNullOrWhiteSpace(raw) Then Return raw
@@ -291,18 +289,18 @@ Namespace TopStepTrader.UI.ViewModels
         Private Sub ExportCsv()
             If _selectedTrade Is Nothing Then Return
             Dim dlg As New SaveFileDialog With {
-                .Title = "Export Snapshots to CSV",
+                .Title = "Export Actions to CSV",
                 .Filter = "CSV files (*.csv)|*.csv",
                 .FileName = $"trade_{_selectedTrade.TradeId}.csv"
             }
             If dlg.ShowDialog() <> True Then Return
             Dim sb As New StringBuilder()
-            sb.AppendLine("Timestamp,EventType,LastPrice,CurrentSL,SuperTrendValue,UnrealizedPnLDollars,StopPhase,Notes")
-            For Each s In _allSnapshots
-                sb.AppendLine($"{CsvEsc(s.Timestamp)},{CsvEsc(s.EventType)},{CsvEsc(s.LastPrice)},{CsvEsc(s.CurrentSL)},{CsvEsc(s.SuperTrendValue)},{CsvEsc(s.UnrealizedPnLDollars)},{CsvEsc(s.StopPhase)},{CsvEsc(s.Notes)}")
+            sb.AppendLine("Timestamp,ActionType,Detail,Source")
+            For Each a In _allActions
+                sb.AppendLine($"{CsvEsc(a.Timestamp)},{CsvEsc(a.ActionType)},{CsvEsc(a.Detail)},{CsvEsc(a.Source)}")
             Next
             File.WriteAllText(dlg.FileName, sb.ToString(), Encoding.UTF8)
-            StatusMessage = $"Exported {_allSnapshots.Count} snapshot(s) to {dlg.FileName}"
+            StatusMessage = $"Exported {_allActions.Count} action(s) to {dlg.FileName}"
         End Sub
 
         Private Sub ExportJson()
@@ -315,7 +313,7 @@ Namespace TopStepTrader.UI.ViewModels
             If dlg.ShowDialog() <> True Then Return
             Dim payload = New With {
                 .Trade = _selectedTrade.Record,
-                .Snapshots = _allSnapshots.Select(Function(s) s.Record).ToList()
+                .Actions = _allActions.Select(Function(a) a.Record).ToList()
             }
             Dim json = JsonSerializer.Serialize(payload, New JsonSerializerOptions With {.WriteIndented = True})
             File.WriteAllText(dlg.FileName, json, Encoding.UTF8)
@@ -326,9 +324,9 @@ Namespace TopStepTrader.UI.ViewModels
             If _selectedTrade Is Nothing Then Return
             Dim tmp = Path.Combine(Path.GetTempPath(), $"trade_{_selectedTrade.TradeId}.csv")
             Dim sb As New StringBuilder()
-            sb.AppendLine("Timestamp,EventType,LastPrice,CurrentSL,SuperTrendValue,UnrealizedPnLDollars,StopPhase,Notes")
-            For Each s In _allSnapshots
-                sb.AppendLine($"{CsvEsc(s.Timestamp)},{CsvEsc(s.EventType)},{CsvEsc(s.LastPrice)},{CsvEsc(s.CurrentSL)},{CsvEsc(s.SuperTrendValue)},{CsvEsc(s.UnrealizedPnLDollars)},{CsvEsc(s.StopPhase)},{CsvEsc(s.Notes)}")
+            sb.AppendLine("Timestamp,ActionType,Detail,Source")
+            For Each a In _allActions
+                sb.AppendLine($"{CsvEsc(a.Timestamp)},{CsvEsc(a.ActionType)},{CsvEsc(a.Detail)},{CsvEsc(a.Source)}")
             Next
             File.WriteAllText(tmp, sb.ToString(), Encoding.UTF8)
             System.Diagnostics.Process.Start(New System.Diagnostics.ProcessStartInfo(tmp) With {.UseShellExecute = True})

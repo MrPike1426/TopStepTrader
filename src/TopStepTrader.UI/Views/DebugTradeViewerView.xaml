@@ -7,15 +7,21 @@
              Background="{StaticResource BackgroundBrush}">
 
     <UserControl.Resources>
-        <Style x:Key="MarkerRowStyle" TargetType="DataGridRow">
+        <Style x:Key="ActionRowStyle" TargetType="DataGridRow">
             <Style.Triggers>
-                <DataTrigger Binding="{Binding EventType}" Value="Exit">
+                <DataTrigger Binding="{Binding ActionType}" Value="Closed">
                     <Setter Property="Foreground" Value="#E74C3C"/>
                 </DataTrigger>
-                <DataTrigger Binding="{Binding EventType}" Value="SlAdjust">
+                <DataTrigger Binding="{Binding ActionType}" Value="StopLossModified">
                     <Setter Property="Foreground" Value="#F39C12"/>
                 </DataTrigger>
-                <DataTrigger Binding="{Binding EventType}" Value="AiCheck">
+                <DataTrigger Binding="{Binding ActionType}" Value="StopLossPlaced">
+                    <Setter Property="Foreground" Value="#F39C12"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ActionType}" Value="EntryFilled">
+                    <Setter Property="Foreground" Value="#2ECC71"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding ActionType}" Value="OrderPlaced">
                     <Setter Property="Foreground" Value="#3498DB"/>
                 </DataTrigger>
             </Style.Triggers>
@@ -40,7 +46,15 @@
                         Command="{Binding RefreshCommand}"
                         HorizontalAlignment="Right"
                         Style="{StaticResource SecondaryButtonStyle}"
-                        Padding="14,6"/>
+                        Padding="14,6"
+                        DockPanel.Dock="Right"/>
+                <Button Content="Reconcile with TopStepX"
+                        Command="{Binding ReconcileCommand}"
+                        HorizontalAlignment="Right"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Padding="14,6"
+                        Margin="0,0,8,0"
+                        DockPanel.Dock="Right"/>
             </DockPanel>
         </Border>
 
@@ -109,6 +123,7 @@
                             <DataGridTextColumn Header="Entry Time" Binding="{Binding EntryTime}"  Width="*"/>
                             <DataGridTextColumn Header="PnL"        Binding="{Binding FinalPnL}"   Width="70"/>
                             <DataGridTextColumn Header="Status"     Binding="{Binding Status}"     Width="55"/>
+                            <DataGridTextColumn Header="Recon"      Binding="{Binding ReconciliationStatus}" Width="75"/>
                         </DataGrid.Columns>
                     </DataGrid>
 
@@ -258,29 +273,32 @@
                             </Border>
                         </Expander>
 
-                        <!-- Price chart (Canvas drawn from code-behind) -->
+                        <!-- FEAT-56: Reconciliation summary -->
                         <Border Background="{StaticResource CardBrush}"
-                                CornerRadius="6" Padding="12,10" Margin="0,0,0,12"
+                                CornerRadius="6" Padding="14,10" Margin="0,0,0,12"
                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                             <StackPanel>
-                                <DockPanel Margin="0,0,0,8">
-                                    <TextBlock Text="PRICE CHART  (Price / SL / SuperTrend)"
-                                               Style="{StaticResource SectionHeadingStyle}"
-                                               DockPanel.Dock="Left"/>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
-                                        <Ellipse Width="10" Height="10" Fill="#2ECC71" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Price" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,0,10,0"/>
-                                        <Ellipse Width="10" Height="10" Fill="#E74C3C" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="SL" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" Margin="0,0,10,0"/>
-                                        <Ellipse Width="10" Height="10" Fill="#F39C12" Margin="0,0,4,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="SuperTrend" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
-                                    </StackPanel>
+                                <TextBlock Text="RECONCILIATION" Style="{StaticResource SectionHeadingStyle}" Margin="0,0,0,6"/>
+                                <DockPanel Margin="0,2">
+                                    <TextBlock Text="Status: " Foreground="{StaticResource TextSecondaryBrush}" Width="90" FontSize="12"/>
+                                    <TextBlock Text="{Binding SelectedTrade.ReconciliationStatus, FallbackValue='—'}"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="12"/>
                                 </DockPanel>
-                                <Canvas x:Name="PriceChartCanvas"
-                                        Height="200"
-                                        Background="{StaticResource SurfaceBrush}"
-                                        ClipToBounds="True"
-                                        SizeChanged="ChartCanvas_SizeChanged"/>
+                                <DockPanel Margin="0,4">
+                                    <TextBlock Text="Exit Price: " Foreground="{StaticResource TextSecondaryBrush}" Width="90" FontSize="12"/>
+                                    <TextBlock Text="{Binding SelectedTrade.Record.ExitPrice, FallbackValue='—'}"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="12"/>
+                                </DockPanel>
+                                <DockPanel Margin="0,4">
+                                    <TextBlock Text="Exit Reason: " Foreground="{StaticResource TextSecondaryBrush}" Width="90" FontSize="12"/>
+                                    <TextBlock Text="{Binding SelectedTrade.ExitReason, FallbackValue='—'}"
+                                               Foreground="{StaticResource TextPrimaryBrush}" FontSize="12"/>
+                                </DockPanel>
+                                <DockPanel Margin="0,4">
+                                    <TextBlock Text="Last check: " Foreground="{StaticResource TextSecondaryBrush}" Width="90" FontSize="12"/>
+                                    <TextBlock Text="{Binding SelectedTrade.Record.ReconciledAt, FallbackValue='Never'}"
+                                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="12"/>
+                                </DockPanel>
                             </StackPanel>
                         </Border>
 
@@ -300,24 +318,15 @@
                                     Padding="14,6"/>
                         </StackPanel>
 
-                        <!-- Snapshot timeline grid -->
+                        <!-- Action timeline -->
                         <Border Background="{StaticResource CardBrush}"
                                 CornerRadius="6" Padding="12,10"
                                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
                             <StackPanel>
-                                <DockPanel Margin="0,0,0,8">
-                                    <TextBlock Text="SNAPSHOT TIMELINE"
-                                               Style="{StaticResource SectionHeadingStyle}"
-                                               DockPanel.Dock="Left"/>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
-                                        <TextBlock Text="Filter: " Foreground="{StaticResource TextSecondaryBrush}"
-                                                   FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                        <ComboBox ItemsSource="{Binding EventFilterOptions}"
-                                                  SelectedItem="{Binding SelectedEventFilter, Mode=TwoWay}"
-                                                  Width="110" FontSize="12"/>
-                                    </StackPanel>
-                                </DockPanel>
-                                <DataGrid ItemsSource="{Binding Snapshots}"
+                                <TextBlock Text="ACTION TIMELINE"
+                                           Style="{StaticResource SectionHeadingStyle}"
+                                           Margin="0,0,0,8"/>
+                                <DataGrid ItemsSource="{Binding Actions}"
                                           AutoGenerateColumns="False"
                                           IsReadOnly="True"
                                           CanUserAddRows="False"
@@ -331,18 +340,14 @@
                                           AlternatingRowBackground="#12FFFFFF"
                                           BorderThickness="0"
                                           FontSize="12"
-                                          MaxHeight="350"
-                                          RowStyle="{StaticResource MarkerRowStyle}">
+                                          MaxHeight="400"
+                                          RowStyle="{StaticResource ActionRowStyle}">
                                     <DataGrid.Columns>
-                                        <DataGridTextColumn Header="#"          Binding="{Binding Id}"                   Width="40"/>
-                                        <DataGridTextColumn Header="Timestamp"  Binding="{Binding Timestamp}"            Width="155"/>
-                                        <DataGridTextColumn Header="Event"      Binding="{Binding EventType}"            Width="80"/>
-                                        <DataGridTextColumn Header="LastPrice"  Binding="{Binding LastPrice}"            Width="85"/>
-                                        <DataGridTextColumn Header="SL"         Binding="{Binding CurrentSL}"           Width="85"/>
-                                        <DataGridTextColumn Header="ST Value"   Binding="{Binding SuperTrendValue}"      Width="85"/>
-                                        <DataGridTextColumn Header="PnL $"      Binding="{Binding UnrealizedPnLDollars}" Width="80"/>
-                                        <DataGridTextColumn Header="Stop Phase" Binding="{Binding StopPhase}"           Width="90"/>
-                                        <DataGridTextColumn Header="Notes"      Binding="{Binding Notes}"               Width="*"/>
+                                        <DataGridTextColumn Header="#"          Binding="{Binding Id}"         Width="40"/>
+                                        <DataGridTextColumn Header="Timestamp"  Binding="{Binding Timestamp}"  Width="170"/>
+                                        <DataGridTextColumn Header="Action"     Binding="{Binding ActionType}" Width="150"/>
+                                        <DataGridTextColumn Header="Detail"     Binding="{Binding Detail}"     Width="*"/>
+                                        <DataGridTextColumn Header="Source"     Binding="{Binding Source}"     Width="70"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
                             </StackPanel>

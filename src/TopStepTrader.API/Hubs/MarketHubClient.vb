@@ -1,3 +1,4 @@
+Imports System.Collections.Concurrent
 Imports System.Threading
 Imports Microsoft.AspNetCore.SignalR.Client
 Imports Microsoft.Extensions.Logging
@@ -20,7 +21,10 @@ Namespace TopStepTrader.API.Hubs
         Private ReadOnly _tokenManager As ProjectXTokenManager
         Private ReadOnly _logger As ILogger(Of MarketHubClient)
         Private _connection As HubConnection
-        Private ReadOnly _subscribedContracts As New HashSet(Of String)
+        ' Thread-safe set of subscribed contract IDs (value byte is unused).
+        ' ConcurrentDictionary is used because subscribe/unsubscribe and the
+        ' Reconnected handler can mutate/enumerate from different threads.
+        Private ReadOnly _subscribedContracts As New ConcurrentDictionary(Of String, Byte)
 
         Public Event QuoteReceived As EventHandler(Of MarketQuoteEventArgs) Implements IMarketQuoteFeed.QuoteReceived
         Public Event BarReceived As EventHandler(Of MarketBarEventArgs)
@@ -75,7 +79,7 @@ Namespace TopStepTrader.API.Hubs
             AddHandler _connection.Reconnected,
                 Async Function(connectionId As String) As Task
                     _logger.LogInformation("Market hub reconnected: {Id}", connectionId)
-                    For Each contractId In _subscribedContracts.ToList()
+                    For Each contractId In _subscribedContracts.Keys.ToList()
                         Await ResubscribeAsync(contractId)
                     Next
                     RaiseEvent ConnectionStateChanged(Me, _connection.State)
@@ -96,17 +100,23 @@ Namespace TopStepTrader.API.Hubs
         Public Async Function SubscribeContractAsync(contractId As String,
                                                       Optional cancel As CancellationToken = Nothing) As Task Implements IMarketQuoteFeed.SubscribeContractAsync
             If _connection Is Nothing Then Await StartAsync(cancel)
-            If _subscribedContracts.Contains(contractId) Then Return
-            Await ResubscribeAsync(contractId, cancel)
-            _subscribedContracts.Add(contractId)
+            If Not _subscribedContracts.TryAdd(contractId, 0) Then Return
+            Try
+                Await ResubscribeAsync(contractId, cancel)
+            Catch
+                ' Roll back the optimistic add so a retry can resubscribe.
+                Dim ignored As Byte
+                _subscribedContracts.TryRemove(contractId, ignored)
+                Throw
+            End Try
         End Function
 
         Public Async Function UnsubscribeContractAsync(contractId As String,
                                                         Optional cancel As CancellationToken = Nothing) As Task Implements IMarketQuoteFeed.UnsubscribeContractAsync
-            If Not _subscribedContracts.Contains(contractId) Then Return
+            Dim ignored As Byte
+            If Not _subscribedContracts.TryRemove(contractId, ignored) Then Return
             Await _connection.InvokeAsync("UnsubscribeContractQuotes", contractId, cancel)
             Await _connection.InvokeAsync("UnsubscribeContractTrades", contractId, cancel)
-            _subscribedContracts.Remove(contractId)
         End Function
 
         Private Async Function ResubscribeAsync(contractId As String,

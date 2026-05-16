@@ -48,6 +48,11 @@ Namespace TopStepTrader.Services.Debug
             Public Property FillConfirmedTime As DateTime
         End Class
 
+        Private NotInheritable Class ActionMsg
+            Inherits DebugMessage
+            Public Property Action As DebugTradeAction
+        End Class
+
         Public Property IsEnabled As Boolean Implements IDebugTradeCaptureService.IsEnabled
             Get
                 Return _isEnabled
@@ -89,6 +94,15 @@ Namespace TopStepTrader.Services.Debug
             _channel.Writer.TryWrite(New EndMsg With {.TradeId = tradeId, .ClosedUtc = closedUtc, .RealisedPnl = realisedPnl})
         End Sub
 
+        Public Sub RecordAction(action As DebugTradeAction) Implements IDebugTradeCaptureService.RecordAction
+            If Not _isEnabled OrElse action Is Nothing Then Return
+            If String.IsNullOrEmpty(action.TimestampUtc) Then
+                action.TimestampUtc = DateTime.UtcNow.ToString("O")
+            End If
+            If String.IsNullOrEmpty(action.Source) Then action.Source = "Local"
+            _channel.Writer.TryWrite(New ActionMsg With {.Action = action})
+        End Sub
+
         Private Async Function ConsumeLoopAsync() As Task
             Try
                 Await _db.EnsureSchemaAsync()
@@ -116,6 +130,7 @@ Namespace TopStepTrader.Services.Debug
             Dim snapshots As New List(Of DebugSnapshotRecord)()
             Dim endTrades As New List(Of (TradeId As String, ClosedUtc As DateTime, RealisedPnl As Nullable(Of Decimal)))()
             Dim fillUpdates As New List(Of (TradeId As String, FillPrice As Decimal, FillConfirmedTime As DateTime))()
+            Dim actions As New List(Of DebugTradeAction)()
 
             Dim msg As DebugMessage = Nothing
             While _channel.Reader.TryRead(msg)
@@ -129,16 +144,18 @@ Namespace TopStepTrader.Services.Debug
                 ElseIf TypeOf msg Is EndMsg Then
                     Dim em = DirectCast(msg, EndMsg)
                     endTrades.Add((em.TradeId, em.ClosedUtc, em.RealisedPnl))
+                ElseIf TypeOf msg Is ActionMsg Then
+                    actions.Add(DirectCast(msg, ActionMsg).Action)
                 End If
             End While
 
-            If headers.Count = 0 AndAlso snapshots.Count = 0 AndAlso endTrades.Count = 0 AndAlso fillUpdates.Count = 0 Then Return
+            If headers.Count = 0 AndAlso snapshots.Count = 0 AndAlso endTrades.Count = 0 AndAlso fillUpdates.Count = 0 AndAlso actions.Count = 0 Then Return
 
             Try
-                Await _db.WriteBatchAsync(headers, snapshots, endTrades, fillUpdates)
+                Await _db.WriteBatchAsync(headers, snapshots, endTrades, fillUpdates, actions)
             Catch ex As Exception
                 _logger.LogWarning(ex, "DebugCapture: batch write failed — {Count} items dropped",
-                                   headers.Count + snapshots.Count + endTrades.Count + fillUpdates.Count)
+                                   headers.Count + snapshots.Count + endTrades.Count + fillUpdates.Count + actions.Count)
             End Try
         End Function
 

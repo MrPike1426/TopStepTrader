@@ -2052,9 +2052,29 @@ Namespace TopStepTrader.UI.ViewModels
                     .SuperTrendConfigJson = configJson,
                     .AiCheckResult = capturedAiResult,
                     .AiCheckReason = capturedAiReason,
-                    .CreatedAt = DateTime.UtcNow.ToString("O")
+                    .CreatedAt = DateTime.UtcNow.ToString("O"),
+                    .AccountId = slot.AccountId
                 }
                 _debugCapture.BeginTrade(header)
+                _debugCapture.RecordAction(New DebugTradeAction With {
+                    .TradeId = newTradeId,
+                    .TimestampUtc = DateTime.UtcNow.ToString("O"),
+                    .ActionType = "OrderPlaced",
+                    .Price = CDec(lastClose),
+                    .Quantity = slot.Contracts,
+                    .OrderId = placed.ExternalOrderId,
+                    .NewValue = stLine,
+                    .Reason = If(_useEarlyMode, "Preemptive entry", "Bar-close entry"),
+                    .Source = "Local"
+                })
+                _debugCapture.RecordAction(New DebugTradeAction With {
+                    .TradeId = newTradeId,
+                    .TimestampUtc = DateTime.UtcNow.ToString("O"),
+                    .ActionType = "StopLossPlaced",
+                    .NewValue = stLine,
+                    .Reason = "Initial SuperTrend stop",
+                    .Source = "Local"
+                })
             End If
             slot.MissCount = 0
             slot.PositionId = placed.ExternalPositionId   ' may be Nothing until first monitoring tick resolves it
@@ -2496,6 +2516,15 @@ Namespace TopStepTrader.UI.ViewModels
                     If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
                        Not String.IsNullOrEmpty(slot.DebugTradeId) Then
                         _debugCapture.UpdateFill(slot.DebugTradeId, confirmedEntry, DateTime.UtcNow)
+                        _debugCapture.RecordAction(New DebugTradeAction With {
+                            .TradeId = slot.DebugTradeId,
+                            .TimestampUtc = DateTime.UtcNow.ToString("O"),
+                            .ActionType = "EntryFilled",
+                            .Price = confirmedEntry,
+                            .Quantity = slot.Contracts,
+                            .OrderId = slot.EntryOrderId,
+                            .Source = "Local"
+                        })
                     End If
                 End If
 
@@ -2806,6 +2835,15 @@ Namespace TopStepTrader.UI.ViewModels
                                         .Notes = $"{oldStopPhase}->{slot.StopPhase}"
                                     }
                                     _debugCapture.RecordSnapshot(slSnap)
+                                    _debugCapture.RecordAction(New DebugTradeAction With {
+                                        .TradeId = slot.DebugTradeId,
+                                        .TimestampUtc = DateTime.UtcNow.ToString("O"),
+                                        .ActionType = "StopLossModified",
+                                        .OldValue = slot.StopPrice,
+                                        .NewValue = newStop,
+                                        .Reason = $"Phase {oldStopPhase} -> {slot.StopPhase}",
+                                        .Source = "Local"
+                                    })
                                 End If
                                 _logger.LogInformation("ST+ ExitEngine SL phase={Phase} trail->{Price} (TP={Tp}) for [Slot {Idx}] on {Contract}",
                                                        slot.StopPhase, newStop,
@@ -3011,6 +3049,16 @@ Namespace TopStepTrader.UI.ViewModels
                     .Notes = exitReason
                 }
                 _debugCapture.RecordSnapshot(exitSnap)
+                _debugCapture.RecordAction(New DebugTradeAction With {
+                    .TradeId = slot.DebugTradeId,
+                    .TimestampUtc = DateTime.UtcNow.ToString("O"),
+                    .ActionType = "Closed",
+                    .Price = slot.StopPrice,
+                    .Quantity = slot.Contracts,
+                    .NewValue = slot.UnrealizedPnl,
+                    .Reason = exitReason,
+                    .Source = "Local"
+                })
                 _debugCapture.EndTrade(slot.DebugTradeId, DateTime.UtcNow, slot.UnrealizedPnl)
                 _debugMfe.Remove(slot.DebugTradeId)
                 _debugMae.Remove(slot.DebugTradeId)

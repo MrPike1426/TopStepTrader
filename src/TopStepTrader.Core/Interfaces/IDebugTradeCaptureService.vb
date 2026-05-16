@@ -8,6 +8,8 @@ Namespace TopStepTrader.Core.Interfaces
         Sub RecordSnapshot(snap As DebugSnapshotRecord)
         Sub UpdateFill(tradeId As String, fillPrice As Decimal, fillConfirmedTime As DateTime)
         Sub EndTrade(tradeId As String, closedUtc As DateTime, Optional realisedPnl As Nullable(Of Decimal) = Nothing)
+        ''' <summary>FEAT-56: record an authoritative action (entry placement, SL move, exit, …).</summary>
+        Sub RecordAction(action As DebugTradeAction)
     End Interface
 
 End Namespace

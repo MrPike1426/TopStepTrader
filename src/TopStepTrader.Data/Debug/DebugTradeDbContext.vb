@@ -120,7 +120,23 @@ Namespace TopStepTrader.Data.Debug
                         "  Notes                TEXT," &
                         "  FOREIGN KEY (TradeId) REFERENCES DebugTrades(TradeId)" &
                         ");" &
-                        "CREATE INDEX IF NOT EXISTS IX_DebugSnapshots_TradeId_Time ON DebugSnapshots(TradeId, Timestamp);"
+                        "CREATE INDEX IF NOT EXISTS IX_DebugSnapshots_TradeId_Time ON DebugSnapshots(TradeId, Timestamp);" &
+                        "CREATE TABLE IF NOT EXISTS DebugTradeActions (" &
+                        "  Id              INTEGER PRIMARY KEY AUTOINCREMENT," &
+                        "  TradeId         TEXT NOT NULL," &
+                        "  TimestampUtc    TEXT NOT NULL," &
+                        "  ActionType      TEXT NOT NULL," &
+                        "  OldValue        REAL," &
+                        "  NewValue        REAL," &
+                        "  Price           REAL," &
+                        "  Quantity        INTEGER," &
+                        "  OrderId         INTEGER," &
+                        "  Reason          TEXT," &
+                        "  Source          TEXT NOT NULL DEFAULT 'Local'," &
+                        "  RawPayloadJson  TEXT," &
+                        "  FOREIGN KEY (TradeId) REFERENCES DebugTrades(TradeId)" &
+                        ");" &
+                        "CREATE INDEX IF NOT EXISTS IX_DebugTradeActions_TradeId_Time ON DebugTradeActions(TradeId, TimestampUtc);"
                     Await cmd.ExecuteNonQueryAsync()
                 End Using
 
@@ -130,6 +146,12 @@ Namespace TopStepTrader.Data.Debug
                 Await AddColumnIfMissingAsync(conn, "DebugTrades", "RealisedPnLDollars", "REAL")
                 Await AddColumnIfMissingAsync(conn, "DebugSnapshots", "Adx", "REAL")
                 Await AddColumnIfMissingAsync(conn, "DebugSnapshots", "StopPhase", "TEXT")
+                ' FEAT-56: reconciliation metadata
+                Await AddColumnIfMissingAsync(conn, "DebugTrades", "AccountId", "INTEGER NOT NULL DEFAULT 0")
+                Await AddColumnIfMissingAsync(conn, "DebugTrades", "ExitPrice", "REAL")
+                Await AddColumnIfMissingAsync(conn, "DebugTrades", "ExitReason", "TEXT")
+                Await AddColumnIfMissingAsync(conn, "DebugTrades", "ReconciliationStatus", "TEXT")
+                Await AddColumnIfMissingAsync(conn, "DebugTrades", "ReconciledAt", "TEXT")
             End Using
         End Function
 
@@ -158,9 +180,11 @@ Namespace TopStepTrader.Data.Debug
                 headers As IReadOnlyList(Of DebugTradeRecord),
                 snapshots As IReadOnlyList(Of DebugSnapshotRecord),
                 endTrades As IReadOnlyList(Of (TradeId As String, ClosedUtc As DateTime, RealisedPnl As Nullable(Of Decimal))),
-                Optional fillUpdates As IReadOnlyList(Of (TradeId As String, FillPrice As Decimal, FillConfirmedTime As DateTime)) = Nothing) As Task
+                Optional fillUpdates As IReadOnlyList(Of (TradeId As String, FillPrice As Decimal, FillConfirmedTime As DateTime)) = Nothing,
+                Optional actions As IReadOnlyList(Of DebugTradeAction) = Nothing) As Task
             If headers.Count = 0 AndAlso snapshots.Count = 0 AndAlso endTrades.Count = 0 AndAlso
-               (fillUpdates Is Nothing OrElse fillUpdates.Count = 0) Then Return
+               (fillUpdates Is Nothing OrElse fillUpdates.Count = 0) AndAlso
+               (actions Is Nothing OrElse actions.Count = 0) Then Return
             Using conn = New SqliteConnection(_connectionString)
                 Await conn.OpenAsync()
                 Using tx = conn.BeginTransaction()
@@ -172,12 +196,12 @@ Namespace TopStepTrader.Data.Debug
                                 "(TradeId,SlotIndex,Persona,Instrument,TimeFrame,EntryMode,Direction," &
                                 " EntryPrice,EntryTime,InitialSL,InitialTP,ContractCount," &
                                 " SuperTrendConfigJson,AiCheckResult,AiCheckReason," &
-                                " ActualFillPrice,FillConfirmedTime,RealisedPnLDollars,ClosedAt,CreatedAt)" &
+                                " ActualFillPrice,FillConfirmedTime,RealisedPnLDollars,ClosedAt,CreatedAt,AccountId)" &
                                 " VALUES " &
                                 "(@TradeId,@SlotIndex,@Persona,@Instrument,@TimeFrame,@EntryMode,@Direction," &
                                 " @EntryPrice,@EntryTime,@InitialSL,@InitialTP,@ContractCount," &
                                 " @SuperTrendConfigJson,@AiCheckResult,@AiCheckReason," &
-                                " @ActualFillPrice,@FillConfirmedTime,@RealisedPnLDollars,@ClosedAt,@CreatedAt)"
+                                " @ActualFillPrice,@FillConfirmedTime,@RealisedPnLDollars,@ClosedAt,@CreatedAt,@AccountId)"
                             cmd.Parameters.AddWithValue("@TradeId", h.TradeId)
                             cmd.Parameters.AddWithValue("@SlotIndex", h.SlotIndex)
                             cmd.Parameters.AddWithValue("@Persona", h.Persona)
@@ -198,6 +222,7 @@ Namespace TopStepTrader.Data.Debug
                             cmd.Parameters.AddWithValue("@RealisedPnLDollars", If(h.RealisedPnLDollars.HasValue, CObj(CDbl(h.RealisedPnLDollars.Value)), DBNull.Value))
                             cmd.Parameters.AddWithValue("@ClosedAt", If(h.ClosedAt IsNot Nothing, CObj(h.ClosedAt), DBNull.Value))
                             cmd.Parameters.AddWithValue("@CreatedAt", h.CreatedAt)
+                            cmd.Parameters.AddWithValue("@AccountId", h.AccountId)
                             Await cmd.ExecuteNonQueryAsync()
                         End Using
                     Next
@@ -271,6 +296,31 @@ Namespace TopStepTrader.Data.Debug
                         Next
                     End If
 
+                    If actions IsNot Nothing Then
+                        For Each a In actions
+                            Using cmd = conn.CreateCommand()
+                                cmd.Transaction = tx
+                                cmd.CommandText =
+                                    "INSERT INTO DebugTradeActions " &
+                                    "(TradeId,TimestampUtc,ActionType,OldValue,NewValue,Price,Quantity,OrderId,Reason,Source,RawPayloadJson)" &
+                                    " VALUES " &
+                                    "(@TradeId,@TimestampUtc,@ActionType,@OldValue,@NewValue,@Price,@Quantity,@OrderId,@Reason,@Source,@RawPayloadJson)"
+                                cmd.Parameters.AddWithValue("@TradeId", a.TradeId)
+                                cmd.Parameters.AddWithValue("@TimestampUtc", a.TimestampUtc)
+                                cmd.Parameters.AddWithValue("@ActionType", a.ActionType)
+                                cmd.Parameters.AddWithValue("@OldValue", NullableReal(a.OldValue))
+                                cmd.Parameters.AddWithValue("@NewValue", NullableReal(a.NewValue))
+                                cmd.Parameters.AddWithValue("@Price", NullableReal(a.Price))
+                                cmd.Parameters.AddWithValue("@Quantity", If(a.Quantity.HasValue, CObj(a.Quantity.Value), DBNull.Value))
+                                cmd.Parameters.AddWithValue("@OrderId", If(a.OrderId.HasValue, CObj(a.OrderId.Value), DBNull.Value))
+                                cmd.Parameters.AddWithValue("@Reason", If(a.Reason IsNot Nothing, CObj(a.Reason), DBNull.Value))
+                                cmd.Parameters.AddWithValue("@Source", If(String.IsNullOrEmpty(a.Source), "Local", a.Source))
+                                cmd.Parameters.AddWithValue("@RawPayloadJson", If(a.RawPayloadJson IsNot Nothing, CObj(a.RawPayloadJson), DBNull.Value))
+                                Await cmd.ExecuteNonQueryAsync()
+                            End Using
+                        Next
+                    End If
+
                     tx.Commit()
                 End Using
             End Using
@@ -292,6 +342,14 @@ Namespace TopStepTrader.Data.Debug
                     End Using
                     Using cmd = conn.CreateCommand()
                         cmd.Transaction = tx
+                        cmd.CommandText =
+                            "DELETE FROM DebugTradeActions WHERE TradeId IN " &
+                            "(SELECT TradeId FROM DebugTrades WHERE CreatedAt < @Cutoff)"
+                        cmd.Parameters.AddWithValue("@Cutoff", cutoff)
+                        Await cmd.ExecuteNonQueryAsync()
+                    End Using
+                    Using cmd = conn.CreateCommand()
+                        cmd.Transaction = tx
                         cmd.CommandText = "DELETE FROM DebugTrades WHERE CreatedAt < @Cutoff"
                         cmd.Parameters.AddWithValue("@Cutoff", cutoff)
                         Await cmd.ExecuteNonQueryAsync()
@@ -302,6 +360,14 @@ Namespace TopStepTrader.Data.Debug
                         cmd.Transaction = tx
                         cmd.CommandText =
                             "DELETE FROM DebugSnapshots WHERE TradeId NOT IN " &
+                            "(SELECT TradeId FROM DebugTrades ORDER BY CreatedAt DESC LIMIT @Max)"
+                        cmd.Parameters.AddWithValue("@Max", _maxTradeCount)
+                        Await cmd.ExecuteNonQueryAsync()
+                    End Using
+                    Using cmd = conn.CreateCommand()
+                        cmd.Transaction = tx
+                        cmd.CommandText =
+                            "DELETE FROM DebugTradeActions WHERE TradeId NOT IN " &
                             "(SELECT TradeId FROM DebugTrades ORDER BY CreatedAt DESC LIMIT @Max)"
                         cmd.Parameters.AddWithValue("@Max", _maxTradeCount)
                         Await cmd.ExecuteNonQueryAsync()
@@ -419,7 +485,8 @@ Namespace TopStepTrader.Data.Debug
                         "SELECT TradeId,SlotIndex,Persona,Instrument,TimeFrame,EntryMode,Direction," &
                         " EntryPrice,EntryTime,InitialSL,InitialTP,ContractCount," &
                         " SuperTrendConfigJson,AiCheckResult,AiCheckReason," &
-                        " ActualFillPrice,FillConfirmedTime,RealisedPnLDollars,ClosedAt,CreatedAt" &
+                        " ActualFillPrice,FillConfirmedTime,RealisedPnLDollars,ClosedAt,CreatedAt," &
+                        " AccountId,ExitPrice,ExitReason,ReconciliationStatus,ReconciledAt" &
                         " FROM DebugTrades ORDER BY CreatedAt DESC"
                     Using reader = Await cmd.ExecuteReaderAsync()
                         While Await reader.ReadAsync()
@@ -444,6 +511,11 @@ Namespace TopStepTrader.Data.Debug
                             r.RealisedPnLDollars = If(reader.IsDBNull(17), CType(Nothing, Decimal?), CDec(reader.GetDouble(17)))
                             r.ClosedAt = If(reader.IsDBNull(18), Nothing, reader.GetString(18))
                             r.CreatedAt = reader.GetString(19)
+                            r.AccountId = If(reader.IsDBNull(20), 0L, reader.GetInt64(20))
+                            r.ExitPrice = If(reader.IsDBNull(21), CType(Nothing, Decimal?), CDec(reader.GetDouble(21)))
+                            r.ExitReason = If(reader.IsDBNull(22), Nothing, reader.GetString(22))
+                            r.ReconciliationStatus = If(reader.IsDBNull(23), Nothing, reader.GetString(23))
+                            r.ReconciledAt = If(reader.IsDBNull(24), Nothing, reader.GetString(24))
                             result.Add(r)
                         End While
                     End Using
@@ -500,6 +572,73 @@ Namespace TopStepTrader.Data.Debug
         Private Shared Function NullableReal(v As Nullable(Of Decimal)) As Object
             If v.HasValue Then Return CDbl(v.Value)
             Return DBNull.Value
+        End Function
+
+        ''' <summary>FEAT-56: load the authoritative action timeline for a trade.</summary>
+        Public Async Function GetActionsAsync(tradeId As String) As Task(Of List(Of DebugTradeAction))
+            Dim result As New List(Of DebugTradeAction)()
+            Using conn = New SqliteConnection(_connectionString)
+                Await conn.OpenAsync()
+                Using cmd = conn.CreateCommand()
+                    cmd.CommandText =
+                        "SELECT Id,TradeId,TimestampUtc,ActionType,OldValue,NewValue,Price,Quantity," &
+                        " OrderId,Reason,Source,RawPayloadJson" &
+                        " FROM DebugTradeActions WHERE TradeId = @TradeId ORDER BY TimestampUtc ASC, Id ASC"
+                    cmd.Parameters.AddWithValue("@TradeId", tradeId)
+                    Using reader = Await cmd.ExecuteReaderAsync()
+                        While Await reader.ReadAsync()
+                            Dim a As New DebugTradeAction()
+                            a.Id = reader.GetInt32(0)
+                            a.TradeId = reader.GetString(1)
+                            a.TimestampUtc = reader.GetString(2)
+                            a.ActionType = reader.GetString(3)
+                            a.OldValue = If(reader.IsDBNull(4), CType(Nothing, Decimal?), CDec(reader.GetDouble(4)))
+                            a.NewValue = If(reader.IsDBNull(5), CType(Nothing, Decimal?), CDec(reader.GetDouble(5)))
+                            a.Price = If(reader.IsDBNull(6), CType(Nothing, Decimal?), CDec(reader.GetDouble(6)))
+                            a.Quantity = If(reader.IsDBNull(7), CType(Nothing, Integer?), reader.GetInt32(7))
+                            a.OrderId = If(reader.IsDBNull(8), CType(Nothing, Long?), reader.GetInt64(8))
+                            a.Reason = If(reader.IsDBNull(9), Nothing, reader.GetString(9))
+                            a.Source = If(reader.IsDBNull(10), "Local", reader.GetString(10))
+                            a.RawPayloadJson = If(reader.IsDBNull(11), Nothing, reader.GetString(11))
+                            result.Add(a)
+                        End While
+                    End Using
+                End Using
+            End Using
+            Return result
+        End Function
+
+        ''' <summary>FEAT-56: persist the outcome of a reconciliation pass for a single trade.</summary>
+        Public Async Function ApplyReconciliationAsync(
+                tradeId As String,
+                status As String,
+                reconciledAtUtc As DateTime,
+                Optional closedAtUtc As Nullable(Of DateTime) = Nothing,
+                Optional exitPrice As Nullable(Of Decimal) = Nothing,
+                Optional exitReason As String = Nothing,
+                Optional realisedPnl As Nullable(Of Decimal) = Nothing) As Task
+            Using conn = New SqliteConnection(_connectionString)
+                Await conn.OpenAsync()
+                Using cmd = conn.CreateCommand()
+                    cmd.CommandText =
+                        "UPDATE DebugTrades SET " &
+                        " ReconciliationStatus = @Status," &
+                        " ReconciledAt = @ReconciledAt," &
+                        " ClosedAt = COALESCE(@ClosedAt, ClosedAt)," &
+                        " ExitPrice = COALESCE(@ExitPrice, ExitPrice)," &
+                        " ExitReason = COALESCE(@ExitReason, ExitReason)," &
+                        " RealisedPnLDollars = COALESCE(@RealisedPnL, RealisedPnLDollars)" &
+                        " WHERE TradeId = @TradeId"
+                    cmd.Parameters.AddWithValue("@Status", If(status, CObj(DBNull.Value)))
+                    cmd.Parameters.AddWithValue("@ReconciledAt", reconciledAtUtc.ToString("O"))
+                    cmd.Parameters.AddWithValue("@ClosedAt", If(closedAtUtc.HasValue, CObj(closedAtUtc.Value.ToString("O")), DBNull.Value))
+                    cmd.Parameters.AddWithValue("@ExitPrice", If(exitPrice.HasValue, CObj(CDbl(exitPrice.Value)), DBNull.Value))
+                    cmd.Parameters.AddWithValue("@ExitReason", If(exitReason IsNot Nothing, CObj(exitReason), DBNull.Value))
+                    cmd.Parameters.AddWithValue("@RealisedPnL", If(realisedPnl.HasValue, CObj(CDbl(realisedPnl.Value)), DBNull.Value))
+                    cmd.Parameters.AddWithValue("@TradeId", tradeId)
+                    Await cmd.ExecuteNonQueryAsync()
+                End Using
+            End Using
         End Function
 
         Public Sub Dispose() Implements IDisposable.Dispose
