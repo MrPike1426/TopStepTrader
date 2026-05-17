@@ -250,7 +250,7 @@
                                     <TextBlock Text="The Scalper — Profit Protection &amp; Exit" Foreground="White" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <TextBlock TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17" Margin="0,0,0,8">
-                                    Once a position is open, exit management is owned by <Run Foreground="White" FontWeight="SemiBold">The Scalper</Run> — a reusable service that ratchets the stop on closed 15-second bars. The stop never moves backwards. <Run Foreground="#90CAF9">R = initial risk (entry − stop at entry).</Run>
+                                    Once a position is open, exit management is owned by <Run Foreground="White" FontWeight="SemiBold">The Scalper</Run> — a reusable service that ratchets the stop on closed strategy-timeframe bars (15-min by default). The stop never moves backwards. <Run Foreground="#90CAF9">R = initial risk (entry − stop at entry).</Run>
                                 </TextBlock>
 
                                 <Border Background="#1A2440" CornerRadius="4" Padding="10,8">
@@ -259,34 +259,39 @@
                                             <Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="Phase" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
                                             <TextBlock Grid.Column="1" Text="Trigger" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
-                                            <TextBlock Grid.Column="2" Text="Stop trail" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
+                                            <TextBlock Grid.Column="2" Text="Stop placement" Foreground="#42A5F5" FontSize="12" FontWeight="SemiBold"/>
                                         </Grid>
                                         <Rectangle Height="1" Fill="#2A3A5A" Margin="0,0,0,4"/>
                                         <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="Initial"     Foreground="#8090A0" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="Entry"       Foreground="White" FontSize="12"/>
-                                            <TextBlock Grid.Column="2" Text="15s SuperTrend line (ratchet only)" Foreground="#8090A0" FontSize="12"/>
+                                            <TextBlock Grid.Column="1" Text="Entry → +1R" Foreground="White" FontSize="12"/>
+                                            <TextBlock Grid.Column="2" Text="Trail the closed strategy-TF SuperTrend line (ratchet only)" Foreground="#8090A0" FontSize="12" TextWrapping="Wrap"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                             <TextBlock Grid.Column="0" Text="Breakeven"   Foreground="#A5D6A7" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="0.5R profit" Foreground="White" FontSize="12"/>
-                                            <TextBlock Grid.Column="2" Text="max(entry, 15s ST) — risk eliminated" Foreground="#8090A0" FontSize="12"/>
+                                            <TextBlock Grid.Column="1" Text="+1R profit"  Foreground="White" FontSize="12"/>
+                                            <TextBlock Grid.Column="2" Text="entry + 0.5R (long) / entry − 0.5R (short)" Foreground="#8090A0" FontSize="12" TextWrapping="Wrap"/>
                                         </Grid>
                                         <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="ProfitLock"  Foreground="#66BB6A" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="1.5R profit" Foreground="White" FontSize="12"/>
-                                            <TextBlock Grid.Column="2" Text="15s BB lower (LONG) / upper (SHORT) — band trail, ST trail dropped" Foreground="#8090A0" FontSize="12"/>
+                                            <TextBlock Grid.Column="0" Text="ProfitTrail" Foreground="#66BB6A" FontSize="12"/>
+                                            <TextBlock Grid.Column="1" Text="+1.5R profit" Foreground="White" FontSize="12"/>
+                                            <TextBlock Grid.Column="2" Text="currentPrice − 1×ATR (long) / currentPrice + 1×ATR (short)" Foreground="#8090A0" FontSize="12" TextWrapping="Wrap"/>
+                                        </Grid>
+                                        <Grid Margin="0,0,0,3"><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Harvest"     Foreground="#FFCC80" FontSize="12"/>
+                                            <TextBlock Grid.Column="1" Text="+2R profit"  Foreground="White" FontSize="12"/>
+                                            <TextBlock Grid.Column="2" Text="entry + 1.5R (long) / entry − 1.5R (short)" Foreground="#8090A0" FontSize="12" TextWrapping="Wrap"/>
                                         </Grid>
                                         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="ScaredyCat"  Foreground="#FFCC80" FontSize="12"/>
-                                            <TextBlock Grid.Column="1" Text="One-way arm" Foreground="White" FontSize="12"/>
-                                            <TextBlock Grid.Column="2" Text="8 consecutive 15s BB-middle bars against trade + 15s ST disagrees → BB mult 2.0 → 1.5 for the rest of the trade" Foreground="#8090A0" FontSize="12" TextWrapping="Wrap"/>
+                                            <TextBlock Grid.Column="0" Text="FreeRide"    Foreground="#FFB74D" FontSize="12"/>
+                                            <TextBlock Grid.Column="1" Text="+3R profit"  Foreground="White" FontSize="12"/>
+                                            <TextBlock Grid.Column="2" Text="entry + 2R (long) / entry − 2R (short)" Foreground="#8090A0" FontSize="12" TextWrapping="Wrap"/>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
 
                                 <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17">
-                                    Exit fires when a closed 15s bar crosses the latest stop. After a release, the same instrument cannot re-enter until the closed 15s bar agrees with the new direction relative to the BB middle (length 10, mult 2.0).
+                                    Exit fires immediately on a SuperTrend direction flip (E1). Other degradation signals (E2–E9) must score ≥6 across two consecutive closed strategy-TF bars before exit fires, preventing a single high-trend consolidation bar from closing a healthy position.
                                 </TextBlock>
                             </StackPanel>
                         </Border>

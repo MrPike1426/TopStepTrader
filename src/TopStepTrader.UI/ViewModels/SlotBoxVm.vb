@@ -233,7 +233,7 @@ Namespace TopStepTrader.UI.ViewModels
         Friend Slot As PositionSlot
 
         Private _stopPhaseLabel As String = String.Empty
-        ''' <summary>Human-readable current stop phase, e.g. "Breakeven" or "ProfitLock".</summary>
+        ''' <summary>Human-readable current stop phase, e.g. "Breakeven" or "ProfitTrail".</summary>
         Public Property StopPhaseLabel As String
             Get
                 Return _stopPhaseLabel
