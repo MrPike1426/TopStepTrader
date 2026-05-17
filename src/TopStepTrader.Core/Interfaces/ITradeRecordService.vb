@@ -20,6 +20,14 @@ Namespace TopStepTrader.Core.Interfaces
         ''' <summary>Returns the most recent trades, newest first, applying optional filters.</summary>
         Function GetRecentTradesAsync(count As Integer, Optional filter As TradeFilter = Nothing) As Task(Of IList(Of LiveTradeRecord))
 
+        ''' <summary>
+        ''' BUG-86 F3: returns every LiveTradeRecord still marked IsOpen, regardless of
+        ''' age. The Dashboard uses this to surface stale-open trades (IsOpen=true with
+        ''' an EntryTime older than the staleness threshold) so the user can trigger
+        ''' an on-demand reconcile.
+        ''' </summary>
+        Function GetOpenTradesAsync() As Task(Of IList(Of LiveTradeRecord))
+
         ''' <summary>BUG-64: efficient single-record lookup by primary key.</summary>
         Function GetTradeByIdAsync(id As Long) As Task(Of LiveTradeRecord)
 

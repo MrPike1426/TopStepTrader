@@ -160,6 +160,20 @@ Namespace TopStepTrader.Services.Trades
             End Try
         End Function
 
+        Public Async Function GetOpenTradesAsync() As Task(Of IList(Of LiveTradeRecord)) _
+            Implements ITradeRecordService.GetOpenTradesAsync
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
+                    Dim entities = Await repo.GetOpenRecordsAsync()
+                    Return entities.Select(AddressOf ToModel).ToList()
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.GetOpenTradesAsync failed")
+                Return New List(Of LiveTradeRecord)()
+            End Try
+        End Function
+
         Public Async Function GetTradeByIdAsync(id As Long) As Task(Of LiveTradeRecord) _
             Implements ITradeRecordService.GetTradeByIdAsync
             If id = 0 Then Return Nothing
@@ -176,8 +190,47 @@ Namespace TopStepTrader.Services.Trades
         End Function
 
         ''' <summary>
-        ''' On startup, finds any IsOpen records (indicating a crash before close was written)
+        ''' BUG-86 F1: cap on how far back the broker fill search will reach. Records whose
+        ''' EntryTime is older than this are skipped with a warning instead of widening the
+        ''' search window unbounded (which would risk REST timeouts and noise from years-old
+        ''' records that got stuck open).
+        ''' </summary>
+        Friend Const RecoveryLookbackMaxDays As Integer = 30
+
+        ''' <summary>
+        ''' BUG-86 F1: pure helper computing the /api/Trade/search lookback window.
+        ''' Returns the timestamp (ms) to use as the "since" cursor and the subset of
+        ''' records whose EntryTime falls inside that window. Records older than
+        ''' <see cref="RecoveryLookbackMaxDays"/> are returned in <paramref name="skipped"/>
+        ''' so the caller can warn and leave them alone.
+        ''' Buffer of 5 minutes is subtracted to tolerate clock skew + the gap between
+        ''' the EntryTime we recorded and the broker's CreationTimestamp on the entry fill.
+        ''' </summary>
+        Friend Shared Function ComputeLookbackSinceMs(records As IEnumerable(Of LiveTradeRecordEntity),
+                                                      nowUtc As DateTimeOffset,
+                                                      ByRef skipped As List(Of LiveTradeRecordEntity)) As (sinceMs As Long, eligible As List(Of LiveTradeRecordEntity))
+            Dim cap = nowUtc.AddDays(-RecoveryLookbackMaxDays)
+            Dim eligible As New List(Of LiveTradeRecordEntity)()
+            skipped = New List(Of LiveTradeRecordEntity)()
+            For Each rec In records
+                If rec.EntryTime < cap Then
+                    skipped.Add(rec)
+                Else
+                    eligible.Add(rec)
+                End If
+            Next
+            If eligible.Count = 0 Then Return (0L, eligible)
+            Dim oldest = eligible.Min(Function(r) r.EntryTime)
+            Dim sinceMs = oldest.AddMinutes(-5).ToUnixTimeMilliseconds()
+            Return (sinceMs, eligible)
+        End Function
+
+        ''' <summary>
+        ''' Finds any IsOpen records (force-flat or crash before close was written)
         ''' and queries TopStepX trade history to resolve their exit fills.
+        ''' BUG-86: also invoked periodically by <c>TradeReconciliationWorker</c> while
+        ''' the app is running — the method is idempotent (records already closed are
+        ''' filtered out by GetOpenRecordsAsync on each pass).
         ''' </summary>
         Public Async Function RecoverOpenTradesAsync(accountId As Long) As Task _
             Implements ITradeRecordService.RecoverOpenTradesAsync
@@ -197,8 +250,21 @@ Namespace TopStepTrader.Services.Trades
             If openRecords.Count = 0 Then Return
             _logger.LogInformation("TradeRecordService: {Count} open record(s) found — attempting crash recovery", openRecords.Count)
 
-            ' Search last 48 hours of fills from the broker
-            Dim sinceMs = DateTimeOffset.UtcNow.AddHours(-48).ToUnixTimeMilliseconds()
+            ' BUG-86 F1: derive lookback from the oldest open record's EntryTime (minus a
+            ' 5-minute buffer), capped at RecoveryLookbackMaxDays. The previous fixed
+            ' 48-hour window dropped force-closes that happened while the app was off
+            ' for a long weekend / multi-day outage.
+            Dim skipped As List(Of LiveTradeRecordEntity) = Nothing
+            Dim window = ComputeLookbackSinceMs(openRecords, DateTimeOffset.UtcNow, skipped)
+            For Each old In skipped
+                _logger.LogWarning(
+                    "TradeRecordService crash recovery: record {Id} ({Symbol}) EntryTime={Entry:o} is older than {Days} days — skipped; resolve manually",
+                    old.Id, old.Symbol, old.EntryTime, RecoveryLookbackMaxDays)
+            Next
+            openRecords = window.eligible
+            If openRecords.Count = 0 Then Return
+
+            Dim sinceMs = window.sinceMs
             Dim nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             Dim allFills As List(Of API.Models.Responses.PXTradeDto)
             Try

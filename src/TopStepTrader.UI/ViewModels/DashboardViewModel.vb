@@ -22,7 +22,16 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _riskSettings As RiskSettings
         Private ReadOnly _userPrefs As IUserPreferencesService
+        Private ReadOnly _tradeRecord As ITradeRecordService
         Private ReadOnly _logger As ILogger(Of DashboardViewModel)
+
+        ''' <summary>
+        ''' BUG-86 F3: an open trade older than this is flagged as stale on the
+        ''' Dashboard. Captures the long-tail case where the periodic reconciler
+        ''' has run but the broker had no matching exit fill (e.g. position genuinely
+        ''' still open per the broker, or a contract-roll mismatch).
+        ''' </summary>
+        Private Shared ReadOnly StaleOpenThreshold As TimeSpan = TimeSpan.FromHours(24)
 
         ' ── Broker label ─────────────────────────────────────────────────────
         Public ReadOnly Property ActiveBrokerLabel As String
@@ -278,11 +287,55 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        ' ── BUG-86 F3 — Stale open trades indicator ────────────────────────────
+
+        Private _staleOpenCount As Integer = 0
+        Public Property StaleOpenCount As Integer
+            Get
+                Return _staleOpenCount
+            End Get
+            Set(value As Integer)
+                If SetProperty(_staleOpenCount, value) Then
+                    OnPropertyChanged(NameOf(HasStaleOpen))
+                    OnPropertyChanged(NameOf(StaleOpenWarningText))
+                End If
+            End Set
+        End Property
+
+        Public ReadOnly Property HasStaleOpen As Boolean
+            Get
+                Return _staleOpenCount > 0
+            End Get
+        End Property
+
+        Public ReadOnly Property StaleOpenWarningText As String
+            Get
+                If _staleOpenCount <= 0 Then Return String.Empty
+                Dim suffix = If(_staleOpenCount = 1, "trade", "trades")
+                Return $"⚠  {_staleOpenCount} open {suffix} with no live position (>24 h)"
+            End Get
+        End Property
+
+        Private _isReconciling As Boolean = False
+        Public Property IsReconciling As Boolean
+            Get
+                Return _isReconciling
+            End Get
+            Set(value As Boolean)
+                If SetProperty(_isReconciling, value) Then
+                    ' RelayCommand routes CanExecuteChanged through CommandManager.RequerySuggested,
+                    ' so invalidating the manager is the correct way to refresh button enablement.
+                    RelayCommand.RaiseCanExecuteChanged()
+                End If
+            End Set
+        End Property
+
         ' ── Commands ─────────────────────────────────────────────────────────
 
         Public ReadOnly Property RefreshCommand As RelayCommand
         Public ReadOnly Property ApplyRiskCommand As RelayCommand
         Public ReadOnly Property ConnectCommand As RelayCommand
+        Public ReadOnly Property ReconcileNowCommand As RelayCommand
 
         ' ── Constructor ──────────────────────────────────────────────────────
 
@@ -292,6 +345,7 @@ Namespace TopStepTrader.UI.ViewModels
                        session As ITradingSessionContext,
                        riskOptions As IOptions(Of RiskSettings),
                        userPrefs As IUserPreferencesService,
+                       tradeRecord As ITradeRecordService,
                        logger As ILogger(Of DashboardViewModel))
             _accountService = accountService
             _authService = authService
@@ -299,6 +353,7 @@ Namespace TopStepTrader.UI.ViewModels
             _session = session
             _riskSettings = riskOptions.Value
             _userPrefs = userPrefs
+            _tradeRecord = tradeRecord
             _logger = logger
 
             ' Initialize from persisted session state (loaded from user-prefs.json at app startup)
@@ -312,6 +367,8 @@ Namespace TopStepTrader.UI.ViewModels
             RefreshCommand = New RelayCommand(AddressOf LoadData)
             ApplyRiskCommand = New RelayCommand(AddressOf ExecuteApplyRisk)
             ConnectCommand = New RelayCommand(AddressOf ExecuteConnect)
+            ReconcileNowCommand = New RelayCommand(AddressOf ExecuteReconcileNow,
+                                                   Function() Not _isReconciling)
         End Sub
 
         ' ── Data loading ─────────────────────────────────────────────────────
@@ -378,6 +435,9 @@ Namespace TopStepTrader.UI.ViewModels
                              DailyPnL = 0
                              Drawdown = 0
                          End Sub)
+
+                ' BUG-86 F3: refresh stale-open badge alongside the rest of the dashboard.
+                Await RefreshStaleOpenAsync()
 
                 Dispatch(Sub() StatusMessage = $"Updated {DateTime.Now:HH:mm:ss}")
 
@@ -462,6 +522,47 @@ Namespace TopStepTrader.UI.ViewModels
             Catch ex As Exception
                 StatusMessage = $"Error applying settings: {ex.Message}"
             End Try
+        End Sub
+
+        ' ── BUG-86 F3 — Stale-open trade reconcile-now ───────────────────────
+
+        Private Async Function RefreshStaleOpenAsync() As Task
+            Try
+                Dim openTrades = Await _tradeRecord.GetOpenTradesAsync()
+                Dim cutoff = DateTimeOffset.UtcNow - StaleOpenThreshold
+                Dim stale = openTrades.Where(Function(t) t.EntryTime <= cutoff).Count()
+                Dispatch(Sub() StaleOpenCount = stale)
+            Catch ex As Exception
+                _logger.LogWarning(ex, "RefreshStaleOpen failed")
+            End Try
+        End Function
+
+        Private Sub ExecuteReconcileNow(param As Object)
+            Task.Run(Async Function() As Task
+                         Try
+                             Dispatch(Sub()
+                                          IsReconciling = True
+                                          StatusMessage = "Reconciling open trades…"
+                                      End Sub)
+                             Dim accountId As Long = If(_session?.SelectedAccount?.Id, 0L)
+                             If accountId = 0 Then
+                                 Dispatch(Sub() StatusMessage = "Cannot reconcile — no account selected")
+                                 Return
+                             End If
+                             Await _tradeRecord.RecoverOpenTradesAsync(accountId)
+                             Await RefreshStaleOpenAsync()
+                             Dispatch(Sub()
+                                          StatusMessage = If(StaleOpenCount = 0,
+                                                             "✓ Reconcile complete — no stale trades remain",
+                                                             $"Reconcile complete — {StaleOpenCount} still stale")
+                                      End Sub)
+                         Catch ex As Exception
+                             _logger.LogWarning(ex, "ReconcileNow failed")
+                             Dispatch(Sub() StatusMessage = $"Reconcile failed: {ex.Message}")
+                         Finally
+                             Dispatch(Sub() IsReconciling = False)
+                         End Try
+                     End Function)
         End Sub
 
         Private Sub ExecuteConnect(param As Object)

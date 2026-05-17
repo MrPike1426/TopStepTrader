@@ -420,7 +420,13 @@ A scrolling log below the slot boxes records every AI pre-trade and mid-trade ch
 
 #### Crash Recovery
 
-On every app startup, `TradeRecordService.RecoverOpenTradesAsync` scans `TradeHistory.db` for any records still marked `IsOpen = True`. For each one it queries the TopStepX `/api/Trade/search` endpoint for fills in the last 48 hours, finds the exit fill (opposite side, timestamp after entry), computes realised P&L from `FavouriteContracts.PxPointValue`, and closes the record with `ExitReason = "Recovered"`.
+`TradeRecordService.RecoverOpenTradesAsync` scans `TradeHistory.db` for any records still marked `IsOpen = True`. For each one it queries the TopStepX `/api/Trade/search` endpoint for fills, finds the exit fill (opposite side, timestamp after entry), computes realised P&L from `FavouriteContracts.PxPointValue`, and closes the record with `ExitReason = "Recovered"`.
+
+The search window starts from the oldest open record's `EntryTime` (minus a 5-minute buffer), capped at 30 days. Records older than the cap are logged and skipped — they must be resolved manually.
+
+Reconciliation runs in two contexts (BUG-86):
+- **Background**: `TradeReconciliationWorker` (registered hosted service) fires an immediate pass when the user picks an account, then repeats every 5 minutes for the life of the session.
+- **On demand**: the Dashboard shows a warning banner whenever any open record's `EntryTime` is older than 24 hours. The "Reconcile now" button triggers the same recovery logic synchronously.
 
 #### Notes
 

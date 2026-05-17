@@ -90,9 +90,12 @@ Namespace TopStepTrader.Services
             ' ── Background workers
             services.AddSingleton(Of BarIngestionWorker)()
             services.AddSingleton(Of TokenRefreshWorker)()
+            ' BUG-86 F2: reconciles stuck "open" LiveTradeRecords every 5 minutes.
+            services.AddSingleton(Of TradeReconciliationWorker)()
 
             services.AddHostedService(Function(sp) sp.GetRequiredService(Of TokenRefreshWorker)())
             services.AddHostedService(Function(sp) sp.GetRequiredService(Of BarIngestionWorker)())
+            services.AddHostedService(Function(sp) sp.GetRequiredService(Of TradeReconciliationWorker)())
 
         End Sub
 

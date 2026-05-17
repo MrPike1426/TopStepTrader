@@ -29,23 +29,42 @@
                         Margin="16,0,0,0" Padding="10,4" FontSize="11"/>
             </StackPanel>
 
-            <!-- Active Broker Banner -->
-            <Border Grid.Row="2"
-                    Background="{StaticResource SurfaceBrush}"
-                    CornerRadius="6" Padding="16,10">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="ACTIVE PLATFORM:"
-                               Style="{StaticResource SectionHeadingStyle}"
-                               VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <TextBlock Text="{Binding ActiveBrokerLabel}"
-                               FontSize="15" FontWeight="SemiBold" Foreground="White"
-                               VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding ConnectionStatusText}"
-                               Foreground="{Binding ConnectionStatusColor, Converter={StaticResource BrushKeyConverter}}"
-                               FontSize="12" FontWeight="SemiBold"
-                               Margin="24,0,0,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Border>
+            <!-- Active Broker Banner + BUG-86 F3 Stale-Open Banner -->
+            <StackPanel Grid.Row="2">
+                <Border Background="{StaticResource SurfaceBrush}"
+                        CornerRadius="6" Padding="16,10">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="ACTIVE PLATFORM:"
+                                   Style="{StaticResource SectionHeadingStyle}"
+                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock Text="{Binding ActiveBrokerLabel}"
+                                   FontSize="15" FontWeight="SemiBold" Foreground="White"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding ConnectionStatusText}"
+                                   Foreground="{Binding ConnectionStatusColor, Converter={StaticResource BrushKeyConverter}}"
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Margin="24,0,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- BUG-86 F3: stale-open trade indicator. Only visible when at least one
+                     LiveTradeRecord has IsOpen=true and EntryTime older than 24h. -->
+                <Border Background="{StaticResource SurfaceBrush}"
+                        BorderBrush="{StaticResource WarningBrush}" BorderThickness="1"
+                        CornerRadius="6" Padding="16,10" Margin="0,8,0,0"
+                        Visibility="{Binding HasStaleOpen, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding StaleOpenWarningText}"
+                                   Foreground="{StaticResource WarningBrush}"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <Button Content="Reconcile now"
+                                Command="{Binding ReconcileNowCommand}"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Margin="16,0,0,0" Padding="12,4" FontSize="11"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
 
             <!-- Metric cards row -->
             <UniformGrid Grid.Row="4" Columns="4" HorizontalAlignment="Stretch">
