@@ -43,6 +43,16 @@ Namespace TopStepTrader.Core.Models
 
         Public Property MissCount As Integer
 
+        ''' <summary>
+        ''' BUG-79: UTC timestamp of the most recent successful live-position snapshot.
+        ''' Updated in HandleOpenPositionAsync when a non-null snapshot is observed; stays at
+        ''' DateTime.MinValue while the first snapshot is still pending. The per-tick reconcile
+        ''' uses this to force-release a slot whose snapshot has not refreshed for several
+        ''' minutes, defending against the case where SearchOpenPositionsAsync keeps returning
+        ''' a stale row long after the broker has actually closed the position.
+        ''' </summary>
+        Public Property LastSnapshotOkUtc As DateTime = DateTime.MinValue
+
         Public Property UnrealizedPnl As Decimal
 
         ''' <summary>14-period ATR value at the time this slot was opened.</summary>

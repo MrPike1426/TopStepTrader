@@ -391,6 +391,11 @@ Namespace TopStepTrader.Services.Trading
                 ' the actual position with the same contractId but netPos=0 and netPrice=0.
                 ' Without this filter the weighted-average entry price collapses to 0
                 ' producing OpenRate=0 → "fill price unavailable" in CreateBracket / Nudge.
+                '
+                ' BUG-79: this NetPos=0 filter applies to BOTH the positionId.HasValue branch and
+                ' the contract-id branch — once the broker reports the position as flat, the row
+                ' is rejected here and the caller sees Nothing, allowing the per-tick MissCount
+                ' mechanism to retire the slot.
                 Dim matches = allMatches.Where(Function(p) Math.Abs(p.NetPos) > 0).ToList()
                 If matches.Count = 0 Then Return Nothing
 

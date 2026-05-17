@@ -271,6 +271,11 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property WatchlistItems
         Private Const SyncMissThreshold As Integer = 3
 
+        ' BUG-79: defensive last-resort release timer. If the live-position snapshot has not
+        ' refreshed for this many minutes (TopStepX keeps replaying a stale row long after
+        ' the actual close), the slot is force-released regardless of MissCount progression.
+        Private Const SnapshotStaleMinutes As Integer = 5
+
         Private ReadOnly _barService As IBarIngestionService
         Private ReadOnly _orderService As IOrderService
         Private ReadOnly _session As ITradingSessionContext
@@ -1721,6 +1726,7 @@ Namespace TopStepTrader.UI.ViewModels
                 s2.IsOpen = True
                 s2.Health = Core.Enums.SlotHealth.Healthy
                 s2.MissCount = 0
+                s2.LastSnapshotOkUtc = DateTime.UtcNow  ' BUG-79: stamp on onboarding via reconcile
                 s2.ConsecutiveExitBars = 0
                 s2.UnrealizedPnl = 0D
                 s2.EntryReason = $"Onboarded (ADX {CInt(currentAdx)})"
@@ -2374,7 +2380,7 @@ Namespace TopStepTrader.UI.ViewModels
             Try
                 If Not _isMonitoring OrElse e Is Nothing OrElse e.PositionData Is Nothing Then Return
                 Dim data = e.PositionData
-                If String.IsNullOrEmpty(data.ContractId) OrElse data.NetPos = 0 Then Return
+                If String.IsNullOrEmpty(data.ContractId) Then Return
 
                 ' Map full contract ID → open slot via root-symbol matcher.
                 Dim slot As PositionSlot = Nothing
@@ -2394,6 +2400,30 @@ Namespace TopStepTrader.UI.ViewModels
                     End If
                 Next
                 If slot Is Nothing Then Return
+
+                ' BUG-79: broker reports the position is flat → release the slot immediately,
+                ' independent of the 15-second polling tick + MissCount escalation. The hub
+                ' push is the fastest authoritative signal that the position has actually
+                ' closed (manual flatten, SL/TP fill, force-flat). Without this branch the UI
+                ' slot can survive for tens of minutes if SearchOpenPositionsAsync keeps
+                ' replaying a stale row, as observed on the MES UAT bug (2026-05-13).
+                If data.NetPos = 0 Then
+                    Dim closingSlot = slot
+                    _logger.LogInformation(
+                        "ST+ OnHubPositionUpdated [Slot {Idx}] {Contract} reports NetPos=0 — releasing slot via hub close path",
+                        closingSlot.SlotIndex, closingSlot.Instrument)
+#Disable Warning BC42358
+                    Task.Run(Async Function() As Task
+                                 Try
+                                     Await ReleaseSlotAsync(closingSlot, "Closed by Broker (hub)")
+                                 Catch ex As Exception
+                                     _logger.LogWarning(ex, "ST+ OnHubPositionUpdated hub-release failed for [Slot {Idx}] {Contract}",
+                                                        closingSlot.SlotIndex, closingSlot.Instrument)
+                                 End Try
+                             End Function)
+#Enable Warning BC42358
+                    Return
+                End If
 
                 Dim brokerVwap As Decimal = CDec(data.NetPrice)
                 Dim brokerNetPos As Integer = Math.Abs(data.NetPos)
@@ -2575,6 +2605,12 @@ Namespace TopStepTrader.UI.ViewModels
                     snapshot = Await _orderService.GetLivePositionSnapshotAsync(
                         slot.AccountId, slot.Instrument, slot.PositionId)
                 Catch ex As Exception
+                    ' BUG-79: explicitly mark this tick as a miss when the broker call throws.
+                    ' The outer ProjectXOrderService also catches internally and returns Nothing,
+                    ' but a thrown exception here would otherwise leave `snapshot` at its initial
+                    ' Nothing value and rely on the Else branch — being explicit guarantees the
+                    ' MissCount escalation cannot be lost to a future refactor.
+                    snapshot = Nothing
                     _logger.LogWarning(ex, "ST+ GetLivePositionSnapshotAsync failed for [Slot {Idx}] on {Contract}", slot.SlotIndex, slot.Instrument)
                 End Try
             End If
@@ -2585,8 +2621,27 @@ Namespace TopStepTrader.UI.ViewModels
                     Await ReleaseSlotAsync(slot, "Closed by Broker")
                     Return
                 End If
+
+                ' BUG-79: defensive last-resort timeout. Even if MissCount keeps escalating, the
+                ' alternate-tick skip-snapshot optimisation could keep a slot alive longer than
+                ' SyncMissThreshold × tick if the snapshot fails are intermittent. Once the most
+                ' recent confirmed snapshot is older than SnapshotStaleMinutes, force release.
+                If Core.Trading.SnapshotStalenessGuard.IsStale(
+                       slot.LastSnapshotOkUtc, DateTime.UtcNow,
+                       TimeSpan.FromMinutes(SnapshotStaleMinutes)) Then
+                    _logger.LogWarning(
+                        "ST+ [Slot {Idx}] {Contract} snapshot stale for {Mins:F1} min — force-releasing slot",
+                        slot.SlotIndex, slot.Instrument,
+                        (DateTime.UtcNow - slot.LastSnapshotOkUtc).TotalMinutes)
+                    Await ReleaseSlotAsync(slot, "Closed by Broker (snapshot stale)")
+                    Return
+                End If
             Else
                 slot.MissCount = 0
+                ' BUG-79: stamp on every confirmed real snapshot. Synthesised "still-open"
+                ' sentinels (skipSnapshot path) deliberately do NOT update this clock so the
+                ' staleness check above relies on actual broker confirmations.
+                If Not skipSnapshot Then slot.LastSnapshotOkUtc = DateTime.UtcNow
                 ' BUG-38: PlaceOrderAsync only returns an orderId; the exchange position ID is
                 ' not available until after fill. Backfill it from the first live snapshot so
                 ' that ReleaseSlotAsync and EditPositionSlTpAsync can use the precise path.

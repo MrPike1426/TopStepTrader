@@ -116,6 +116,7 @@ Namespace TopStepTrader.UI.ViewModels
             slot.IsOpen              = True
             slot.Health              = SlotHealth.Healthy
             slot.MissCount           = 0
+            slot.LastSnapshotOkUtc   = DateTime.MinValue
             slot.UnrealizedPnl       = 0D
             slot.EntryReason         = FormatEntryReason(entryAdx)
             slot.ConsecutiveExitBars = 0
@@ -176,6 +177,7 @@ Namespace TopStepTrader.UI.ViewModels
                 s.PositionId   = Nothing
                 s.AccountId    = 0
                 s.MissCount    = 0
+                s.LastSnapshotOkUtc = DateTime.MinValue
                 s.UnrealizedPnl = 0D
                 s.EntryReason  = String.Empty
                 s.EntryTime    = DateTime.MinValue
