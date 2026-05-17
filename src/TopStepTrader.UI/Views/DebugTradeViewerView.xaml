@@ -123,7 +123,7 @@
                             <DataGridTextColumn Header="Entry Time" Binding="{Binding EntryTime}"  Width="*"/>
                             <DataGridTextColumn Header="PnL"        Binding="{Binding FinalPnL}"   Width="70"/>
                             <DataGridTextColumn Header="Status"     Binding="{Binding Status}"     Width="55"/>
-                            <DataGridTextColumn Header="Recon"      Binding="{Binding ReconciliationStatus}" Width="75"/>
+                            <DataGridTextColumn Header="Recon"      Binding="{Binding ReconciliationStatus}" Width="180"/>
                         </DataGrid.Columns>
                     </DataGrid>
 

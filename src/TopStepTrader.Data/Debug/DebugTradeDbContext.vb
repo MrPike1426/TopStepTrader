@@ -608,6 +608,91 @@ Namespace TopStepTrader.Data.Debug
             Return result
         End Function
 
+        ''' <summary>
+        ''' FEAT-56 / BUG-83 F5: if a local Closed action already exists for this TradeId
+        ''' with the same OrderId (or timestamp within 2 s of <paramref name="closedUtc"/>),
+        ''' upgrade its Source to "Local+Api" and overwrite Price + TimestampUtc with the API
+        ''' values (preserving the original Reason as a suffix). Otherwise insert a new "Api"
+        ''' Closed action. This ensures we never get two Closed rows in the action timeline
+        ''' when the engine emitted a local Closed and reconciliation also fires.
+        ''' </summary>
+        ''' <remarks>
+        ''' This is a destructive merge on Price/TimestampUtc — the original local values are
+        ''' not preserved separately. The "Local+Api" Source tag signals that the row was merged.
+        ''' </remarks>
+        Public Async Function UpsertClosedActionAsync(
+                tradeId As String,
+                closingOrderId As Long,
+                closedUtc As DateTime,
+                exitPrice As Decimal,
+                quantity As Integer,
+                reason As String) As Task
+            Using conn = New SqliteConnection(_connectionString)
+                Await conn.OpenAsync()
+                Using tx = conn.BeginTransaction()
+                    Dim existingId As Long? = Nothing
+                    Dim existingReason As String = Nothing
+                    Using sel = conn.CreateCommand()
+                        sel.Transaction = tx
+                        sel.CommandText =
+                            "SELECT Id, Reason FROM DebugTradeActions" &
+                            " WHERE TradeId = @T AND ActionType = 'Closed'" &
+                            " AND (OrderId = @O OR ABS((julianday(TimestampUtc) - julianday(@Ts)) * 86400.0) <= 2)" &
+                            " ORDER BY Id LIMIT 1"
+                        sel.Parameters.AddWithValue("@T", tradeId)
+                        sel.Parameters.AddWithValue("@O", closingOrderId)
+                        sel.Parameters.AddWithValue("@Ts", closedUtc.ToString("O"))
+                        Using r = Await sel.ExecuteReaderAsync()
+                            If Await r.ReadAsync() Then
+                                existingId = r.GetInt64(0)
+                                existingReason = If(r.IsDBNull(1), Nothing, r.GetString(1))
+                            End If
+                        End Using
+                    End Using
+
+                    If existingId.HasValue Then
+                        Using upd = conn.CreateCommand()
+                            upd.Transaction = tx
+                            upd.CommandText =
+                                "UPDATE DebugTradeActions SET" &
+                                " Source = 'Local+Api'," &
+                                " Price = @P," &
+                                " TimestampUtc = @Ts," &
+                                " OrderId = @O," &
+                                " Reason = @R" &
+                                " WHERE Id = @Id"
+                            upd.Parameters.AddWithValue("@P", CDbl(exitPrice))
+                            upd.Parameters.AddWithValue("@Ts", closedUtc.ToString("O"))
+                            upd.Parameters.AddWithValue("@O", closingOrderId)
+                            Dim mergedReason As String =
+                                If(String.IsNullOrEmpty(existingReason),
+                                   If(reason, ""),
+                                   existingReason & " | api:" & If(reason, ""))
+                            upd.Parameters.AddWithValue("@R", CObj(mergedReason))
+                            upd.Parameters.AddWithValue("@Id", existingId.Value)
+                            Await upd.ExecuteNonQueryAsync()
+                        End Using
+                    Else
+                        Using ins = conn.CreateCommand()
+                            ins.Transaction = tx
+                            ins.CommandText =
+                                "INSERT INTO DebugTradeActions" &
+                                " (TradeId, TimestampUtc, ActionType, Price, Quantity, OrderId, Reason, Source)" &
+                                " VALUES (@T, @Ts, 'Closed', @P, @Q, @O, @R, 'Api')"
+                            ins.Parameters.AddWithValue("@T", tradeId)
+                            ins.Parameters.AddWithValue("@Ts", closedUtc.ToString("O"))
+                            ins.Parameters.AddWithValue("@P", CDbl(exitPrice))
+                            ins.Parameters.AddWithValue("@Q", quantity)
+                            ins.Parameters.AddWithValue("@O", closingOrderId)
+                            ins.Parameters.AddWithValue("@R", If(reason IsNot Nothing, CObj(reason), DBNull.Value))
+                            Await ins.ExecuteNonQueryAsync()
+                        End Using
+                    End If
+                    tx.Commit()
+                End Using
+            End Using
+        End Function
+
         ''' <summary>FEAT-56: persist the outcome of a reconciliation pass for a single trade.</summary>
         Public Async Function ApplyReconciliationAsync(
                 tradeId As String,

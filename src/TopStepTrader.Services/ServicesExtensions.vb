@@ -83,7 +83,8 @@ Namespace TopStepTrader.Services
             ' ── Debug trade capture (FEAT-39) — Singleton; background Channel consumer
             services.AddSingleton(Of DebugTradeDbContext)()
             services.AddSingleton(Of IDebugTradeCaptureService, DebugTradeCaptureService)()
-            ' ── Debug trade reconciliation (FEAT-56)
+            ' ── Debug trade reconciliation (FEAT-56 / BUG-83)
+            services.AddSingleton(Of IDebugReconciliationOrderClient, PXOrderClientReconciliationAdapter)()
             services.AddSingleton(Of IDebugTradeReconciliationService, DebugTradeReconciliationService)()
 
             ' ── Background workers
