@@ -50,6 +50,42 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Function BackfillSnapshotsAsync(accountId As Long) As Task
 
+        ''' <summary>
+        ''' FEAT-57: Persists a TradeSignal row and returns its Id. Used by the live trade
+        ''' lifecycle to obtain a SignalId for the linked TradeOutcomes row.
+        ''' </summary>
+        Function SaveSignalAsync(signal As TradeSignal) As Task(Of Long)
+
+        ''' <summary>
+        ''' FEAT-57: Inserts a new TradeOutcomes row with IsOpen=true. The supplied
+        ''' SignalId/recordId override whatever the caller may have set on the model so
+        ''' the cross-DB linkage to LiveTradeRecord (recordId stashed in OrderId) and the
+        ''' just-persisted Signal row is authoritative. Returns the new outcome Id.
+        ''' </summary>
+        Function OpenOutcomeAsync(signalId As Long, recordId As Long, model As TradeOutcome) As Task(Of Long)
+
+        ''' <summary>
+        ''' FEAT-57: Resolves an open TradeOutcomes row with the realised exit data.
+        ''' No-op when outcomeId = 0.
+        ''' </summary>
+        Function ResolveOutcomeAsync(outcomeId As Long, exitTime As DateTimeOffset,
+                                     exitPrice As Decimal, pnl As Decimal,
+                                     isWinner As Boolean, exitReason As String) As Task
+
+        ''' <summary>
+        ''' FEAT-58: Persists a TradeSetupSnapshot (indicator + context snapshot at signal time)
+        ''' linked to the supplied TradeOutcomeId. The supplied id overrides whatever was set
+        ''' on the model. Returns the new row Id, or 0 on failure / outcomeId = 0.
+        ''' </summary>
+        Function SaveSetupSnapshotAsync(tradeOutcomeId As Long, snapshot As TradeSetupSnapshot) As Task(Of Long)
+
+        ''' <summary>
+        ''' FEAT-58: Upserts a TradeLifespan record (MAE/MFE, duration, trail counts, R-multiple)
+        ''' for the supplied TradeOutcomeId. If a row already exists for the outcome it is updated
+        ''' in place; otherwise a new row is inserted. No-op when outcomeId = 0.
+        ''' </summary>
+        Function SaveLifespanRecordAsync(tradeOutcomeId As Long, record As TradeLifespan) As Task
+
     End Interface
 
 End Namespace

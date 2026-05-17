@@ -59,7 +59,9 @@ Namespace TopStepTrader.Services.Trading
                                  adxValues As Single(),
                                  atrValues As Single(),
                                  Optional vwapValues As Single() = Nothing,
-                                 Optional rsiValues As Single() = Nothing) As ExitEvaluation
+                                 Optional rsiValues As Single() = Nothing,
+                                 Optional breakevenMinTicks As Integer = 0,
+                                 Optional tickSize As Decimal = 0D) As ExitEvaluation
 
             Dim n = closes.Count - 1
             Dim eval As New ExitEvaluation()
@@ -254,7 +256,8 @@ Namespace TopStepTrader.Services.Trading
             ' ── Phased stop calculation ──────────────────────────────────────────
             Dim phasedStop = ComputePhasedStop(slot, closes(n),
                                                If(Not Single.IsNaN(stLines(n)), CDec(stLines(n)), slot.StopPrice),
-                                               If(n < atrValues.Length AndAlso Not Single.IsNaN(atrValues(n)), CDec(atrValues(n)), 0D))
+                                               If(n < atrValues.Length AndAlso Not Single.IsNaN(atrValues(n)), CDec(atrValues(n)), 0D),
+                                               breakevenMinTicks, tickSize)
             eval.PhasedStopPrice = phasedStop.NewStop
             eval.StopPhase       = phasedStop.Phase
 
@@ -301,7 +304,9 @@ Namespace TopStepTrader.Services.Trading
         Friend Function ComputePhasedStop(slot As PositionSlot,
                                            currentPrice As Decimal,
                                            stLine As Decimal,
-                                           currentAtr As Decimal) As (NewStop As Decimal, Phase As StopPhase)
+                                           currentAtr As Decimal,
+                                           Optional breakevenMinTicks As Integer = 0,
+                                           Optional tickSize As Decimal = 0D) As (NewStop As Decimal, Phase As StopPhase)
             If slot.EntryPrice = 0D OrElse slot.InitialRisk = 0D Then
                 Return (slot.StopPrice, slot.StopPhase)
             End If
@@ -335,7 +340,18 @@ Namespace TopStepTrader.Services.Trading
                 End If
 
             ElseIf profit >= 1D * R Then
-                If phase < StopPhase.Breakeven Then phase = StopPhase.Breakeven
+                If phase < StopPhase.Breakeven Then
+                    ' BUG-87: enforce the per-favourite minimum profit in ticks before arming Breakeven.
+                    If breakevenMinTicks > 0D AndAlso tickSize > 0D Then
+                        Dim profitTicks As Decimal = profit / tickSize
+                        If profitTicks < breakevenMinTicks Then
+                            ' Stay in Initial — keep trailing the ST line.
+                            newStop = If(isLng, Math.Max(newStop, stLine), Math.Min(newStop, stLine))
+                            Return (newStop, slot.StopPhase)
+                        End If
+                    End If
+                    phase = StopPhase.Breakeven
+                End If
                 Dim beStop = If(isLng, entry + 0.5D * R, entry - 0.5D * R)
                 newStop = If(isLng, Math.Max(newStop, beStop), Math.Min(newStop, beStop))
 

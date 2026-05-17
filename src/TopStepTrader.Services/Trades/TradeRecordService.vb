@@ -254,6 +254,21 @@ Namespace TopStepTrader.Services.Trades
                 Catch ex As Exception
                     _logger.LogWarning(ex, "TradeRecordService: failed to close recovered record {Id}", rec.Id)
                 End Try
+
+                ' FEAT-57: also resolve any dangling open TradeOutcomes row whose
+                ' OrderId == this LiveTradeRecord.Id (the link we stash at entry).
+                Try
+                    Using scope = _scopeFactory.CreateScope()
+                        Dim outcomeRepo = scope.ServiceProvider.GetRequiredService(Of TradeOutcomeRepository)()
+                        Dim openOutcomes = Await outcomeRepo.GetOpenOutcomesAsync()
+                        Dim match = openOutcomes.FirstOrDefault(Function(o) o.OrderId.HasValue AndAlso o.OrderId.Value = rec.Id)
+                        If match IsNot Nothing Then
+                            Await outcomeRepo.ResolveOutcomeAsync(match.Id, exitTime, exitPx, pnl, pnl > 0D, "Recovered")
+                        End If
+                    End Using
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "TradeRecordService: failed to resolve open outcome for recovered record {Id}", rec.Id)
+                End Try
             Next
         End Function
 
@@ -261,6 +276,174 @@ Namespace TopStepTrader.Services.Trades
             Dim v As Long
             Long.TryParse(raw, v)
             Return v
+        End Function
+
+        ' ── FEAT-57: TradeOutcomes lifecycle ────────────────────────────────
+        ' These methods wire the previously-orphan TradeOutcomeRepository into the live
+        ' trade lifecycle so ML retraining can consume real-world P&L outcomes instead
+        ' of falling back to look-ahead synthetic labels in SignalModelTrainer.
+        '
+        ' Cross-DB note: TradeOutcomes lives in AppDbContext (app.db); LiveTradeRecords
+        ' lives in TradeHistoryDbContext (TradeHistory.db). The recordId passed to
+        ' OpenOutcomeAsync is stashed in TradeOutcomes.OrderId so the crash-recovery
+        ' path can find the matching open outcome row by LiveTradeRecord.Id alone.
+
+        Public Async Function SaveSignalAsync(signal As TradeSignal) As Task(Of Long) _
+            Implements ITradeRecordService.SaveSignalAsync
+            If signal Is Nothing Then Return 0
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of SignalRepository)()
+                    Return Await repo.SaveSignalAsync(signal)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.SaveSignalAsync failed for {Contract}", signal.ContractId)
+                Return 0
+            End Try
+        End Function
+
+        Public Async Function OpenOutcomeAsync(signalId As Long, recordId As Long,
+                                                model As TradeOutcome) As Task(Of Long) _
+            Implements ITradeRecordService.OpenOutcomeAsync
+            If model Is Nothing Then Return 0
+            Try
+                model.SignalId = signalId
+                ' OrderId stores the LiveTradeRecord.Id so RecoverOpenTradesAsync
+                ' can resolve dangling open outcomes after a crash.
+                model.OrderId = If(recordId > 0, CType(recordId, Long?), Nothing)
+                model.IsOpen = True
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of TradeOutcomeRepository)()
+                    Return Await repo.SaveOutcomeAsync(model)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.OpenOutcomeAsync failed for {Contract}", model.ContractId)
+                Return 0
+            End Try
+        End Function
+
+        Public Async Function ResolveOutcomeAsync(outcomeId As Long, exitTime As DateTimeOffset,
+                                                   exitPrice As Decimal, pnl As Decimal,
+                                                   isWinner As Boolean, exitReason As String) As Task _
+            Implements ITradeRecordService.ResolveOutcomeAsync
+            If outcomeId = 0 Then Return
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of TradeOutcomeRepository)()
+                    Await repo.ResolveOutcomeAsync(outcomeId, exitTime, exitPrice, pnl, isWinner, exitReason)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.ResolveOutcomeAsync failed for outcome {Id}", outcomeId)
+            End Try
+        End Function
+
+        ' ── FEAT-58: TradeSetupSnapshot + TradeLifespan persistence ──────────
+        ' Linked to TradeOutcomes via TradeOutcomeId. Both live in AppDbContext (app.db).
+        ' Together with FEAT-57 these complete the ML training triple: (outcome label) +
+        ' (entry-time feature snapshot) + (lifespan metrics like MAE/MFE/R-multiple).
+
+        Public Async Function SaveSetupSnapshotAsync(tradeOutcomeId As Long, snapshot As TradeSetupSnapshot) As Task(Of Long) _
+            Implements ITradeRecordService.SaveSetupSnapshotAsync
+            If tradeOutcomeId = 0 OrElse snapshot Is Nothing Then Return 0
+            Try
+                Dim entity = MapSnapshotToEntity(snapshot)
+                entity.TradeOutcomeId = tradeOutcomeId
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ITradeSetupSnapshotRepository)()
+                    Return Await repo.SaveAsync(entity)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.SaveSetupSnapshotAsync failed for outcome {Id}", tradeOutcomeId)
+                Return 0
+            End Try
+        End Function
+
+        Public Async Function SaveLifespanRecordAsync(tradeOutcomeId As Long, record As TradeLifespan) As Task _
+            Implements ITradeRecordService.SaveLifespanRecordAsync
+            If tradeOutcomeId = 0 OrElse record Is Nothing Then Return
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ITradeLifespanRepository)()
+                    ' Upsert on TradeOutcomeId — same trade can transit ReleaseSlot multiple
+                    ' times via different paths (engine exit, P&L guard, crash recovery).
+                    Dim existing = Await repo.GetByTradeOutcomeIdAsync(tradeOutcomeId)
+                    Dim entity = MapLifespanToEntity(record)
+                    entity.TradeOutcomeId = tradeOutcomeId
+                    If existing IsNot Nothing Then
+                        entity.Id = existing.Id
+                        entity.CreatedAt = existing.CreatedAt
+                        Await repo.UpdateAsync(entity)
+                    Else
+                        Await repo.SaveAsync(entity)
+                    End If
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.SaveLifespanRecordAsync failed for outcome {Id}", tradeOutcomeId)
+            End Try
+        End Function
+
+        Private Shared Function MapSnapshotToEntity(s As TradeSetupSnapshot) As TradeSetupSnapshotEntity
+            Return New TradeSetupSnapshotEntity With {
+                .TradeOutcomeId = s.TradeOutcomeId,
+                .CapturedAt = s.CapturedAt,
+                .Tenkan = s.Tenkan,
+                .Kijun = s.Kijun,
+                .Cloud1 = s.Cloud1,
+                .Cloud2 = s.Cloud2,
+                .Ema21 = s.Ema21,
+                .Ema50 = s.Ema50,
+                .MacdHist = s.MacdHist,
+                .MacdHistPrev = s.MacdHistPrev,
+                .StochRsiK = s.StochRsiK,
+                .PlusDI = s.PlusDI,
+                .MinusDI = s.MinusDI,
+                .AdxValue = s.AdxValue,
+                .Rsi14 = s.Rsi14,
+                .VidyaValue = s.VidyaValue,
+                .CmoValue = s.CmoValue,
+                .DeltaVol = s.DeltaVol,
+                .LongCount = s.LongCount,
+                .ShortCount = s.ShortCount,
+                .TotalConditions = s.TotalConditions,
+                .UpPct = s.UpPct,
+                .DownPct = s.DownPct,
+                .SignalBarOpen = s.SignalBarOpen,
+                .SignalBarHigh = s.SignalBarHigh,
+                .SignalBarLow = s.SignalBarLow,
+                .SignalBarClose = s.SignalBarClose,
+                .SignalBarVolume = s.SignalBarVolume,
+                .AtrValue = s.AtrValue,
+                .SessionWindow = If(s.SessionWindow, String.Empty),
+                .DayOfWeek = s.DayOfWeek,
+                .HourOfDay = s.HourOfDay,
+                .StrategyName = If(s.StrategyName, String.Empty),
+                .PersonaName = If(s.PersonaName, String.Empty),
+                .SlMultiple = s.SlMultiple,
+                .TpMultiple = s.TpMultiple,
+                .TimeframeMinutes = s.TimeframeMinutes
+            }
+        End Function
+
+        Private Shared Function MapLifespanToEntity(r As TradeLifespan) As TradeLifespanRecordEntity
+            Return New TradeLifespanRecordEntity With {
+                .TradeOutcomeId = r.TradeOutcomeId,
+                .MaxAdverseExcursionDollars = r.MaxAdverseExcursionDollars,
+                .MaxFavorableExcursionDollars = r.MaxFavorableExcursionDollars,
+                .MaxAdverseExcursionTicks = r.MaxAdverseExcursionTicks,
+                .MaxFavorableExcursionTicks = r.MaxFavorableExcursionTicks,
+                .SlRatchetCount = r.SlRatchetCount,
+                .TpAdvanceCount = r.TpAdvanceCount,
+                .FreeRideActivated = r.FreeRideActivated,
+                .FreeRideActivatedAtMinutes = r.FreeRideActivatedAtMinutes,
+                .DurationMinutes = r.DurationMinutes,
+                .BarsInTrade = r.BarsInTrade,
+                .EntrySessionWindow = If(r.EntrySessionWindow, String.Empty),
+                .ExitSessionWindow = If(r.ExitSessionWindow, String.Empty),
+                .CrossedSessionBoundary = r.CrossedSessionBoundary,
+                .RMultiple = r.RMultiple,
+                .CreatedAt = r.CreatedAt,
+                .UpdatedAt = DateTimeOffset.UtcNow
+            }
         End Function
 
         Public Async Function LogStopAdjustmentAsync(liveTradeRecordId As Long,

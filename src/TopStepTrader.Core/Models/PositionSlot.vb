@@ -92,6 +92,38 @@ Namespace TopStepTrader.Core.Models
         ''' <summary>Row ID in LiveTradeRecords (TradeHistory.db). 0 = not yet persisted.</summary>
         Public Property TradeRecordId As Long = 0
 
+        ''' <summary>FEAT-57: Row ID in TradeOutcomes (app.db). 0 = not yet persisted.
+        ''' Set when the outcome row is opened at entry confirmation; consumed when
+        ''' ReleaseSlotAsync resolves the outcome at exit.</summary>
+        Public Property TradeOutcomeId As Long = 0
+
+        ''' <summary>FEAT-58: Worst unrealised P&amp;L (most-negative dollars) observed during the trade.
+        ''' Updated on every management tick alongside <c>UnrealizedPnl</c>. Persisted at close as the
+        ''' absolute value on <c>TradeLifespanRecords.MaxAdverseExcursionDollars</c>.</summary>
+        Public Property MaxAdverseExcursionUsd As Decimal = 0D
+
+        ''' <summary>FEAT-58: Best unrealised P&amp;L (most-positive dollars) observed during the trade.
+        ''' Updated on every management tick alongside <c>UnrealizedPnl</c>. Persisted at close on
+        ''' <c>TradeLifespanRecords.MaxFavorableExcursionDollars</c>.</summary>
+        Public Property MaxFavorableExcursionUsd As Decimal = 0D
+
+        ''' <summary>FEAT-58: Number of times the ExitSignalEngine returned a different phase or
+        ''' a different stop price during the trade. Counts stop-trail steps as well as ladder
+        ''' phase transitions. Persisted at close on <c>TradeLifespanRecords.SlRatchetCount</c>.</summary>
+        Public Property SlRatchetCount As Integer = 0
+
+        ''' <summary>FEAT-58: Minutes from entry to the first tick where <c>StopPhase</c> reached
+        ''' <c>FreeRide</c>. Stays at 0 if the trade never reached FreeRide. Persisted on
+        ''' <c>TradeLifespanRecords.FreeRideActivatedAtMinutes</c>; the boolean
+        ''' <c>FreeRideActivated</c> column is derived as <c>(FreeRideActivatedAtMinutes &gt; 0)</c>.</summary>
+        Public Property FreeRideActivatedAtMinutes As Single = 0F
+
+        ''' <summary>FEAT-58: Trading session window label (e.g. "Asia", "London", "US-Pre", "US-RTH",
+        ''' "US-Post") captured at entry confirmation. Persisted on
+        ''' <c>TradeLifespanRecords.EntrySessionWindow</c> and used to derive
+        ''' <c>CrossedSessionBoundary</c> at close.</summary>
+        Public Property EntrySessionWindow As String = String.Empty
+
         ''' <summary>Most recent ADX value from the 15-second monitoring tick. Updated live; 0 until first tick.</summary>
         Public Property CurrentAdx As Single = 0F
 

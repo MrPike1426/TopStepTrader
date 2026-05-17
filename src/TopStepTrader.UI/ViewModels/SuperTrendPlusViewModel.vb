@@ -1852,7 +1852,21 @@ Namespace TopStepTrader.UI.ViewModels
                 If fc.PxMinStopDollars > 0D AndAlso fc.PxTickValue > 0D Then
                     minTicks = CInt(Math.Ceiling(fc.PxMinStopDollars / fc.PxTickValue))
                 End If
-                stopTicks = Math.Max(rawTicks, minTicks)
+                Dim initialStopTicks = Math.Max(rawTicks, minTicks)
+                ' BUG-87: Clamp initial SL ticks to per-favourite min/max
+                If fc.PhasedTrailMinInitialStopTicks > 0 AndAlso initialStopTicks < fc.PhasedTrailMinInitialStopTicks Then
+                    _logger.LogInformation(
+                        "ST+ [{Contract}] initial SL clamped UP to floor: {Old}t → {New}t (fav floor)",
+                        contractId, initialStopTicks, fc.PhasedTrailMinInitialStopTicks)
+                    initialStopTicks = fc.PhasedTrailMinInitialStopTicks
+                End If
+                If fc.PhasedTrailMaxInitialStopTicks > 0 AndAlso initialStopTicks > fc.PhasedTrailMaxInitialStopTicks Then
+                    _logger.LogInformation(
+                        "ST+ [{Contract}] initial SL clamped DOWN to cap: {Old}t → {New}t (fav cap)",
+                        contractId, initialStopTicks, fc.PhasedTrailMaxInitialStopTicks)
+                    initialStopTicks = fc.PhasedTrailMaxInitialStopTicks
+                End If
+                stopTicks = initialStopTicks
             End If
             _logger.LogInformation("ST+ bracket for {Contract}: SL={SL} ticks (flip-only; no hard TP) lastClose={Close}, stLine={St}",
                                    contractId, If(stopTicks.HasValue, stopTicks.Value.ToString(), "none"),
@@ -2010,15 +2024,15 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim fcSub = FavouriteContracts.TryGetBySymbolResolved(contractId, _contractResolver)
                 Dim pxIdSub As String = If(fcSub IsNot Nothing, fcSub.PxContractId, Nothing)
                 If Not String.IsNullOrEmpty(pxIdSub) Then
-                    #Disable Warning BC42358
-                                        Task.Run(Async Function() As Task
-                                                     Try
-                                                         Await _marketHub.SubscribeContractAsync(pxIdSub)
-                                                     Catch ex As Exception
-                                                         _logger.LogDebug(ex, "ST+ MarketHub subscribe failed for {Id}", pxIdSub)
-                                                     End Try
-                                                 End Function)
-                    #Enable Warning BC42358
+#Disable Warning BC42358
+                    Task.Run(Async Function() As Task
+                                 Try
+                                     Await _marketHub.SubscribeContractAsync(pxIdSub)
+                                 Catch ex As Exception
+                                     _logger.LogDebug(ex, "ST+ MarketHub subscribe failed for {Id}", pxIdSub)
+                                 End Try
+                             End Function)
+#Enable Warning BC42358
                 End If
             End If
 
@@ -2085,7 +2099,9 @@ Namespace TopStepTrader.UI.ViewModels
             slot.InitialRisk = 0D  ' computed once EntryPrice is confirmed
             slot.EntryAtr = 0D  ' set from bar data below
 
-            ' Persist opening trade record to TradeHistory.db
+            ' Persist opening trade record to TradeHistory.db; also persist the matching
+            ' Signal + open TradeOutcome row in app.db (FEAT-57) so ML retraining can
+            ' consume real-world P&L outcomes instead of look-ahead synthetic labels.
 #Disable Warning BC42358
             Task.Run(Async Function()
                          Try
@@ -2110,7 +2126,130 @@ Namespace TopStepTrader.UI.ViewModels
                                  .FeesUsd = fees,
                                  .IsOpen = True
                              }
-                             slot.TradeRecordId = Await _tradeRecordService.OpenTradeAsync(rec)
+                             Dim newRecId = Await _tradeRecordService.OpenTradeAsync(rec)
+                             slot.TradeRecordId = newRecId
+
+                             ' FEAT-57: persist Signal + open TradeOutcome row. The ViewModel
+                             ' doesn't carry a SignalId through to entry, so synthesise one.
+                             ' SignalConfidence uses the entry ADX (proxy until FEAT-58 lands
+                             ' an actual ML score). ModelVersion is fixed to SuperTrendPlus.v1.
+                             Try
+                                 Dim tfMins As Integer = CInt(_selectedTimeframe.Replace("min", "").Replace("hr", ""))
+                                 If _selectedTimeframe.EndsWith("hr") Then tfMins *= 60
+                                 Dim sigType As Core.Enums.SignalType =
+                                     If(side = "Buy", Core.Enums.SignalType.Buy, Core.Enums.SignalType.Sell)
+                                 Dim sigConfidence As Single = slot.EntryAdx
+                                 Const ModelVer As String = "SuperTrendPlus.v1"
+
+                                 Dim signal As New Core.Models.TradeSignal With {
+                                     .ContractId = contractId,
+                                     .GeneratedAt = DateTimeOffset.UtcNow,
+                                     .SignalType = sigType,
+                                     .Confidence = sigConfidence,
+                                     .ModelVersion = ModelVer,
+                                     .SuggestedEntryPrice = CDec(lastClose),
+                                     .SuggestedStopLoss = stLine,
+                                     .SuggestedTakeProfit = Nothing
+                                 }
+                                 Dim sigId = Await _tradeRecordService.SaveSignalAsync(signal)
+                                 If sigId > 0 Then
+                                     Dim outcome As New Core.Models.TradeOutcome With {
+                                         .ContractId = contractId,
+                                         .Timeframe = tfMins,
+                                         .SignalType = If(side = "Buy", "Buy", "Sell"),
+                                         .SignalConfidence = sigConfidence,
+                                         .ModelVersion = ModelVer,
+                                         .EntryTime = DateTimeOffset.UtcNow,
+                                         .EntryPrice = CDec(lastClose)
+                                     }
+                                     slot.TradeOutcomeId = Await _tradeRecordService.OpenOutcomeAsync(sigId, newRecId, outcome)
+
+                                     ' FEAT-58: persist the indicator + context snapshot linked to the
+                                     ' new TradeOutcomes row. Fields not produced by SuperTrend+ Autopilot
+                                     ' (Ichimoku, EMA21/50, MACD, StochRSI, VIDYA, CMO, ΔVolume) are left
+                                     ' at default 0 for forward-compatibility with the Multi-Confluence
+                                     ' strategy snapshot. LongCount/ShortCount are mapped from the persona
+                                     ' ADX-band (1=Mellow Birds / 2=Latte / 3=Espresso) on the trade side.
+                                     If slot.TradeOutcomeId > 0 Then
+                                         Try
+                                             Dim entrySession As String = ResolveSessionWindow(DateTime.UtcNow)
+                                             slot.EntrySessionWindow = entrySession
+
+                                             Dim snapBars = Await _barService.GetLiveBarsAsync(contractId, MapTimeframe(_selectedTimeframe), BarsToFetch)
+                                             Dim adxAtEntry As Single = 0F
+                                             Dim plusDiAtEntry As Single = 0F
+                                             Dim minusDiAtEntry As Single = 0F
+                                             Dim rsiAtEntry As Single = 0F
+                                             Dim atrAtEntry As Decimal = 0D
+                                             Dim openPx As Decimal = 0D
+                                             Dim highPx As Decimal = 0D
+                                             Dim lowPx As Decimal = 0D
+                                             Dim closePx As Decimal = CDec(lastClose)
+                                             Dim volPx As Long = 0L
+                                             If snapBars IsNot Nothing AndAlso snapBars.Count >= 14 Then
+                                                 Dim eHighs = snapBars.Select(Function(b) b.High).ToList()
+                                                 Dim eLows = snapBars.Select(Function(b) b.Low).ToList()
+                                                 Dim eCloses = snapBars.Select(Function(b) b.Close).ToList()
+                                                 Dim dmi = TechnicalIndicators.DMI(eHighs, eLows, eCloses, period:=14)
+                                                 Dim atr = TechnicalIndicators.ATR(eHighs, eLows, eCloses, period:=14)
+                                                 Dim rsi = TechnicalIndicators.RSI(eCloses, 14)
+                                                 Dim eN = snapBars.Count - 1
+                                                 If Not Single.IsNaN(dmi.ADX(eN)) Then adxAtEntry = dmi.ADX(eN)
+                                                 If Not Single.IsNaN(dmi.PlusDI(eN)) Then plusDiAtEntry = dmi.PlusDI(eN)
+                                                 If Not Single.IsNaN(dmi.MinusDI(eN)) Then minusDiAtEntry = dmi.MinusDI(eN)
+                                                 If rsi IsNot Nothing AndAlso rsi.Length > eN AndAlso Not Single.IsNaN(rsi(eN)) Then rsiAtEntry = rsi(eN)
+                                                 If atr IsNot Nothing AndAlso atr.Length > eN AndAlso Not Single.IsNaN(atr(eN)) Then atrAtEntry = CDec(atr(eN))
+                                                 Dim entryBar = snapBars(eN)
+                                                 openPx = entryBar.Open
+                                                 highPx = entryBar.High
+                                                 lowPx = entryBar.Low
+                                                 closePx = entryBar.Close
+                                                 volPx = CLng(entryBar.Volume)
+                                             End If
+
+                                             Dim band As Integer = _slotManager.BandForAdx(adxAtEntry)
+                                             Dim longCount As Integer = If(side = "Buy", band, 0)
+                                             Dim shortCount As Integer = If(side = "Buy", 0, band)
+                                             Dim slMult As Single = If(persona IsNot Nothing, CSng(persona.SlMultipleOfN), 0F)
+                                             Dim tpMult As Single = If(persona IsNot Nothing, CSng(persona.TpMultipleOfN), 0F)
+                                             Dim nowUtc As DateTime = DateTime.UtcNow
+
+                                             Dim snapshotModel As New Core.Models.TradeSetupSnapshot With {
+                                                 .TradeOutcomeId = slot.TradeOutcomeId,
+                                                 .CapturedAt = DateTimeOffset.UtcNow,
+                                                 .PlusDI = plusDiAtEntry,
+                                                 .MinusDI = minusDiAtEntry,
+                                                 .AdxValue = adxAtEntry,
+                                                 .Rsi14 = rsiAtEntry,
+                                                 .AtrValue = atrAtEntry,
+                                                 .LongCount = longCount,
+                                                 .ShortCount = shortCount,
+                                                 .TotalConditions = 3,
+                                                 .UpPct = If(side = "Buy" AndAlso band > 0, CInt(band / 3.0 * 100), 0),
+                                                 .DownPct = If(side <> "Buy" AndAlso band > 0, CInt(band / 3.0 * 100), 0),
+                                                 .SignalBarOpen = openPx,
+                                                 .SignalBarHigh = highPx,
+                                                 .SignalBarLow = lowPx,
+                                                 .SignalBarClose = closePx,
+                                                 .SignalBarVolume = volPx,
+                                                 .SessionWindow = entrySession,
+                                                 .DayOfWeek = CInt(nowUtc.DayOfWeek),
+                                                 .HourOfDay = nowUtc.Hour,
+                                                 .StrategyName = "SuperTrendPlus",
+                                                 .PersonaName = _activePersona,
+                                                 .SlMultiple = slMult,
+                                                 .TpMultiple = tpMult,
+                                                 .TimeframeMinutes = tfMins
+                                             }
+                                             Await _tradeRecordService.SaveSetupSnapshotAsync(slot.TradeOutcomeId, snapshotModel)
+                                         Catch exSnap As Exception
+                                             _logger.LogWarning(exSnap, "ST+ [Slot {Idx}] failed to save setup snapshot for outcome {Id}", slot.SlotIndex, slot.TradeOutcomeId)
+                                         End Try
+                                     End If
+                                 End If
+                             Catch exOutcome As Exception
+                                 _logger.LogWarning(exOutcome, "ST+ [Slot {Idx}] failed to open TradeOutcome for {Contract}", slot.SlotIndex, contractId)
+                             End Try
                          Catch ex As Exception
                              _logger.LogWarning(ex, "ST+ [Slot {Idx}] failed to open trade record for {Contract}", slot.SlotIndex, contractId)
                          End Try
@@ -2527,11 +2666,11 @@ Namespace TopStepTrader.UI.ViewModels
                         End Try
                     End If
                     If slot.TradeRecordId > 0 Then
-                        #Disable Warning BC42358
-                                                Task.Run(Async Function() As Task
-                                                             Await _tradeRecordService.UpdateEntryPriceAsync(slot.TradeRecordId, confirmedEntry)
-                                                         End Function)
-                        #Enable Warning BC42358
+#Disable Warning BC42358
+                        Task.Run(Async Function() As Task
+                                     Await _tradeRecordService.UpdateEntryPriceAsync(slot.TradeRecordId, confirmedEntry)
+                                 End Function)
+#Enable Warning BC42358
                     End If
                     If _isDebugCaptureEnabled AndAlso _debugCapture IsNot Nothing AndAlso
                        Not String.IsNullOrEmpty(slot.DebugTradeId) Then
@@ -2671,6 +2810,12 @@ Namespace TopStepTrader.UI.ViewModels
                         Dim ticks As Decimal = priceDiff / fc3.PxTickSize
                         latestPnl = Math.Round(ticks * fc3.PxTickValue * slot.Contracts, 2)
                         slot.UnrealizedPnl = latestPnl
+                        ' FEAT-58: track maximum favourable / adverse excursion alongside live P&L.
+                        ' Sign convention: MaxAdverseExcursionUsd is the most-negative dollar value
+                        ' observed (loss); MaxFavorableExcursionUsd is the most-positive value (gain).
+                        ' The lifespan record stores MAE as its absolute value.
+                        If latestPnl < slot.MaxAdverseExcursionUsd Then slot.MaxAdverseExcursionUsd = latestPnl
+                        If latestPnl > slot.MaxFavorableExcursionUsd Then slot.MaxFavorableExcursionUsd = latestPnl
                         If slot.InitialRiskDollars = 0D AndAlso slot.InitialRisk <> 0D Then
                             Dim riskTicks = slot.InitialRisk / fc3.PxTickSize
                             slot.InitialRiskDollars = Math.Round(riskTicks * fc3.PxTickValue * slot.Contracts, 2)
@@ -2810,12 +2955,17 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim plusDIArr = Enumerable.Range(0, bars.Count).Select(Function(i) dmiForExit.PlusDI(i)).ToArray()
                 Dim minusDIArr = Enumerable.Range(0, bars.Count).Select(Function(i) dmiForExit.MinusDI(i)).ToArray()
                 Dim adxArr = Enumerable.Range(0, bars.Count).Select(Function(i) dmiForExit.ADX(i)).ToArray()
+                ' BUG-87: Pass breakevenMinTicks and tickSize to ComputePhasedStop via Evaluate
+                Dim fc = FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
+                Dim breakevenMinTicks As Integer = If(fc IsNot Nothing, fc.PhasedTrailBreakevenMinTicks, 0)
+                Dim tickSize As Decimal = If(fc IsNot Nothing, fc.PxTickSize, 0D)
                 Dim eval = _exitEngine.Evaluate(slot,
                                                 highsDec, lowsDec, closesDec,
                                                 st.Line, st.Direction,
                                                 plusDIArr, minusDIArr, adxArr,
                                                 atr14Exit,
-                                                vwapExit, rsiExit)
+                                                vwapExit, rsiExit,
+                                                breakevenMinTicks, tickSize)
 
                 ' Exit triggers: E1 SuperTrend flip OR cumulative score above threshold.
                 If eval.ImmediateExit Then
@@ -2832,6 +2982,17 @@ Namespace TopStepTrader.UI.ViewModels
                     Dim newStop As Decimal = eval.PhasedStopPrice
                     Dim oldStopPhase = slot.StopPhase
                     slot.StopPhase = eval.StopPhase
+
+                    ' FEAT-58: count a ratchet step whenever the engine returns a different phase OR
+                    ' a different stop price (covers both ladder transitions and within-phase trails).
+                    ' Stamp FreeRide activation minutes on the first tick the phase reaches FreeRide.
+                    If oldStopPhase <> slot.StopPhase OrElse newStop <> slot.StopPrice Then
+                        slot.SlRatchetCount += 1
+                    End If
+                    If slot.StopPhase = StopPhase.FreeRide AndAlso slot.FreeRideActivatedAtMinutes = 0F AndAlso
+                       slot.EntryTime <> DateTime.MinValue Then
+                        slot.FreeRideActivatedAtMinutes = CSng((DateTime.UtcNow - slot.EntryTime).TotalMinutes)
+                    End If
 
                     Dim isPrimaryForEdit As Boolean =
                         Not _slotManager.Slots.Any(Function(s) s.IsOpen AndAlso
@@ -3043,15 +3204,83 @@ Namespace TopStepTrader.UI.ViewModels
             End If
 
             ' ── Persist close record before flattening (while slot data is still valid) ──
+            Dim closeTime As DateTimeOffset = DateTimeOffset.UtcNow
+            Dim closePx As Decimal = If(exitPx.HasValue, exitPx.Value, 0D)
+            Dim closePnl As Decimal = slot.UnrealizedPnl
             If slot.TradeRecordId > 0 Then
                 Try
                     Await _tradeRecordService.CloseTradeAsync(slot.TradeRecordId,
-                                                              DateTimeOffset.UtcNow,
-                                                              If(exitPx.HasValue, exitPx.Value, 0D),
-                                                              slot.UnrealizedPnl,
+                                                              closeTime,
+                                                              closePx,
+                                                              closePnl,
                                                               exitReason)
                 Catch ex As Exception
                     _logger.LogWarning(ex, "ST+ [Slot {Idx}] failed to close trade record {Id}", slot.SlotIndex, slot.TradeRecordId)
+                End Try
+            End If
+
+            ' FEAT-57: resolve the linked TradeOutcomes row (winner = pnl > 0, before
+            ' commissions/fees; documented first-cut policy).
+            If slot.TradeOutcomeId > 0 Then
+                Try
+                    Await _tradeRecordService.ResolveOutcomeAsync(slot.TradeOutcomeId,
+                                                                   closeTime,
+                                                                   closePx,
+                                                                   closePnl,
+                                                                   closePnl > 0D,
+                                                                   exitReason)
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ [Slot {Idx}] failed to resolve outcome {Id}", slot.SlotIndex, slot.TradeOutcomeId)
+                End Try
+
+                ' FEAT-58: persist the lifespan record (MAE/MFE, duration, ratchet count, R-multiple)
+                ' linked to the same TradeOutcomes row. Upsert semantics in the service handle the
+                ' (rare) double-close case where a slot exits via two code paths.
+                Try
+                    Dim fcL = FavouriteContracts.TryGetBySymbolResolved(slot.Instrument, _contractResolver)
+                    Dim tickSize As Decimal = If(fcL IsNot Nothing, fcL.PxTickSize, 0D)
+                    Dim tickValue As Decimal = If(fcL IsNot Nothing, fcL.PxTickValue, 0D)
+                    Dim maeAbsUsd As Decimal = Math.Abs(slot.MaxAdverseExcursionUsd)
+                    Dim mfeUsd As Decimal = slot.MaxFavorableExcursionUsd
+                    Dim maeTicks As Integer = 0
+                    Dim mfeTicks As Integer = 0
+                    If tickValue > 0D AndAlso slot.Contracts > 0 Then
+                        maeTicks = CInt(Math.Round(maeAbsUsd / (tickValue * slot.Contracts)))
+                        mfeTicks = CInt(Math.Round(mfeUsd / (tickValue * slot.Contracts)))
+                    End If
+
+                    Dim durationMins As Single = 0F
+                    If slot.EntryTime <> DateTime.MinValue Then
+                        durationMins = CSng(Math.Max(0R, (DateTime.UtcNow - slot.EntryTime).TotalMinutes))
+                    End If
+                    Dim tfMinsClose As Integer = TimeframeMinutesFor(_selectedTimeframe)
+                    Dim barsInTrade As Integer = If(tfMinsClose > 0, CInt(Math.Floor(durationMins / tfMinsClose)), 0)
+                    Dim rMultiple As Single = If(slot.InitialRiskDollars > 0D,
+                                                  CSng(closePnl / slot.InitialRiskDollars), 0F)
+                    Dim exitSession As String = ResolveSessionWindow(DateTime.UtcNow)
+                    Dim entrySession As String = If(String.IsNullOrEmpty(slot.EntrySessionWindow),
+                                                     exitSession, slot.EntrySessionWindow)
+
+                    Dim lifespan As New Core.Models.TradeLifespan With {
+                        .TradeOutcomeId = slot.TradeOutcomeId,
+                        .MaxAdverseExcursionDollars = maeAbsUsd,
+                        .MaxFavorableExcursionDollars = mfeUsd,
+                        .MaxAdverseExcursionTicks = maeTicks,
+                        .MaxFavorableExcursionTicks = mfeTicks,
+                        .SlRatchetCount = slot.SlRatchetCount,
+                        .TpAdvanceCount = 0,
+                        .FreeRideActivated = (slot.FreeRideActivatedAtMinutes > 0F),
+                        .FreeRideActivatedAtMinutes = slot.FreeRideActivatedAtMinutes,
+                        .DurationMinutes = durationMins,
+                        .BarsInTrade = barsInTrade,
+                        .EntrySessionWindow = entrySession,
+                        .ExitSessionWindow = exitSession,
+                        .CrossedSessionBoundary = Not String.Equals(entrySession, exitSession, StringComparison.OrdinalIgnoreCase),
+                        .RMultiple = rMultiple
+                    }
+                    Await _tradeRecordService.SaveLifespanRecordAsync(slot.TradeOutcomeId, lifespan)
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ST+ [Slot {Idx}] failed to save lifespan record for outcome {Id}", slot.SlotIndex, slot.TradeOutcomeId)
                 End Try
             End If
 
@@ -3309,6 +3538,30 @@ Namespace TopStepTrader.UI.ViewModels
                 Case "5min"  : Return BarTimeframe.FiveMinute
                 Case "1hr"   : Return BarTimeframe.OneHour
                 Case Else    : Return BarTimeframe.FifteenMinute
+            End Select
+        End Function
+
+        ' FEAT-58: TF label → integer minutes for snapshot/lifespan persistence.
+        ' Mirrors MapTimeframe but emits minutes for ML-friendly storage.
+        Private Shared Function TimeframeMinutesFor(tf As String) As Integer
+            Select Case tf
+                Case "5min"  : Return 5
+                Case "1hr"   : Return 60
+                Case Else    : Return 15
+            End Select
+        End Function
+
+        ' FEAT-58: Coarse-grained UTC session window mapping for ML feature persistence.
+        ' Tracks the major futures sessions that drive volatility regime — finer resolution
+        ' (Asian open / NY lunch / London close) can be layered later without schema changes.
+        Private Shared Function ResolveSessionWindow(utc As DateTime) As String
+            Dim h As Integer = utc.Hour
+            Select Case h
+                Case 0 To 6   : Return "Asia"
+                Case 7 To 11  : Return "London"
+                Case 12 To 13 : Return "US-Pre"
+                Case 14 To 20 : Return "US-RTH"
+                Case Else     : Return "US-Post"
             End Select
         End Function
 

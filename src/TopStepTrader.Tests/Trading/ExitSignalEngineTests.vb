@@ -313,6 +313,77 @@ Namespace TopStepTrader.Tests.Trading
             Assert.Contains("E1:8", eval.ContributingSignals)
         End Sub
 
+        ' ──────────────────────────────────────────────────────────────────────
+        '  BUG-87 — BreakevenMinTicks (BE-floor) logic
+        '  Gates the Breakeven phase advance on a minimum profit expressed in
+        '  ticks (per-favourite PhasedTrailBreakevenMinTicks). When profit-in-
+        '  ticks is below the floor the engine must stay in Initial and keep
+        '  trailing the SuperTrend line; once profit-in-ticks meets the floor
+        '  the phase advances normally.
+        ' ──────────────────────────────────────────────────────────────────────
+
+        <Fact>
+        Public Sub Breakeven_Long_DoesNotArmWhenProfitTicksBelowMinimum()
+            Dim engine = MakeEngine()
+            Dim slot = MakeSlot("Buy", entryPrice:=100D, initialRisk:=4D,
+                                stopPrice:=95D, phase:=StopPhase.Initial)
+            Dim stLine = 96D
+            Dim currentPrice = 104D ' profit = 4 (1R)
+            Dim tickSize = 0.25D
+            Dim breakevenMinTicks = 20
+            ' 4 / 0.25 = 16 ticks < 20 — must NOT arm Breakeven
+            Dim result = engine.ComputePhasedStop(slot, currentPrice, stLine, 1D,
+                                                   breakevenMinTicks, tickSize)
+            Assert.Equal(StopPhase.Initial, result.Phase)
+            Assert.Equal(Math.Max(slot.StopPrice, stLine), result.NewStop)
+        End Sub
+
+        <Fact>
+        Public Sub Breakeven_Long_ArmsOnceProfitTicksMeetsMinimum()
+            Dim engine = MakeEngine()
+            Dim slot = MakeSlot("Buy", entryPrice:=100D, initialRisk:=4D,
+                                stopPrice:=95D, phase:=StopPhase.Initial)
+            Dim stLine = 96D
+            Dim currentPrice = 106D ' profit = 6 (1.5R)
+            Dim tickSize = 0.25D
+            Dim breakevenMinTicks = 20
+            ' 6 / 0.25 = 24 ticks >= 20 — Breakeven (or higher) may arm
+            Dim result = engine.ComputePhasedStop(slot, currentPrice, stLine, 1D,
+                                                   breakevenMinTicks, tickSize)
+            Assert.True(result.Phase >= StopPhase.Breakeven)
+        End Sub
+
+        <Fact>
+        Public Sub Breakeven_Short_DoesNotArmWhenProfitTicksBelowMinimum()
+            Dim engine = MakeEngine()
+            Dim slot = MakeSlot("Sell", entryPrice:=100D, initialRisk:=4D,
+                                stopPrice:=105D, phase:=StopPhase.Initial)
+            Dim stLine = 104D
+            Dim currentPrice = 96D ' profit = 4 (1R)
+            Dim tickSize = 0.25D
+            Dim breakevenMinTicks = 20
+            ' 4 / 0.25 = 16 ticks < 20 — must NOT arm Breakeven
+            Dim result = engine.ComputePhasedStop(slot, currentPrice, stLine, 1D,
+                                                   breakevenMinTicks, tickSize)
+            Assert.Equal(StopPhase.Initial, result.Phase)
+            Assert.Equal(Math.Min(slot.StopPrice, stLine), result.NewStop)
+        End Sub
+
+        <Fact>
+        Public Sub Breakeven_Short_ArmsOnceProfitTicksMeetsMinimum()
+            Dim engine = MakeEngine()
+            Dim slot = MakeSlot("Sell", entryPrice:=100D, initialRisk:=4D,
+                                stopPrice:=105D, phase:=StopPhase.Initial)
+            Dim stLine = 104D
+            Dim currentPrice = 94D ' profit = 6 (1.5R)
+            Dim tickSize = 0.25D
+            Dim breakevenMinTicks = 20
+            ' 6 / 0.25 = 24 ticks >= 20 — Breakeven (or higher) may arm
+            Dim result = engine.ComputePhasedStop(slot, currentPrice, stLine, 1D,
+                                                   breakevenMinTicks, tickSize)
+            Assert.True(result.Phase >= StopPhase.Breakeven)
+        End Sub
+
     End Class
 
 End Namespace
