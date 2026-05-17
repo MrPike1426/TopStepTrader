@@ -44,12 +44,14 @@
                            DockPanel.Dock="Left"/>
                 <Button Content="Refresh"
                         Command="{Binding RefreshCommand}"
+                        ToolTip="Re-read trades from the local DB (no broker call)."
                         HorizontalAlignment="Right"
                         Style="{StaticResource SecondaryButtonStyle}"
                         Padding="14,6"
                         DockPanel.Dock="Right"/>
                 <Button Content="Reconcile with TopStepX"
                         Command="{Binding ReconcileCommand}"
+                        ToolTip="Query TopStepX to resolve any open trades, then refresh."
                         HorizontalAlignment="Right"
                         Style="{StaticResource SecondaryButtonStyle}"
                         Padding="14,6"

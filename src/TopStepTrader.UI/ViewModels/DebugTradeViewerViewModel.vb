@@ -68,7 +68,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private _isLoading As Boolean = False
         Private _isEmpty As Boolean = False
         Private _statusMessage As String = String.Empty
-        Private _isReconciling As Boolean = False
+        Private _isBusy As Boolean = False
 
         Public ReadOnly Property Trades As ObservableCollection(Of DebugTradeRowViewModel)
             Get
@@ -144,12 +144,16 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
-        Public Property IsReconciling As Boolean
+        ' BUG-84 F2: single busy flag gates both Refresh and Reconcile so concurrent
+        ' clicks coalesce into one in-flight load.
+        Public Property IsBusy As Boolean
             Get
-                Return _isReconciling
+                Return _isBusy
             End Get
             Set(value As Boolean)
-                SetProperty(_isReconciling, value)
+                If SetProperty(_isBusy, value) Then
+                    RelayCommand.RaiseCanExecuteChanged()
+                End If
             End Set
         End Property
 
@@ -162,29 +166,40 @@ Namespace TopStepTrader.UI.ViewModels
         Public Sub New(db As DebugTradeDbContext, reconciliation As IDebugTradeReconciliationService)
             _db = db
             _reconciliation = reconciliation
-            RefreshCommand = New RelayCommand(Sub() LoadDataAsync())
-            ReconcileCommand = New RelayCommand(Sub() ReconcileAsync(), Function() Not _isReconciling)
+            ' BUG-84 F1/F2: Refresh is DB-only; Reconcile hits broker then refreshes.
+            ' Both gate on the shared _isBusy flag so spamming either button cannot
+            ' produce parallel reconciler invocations.
+            RefreshCommand = New RelayCommand(Sub() LoadDataAsync(autoReconcile:=False), Function() Not _isBusy)
+            ReconcileCommand = New RelayCommand(Sub() LoadDataAsync(autoReconcile:=True), Function() Not _isBusy)
             ExportCsvCommand = New RelayCommand(AddressOf ExportCsv, Function() _selectedTrade IsNot Nothing)
             ExportJsonCommand = New RelayCommand(AddressOf ExportJson, Function() _selectedTrade IsNot Nothing)
             OpenInExcelCommand = New RelayCommand(AddressOf OpenInExcel, Function() _selectedTrade IsNot Nothing)
         End Sub
 
-        Public Async Sub LoadDataAsync()
+        ' BUG-84 F1: single source of truth for reconcile-then-refresh. Reconcile
+        ' button calls with autoReconcile:=True; Refresh button passes False to skip
+        ' the broker hit and only re-read the DB. The previous ReconcileAsync method
+        ' has been removed — it caused a double reconciliation (it ran the reconciler
+        ' itself and then called LoadDataAsync which ran it again).
+        Public Async Sub LoadDataAsync(Optional autoReconcile As Boolean = True)
+            ' BUG-84 F2: coalesce concurrent invocations — no parallel reconciler runs.
+            If _isBusy Then Return
+            IsBusy = True
             IsLoading = True
-            StatusMessage = "Loading trades…"
+            StatusMessage = If(autoReconcile, "Reconciling and loading trades…", "Loading trades…")
             Try
                 Await _db.EnsureSchemaAsync()
 
-                ' FEAT-56: auto-reconcile open trades on first load so the post-mortem
-                ' is authoritative even if the engine missed an exit callback.
-                Try
-                    Dim updated = Await _reconciliation.ReconcileOpenTradesAsync()
-                    If updated > 0 Then
-                        StatusMessage = $"Reconciled {updated} open trade(s) from broker."
-                    End If
-                Catch ex As Exception
-                    StatusMessage = $"Reconciliation skipped: {ex.Message}"
-                End Try
+                If autoReconcile Then
+                    Try
+                        Dim updated = Await _reconciliation.ReconcileOpenTradesAsync()
+                        If updated > 0 Then
+                            StatusMessage = $"Reconciled {updated} open trade(s) from broker."
+                        End If
+                    Catch ex As Exception
+                        StatusMessage = $"Reconciliation skipped: {ex.Message}"
+                    End Try
+                End If
 
                 Dim rows = Await _db.GetAllTradesAsync()
                 Dim vms = rows.Select(AddressOf MapTradeRow).ToList()
@@ -196,30 +211,24 @@ Namespace TopStepTrader.UI.ViewModels
                     Next
                 End Sub)
                 IsEmpty = (vms.Count = 0)
-                If IsEmpty Then
-                    StatusMessage = "No captured trades found. Enable debug capture on the SuperTrend+ page to start recording."
-                ElseIf String.IsNullOrEmpty(StatusMessage) OrElse Not StatusMessage.StartsWith("Reconcil") Then
-                    StatusMessage = $"{vms.Count} trade(s) loaded."
+
+                ' BUG-84 F3: preserve a reconciliation banner on BOTH the empty and
+                ' non-empty branches — previously the empty branch unconditionally
+                ' overwrote it with "No captured trades found.".
+                Dim preserveBanner As Boolean = Not String.IsNullOrEmpty(StatusMessage) AndAlso
+                                                StatusMessage.StartsWith("Reconcil")
+                If Not preserveBanner Then
+                    If IsEmpty Then
+                        StatusMessage = "No captured trades found. Enable debug capture on the SuperTrend+ page to start recording."
+                    Else
+                        StatusMessage = $"{vms.Count} trade(s) loaded."
+                    End If
                 End If
             Catch ex As Exception
                 StatusMessage = $"Error loading trades: {ex.Message}"
             Finally
                 IsLoading = False
-            End Try
-        End Sub
-
-        Private Async Sub ReconcileAsync()
-            If _isReconciling Then Return
-            IsReconciling = True
-            StatusMessage = "Reconciling open trades with TopStepX…"
-            Try
-                Dim updated = Await _reconciliation.ReconcileOpenTradesAsync()
-                StatusMessage = $"Reconciliation complete — {updated} trade(s) updated."
-                LoadDataAsync()
-            Catch ex As Exception
-                StatusMessage = $"Reconciliation failed: {ex.Message}"
-            Finally
-                IsReconciling = False
+                IsBusy = False
             End Try
         End Sub
 
