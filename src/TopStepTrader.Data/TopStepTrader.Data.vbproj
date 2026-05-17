@@ -15,4 +15,8 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="TopStepTrader.Tests" />
+  </ItemGroup>
+
 </Project>

@@ -19,6 +19,11 @@
   <ItemGroup>
     <ProjectReference Include="..\TopStepTrader.Core\TopStepTrader.Core.vbproj" />
     <ProjectReference Include="..\TopStepTrader.Services\TopStepTrader.Services.vbproj" />
+    <ProjectReference Include="..\TopStepTrader.Data\TopStepTrader.Data.vbproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.*" />
   </ItemGroup>
 
 </Project>

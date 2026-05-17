@@ -155,7 +155,7 @@ Namespace TopStepTrader.Data.Debug
             End Using
         End Function
 
-        Private Shared Async Function AddColumnIfMissingAsync(conn As SqliteConnection, tableName As String, columnName As String, columnType As String) As Task
+        Friend Shared Async Function AddColumnIfMissingAsync(conn As SqliteConnection, tableName As String, columnName As String, columnType As String) As Task
             Dim exists As Boolean = False
             Using infoCmd = conn.CreateCommand()
                 infoCmd.CommandText = $"PRAGMA table_info({tableName})"
@@ -170,7 +170,7 @@ Namespace TopStepTrader.Data.Debug
             End Using
             If Not exists Then
                 Using alterCmd = conn.CreateCommand()
-                    alterCmd.CommandText = $"ALTER TABLE {tableName} ADD COLUMN {columnName} {columnType} DEFAULT NULL"
+                    alterCmd.CommandText = $"ALTER TABLE {tableName} ADD COLUMN {columnName} {columnType}"
                     Await alterCmd.ExecuteNonQueryAsync()
                 End Using
             End If
