@@ -290,8 +290,9 @@
                                     </StackPanel>
                                 </Border>
 
+                                <!-- BUG-88: threshold here must equal Config.ExitScoreThreshold -->
                                 <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#8090A0" FontSize="12" LineHeight="17">
-                                    Exit fires immediately on a SuperTrend direction flip (E1). Other degradation signals (E2–E9) must score ≥6 across two consecutive closed strategy-TF bars before exit fires, preventing a single high-trend consolidation bar from closing a healthy position.
+                                    Exit fires immediately on a SuperTrend direction flip (E1). Other degradation signals (E2–E9) must score ≥7 on two consecutive closed strategy-TF bars before exit fires; a single bar above the threshold shows the slot in Exiting (red) but does not close it.
                                 </TextBlock>
                             </StackPanel>
                         </Border>
@@ -490,7 +491,7 @@
                         <!-- Debug Capture On/Off toggle -->
                         <ToggleButton Grid.Column="8"
                                       IsChecked="{Binding IsDebugCaptureEnabled, Mode=TwoWay}"
-                                      ToolTip="Records every 15-second tick + SL/AI/exit events for each open trade to TopStepTrader_Diagnostics\debug_trades.db. Default OFF."
+                                      ToolTip="Records every 15-second tick + SL/AI/exit events for each open trade to Diagnostics\debug_trades.db (dev) or %LOCALAPPDATA%\TopStepTrader\Diagnostics\debug_trades.db (published). Default OFF."
                                       Padding="10,6" VerticalAlignment="Center">
                             <ToggleButton.Style>
                                 <Style TargetType="ToggleButton">

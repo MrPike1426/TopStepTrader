@@ -75,9 +75,17 @@ python tools/postmortem/postmortem.py --db "C:\path\to\debug_trades.db" ...
 
 ## Default DB Location
 
-```
-%LOCALAPPDATA%\TopStepTrader\debug_trades.db
-```
+The CLI resolves the DB the same way the app does
+(`DebugTradeDbContext.ResolveDiagnosticsFolder` in
+`src/TopStepTrader.Data/Debug/DebugTradeDbContext.vb`):
+
+1. **Dev build** — walks up from the current working directory (and the script's
+   own directory as a fallback) looking for any `*.sln`/`*.slnx`, up to 10 hops.
+   When found, uses `<solution-root>\Diagnostics\debug_trades.db`.
+2. **Published build** — falls back to
+   `%LOCALAPPDATA%\TopStepTrader\Diagnostics\debug_trades.db`.
+
+Use `--db <path>` to override when running against a copy or a different machine.
 
 ---
 

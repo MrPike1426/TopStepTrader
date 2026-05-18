@@ -1,8 +1,12 @@
 import sqlite3
-import os
+import sys
 from pathlib import Path
 
-db = Path(os.environ.get('LOCALAPPDATA', '')) / 'TopStepTrader' / 'debug_trades.db'
+# Share the resolver with db_reader so the two scripts can't drift apart again.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from db_reader import default_db_path  # noqa: E402
+
+db = default_db_path()
 conn = sqlite3.connect(str(db))
 cursor = conn.cursor()
 

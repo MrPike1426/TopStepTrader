@@ -1,7 +1,12 @@
 """
 db_reader.py
 Reads debug_trades.db and returns typed dicts for one trade + its snapshots.
-The DB lives at %LOCALAPPDATA%/TopStepTrader/debug_trades.db by default.
+
+DB location mirrors DebugTradeDbContext.ResolveDiagnosticsFolder
+(src/TopStepTrader.Data/Debug/DebugTradeDbContext.vb) — the source of truth:
+  1. Walk up from CWD (then this script's dir) looking for *.sln/*.slnx,
+     max 10 hops -> <solution-root>/Diagnostics/debug_trades.db
+  2. Otherwise fall back to %LOCALAPPDATA%/TopStepTrader/Diagnostics/debug_trades.db
 """
 
 import sqlite3
@@ -11,11 +16,57 @@ from pathlib import Path
 from typing import Optional
 
 
-DEFAULT_DB_PATH = Path(os.environ.get("LOCALAPPDATA", "")) / "TopStepTrader" / "debug_trades.db"
+_DB_FILENAME = "debug_trades.db"
+_DIAGNOSTICS_FOLDER = "Diagnostics"
+_MAX_HOPS = 10
+
+
+def _find_solution_root(start: Path) -> Optional[Path]:
+    """Walk up from start looking for *.sln or *.slnx, max 10 hops."""
+    try:
+        current = start.resolve()
+    except OSError:
+        return None
+    for _ in range(_MAX_HOPS):
+        if not current.is_dir():
+            break
+        try:
+            for entry in current.iterdir():
+                suffix = entry.suffix.lower()
+                if suffix in (".sln", ".slnx") and entry.is_file():
+                    return current
+        except OSError:
+            break
+        if current.parent == current:
+            break
+        current = current.parent
+    return None
+
+
+def default_db_path() -> Path:
+    """
+    Resolve the default debug_trades.db path the same way the app does.
+    Returns the expected location even if the file does not exist yet —
+    callers should check existence (resolve_db_path does this).
+    """
+    # 1. CWD walk-up (dev scenario: running from repo root or a subfolder)
+    root = _find_solution_root(Path.cwd())
+    # 2. Script-dir walk-up (fallback for when CWD is unrelated)
+    if root is None:
+        root = _find_solution_root(Path(__file__).resolve().parent)
+    if root is not None:
+        return root / _DIAGNOSTICS_FOLDER / _DB_FILENAME
+    # 3. Published-build fallback
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    return Path(local_app_data) / "TopStepTrader" / _DIAGNOSTICS_FOLDER / _DB_FILENAME
+
+
+# Kept as a module-level convenience for any caller that imported the old constant.
+DEFAULT_DB_PATH = default_db_path()
 
 
 def resolve_db_path(override: Optional[str] = None) -> Path:
-    path = Path(override) if override else DEFAULT_DB_PATH
+    path = Path(override) if override else default_db_path()
     if not path.exists():
         print(f"ERROR: debug_trades.db not found at: {path}", file=sys.stderr)
         print("Make sure Debug Capture was enabled during the session.", file=sys.stderr)
