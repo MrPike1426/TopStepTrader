@@ -24,6 +24,7 @@ Namespace TopStepTrader.Data
         Public Property ContractCache As DbSet(Of ContractCacheEntity)
         Public Property SuperTrendPlusConfig As DbSet(Of SuperTrendPlusConfigEntity)
         Public Property UltimateScalperConfig As DbSet(Of UltimateScalperConfigEntity)
+        Public Property SlipStreamConfig As DbSet(Of SlipStreamConfigEntity)
 
         Protected Overrides Sub OnModelCreating(modelBuilder As ModelBuilder)
             MyBase.OnModelCreating(modelBuilder)
@@ -94,6 +95,11 @@ Namespace TopStepTrader.Data
             ' UltimateScalperConfig — singleton row (id=1), no auto-increment (FEAT-64)
             modelBuilder.Entity(Of UltimateScalperConfigEntity)() _
                 .ToTable("UltimateScalperConfig") _
+                .HasKey(Function(c) c.Id)
+
+            ' SlipStreamConfig — singleton row (id=1), no auto-increment (FEAT-70)
+            modelBuilder.Entity(Of SlipStreamConfigEntity)() _
+                .ToTable("SlipStreamConfig") _
                 .HasKey(Function(c) c.Id)
 
         End Sub
@@ -533,6 +539,67 @@ Namespace TopStepTrader.Data
                 Next
             Finally
                 If mustClose10 Then conn.Close()
+            End Try
+
+            ' ── FEAT-70: SlipStream config singleton table ────────────────────────
+            Dim mustClose11 = (conn.State <> ConnectionState.Open)
+            If mustClose11 Then conn.Open()
+            Try
+                Dim slipDdl = New String() {
+                    "CREATE TABLE IF NOT EXISTS ""SlipStreamConfig"" (
+                         ""Id""                          INTEGER NOT NULL PRIMARY KEY,
+                         ""HtfTimeframe""                TEXT    NOT NULL DEFAULT '60min',
+                         ""UseHtfFilter""                INTEGER NOT NULL DEFAULT 1,
+                         ""HtfEmaLength""                INTEGER NOT NULL DEFAULT 50,
+                         ""EmaFastLength""               INTEGER NOT NULL DEFAULT 21,
+                         ""EmaSlowLength""               INTEGER NOT NULL DEFAULT 200,
+                         ""RsiLength""                   INTEGER NOT NULL DEFAULT 14,
+                         ""RsiLongMin""                  REAL    NOT NULL DEFAULT 55.0,
+                         ""RsiShortMax""                 REAL    NOT NULL DEFAULT 45.0,
+                         ""AdxLength""                   INTEGER NOT NULL DEFAULT 14,
+                         ""AdxMin""                      REAL    NOT NULL DEFAULT 22.0,
+                         ""AtrLength""                   INTEGER NOT NULL DEFAULT 14,
+                         ""AtrPercentLookback""          INTEGER NOT NULL DEFAULT 100,
+                         ""AtrPercentMin""               REAL    NOT NULL DEFAULT 30.0,
+                         ""ExtendBars""                  INTEGER NOT NULL DEFAULT 3,
+                         ""ExtendAtrMult""               REAL    NOT NULL DEFAULT 0.5,
+                         ""RiskPct""                     REAL    NOT NULL DEFAULT 0.5,
+                         ""AtrSLmult""                   REAL    NOT NULL DEFAULT 1.5,
+                         ""AtrTP1mult""                  REAL    NOT NULL DEFAULT 1.0,
+                         ""Tp1Pct""                      REAL    NOT NULL DEFAULT 50.0,
+                         ""TrailMult""                   REAL    NOT NULL DEFAULT 1.5,
+                         ""TrailOffsetMult""             REAL    NOT NULL DEFAULT 1.0,
+                         ""MaxBarsInTrade""              INTEGER NOT NULL DEFAULT 40,
+                         ""UseSession""                  INTEGER NOT NULL DEFAULT 1,
+                         ""SessionWindow""               TEXT    NOT NULL DEFAULT '0830-1500',
+                         ""FlatWindow""                  TEXT    NOT NULL DEFAULT '1450-1500',
+                         ""CooldownBars""                INTEGER NOT NULL DEFAULT 3,
+                         ""EnableLong""                  INTEGER NOT NULL DEFAULT 1,
+                         ""EnableShort""                 INTEGER NOT NULL DEFAULT 1,
+                         ""MinSlEditStepTicks""          INTEGER NOT NULL DEFAULT 1,
+                         ""MaxSlEditsPerSecond""         INTEGER NOT NULL DEFAULT 5,
+                         ""MaxConcurrentPositions""      INTEGER NOT NULL DEFAULT 1,
+                         ""MesAtrSLmultOverride""        REAL,
+                         ""MesAtrTP1multOverride""       REAL,
+                         ""MesTrailMultOverride""        REAL,
+                         ""MesTrailOffsetMultOverride""  REAL,
+                         ""MnqAtrSLmultOverride""        REAL,
+                         ""MnqAtrTP1multOverride""       REAL,
+                         ""MnqTrailMultOverride""        REAL,
+                         ""MnqTrailOffsetMultOverride""  REAL,
+                         ""MgcAtrSLmultOverride""        REAL,
+                         ""MgcAtrTP1multOverride""       REAL,
+                         ""MgcTrailMultOverride""        REAL,
+                         ""MgcTrailOffsetMultOverride""  REAL)"
+                }
+                For Each ddl In slipDdl
+                    Using cmd = conn.CreateCommand()
+                        cmd.CommandText = ddl
+                        cmd.ExecuteNonQuery()
+                    End Using
+                Next
+            Finally
+                If mustClose11 Then conn.Close()
             End Try
         End Sub
 

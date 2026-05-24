@@ -12,6 +12,7 @@ Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.Personas
 Imports TopStepTrader.Services.PostMortem
 Imports TopStepTrader.Services.Scalper
+Imports TopStepTrader.Services.SlipStream
 Imports TopStepTrader.Services.Trades
 Imports TopStepTrader.Services.Trading
 Imports TopStepTrader.Services.Training
@@ -28,6 +29,7 @@ Namespace TopStepTrader.Services
             ' BarRepository, SignalRepository, OrderRepository registered by AddDataServices()
             services.AddScoped(Of SuperTrendPlusConfigRepository)()
             services.AddScoped(Of UltimateScalperConfigRepository)()  ' FEAT-64
+            services.AddScoped(Of SlipStreamConfigRepository)()       ' FEAT-70
 
             ' ── FEAT-64: Ultimate Scalper. Config resolved once per scope from the
             '    repository so both the orchestrator and the signal detector share
@@ -51,6 +53,15 @@ Namespace TopStepTrader.Services
             ' Registered as a hosted service below so the scan timer starts at app startup.
             services.AddSingleton(Of UltimateScalperOrchestrator)()
             services.AddHostedService(Function(sp) sp.GetRequiredService(Of UltimateScalperOrchestrator)())
+
+            ' ── FEAT-70: SlipStream trend-pullback strategy.
+            services.AddScoped(Of SlipStreamConfig)(Function(sp)
+                                                         Dim repo = sp.GetRequiredService(Of SlipStreamConfigRepository)()
+                                                         Return repo.LoadAsync().GetAwaiter().GetResult()
+                                                     End Function)
+            services.AddScoped(Of ISlipStreamSignalDetector, SlipStreamSignalDetector)()
+            services.AddSingleton(Of SlipStreamOrchestrator)()
+            services.AddHostedService(Function(sp) sp.GetRequiredService(Of SlipStreamOrchestrator)())
 
             ' ── API key store — Singleton: one file-backed store for the session lifetime
             services.AddSingleton(Of IApiKeyStore, ApiKeyStore)()

@@ -61,6 +61,13 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        ''' <summary>FEAT-70: SlipStream tab.</summary>
+        Public ReadOnly Property SlipStreamView As Views.SlipStreamView
+            Get
+                Return Resolve(Of Views.SlipStreamView)("SlipStream")
+            End Get
+        End Property
+
         Public ReadOnly Property ApiKeysView As Views.ApiKeysView
             Get
                 Return Resolve(Of Views.ApiKeysView)("ApiKeys")
