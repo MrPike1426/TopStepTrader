@@ -51,10 +51,10 @@ Namespace TopStepTrader.ML.Training
         ''' When provided, the look-ahead heuristic label is replaced by the actual P&amp;L result
         ''' for any bar whose timestamp matches a recorded outcome.
         ''' </param>
-        Public Function TrainAndSave(allBars As IList(Of MarketBar),
-                                     outputPath As String,
-                                     Optional lookAheadBars As Integer = 5,
-                                     Optional outcomeLabels As Dictionary(Of DateTimeOffset, Boolean) = Nothing) As ModelMetrics
+        Public Overridable Function TrainAndSave(allBars As IList(Of MarketBar),
+                                                  outputPath As String,
+                                                  Optional lookAheadBars As Integer = 5,
+                                                  Optional outcomeLabels As Dictionary(Of DateTimeOffset, Boolean) = Nothing) As ModelMetrics
 
             Dim overrideCount = If(outcomeLabels IsNot Nothing, outcomeLabels.Count, 0)
             _logger.LogInformation(

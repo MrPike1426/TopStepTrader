@@ -229,6 +229,59 @@
                                FontFamily="Consolas" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap"/>
                 </Border>
 
+                <!-- BUG-90 F4: stuck-slot warning chip (60 s ≤ age < 5 min) -->
+                <Border Margin="0,6,0,0" CornerRadius="3" Padding="6,3"
+                        Visibility="{Binding ShowSnapshotWarn}"
+                        Background="#2B2000" BorderBrush="#FFB300" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#x26A0;" FontSize="11"
+                                   Foreground="#FFCC00" VerticalAlignment="Center"
+                                   Margin="0,0,5,0"/>
+                        <TextBlock Foreground="#FFCC00" FontFamily="Consolas" FontSize="11"
+                                   VerticalAlignment="Center">
+                            <Run Text="No broker confirm in "/>
+                            <Run Text="{Binding SnapshotAgeText, Mode=OneWay}"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <!-- BUG-90 F4: stuck-slot red banner + Force-reconcile button (age ≥ 5 min) -->
+                <Border Margin="0,6,0,0" CornerRadius="3" Padding="6,5"
+                        Visibility="{Binding ShowSnapshotRed}"
+                        Background="#3A0000" BorderBrush="#FF5252" BorderThickness="1">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <TextBlock Text="&#x1F6A8;" FontSize="12"
+                                       VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <TextBlock Foreground="#FF8A80" FontFamily="Consolas"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       VerticalAlignment="Center">
+                                <Run Text="No broker confirm in "/>
+                                <Run Text="{Binding SnapshotAgeText, Mode=OneWay}"/>
+                                <Run Text=" — slot may be stuck"/>
+                            </TextBlock>
+                        </StackPanel>
+                        <Button Command="{Binding ForceReconcileCommand}"
+                                Background="#7F1D1D" BorderBrush="#FF5252" Foreground="White"
+                                Padding="6,3" FontSize="11" Cursor="Hand"
+                                HorizontalAlignment="Stretch"
+                                ToolTip="Query the broker for this slot's instrument. Releases the slot if the broker reports flat.">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="1" CornerRadius="3"
+                                            Padding="{TemplateBinding Padding}">
+                                        <ContentPresenter HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"/>
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <TextBlock Text="Force reconcile this slot"/>
+                        </Button>
+                    </StackPanel>
+                </Border>
+
                 <!-- AI mid-trade result -->
                 <Border Margin="0,6,0,0" CornerRadius="4" Padding="6,4"
                         Visibility="{Binding AiResultVisibility}"

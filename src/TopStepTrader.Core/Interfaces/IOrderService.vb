@@ -37,14 +37,19 @@ Namespace TopStepTrader.Core.Interfaces
                                            Optional cancel As CancellationToken = Nothing) As Task(Of IEnumerable(Of Order))
 
         ''' <summary>
-        ''' Returns an API-authoritative snapshot of the live position for the given contract,
-        ''' including broker-reported unrealised P&amp;L and open timestamp.
+        ''' Returns a snapshot of the live position for the given contract.
+        ''' The underlying broker query (SearchOpenPositions) is cached for up to 5 s by
+        ''' IOpenPositionsCache (PERF-02) for rate-limit protection — multiple per-contract
+        ''' callers within the window share a single REST round-trip.
+        ''' Pass bypassCache:=True to force a fresh fetch; required for pre-entry duplicate-
+        ''' position guards and manual force-reconcile paths.
         ''' Matches by positionId when supplied; falls back to the first open position for the contract.
         ''' Returns Nothing when no matching live position exists.
         ''' </summary>
         Function GetLivePositionSnapshotAsync(accountId As Long,
                                               contractId As String,
                                               Optional positionId As Long? = Nothing,
+                                              Optional bypassCache As Boolean = False,
                                               Optional cancel As CancellationToken = Nothing) As Task(Of LivePositionSnapshot)
 
         ''' <summary>

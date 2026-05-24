@@ -538,6 +538,49 @@ Namespace TopStepTrader.Services.Trades
             End Try
         End Function
 
+        Public Async Function LogTickSnapshotAsync(liveTradeRecordId As Long,
+                                                   snapshot As Core.Models.TradeTickSnapshot) As Task _
+            Implements ITradeRecordService.LogTickSnapshotAsync
+            ' FEAT-59: best-effort per-bar snapshot write. Any failure here is logged and
+            ' swallowed so the management tick never blocks on diagnostic persistence.
+            If liveTradeRecordId = 0 OrElse snapshot Is Nothing Then Return
+            Try
+                Dim entity = MapTickSnapshotToEntity(snapshot)
+                entity.LiveTradeRecordId = liveTradeRecordId
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ITradeTickSnapshotRepository)()
+                    Await repo.AddAsync(entity)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.LogTickSnapshotAsync failed for record {Id}", liveTradeRecordId)
+            End Try
+        End Function
+
+        Private Shared Function MapTickSnapshotToEntity(s As Core.Models.TradeTickSnapshot) As TradeTickSnapshotEntity
+            Return New TradeTickSnapshotEntity With {
+                .LiveTradeRecordId = s.LiveTradeRecordId,
+                .BarTimestamp = s.BarTimestamp,
+                .BarOpen = s.BarOpen,
+                .BarHigh = s.BarHigh,
+                .BarLow = s.BarLow,
+                .BarClose = s.BarClose,
+                .BarVolume = s.BarVolume,
+                .SuperTrendLine = s.SuperTrendLine,
+                .SuperTrendDirection = s.SuperTrendDirection,
+                .Atr = s.Atr,
+                .Adx = s.Adx,
+                .PlusDi = s.PlusDi,
+                .MinusDi = s.MinusDi,
+                .CurrentStopPrice = s.CurrentStopPrice,
+                .CurrentTakeProfitPrice = s.CurrentTakeProfitPrice,
+                .UnrealisedPnlDollars = s.UnrealisedPnlDollars,
+                .MaxAdverseExcursionDollars = s.MaxAdverseExcursionDollars,
+                .MaxFavorableExcursionDollars = s.MaxFavorableExcursionDollars,
+                .StopPhase = If(s.StopPhase, String.Empty),
+                .ExitScore = s.ExitScore
+            }
+        End Function
+
         Public Async Function GetStopAdjustmentsAsync(liveTradeRecordId As Long) As Task(Of IList(Of Core.Models.TradeStopAdjustment)) _
             Implements ITradeRecordService.GetStopAdjustmentsAsync
             Try
@@ -580,7 +623,15 @@ Namespace TopStepTrader.Services.Trades
             Dim startTs = entity.EntryTime.AddMinutes(-1).ToUnixTimeMilliseconds()
             Dim endTimeRef = If(entity.ExitTime.HasValue, entity.ExitTime.Value, DateTimeOffset.UtcNow)
             Dim endTs = endTimeRef.AddMinutes(1).ToUnixTimeMilliseconds()
-            Dim contractId = entity.ContractId
+
+            ' BUG-92: LiveTradeRecords.ContractId is stored as the short symbol (e.g. "MNQ"),
+            ' but the broker returns the resolved PX contract ID (e.g. "CON.F.US.MNQ.U26").
+            ' The old `x.ContractId = entity.ContractId` filter never matched, leaving every
+            ' snapshot table empty system-wide. We now match against the CME root-symbol prefix
+            ' (e.g. "CON.F.US.MNQ.") via FavouriteContracts, falling back to the literal
+            ' ContractId when no favourite is found (legacy rows / unknown symbols).
+            Dim rootPrefix As String = TryResolveContractRootPrefix(entity.ContractId)
+            Dim contractIdMatcher As Func(Of String, Boolean) = BuildContractMatcher(entity.ContractId, rootPrefix)
 
             ' BUG-63: run the 3 PX search calls in parallel with a hard timeout.
             Dim cts As New Threading.CancellationTokenSource(TimeSpan.FromSeconds(10))
@@ -596,7 +647,7 @@ Namespace TopStepTrader.Services.Trades
             Dim orderRows As New List(Of TradeOrderSnapshotEntity)()
             Dim ordersResp = ordersTask.Result
             If ordersResp IsNot Nothing AndAlso ordersResp.Orders IsNot Nothing Then
-                For Each o In ordersResp.Orders.Where(Function(x) x.ContractId = contractId)
+                For Each o In ordersResp.Orders.Where(Function(x) contractIdMatcher(x.ContractId))
                     orderRows.Add(New TradeOrderSnapshotEntity With {
                         .LiveTradeRecordId = recordId,
                         .TopStepXOrderId = o.Id,
@@ -618,7 +669,7 @@ Namespace TopStepTrader.Services.Trades
             Dim positionRows As New List(Of TradePositionSnapshotEntity)()
             Dim positionsResp = positionsTask.Result
             If positionsResp IsNot Nothing AndAlso positionsResp.Positions IsNot Nothing Then
-                For Each p In positionsResp.Positions.Where(Function(x) x.ContractId = contractId)
+                For Each p In positionsResp.Positions.Where(Function(x) contractIdMatcher(x.ContractId))
                     positionRows.Add(New TradePositionSnapshotEntity With {
                         .LiveTradeRecordId = recordId,
                         .TopStepXPositionId = p.Id,
@@ -637,7 +688,7 @@ Namespace TopStepTrader.Services.Trades
             Dim fillRows As New List(Of TradeFillSnapshotEntity)()
             Dim tradesResp = tradesTask.Result
             If tradesResp IsNot Nothing AndAlso tradesResp.Trades IsNot Nothing Then
-                For Each t In tradesResp.Trades.Where(Function(x) x.ContractId = contractId)
+                For Each t In tradesResp.Trades.Where(Function(x) contractIdMatcher(x.ContractId))
                     fillRows.Add(New TradeFillSnapshotEntity With {
                         .LiveTradeRecordId = recordId,
                         .TopStepXTradeId = t.Id,
@@ -664,6 +715,181 @@ Namespace TopStepTrader.Services.Trades
             Catch ex As Exception
                 _logger.LogWarning(ex, "CaptureClosingSnapshots: persistence failed for record {Id}", recordId)
             End Try
+
+            ' BUG-92: reconcile ExitPrice + PnL from the broker-confirmed closing fill. The
+            ' close path previously stamped an engine-derived ExitPrice computed from local
+            ' UnrealizedPnl, which diverged from the broker's ExecutePrice by several ticks
+            ' in fast markets. Replace with broker-truth now that we have the fill rows in hand.
+            Try
+                Await ReconcileExitFromFillsAsync(entity, tradesResp?.Trades, ordersResp?.Orders, contractIdMatcher)
+            Catch ex As Exception
+                _logger.LogWarning(ex, "CaptureClosingSnapshots: reconciliation failed for record {Id}", recordId)
+            End Try
+        End Function
+
+        ''' <summary>
+        ''' BUG-92: corrects LiveTradeRecord.ExitPrice/PnL + TradeOutcome.ExitPrice/PnL from the
+        ''' broker-confirmed closing fill price. Identifies the closing fill (Side opposite the
+        ''' entry direction, occurring at or after EntryTime, on the matching contract). When
+        ''' multiple closing fills exist (partial fills), uses the volume-weighted average price.
+        ''' Idempotent — re-running with the same broker data is a no-op.
+        ''' </summary>
+        Private Async Function ReconcileExitFromFillsAsync(entity As LiveTradeRecordEntity,
+                                                            trades As IList(Of API.Models.Responses.PXTradeDto),
+                                                            orders As IList(Of API.Models.Responses.PXOrderDto),
+                                                            matcher As Func(Of String, Boolean)) As Task
+            If entity Is Nothing OrElse trades Is Nothing OrElse trades.Count = 0 Then Return
+
+            Dim plan = ComputeExitReconciliation(entity, trades, orders, matcher)
+            If plan Is Nothing Then Return
+
+            If entity.ExitOrderId = plan.ExitOrderId AndAlso
+               entity.ExitPrice.HasValue AndAlso entity.ExitPrice.Value = plan.ExitPrice AndAlso
+               entity.PnL.HasValue AndAlso entity.PnL.Value = plan.PnL Then
+                ' Already reconciled with these exact values.
+                Return
+            End If
+
+            Dim originalExitPrice = entity.ExitPrice
+            Dim originalPnL = entity.PnL
+
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
+                    Await repo.ReconcileExitAsync(entity.Id, plan.ExitPrice, plan.PnL, plan.ExitOrderId, plan.ExitTime)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ReconcileExit: failed to update LiveTradeRecord {Id}", entity.Id)
+                Return
+            End Try
+
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim outcomeRepo = scope.ServiceProvider.GetRequiredService(Of TradeOutcomeRepository)()
+                    Await outcomeRepo.ReconcileExitByLiveTradeRecordIdAsync(entity.Id, plan.ExitPrice, plan.PnL)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ReconcileExit: failed to update TradeOutcome linked to record {Id}", entity.Id)
+            End Try
+
+            _logger.LogInformation(
+                "ReconcileExit: record {Id} {Symbol} {Dir} — ExitPrice {OldPx}→{NewPx}, PnL {OldPnL}→{NewPnL} (closing orderId={OrderId})",
+                entity.Id, entity.Symbol, entity.Direction,
+                If(originalExitPrice.HasValue, originalExitPrice.Value.ToString("G"), "?"),
+                plan.ExitPrice.ToString("G"),
+                If(originalPnL.HasValue, originalPnL.Value.ToString("G"), "?"),
+                plan.PnL.ToString("G"),
+                plan.ExitOrderId)
+        End Function
+
+        ''' <summary>
+        ''' BUG-92: pure helper computing the broker-reconciled exit price/PnL/closing order ID
+        ''' for a closed LiveTradeRecord. Extracted from the live path so unit tests can drive
+        ''' every fill-shape scenario (single fill, partial fills, missing side, etc.) without a
+        ''' DB or PX REST mock. Returns Nothing when no closing fill can be identified.
+        ''' </summary>
+        Friend Shared Function ComputeExitReconciliation(entity As LiveTradeRecordEntity,
+                                                          trades As IList(Of API.Models.Responses.PXTradeDto),
+                                                          orders As IList(Of API.Models.Responses.PXOrderDto),
+                                                          matcher As Func(Of String, Boolean)) As ExitReconciliationPlan
+            If entity Is Nothing OrElse trades Is Nothing OrElse trades.Count = 0 Then Return Nothing
+            If matcher Is Nothing Then matcher = Function(s) True
+
+            ' Long entered → exit Side = 1 (Sell). Short entered → exit Side = 0 (Buy).
+            Dim exitSide As Integer = If(entity.Direction = "Long", 1, 0)
+            Dim entryMs = entity.EntryTime.ToUnixTimeMilliseconds()
+
+            ' Optional cross-check: closing orders carry Disposition=Closing on the broker. The
+            ' PXOrderDto doesn't expose that field today, but we can still narrow down using
+            ' OrderType=Market (2) + Side=opposite-entry + CreationTimestamp >= EntryTime.
+            ' We use that order set only as a filter on trades — trades carry the actual fill price.
+            Dim closingOrderIds As HashSet(Of Long) = Nothing
+            If orders IsNot Nothing Then
+                closingOrderIds = New HashSet(Of Long)(
+                    orders _
+                        .Where(Function(o) matcher(o.ContractId) AndAlso
+                                           o.Side = exitSide AndAlso
+                                           o.OrderType = 2 AndAlso
+                                           ParseTs(o.CreationTimestamp) >= entryMs) _
+                        .Select(Function(o) o.Id))
+            End If
+
+            Dim closingFills = trades _
+                .Where(Function(t) matcher(t.ContractId) AndAlso
+                                   t.Side = exitSide AndAlso
+                                   ParseTs(t.CreationTimestamp) >= entryMs) _
+                .ToList()
+
+            If closingOrderIds IsNot Nothing AndAlso closingOrderIds.Count > 0 Then
+                Dim narrowed = closingFills.Where(Function(t) closingOrderIds.Contains(t.OrderId)).ToList()
+                If narrowed.Count > 0 Then closingFills = narrowed
+            End If
+
+            If closingFills.Count = 0 Then Return Nothing
+
+            ' Volume-weighted average over partial fills (in practice, ClosePosition fills as one).
+            Dim totalSize As Decimal = closingFills.Sum(Function(t) CDec(t.Size))
+            If totalSize <= 0D Then Return Nothing
+            Dim vwap As Decimal = closingFills.Sum(Function(t) CDec(t.Price) * CDec(t.Size)) / totalSize
+
+            ' PnL from FavouriteContracts point value (matches RecoverOpenTradesAsync).
+            Dim root = If(entity.Symbol, String.Empty).TrimStart("/"c)
+            Dim fc = FavouriteContracts.TryGetBySymbol(root)
+            Dim pointValue As Decimal = If(fc IsNot Nothing AndAlso fc.PxPointValue > 0D, fc.PxPointValue, 1D)
+            Dim priceDiff = If(entity.Direction = "Long", vwap - entity.EntryPrice, entity.EntryPrice - vwap)
+            Dim pnl = Math.Round(priceDiff * pointValue * entity.Sizes, 2)
+
+            ' Closing order ID: prefer the OrderId reported on the fills (broker-authoritative).
+            ' When fills share a single OrderId use that; otherwise fall back to the latest fill's OrderId.
+            Dim distinctOrderIds = closingFills.Select(Function(t) t.OrderId).Distinct().ToList()
+            Dim exitOrderId As Long
+            If distinctOrderIds.Count = 1 Then
+                exitOrderId = distinctOrderIds(0)
+            Else
+                exitOrderId = closingFills _
+                    .OrderByDescending(Function(t) ParseTs(t.CreationTimestamp)) _
+                    .First().OrderId
+            End If
+
+            ' Authoritative exit time: latest closing fill timestamp.
+            Dim latestExitMs = closingFills.Max(Function(t) ParseTs(t.CreationTimestamp))
+            Dim exitTimeFromBroker As DateTimeOffset? = Nothing
+            If latestExitMs > 0 Then exitTimeFromBroker = DateTimeOffset.FromUnixTimeMilliseconds(latestExitMs)
+
+            Return New ExitReconciliationPlan With {
+                .ExitPrice = Math.Round(vwap, 6),
+                .PnL = pnl,
+                .ExitOrderId = exitOrderId,
+                .ExitTime = exitTimeFromBroker
+            }
+        End Function
+
+        ''' <summary>
+        ''' BUG-92: helper exposed for unit tests so we can drive ContractId resolution without
+        ''' loading the full FavouriteContracts table. Returns "CON.F.US.&lt;root&gt;." when the
+        ''' record's symbol resolves to a favourite with a PxRootSymbol, otherwise Nothing.
+        ''' </summary>
+        Friend Shared Function TryResolveContractRootPrefix(contractIdOrSymbol As String) As String
+            If String.IsNullOrEmpty(contractIdOrSymbol) Then Return Nothing
+            Dim fav = FavouriteContracts.TryGetBySymbol(contractIdOrSymbol.TrimStart("/"c))
+            If fav Is Nothing Then fav = FavouriteContracts.TryGetBySymbolResolved(contractIdOrSymbol)
+            If fav Is Nothing OrElse String.IsNullOrEmpty(fav.PxRootSymbol) Then Return Nothing
+            Return $"CON.F.US.{fav.PxRootSymbol}."
+        End Function
+
+        ''' <summary>
+        ''' BUG-92: builds the contract-ID matcher used to filter broker rows. Prefers root-prefix
+        ''' matching when the favourite resolves; falls back to literal equality so legacy rows
+        ''' with fully-qualified ContractIds still match.
+        ''' </summary>
+        Friend Shared Function BuildContractMatcher(literalContractId As String,
+                                                     rootPrefix As String) As Func(Of String, Boolean)
+            If Not String.IsNullOrEmpty(rootPrefix) Then
+                Return Function(s) Not String.IsNullOrEmpty(s) AndAlso
+                                   s.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase)
+            End If
+            Dim literal = If(literalContractId, String.Empty)
+            Return Function(s) String.Equals(s, literal, StringComparison.OrdinalIgnoreCase)
         End Function
 
         Public Async Function BackfillSnapshotsAsync(accountId As Long) As Task _
@@ -709,6 +935,63 @@ Namespace TopStepTrader.Services.Trades
                 End Try
             Next
             _logger.LogInformation("BackfillSnapshots complete: {Count} record(s) backfilled", processed)
+        End Function
+
+        Public Async Function BackfillExitPricesAsync(accountId As Long) As Task(Of Integer) _
+            Implements ITradeRecordService.BackfillExitPricesAsync
+            If accountId = 0 Then Return 0
+
+            Dim closedRecords As IList(Of LiveTradeRecordEntity)
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
+                    closedRecords = Await repo.GetRecentAsync(5000, closedOnly:=True)
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "BackfillExitPrices: failed to load closed records")
+                Return 0
+            End Try
+
+            ' Skip records that already carry a broker-confirmed exit (ExitOrderId > 0).
+            Dim eligible = closedRecords.Where(Function(r) r.ExitOrderId = 0L).ToList()
+            If eligible.Count = 0 Then
+                _logger.LogInformation("BackfillExitPrices: no records need reconciliation")
+                Return 0
+            End If
+
+            _logger.LogInformation("BackfillExitPrices: {Count} record(s) need reconciliation", eligible.Count)
+
+            Dim reconciledCount As Integer = 0
+            Dim attempts As Integer = 0
+            For Each rec In eligible
+                attempts += 1
+                Try
+                    Dim before = rec.ExitOrderId
+                    Await CaptureClosingSnapshotsAsync(rec.Id, accountId)
+
+                    ' Re-load to detect whether the reconciliation step actually wrote a non-zero ExitOrderId.
+                    Using scope = _scopeFactory.CreateScope()
+                        Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
+                        Dim refreshed = Await repo.GetByIdAsync(rec.Id)
+                        If refreshed IsNot Nothing AndAlso refreshed.ExitOrderId <> 0L AndAlso refreshed.ExitOrderId <> before Then
+                            reconciledCount += 1
+                        End If
+                    End Using
+
+                    If attempts Mod 25 = 0 Then
+                        _logger.LogInformation("BackfillExitPrices: {Done}/{Total} attempted, {Reconciled} reconciled so far",
+                                               attempts, eligible.Count, reconciledCount)
+                    End If
+                    ' Inter-request pacing so we don't hammer TopStepX REST.
+                    Await Task.Delay(100)
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "BackfillExitPrices: reconciliation failed for record {Id}", rec.Id)
+                End Try
+            Next
+
+            _logger.LogInformation("BackfillExitPrices complete: {Reconciled}/{Attempted} record(s) reconciled",
+                                   reconciledCount, attempts)
+            Return reconciledCount
         End Function
 
         Private Shared Function MapSide(side As Integer) As String
@@ -790,6 +1073,17 @@ Namespace TopStepTrader.Services.Trades
             }
         End Function
 
+    End Class
+
+    ''' <summary>
+    ''' BUG-92: result of <see cref="TradeRecordService.ComputeExitReconciliation"/>. Mutable
+    ''' so tests can construct expected values inline without a record constructor.
+    ''' </summary>
+    Public Class ExitReconciliationPlan
+        Public Property ExitPrice As Decimal
+        Public Property PnL As Decimal
+        Public Property ExitOrderId As Long
+        Public Property ExitTime As DateTimeOffset?
     End Class
 
 End Namespace

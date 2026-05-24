@@ -306,17 +306,21 @@
                     BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,2">
                 <StackPanel>
 
-                    <!-- Row 1: Account, Timeframe, P&L Guard, Entry Mode -->
+                    <!-- Row 1: Account, Timeframe, Leverage, P&L Guard, TP Ladder, Entry Mode -->
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="16"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="16"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="16"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>  <!-- 0  Account -->
+                            <ColumnDefinition Width="16"/>    <!-- 1  gap -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 2  Timeframe -->
+                            <ColumnDefinition Width="16"/>    <!-- 3  gap -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 4  Leverage -->
+                            <ColumnDefinition Width="16"/>    <!-- 5  gap -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 6  P&L Guard -->
+                            <ColumnDefinition Width="16"/>    <!-- 7  gap -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 8  TP Ladder (FEAT-63) -->
+                            <ColumnDefinition Width="16"/>    <!-- 9  gap -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 10 Enter on -->
+                            <ColumnDefinition Width="*"/>     <!-- 11 stretch -->
                         </Grid.ColumnDefinitions>
 
                         <ComboBox Grid.Column="0"
@@ -330,11 +334,37 @@
                                   SelectedItem="{Binding SelectedTimeframe}"
                                   Width="90" VerticalAlignment="Center"/>
 
-                        <controls:PnLGuardControl Grid.Column="4"
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Leverage:"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ComboBox ItemsSource="{Binding Leverages}"
+                                      SelectedItem="{Binding SelectedLeverage}"
+                                      Width="70" VerticalAlignment="Center"
+                                      ToolTip="Multiplies the ADX-band contract count for both new entries and mid-trade scale-ins. 1× = unchanged, 2× = double, 3× = triple. Resets to 1× on every app restart.">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding StringFormat={}{0}×}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+
+                        <controls:PnLGuardControl Grid.Column="6"
                                                   Settings="{Binding PnLGuard}"
                                                   VerticalAlignment="Center"/>
 
-                        <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center"
+                                    ToolTip="When > 0, ladder mode is active. Once total unrealised P&amp;L crosses 10% above a multiple of this value, the stop ratchets up to that multiple ($50 ladder: $55→SL $50, $105→SL $100, $155→SL $150). E1–E9 force-close exits (SuperTrend flip, degradation score) are suppressed while ladder is active; phased stops keep ratcheting in parallel — whichever stop is more conservative wins. Set to 0 to disable.">
+                            <TextBlock Text="TP ladder ($):"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBox Text="{Binding LadderTpDollars, UpdateSourceTrigger=LostFocus, StringFormat=N2}"
+                                     Width="70" VerticalAlignment="Center"
+                                     HorizontalContentAlignment="Right"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="10" Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="Enter on:"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>
@@ -628,6 +658,7 @@
                                                Foreground="{StaticResource TextSecondaryBrush}"
                                                FontSize="11" TextWrapping="NoWrap"
                                                TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding SignalReason, Mode=OneWay}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
                             </DataTemplate>
@@ -682,7 +713,8 @@
                     </Border>
 
                     <!-- Scrolling log -->
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                    <ScrollViewer x:Name="AiHistoryScroller" Grid.Row="1"
+                                  VerticalScrollBarVisibility="Visible"
                                   HorizontalScrollBarVisibility="Disabled">
                         <ItemsControl ItemsSource="{Binding AiHistoryLog}">
                             <ItemsControl.ItemTemplate>
@@ -691,7 +723,9 @@
                                         <TextBlock Foreground="{Binding EntryColour}"
                                                    FontFamily="Consolas" FontSize="11"
                                                    Text="{Binding Display}"
-                                                   TextWrapping="Wrap"/>
+                                                   TextWrapping="Wrap"
+                                                   ToolTip="{Binding Display}"
+                                                   MaxWidth="{Binding ViewportWidth, ElementName=AiHistoryScroller}"/>
                                     </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

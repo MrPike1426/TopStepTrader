@@ -36,6 +36,7 @@ Namespace TopStepTrader.Data
                 existing.WarningScoreThreshold          = entity.WarningScoreThreshold
                 existing.ExitingScoreThreshold          = entity.ExitingScoreThreshold
                 existing.EntryExitScoreBlockThreshold   = entity.EntryExitScoreBlockThreshold
+                existing.LadderTpDollars                = entity.LadderTpDollars
             End If
             Await _db.SaveChangesAsync()
         End Function

@@ -19,6 +19,7 @@ Namespace TopStepTrader.Data
         Public Property TradeOrderSnapshots As DbSet(Of TradeOrderSnapshotEntity)
         Public Property TradePositionSnapshots As DbSet(Of TradePositionSnapshotEntity)
         Public Property TradeFillSnapshots As DbSet(Of TradeFillSnapshotEntity)
+        Public Property TradeTickSnapshots As DbSet(Of TradeTickSnapshotEntity)
 
         ''' <summary>Idempotent ALTER TABLE statements for columns added after initial EnsureCreated.</summary>
         Public Sub EnsureSchemaCurrent()
@@ -91,6 +92,25 @@ Namespace TopStepTrader.Data
                 cmd.ExecuteNonQuery()
                 cmd.CommandText = "CREATE INDEX IF NOT EXISTS IX_TradeFillSnapshots_RecordId " &
                     "ON TradeFillSnapshots (LiveTradeRecordId)"
+                cmd.ExecuteNonQuery()
+
+                ' FEAT-59: Per-closed-bar tick snapshots (unconditional replay data)
+                cmd.CommandText = "CREATE TABLE IF NOT EXISTS TradeTickSnapshots (" &
+                    "Id INTEGER PRIMARY KEY AUTOINCREMENT, " &
+                    "LiveTradeRecordId INTEGER NOT NULL, " &
+                    "BarTimestamp TEXT NOT NULL, " &
+                    "BarOpen TEXT NOT NULL, BarHigh TEXT NOT NULL, BarLow TEXT NOT NULL, BarClose TEXT NOT NULL, " &
+                    "BarVolume INTEGER NOT NULL, " &
+                    "SuperTrendLine TEXT NOT NULL, SuperTrendDirection INTEGER NOT NULL, " &
+                    "Atr REAL NOT NULL, Adx REAL NOT NULL, PlusDi REAL NOT NULL, MinusDi REAL NOT NULL, " &
+                    "CurrentStopPrice TEXT NOT NULL, CurrentTakeProfitPrice TEXT NOT NULL, " &
+                    "UnrealisedPnlDollars TEXT NOT NULL, " &
+                    "MaxAdverseExcursionDollars TEXT NOT NULL, MaxFavorableExcursionDollars TEXT NOT NULL, " &
+                    "StopPhase TEXT NOT NULL, " &
+                    "ExitScore INTEGER NOT NULL)"
+                cmd.ExecuteNonQuery()
+                cmd.CommandText = "CREATE INDEX IF NOT EXISTS IX_TradeTickSnapshots_RecordId_Time " &
+                    "ON TradeTickSnapshots (LiveTradeRecordId, BarTimestamp)"
                 cmd.ExecuteNonQuery()
 
                 For Each sql In New String() {

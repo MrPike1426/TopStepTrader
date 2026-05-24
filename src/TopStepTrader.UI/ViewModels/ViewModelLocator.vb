@@ -54,6 +54,13 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        ''' <summary>FEAT-64: Ultimate Scalper tab.</summary>
+        Public ReadOnly Property UltimateScalperView As Views.UltimateScalperView
+            Get
+                Return Resolve(Of Views.UltimateScalperView)("UltimateScalper")
+            End Get
+        End Property
+
         Public ReadOnly Property ApiKeysView As Views.ApiKeysView
             Get
                 Return Resolve(Of Views.ApiKeysView)("ApiKeys")

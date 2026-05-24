@@ -55,6 +55,25 @@ Namespace TopStepTrader.Data.Repositories
             Await _db.SaveChangesAsync()
         End Function
 
+        ''' <summary>
+        ''' BUG-92: amends an already-resolved outcome with broker-confirmed exit data.
+        ''' Lookup is by the LiveTradeRecord.Id stashed in OrderId at OpenOutcomeAsync time
+        ''' so the ML training data stays in sync with broker-reconciled PnL on LiveTradeRecords.
+        ''' Idempotent: re-running with the same values is a no-op.
+        ''' </summary>
+        Public Async Function ReconcileExitByLiveTradeRecordIdAsync(liveTradeRecordId As Long,
+                                                                     exitPrice As Decimal,
+                                                                     pnl As Decimal) As Task
+            If liveTradeRecordId = 0 Then Return
+            Dim entity = Await _db.TradeOutcomes _
+                .FirstOrDefaultAsync(Function(o) o.OrderId.HasValue AndAlso o.OrderId.Value = liveTradeRecordId)
+            If entity Is Nothing Then Return
+            entity.ExitPrice = exitPrice
+            entity.PnL = pnl
+            entity.IsWinner = (pnl > 0D)
+            Await _db.SaveChangesAsync()
+        End Function
+
         ''' <summary>All outcomes still marked open (not yet resolved).</summary>
         ''' <remarks>
         ''' UAT-BUG-003 (ORDER BY extension): EF Core SQLite cannot translate DateTimeOffset

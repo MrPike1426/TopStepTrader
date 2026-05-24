@@ -1,0 +1,88 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        FEAT-67 F3: Direction-icon ImageSource resources for the Ultimate Scalper watchlist.
+
+        Authored as DrawingImage geometry instead of bitmaps so the icons render crisply at
+        any DPI (16 / 32 / 48 px) without needing per-scale PNG assets. StringKeyToImageSourceConverter
+        resolves the row's DirectionIconKey ("BullIconGreen" / "BearIconRed" / "") to the matching
+        resource. An empty key yields a null ImageSource, leaving the column blank.
+
+        Geometry: a 24×24 viewBox. Up-arrow with two horn-flares for bull, down-arrow with two
+        claw-flares for bear. Stroke-less filled paths so colour comes entirely from the brush.
+    -->
+
+    <!-- Bull: stylized upward arrow with two horn flares at the top. -->
+    <DrawingImage x:Key="BullIconGreen">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FF27AE60">
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M 12 3
+                                               L 18 11
+                                               L 14 11
+                                               L 14 20
+                                               L 10 20
+                                               L 10 11
+                                               L 6 11
+                                               Z" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF27AE60">
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M 6 8
+                                               L 3 4
+                                               L 8 6
+                                               Z" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FF27AE60">
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M 18 8
+                                               L 21 4
+                                               L 16 6
+                                               Z" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+    <!-- Bear: stylized downward arrow with two claw flares at the bottom. -->
+    <DrawingImage x:Key="BearIconRed">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <GeometryDrawing Brush="#FFFF4444">
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M 12 21
+                                               L 6 13
+                                               L 10 13
+                                               L 10 4
+                                               L 14 4
+                                               L 14 13
+                                               L 18 13
+                                               Z" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFF4444">
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M 6 16
+                                               L 3 20
+                                               L 8 18
+                                               Z" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+                <GeometryDrawing Brush="#FFFF4444">
+                    <GeometryDrawing.Geometry>
+                        <PathGeometry Figures="M 18 16
+                                               L 21 20
+                                               L 16 18
+                                               Z" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+
+</ResourceDictionary>

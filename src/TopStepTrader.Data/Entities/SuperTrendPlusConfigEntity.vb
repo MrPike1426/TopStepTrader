@@ -32,6 +32,9 @@ Namespace TopStepTrader.Data.Entities
         ' ── FEAT-46: Pre-entry exit-signal gate ─────────────────────────────
         Public Property EntryExitScoreBlockThreshold As Integer = 4
 
+        ' ── FEAT-63: $-denominated TP ladder ────────────────────────────────
+        Public Property LadderTpDollars As Decimal = 0D
+
     End Class
 
 End Namespace

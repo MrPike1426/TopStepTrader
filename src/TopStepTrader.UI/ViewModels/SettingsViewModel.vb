@@ -1,7 +1,11 @@
+Imports System.IO
 Imports System.Windows
 Imports Microsoft.Extensions.Options
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Settings
+Imports TopStepTrader.Core.Trading
+Imports TopStepTrader.Data.Debug
+Imports TopStepTrader.Services.Training
 Imports TopStepTrader.UI.ViewModels.Base
 
 Namespace TopStepTrader.UI.ViewModels
@@ -20,6 +24,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _apiSettings As ApiSettings
         Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _userPrefs As IUserPreferencesService
+        Private ReadOnly _trainingOrchestrator As TrainingOrchestrator
 
         ' ── API Status ───────────────────────────────────────────────────────
 
@@ -133,10 +138,32 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── Retrain state ────────────────────────────────────────────────────
+
+        Private _isRetraining As Boolean
+        Public Property IsRetraining As Boolean
+            Get
+                Return _isRetraining
+            End Get
+            Set(value As Boolean)
+                If SetProperty(_isRetraining, value) Then
+                    OnPropertyChanged(NameOf(CanRetrainModel))
+                    RelayCommand.RaiseCanExecuteChanged()
+                End If
+            End Set
+        End Property
+
+        Public ReadOnly Property CanRetrainModel As Boolean
+            Get
+                Return Not _isRetraining
+            End Get
+        End Property
+
         ' ── Commands ─────────────────────────────────────────────────────────
 
         Public ReadOnly Property ConnectCommand As RelayCommand
         Public ReadOnly Property ApplyRiskCommand As RelayCommand
+        Public ReadOnly Property RetrainModelCommand As RelayCommand
 
         ' ── Constructor ──────────────────────────────────────────────────────
 
@@ -145,13 +172,15 @@ Namespace TopStepTrader.UI.ViewModels
                        riskOptions As IOptions(Of RiskSettings),
                        tradingOptions As IOptions(Of TradingSettings),
                        session As ITradingSessionContext,
-                       userPrefs As IUserPreferencesService)
+                       userPrefs As IUserPreferencesService,
+                       trainingOrchestrator As TrainingOrchestrator)
             _authService = authService
             _apiSettings = apiOptions.Value
             _riskSettings = riskOptions.Value
             _tradingSettings = tradingOptions.Value
             _session = session
             _userPrefs = userPrefs
+            _trainingOrchestrator = trainingOrchestrator
 
             ' Populate form from current settings (AutoExecution from persisted prefs via session)
             _dailyLossLimit = _riskSettings.DailyLossLimitDollars.ToString()
@@ -162,6 +191,8 @@ Namespace TopStepTrader.UI.ViewModels
 
             ConnectCommand = New RelayCommand(AddressOf ExecuteConnect)
             ApplyRiskCommand = New RelayCommand(AddressOf ExecuteApplyRisk)
+            RetrainModelCommand = New RelayCommand(AddressOf ExecuteRetrainModel,
+                                                    Function() CanRetrainModel)
         End Sub
 
         Public Sub LoadDataAsync()
@@ -223,6 +254,52 @@ Namespace TopStepTrader.UI.ViewModels
             Catch ex As Exception
                 StatusMessage = $"Error: {ex.Message}"
             End Try
+        End Sub
+
+        ''' <summary>
+        ''' FEAT-60: invokes <see cref="TrainingOrchestrator.RunAsync"/> against the first
+        ''' favourite contract over the last 90 days at the default timeframe; writes the
+        ''' .zip to Diagnostics\models with a timestamped filename.
+        ''' </summary>
+        Private Sub ExecuteRetrainModel(param As Object)
+            If _isRetraining Then Return
+            IsRetraining = True
+            StatusMessage = "Retraining signal model…"
+
+            Task.Run(Async Function()
+                         Try
+                             Dim fav = FavouriteContracts.GetDefaults().FirstOrDefault()
+                             If fav Is Nothing Then
+                                 Dispatch(Sub() StatusMessage = "Train failed: no favourite contracts configured")
+                                 Return
+                             End If
+                             Dim resolved = FavouriteContracts.TryGetBySymbolResolved(fav.Name)
+                             Dim contractId = If(resolved IsNot Nothing, resolved.PxContractId, fav.PxContractId)
+
+                             Const Timeframe As String = "15min"
+                             Dim fromUtc = DateTimeOffset.UtcNow.AddDays(-90)
+
+                             Dim diagnosticsRoot = DebugTradeDbContext.ResolveDiagnosticsFolder()
+                             Dim modelsDir = Path.Combine(diagnosticsRoot, "models")
+                             Directory.CreateDirectory(modelsDir)
+                             Dim stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")
+                             Dim outputPath = Path.Combine(modelsDir,
+                                 $"signal-model-{contractId}-{Timeframe}-{stamp}.zip")
+
+                             Dim metrics = Await _trainingOrchestrator.RunAsync(
+                                 contractId, Timeframe, fromUtc, outputPath)
+
+                             Dispatch(Sub()
+                                          StatusMessage = String.Format(
+                                              "Trained: {0} samples, AUC={1:F3}, Accuracy={2:P1} → {3}",
+                                              metrics.TrainingSamples, metrics.AUC, metrics.Accuracy, outputPath)
+                                      End Sub)
+                         Catch ex As Exception
+                             Dispatch(Sub() StatusMessage = $"Train failed: {ex.Message}")
+                         Finally
+                             Dispatch(Sub() IsRetraining = False)
+                         End Try
+                     End Function)
         End Sub
 
         Private Sub Dispatch(action As Action)

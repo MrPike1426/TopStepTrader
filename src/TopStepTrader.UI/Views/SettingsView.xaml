@@ -16,6 +16,8 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="20"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="20"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="16"/>
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
@@ -110,8 +112,25 @@
                 </StackPanel>
             </Border>
 
+            <!-- FEAT-60: Maintenance commands (model retrain, future backfill) -->
+            <Border Grid.Row="8" Background="{StaticResource SurfaceBrush}"
+                    CornerRadius="6" Padding="20,12">
+                <StackPanel>
+                    <TextBlock Text="MAINTENANCE" Style="{StaticResource SectionHeadingStyle}"/>
+                    <TextBlock Text="Replays resolved trade outcomes through the signal trainer and writes a new model .zip to Diagnostics\models."
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"
+                               TextWrapping="Wrap" Margin="0,0,0,8"/>
+                    <Button Content="Retrain signal model from real outcomes"
+                            Command="{Binding RetrainModelCommand}"
+                            IsEnabled="{Binding CanRetrainModel}"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Padding="12,6"
+                            HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Border>
+
             <!-- Status -->
-            <TextBlock Grid.Row="8"
+            <TextBlock Grid.Row="10"
                        Text="{Binding StatusMessage}"
                        Foreground="{StaticResource TextSecondaryBrush}"
                        FontSize="12"/>

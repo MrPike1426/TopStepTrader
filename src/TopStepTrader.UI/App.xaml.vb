@@ -1,10 +1,13 @@
+Imports System.IO
 Imports System.Windows
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 Imports TopStepTrader.API.Hubs
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Trading
+Imports TopStepTrader.Data.Debug
 Imports TopStepTrader.Services.Market
+Imports TopStepTrader.Services.Training
 Imports TopStepTrader.UI.Infrastructure
 Imports TopStepTrader.UI.ViewModels
 Imports TopStepTrader.UI.Views
@@ -86,8 +89,83 @@ Namespace TopStepTrader.UI
                 End Try
             End If
 
+            ' BUG-92: optional ExitPrice/PnL backfill triggered by --backfill-exit-prices arg.
+            ' Rewrites every closed record's ExitPrice/PnL from the broker's closing-fill
+            ' ExecutePrice. Safe to re-run — already-reconciled records (ExitOrderId != 0)
+            ' are skipped automatically.
+            If StartupArgs IsNot Nothing AndAlso
+               StartupArgs.Any(Function(a) String.Equals(a, "--backfill-exit-prices", StringComparison.OrdinalIgnoreCase)) Then
+                Try
+                    Dim tradeRecordService = _host.Services.GetRequiredService(Of ITradeRecordService)()
+                    Dim session = _host.Services.GetRequiredService(Of ITradingSessionContext)()
+                    Dim accountId As Long = If(session?.SelectedAccount?.Id, 0L)
+                    If accountId <> 0 Then
+                        Await tradeRecordService.BackfillExitPricesAsync(accountId)
+                    End If
+                Catch ex As Exception
+                    System.Diagnostics.Debug.WriteLine($"BackfillExitPrices startup error: {ex.Message}")
+                End Try
+            End If
+
+            ' FEAT-60: optional model retrain triggered by --retrain-model[=<contractId>] arg.
+            ' Exits the process directly when the arg is present — does not return to the WPF loop.
+            Dim retrainArg = If(StartupArgs Is Nothing,
+                                Nothing,
+                                StartupArgs.FirstOrDefault(Function(a) a IsNot Nothing AndAlso
+                                    a.StartsWith("--retrain-model", StringComparison.OrdinalIgnoreCase)))
+            If retrainArg IsNot Nothing Then
+                Await RunRetrainModelCliAsync(retrainArg)
+                Return
+            End If
+
             mainWindow.Show()
         End Sub
+
+        ''' <summary>
+        ''' FEAT-60 CLI: resolves TrainingOrchestrator from DI, runs against the supplied
+        ''' (or default) contract, prints the metrics line to stdout, and exits with 0/1.
+        ''' Format of <paramref name="arg"/>: <c>--retrain-model</c> or <c>--retrain-model=&lt;contractId&gt;</c>.
+        ''' </summary>
+        Private Async Function RunRetrainModelCliAsync(arg As String) As Task
+            Try
+                Dim explicitContract As String = Nothing
+                Dim eqIdx = arg.IndexOf("="c)
+                If eqIdx >= 0 AndAlso eqIdx < arg.Length - 1 Then
+                    explicitContract = arg.Substring(eqIdx + 1).Trim().Trim(""""c)
+                End If
+
+                Dim contractId As String = explicitContract
+                If String.IsNullOrWhiteSpace(contractId) Then
+                    Dim fav = FavouriteContracts.GetDefaults().FirstOrDefault()
+                    If fav Is Nothing Then
+                        Console.Error.WriteLine("Train failed: no favourite contracts configured")
+                        Environment.Exit(1)
+                        Return
+                    End If
+                    Dim resolved = FavouriteContracts.TryGetBySymbolResolved(fav.Name)
+                    contractId = If(resolved IsNot Nothing, resolved.PxContractId, fav.PxContractId)
+                End If
+
+                Const Timeframe As String = "15min"
+                Dim fromUtc = DateTimeOffset.UtcNow.AddDays(-90)
+                Dim diagnosticsRoot = DebugTradeDbContext.ResolveDiagnosticsFolder()
+                Dim modelsDir = Path.Combine(diagnosticsRoot, "models")
+                Directory.CreateDirectory(modelsDir)
+                Dim stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss")
+                Dim outputPath = Path.Combine(modelsDir,
+                    $"signal-model-{contractId}-{Timeframe}-{stamp}.zip")
+
+                Dim orchestrator = _host.Services.GetRequiredService(Of TrainingOrchestrator)()
+                Dim metrics = Await orchestrator.RunAsync(contractId, Timeframe, fromUtc, outputPath)
+                Console.Out.WriteLine(
+                    $"Trained: {metrics.TrainingSamples} samples, AUC={metrics.AUC:F3}, " &
+                    $"Accuracy={metrics.Accuracy:P1} → {outputPath}")
+                Environment.Exit(0)
+            Catch ex As Exception
+                Console.Error.WriteLine($"Train failed: {ex.Message}")
+                Environment.Exit(1)
+            End Try
+        End Function
 
         Protected Overrides Async Sub OnExit(e As ExitEventArgs)
             If _host IsNot Nothing Then

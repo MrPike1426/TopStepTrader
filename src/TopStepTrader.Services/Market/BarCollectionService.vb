@@ -40,16 +40,27 @@ Namespace TopStepTrader.Services.Market
         Private ReadOnly _pxHistoryClient As PXHistoryClient
         Private ReadOnly _barRepository As BarRepository
         Private ReadOnly _catalog As TopStepXInstrumentCatalog
+        Private ReadOnly _memoCache As BarEnsureMemoCache
         Private ReadOnly _logger As ILogger(Of BarCollectionService)
 
         Public Sub New(pxHistoryClient As PXHistoryClient,
                        barRepository As BarRepository,
                        catalog As TopStepXInstrumentCatalog,
+                       memoCache As BarEnsureMemoCache,
                        logger As ILogger(Of BarCollectionService))
             _pxHistoryClient = pxHistoryClient
             _barRepository = barRepository
             _catalog = catalog
+            _memoCache = memoCache
             _logger = logger
+        End Sub
+
+        ''' <summary>
+        ''' FEAT-68: Clears the in-memory "last ensured" entry for the given key prefix. Used by
+        ''' StartupBarCheckService on app boot (defensive against hot-reload) and by unit tests.
+        ''' </summary>
+        Friend Sub InvalidateMemoCache(contractId As String, timeframe As BarTimeframe)
+            _memoCache?.Invalidate(contractId, timeframe)
         End Sub
 
         ''' <inheritdoc/>
@@ -71,6 +82,20 @@ Namespace TopStepTrader.Services.Market
             ' Date range as UTC DateTimeOffset  (endDate + 1 day makes end inclusive)
             Dim fromDt = New DateTimeOffset(DateTime.SpecifyKind(startDate, DateTimeKind.Unspecified), TimeSpan.Zero)
             Dim toDt = New DateTimeOffset(DateTime.SpecifyKind(endDate.AddDays(1), DateTimeKind.Unspecified), TimeSpan.Zero)
+
+            ' ── FEAT-68: short-circuit when an Ensure for this exact key succeeded inside the
+            ' freshness window. Avoids the SQLite count + max-timestamp queries when the
+            ' orchestrator's 5 s scan loop has just confirmed nothing changed.
+            Dim memoKey = BarEnsureMemoCache.BuildKey(contractId, timeframe, fromDt, toDt)
+            If _memoCache IsNot Nothing AndAlso _memoCache.IsFresh(memoKey, timeframe) Then
+                Return New BarEnsureResult With {
+                    .Success = True,
+                    .BarCount = -1,
+                    .ContractId = contractId,
+                    .Message = $"(memoized) {tfLabel} bars for {contractId}",
+                    .WasCacheHit = True
+                }
+            End If
 
             ' ── Step 1: Check existing bars in SQLite ──────────────────────────────────
             progress?.Report($"⏳ Checking local {tfLabel} bars for {contractId}...")
@@ -108,6 +133,7 @@ Namespace TopStepTrader.Services.Market
                         _logger.LogInformation(
                             "EnsureBarsAsync: {Count} {Tf} bars in DB for {Contract} — span OK and fresh, skipping download",
                             existing.Count, tfLabel, contractId)
+                        _memoCache?.Record(memoKey)
                         Return New BarEnsureResult With {
                             .Success = True,
                             .BarCount = existing.Count,
@@ -316,6 +342,9 @@ Namespace TopStepTrader.Services.Market
             _logger.LogInformation(
                 "EnsureBarsAsync: complete — {Count} {Tf} bars for {Contract}, success={Ok}",
                 countBars.Count, tfLabel, contractId, success)
+
+            ' FEAT-68: only memoize on success — a transient failure must not poison the next retry.
+            If success Then _memoCache?.Record(memoKey)
 
             Return New BarEnsureResult With {
                 .Success = success,

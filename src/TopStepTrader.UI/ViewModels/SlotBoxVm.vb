@@ -1,6 +1,7 @@
 Imports System.Collections.ObjectModel
 Imports System.Threading.Tasks
 Imports System.Windows
+Imports System.Windows.Input
 Imports System.Windows.Media
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Models
@@ -599,7 +600,58 @@ Namespace TopStepTrader.UI.ViewModels
             SlDisplay = String.Empty
             StrengthLabel = String.Empty
             NextPhaseLabel = String.Empty
+            SnapshotAgeText = String.Empty
+            ShowSnapshotWarn = Visibility.Collapsed
+            ShowSnapshotRed = Visibility.Collapsed
         End Sub
+
+        ' ── BUG-90 F4: stuck-slot diagnostic ─────────────────────────────────
+        ' Three states driven by time since last broker-confirmed snapshot:
+        '   < 60 s  → both visibilities Collapsed (healthy)
+        '   60 s–5 min → ShowSnapshotWarn=Visible (amber chip)
+        '   ≥ 5 min → ShowSnapshotRed=Visible (red banner + Force-reconcile button)
+        ' The chip and banner are mutually exclusive; the banner replaces the chip
+        ' once the slot crosses the 5-minute threshold.
+
+        Private _snapshotAgeText As String = String.Empty
+        ''' <summary>BUG-90 F4: short human-readable age e.g. "2m 14s" — shown in the
+        ''' warning chip and the red banner.</summary>
+        Public Property SnapshotAgeText As String
+            Get
+                Return _snapshotAgeText
+            End Get
+            Set(value As String)
+                SetProperty(_snapshotAgeText, value)
+            End Set
+        End Property
+
+        Private _showSnapshotWarn As Visibility = Visibility.Collapsed
+        ''' <summary>BUG-90 F4: amber chip when last successful broker snapshot is older
+        ''' than 60 s but younger than 5 min.</summary>
+        Public Property ShowSnapshotWarn As Visibility
+            Get
+                Return _showSnapshotWarn
+            End Get
+            Set(value As Visibility)
+                SetProperty(_showSnapshotWarn, value)
+            End Set
+        End Property
+
+        Private _showSnapshotRed As Visibility = Visibility.Collapsed
+        ''' <summary>BUG-90 F4: red banner + Force-reconcile button when last successful
+        ''' broker snapshot is older than 5 min.</summary>
+        Public Property ShowSnapshotRed As Visibility
+            Get
+                Return _showSnapshotRed
+            End Get
+            Set(value As Visibility)
+                SetProperty(_showSnapshotRed, value)
+            End Set
+        End Property
+
+        ''' <summary>BUG-90 F4: command bound to the "Force reconcile this slot" button.
+        ''' Wired by the parent ViewModel to its <c>ForceReconcileSlotAsync</c> entry point.</summary>
+        Public Property ForceReconcileCommand As ICommand
 
     End Class
 

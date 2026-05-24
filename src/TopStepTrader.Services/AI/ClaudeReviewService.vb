@@ -174,8 +174,9 @@ Namespace TopStepTrader.Services.AI
         Private Const PreTradeSystemPrompt As String =
             "You are a pre-trade risk filter for an automated futures trading system. " &
             "A fully automated strategy has passed all its technical gates (ADX, confidence, ATR sizing) " &
-            "and is about to place a live order. You receive the session P&L and completed trade count " &
-            "for this engine's current run, which tells you whether the system is in a drawdown streak." & vbLf &
+            "and is about to place a live order. You receive the session P&L, completed trade count " &
+            "for this engine's current run, and — when bar capture is on — the recent bar history at " &
+            "the entry timeframe." & vbLf &
             "Rules:" & vbLf &
             "- Respond with ""PROCEED"" or ""VETO"" as the FIRST WORD of your response." & vbLf &
             "- Follow immediately with 1-2 sentences of plain-text rationale (no bullet points, no headers)." & vbLf &
@@ -187,11 +188,17 @@ Namespace TopStepTrader.Services.AI
             "     (e.g. Asian session for equity-index futures, thin overnight window for commodities)." & vbLf &
             "  3. SIGNAL DIRECTION vs INSTRUMENT CHARACTER — a fundamental incompatibility between the " &
             "     signal direction and well-known persistent instrument behaviour at this session." & vbLf &
+            "  4. PRICE ACTION (only when bar history is supplied) — the recent bar action strongly " &
+            "     contradicts the proposed direction. Examples: shorting after a clear bullish " &
+            "     rejection candle, longing into established overhead resistance, or multiple " &
+            "     consecutive bars closing against the proposed direction with no confirmation candle " &
+            "     in the entry bar itself. Apply the same standard you would on a mid-trade sense " &
+            "     check looking at the same bar window." & vbLf &
             "- Your knowledge has a cutoff date — you cannot see live prices or today's news. " &
             "  For session P&L drawdown judgements, trust the numbers provided — they are real." & vbLf &
-            "Example PROCEED: ""PROCEED The London/NY overlap is the highest-liquidity window for Gold and no session drawdown pattern is present.""" & vbLf &
+            "Example PROCEED: ""PROCEED The London/NY overlap is the highest-liquidity window for Gold and the last 6 bars confirm the short with successive lower closes; no drawdown pattern is present.""" & vbLf &
             "Example VETO (drawdown): ""VETO Session P&L is -$240 across 3 trades on this engine — a 100% loss rate strongly suggests an adverse market regime that the technical gates cannot filter out.""" & vbLf &
-            "Example VETO (session): ""VETO Micro Gold Futures in the Asian session produce excessive noise that undermines ATR sizing assumptions."""
+            "Example VETO (price action): ""VETO The last 4 bars all printed higher closes and the entry bar itself is green — the SHORT signal is firing into bullish momentum, not against exhaustion."""
 
         ''' <summary>
         ''' Calls Claude Haiku for a pre-trade macro/session sanity check. Returns (Proceed=True)
@@ -259,7 +266,9 @@ Namespace TopStepTrader.Services.AI
             End Try
         End Function
 
-        Private Shared Function BuildPreTradeUserMessage(ctx As PreTradeContext) As String
+        ''' <summary>UAT-03 F1: builds the pre-trade prompt user-message. Friend-scoped so
+        ''' tests can assert bar-table inclusion without HTTP mocking.</summary>
+        Friend Shared Function BuildPreTradeUserMessage(ctx As PreTradeContext) As String
             Dim sb As New System.Text.StringBuilder()
             Dim session = GetTradingSession(ctx.UtcNow)
             Dim personaDesc = GetPersonaDescription(ctx.PersonaName)
@@ -310,10 +319,32 @@ Namespace TopStepTrader.Services.AI
                 sb.AppendLine($"  Trades:      {ctx.SessionTradeCount} completed")
                 sb.AppendLine($"  Session P&L: {If(ctx.SessionPnlUsd >= 0D, "+", "")}${ctx.SessionPnlUsd:F2}{lossRate}")
             End If
+
+            ' UAT-03 F1: include the same bar window the mid-trade check sees, so price-action
+            ' review can happen at entry. The shared formatter guarantees the two prompts emit
+            ' bars in an identical table layout, preventing prompt-format drift over time.
+            If ctx.RecentBars IsNot Nothing AndAlso ctx.RecentBars.Count > 0 Then
+                sb.AppendLine()
+                AppendBarHistory(sb, ctx.RecentBars)
+            End If
+
             sb.AppendLine()
             sb.AppendLine("Should this trade PROCEED or be VETOED?")
             Return sb.ToString()
         End Function
+
+        ''' <summary>Shared bar-table emitter used by both the pre-trade and mid-trade prompts.
+        ''' Keeping a single formatter means F1's "two checks must see the same data" guarantee
+        ''' cannot drift apart by accident.</summary>
+        Friend Shared Sub AppendBarHistory(sb As System.Text.StringBuilder,
+                                            bars As IReadOnlyList(Of MarketBar))
+            Dim recent = bars.Skip(Math.Max(0, bars.Count - 20)).ToList()
+            sb.AppendLine($"BAR HISTORY (last {recent.Count} bars, newest last):")
+            sb.AppendLine("Time (UTC)          Open      High      Low       Close     Volume")
+            For Each b In recent
+                sb.AppendLine($"{b.Timestamp:yyyy-MM-dd HH:mm}  {b.Open,8:F4}  {b.High,8:F4}  {b.Low,8:F4}  {b.Close,8:F4}  {b.Volume,8}")
+            Next
+        End Sub
 
         Private Shared Function GetTradingSession(utc As DateTimeOffset) As String
             Dim h = utc.Hour + utc.Minute / 60.0
@@ -593,14 +624,14 @@ Namespace TopStepTrader.Services.AI
             End Try
         End Function
 
-        Private Shared Function BuildMidTradeMessage(instrument As String,
-                                                      side As String,
-                                                      adxVal As Single,
-                                                      plusDi As Single,
-                                                      minusDi As Single,
-                                                      stopPhaseLabel As String,
-                                                      unrealizedPnl As Decimal,
-                                                      bars As IReadOnlyList(Of MarketBar)) As String
+        Friend Shared Function BuildMidTradeMessage(instrument As String,
+                                                     side As String,
+                                                     adxVal As Single,
+                                                     plusDi As Single,
+                                                     minusDi As Single,
+                                                     stopPhaseLabel As String,
+                                                     unrealizedPnl As Decimal,
+                                                     bars As IReadOnlyList(Of MarketBar)) As String
             Dim sb As New System.Text.StringBuilder()
             sb.AppendLine("MID-TRADE SENSE CHECK")
             sb.AppendLine()
@@ -612,12 +643,7 @@ Namespace TopStepTrader.Services.AI
             sb.AppendLine($"Stop Phase:   {stopPhaseLabel}")
             sb.AppendLine($"Unrealised PnL: {If(unrealizedPnl >= 0, "+", "")}${unrealizedPnl:F2}")
             sb.AppendLine()
-            sb.AppendLine($"BAR HISTORY (last {Math.Min(bars.Count, 20)} bars, newest last):")
-            sb.AppendLine("Time (UTC)          Open      High      Low       Close     Volume")
-            Dim recent = bars.Skip(Math.Max(0, bars.Count - 20)).ToList()
-            For Each b In recent
-                sb.AppendLine($"{b.Timestamp:yyyy-MM-dd HH:mm}  {b.Open,8:F4}  {b.High,8:F4}  {b.Low,8:F4}  {b.Close,8:F4}  {b.Volume,8}")
-            Next
+            AppendBarHistory(sb, bars)
             sb.AppendLine()
             sb.AppendLine("Should this position be held (GREEN), monitored with caution (AMBER), or exited (RED)?")
             Return sb.ToString()

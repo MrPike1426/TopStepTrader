@@ -31,6 +31,14 @@ Namespace TopStepTrader.Core.Settings
         ''' <summary>Chart timeframe label shown in the UI (e.g. "5min").</summary>
         Public Property BarTimeframe As String = "5min"
 
+        ''' <summary>
+        ''' Multiplier applied to the ADX-band contract count for both initial entries
+        ''' and mid-trade scale-ins. 1 = unchanged; 2 = double; 3 = triple. Resets to 1
+        ''' on every app start (not persisted) so leverage is never silently active
+        ''' after a restart or crash.
+        ''' </summary>
+        Public Property LeverageMultiplier As Integer = 1
+
         ' ── Degradation score thresholds ─────────────────────────────────────────
         Public Property WarningScoreThreshold As Integer = 3
         Public Property ExitingScoreThreshold As Integer = 6
@@ -68,6 +76,62 @@ Namespace TopStepTrader.Core.Settings
         ''' never suppress downstream exit logic indefinitely. Default 30.
         ''' </summary>
         Public Property EarlyModeMaxAgeMinutes As Integer = 30
+
+        ' ── UAT-03 F2: BB position entry gate ────────────────────────────────────
+        ''' <summary>
+        ''' When True, block a SHORT entry if the last <see cref="BbPositionGateBars"/>
+        ''' closes were all above the 20-period BB median (mirror for LONG). Catches the
+        ''' "shorting above the median" / "longing below the median" case where price
+        ''' has pulled back inside the channel against the proposed direction.
+        ''' </summary>
+        Public Property BbPositionGateEnabled As Boolean = True
+
+        ''' <summary>
+        ''' Number of trailing closes that must all be on the wrong side of the BB median
+        ''' to trigger the <see cref="BbPositionGateEnabled"/> block. Default 2.
+        ''' </summary>
+        Public Property BbPositionGateBars As Integer = 2
+
+        ' ── UAT-03 F3: Consecutive-bar momentum-against entry gate ───────────────
+        ''' <summary>
+        ''' When True, block an entry where <c>isFlip = False</c> if the last
+        ''' <see cref="MomentumAgainstGateBars"/> closes all moved against the proposed
+        ''' direction (e.g. 4 consecutive higher closes on a SHORT re-entry). Genuine
+        ''' SuperTrend flips (<c>isFlip = True</c>) are not affected so reversal entries
+        ''' at the start of a new leg still fire.
+        ''' </summary>
+        Public Property MomentumAgainstGateEnabled As Boolean = True
+
+        ''' <summary>
+        ''' Number of trailing bar-to-bar moves that must all be against the proposed
+        ''' direction to trigger the <see cref="MomentumAgainstGateEnabled"/> block.
+        ''' Default 4.
+        ''' </summary>
+        Public Property MomentumAgainstGateBars As Integer = 4
+
+        ' ── FEAT-63: $-denominated TP ladder ─────────────────────────────────────
+        ''' <summary>
+        ''' Global dollar TP increment for the laddered profit-protection stop. When
+        ''' &gt; 0, ladder mode is active: once total unrealised P&amp;L crosses
+        ''' <c>(N + 0.10) × LadderTpDollars</c> for some <c>N ≥ 1</c>, the broker
+        ''' stop ratchets up to the price equivalent of <c>N × LadderTpDollars</c>
+        ''' total P&amp;L. <c>ExitSignalEngine</c>'s E1–E9 force-close path is
+        ''' suppressed for the entire trade while ladder mode is on; phased stops
+        ''' (Initial / Breakeven / ProfitTrail / Harvest / FreeRide) keep ratcheting
+        ''' in parallel and whichever stop is more conservative wins. Set to 0 to
+        ''' fall back to the existing exit-gate + phased-stop behavior. Persisted
+        ''' across restarts.
+        ''' </summary>
+        Public Property LadderTpDollars As Decimal = 0D
+
+        ' ── UAT-03 F6: Entry-bar confirmation-candle gate ────────────────────────
+        ''' <summary>
+        ''' When True, block an entry where <c>isFlip = True</c> unless the entry bar
+        ''' itself confirms the new direction (close past prior bar's high for LONG,
+        ''' below prior bar's low for SHORT). Forces "wait for the rejection candle"
+        ''' on flips while leaving established-trend re-entries untouched.
+        ''' </summary>
+        Public Property ConfirmationCandleGateEnabled As Boolean = True
 
     End Class
 

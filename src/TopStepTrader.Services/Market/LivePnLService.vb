@@ -37,8 +37,8 @@ Namespace TopStepTrader.Services.Market
         Private _handlerAttached As Integer = 0
         Private _disposed As Boolean = False
 
-        ''' <summary>Bar-poll period (matches StrategyExecutionEngine 2-second cadence).</summary>
-        Public Shared ReadOnly BarPollPeriod As TimeSpan = TimeSpan.FromSeconds(2)
+        ''' <summary>Bar-poll period — fallback only; quote feed is preferred. 10 s caps the worst-case REST rate at 6/min per root during hub outages (PERF-02).</summary>
+        Public Shared ReadOnly BarPollPeriod As TimeSpan = TimeSpan.FromSeconds(10)
         ''' <summary>Entry-correction poll period.</summary>
         Public Shared ReadOnly EntryCorrectionPeriod As TimeSpan = TimeSpan.FromSeconds(30)
         ''' <summary>Window during which a quote is considered fresh (preferred over bar).</summary>
@@ -78,6 +78,8 @@ Namespace TopStepTrader.Services.Market
                                                     Optional cancel As CancellationToken = Nothing) As Task
             Dim state As RootState = Nothing
             If Not _roots.TryGetValue(NormalizeRoot(rootKey), state) Then Return
+            ' PERF-02 F1: skip REST call when the SignalR quote feed is live.
+            If state.GetQuotesPerSec5s(DateTime.UtcNow) > 0 Then Return
             Try
                 Using scope = _scopeFactory.CreateScope()
                     Dim ingestion = scope.ServiceProvider.GetRequiredService(Of IBarIngestionService)()
@@ -145,7 +147,7 @@ Namespace TopStepTrader.Services.Market
                         Using scope = _scopeFactory.CreateScope()
                             Dim orderSvc = scope.ServiceProvider.GetRequiredService(Of IOrderService)()
                             snap = Await orderSvc.GetLivePositionSnapshotAsync(
-                                subItem.AccountId, state.PxContractId, Nothing, cancel)
+                                subItem.AccountId, state.PxContractId, cancel:=cancel)
                         End Using
                         If snap Is Nothing OrElse snap.OpenRate <= 0D Then Continue For
                         Dim tickSize = If(state.TickSize > 0D, state.TickSize, 0.0001D)
@@ -164,6 +166,13 @@ Namespace TopStepTrader.Services.Market
                 Next
                 EmitFromState(state, reason:="EntryCorrected")
             Next
+        End Function
+
+        ''' <summary>For tests: returns the RootState for a root key, or Nothing when not subscribed.</summary>
+        Friend Function GetRootStateForTests(rootKey As String) As RootState
+            Dim state As RootState = Nothing
+            _roots.TryGetValue(NormalizeRoot(rootKey), state)
+            Return state
         End Function
 
         ''' <summary>For tests: returns true when at least one subscription exists for the root.</summary>

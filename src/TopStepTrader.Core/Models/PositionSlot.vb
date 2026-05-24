@@ -50,8 +50,20 @@ Namespace TopStepTrader.Core.Models
         ''' uses this to force-release a slot whose snapshot has not refreshed for several
         ''' minutes, defending against the case where SearchOpenPositionsAsync keeps returning
         ''' a stale row long after the broker has actually closed the position.
+        '''
+        ''' BUG-90 F3: stamped only when the snapshot also confirms the position is still
+        ''' open (Units &gt; 0 AND Amount &gt; 0). A degenerate "successful but flat" snapshot
+        ''' deliberately does NOT advance this clock so the staleness guard remains effective.
         ''' </summary>
         Public Property LastSnapshotOkUtc As DateTime = DateTime.MinValue
+
+        ''' <summary>
+        ''' BUG-90 F5: most recent absolute NetPos observed from a non-degenerate broker
+        ''' snapshot. Reset to 0 on slot close. Surfaced in the structured release log line
+        ''' so a post-mortem can see what the last confirmed position size was when the
+        ''' release decision fired.
+        ''' </summary>
+        Public Property NetPosLastSeen As Integer = 0
 
         Public Property UnrealizedPnl As Decimal
 
@@ -68,10 +80,11 @@ Namespace TopStepTrader.Core.Models
         Public Property StopPhase As StopPhase = StopPhase.Initial
 
         ''' <summary>
-        ''' Number of consecutive bars on which the exit engine scored Exiting health
-        ''' (score >= 6, no E1 flip). Exit only fires when this reaches 2, preventing
-        ''' single-bar consolidation at trend highs from triggering premature closure.
-        ''' Resets to zero whenever the bar scores Warning or Healthy.
+        ''' Number of consecutive closed strategy-TF bars on which the exit engine has scored
+        ''' >= <c>ExitScoreThreshold</c> (no E1 flip). Exit only fires when this reaches 2,
+        ''' preventing single-bar consolidation at trend highs from triggering premature closure.
+        ''' Resets to 0 on any bar that scores below the threshold, on slot close, and on slot
+        ''' onboarding via reconcile.
         ''' </summary>
         Public Property ConsecutiveExitBars As Integer = 0
 
@@ -133,6 +146,20 @@ Namespace TopStepTrader.Core.Models
         ''' <c>TradeLifespanRecords.EntrySessionWindow</c> and used to derive
         ''' <c>CrossedSessionBoundary</c> at close.</summary>
         Public Property EntrySessionWindow As String = String.Empty
+
+        ''' <summary>FEAT-59: Bar timestamp of the most recent <c>TradeTickSnapshots</c> row written
+        ''' for this slot. Used to throttle the per-tick snapshot writer to one row per unique
+        ''' closed strategy-TF bar — the management tick fires several times per minute, but only
+        ''' the first tick of each new bar should produce a snapshot row. Reset in
+        ''' <c>SlotManager.CloseSlot</c>.</summary>
+        Public Property LastTickSnapshotBarTime As DateTimeOffset = DateTimeOffset.MinValue
+
+        ''' <summary>BUG-88: bar timestamp of the most recent exit-decision evaluation for this slot.
+        ''' Used by the per-tick management block to gate the ConsecutiveExitBars increment to once
+        ''' per closed strategy-TF bar — without this, the multi-times-per-minute management timer
+        ''' would inflate the counter and fire exit on bar 1 anyway. Reset in
+        ''' <c>SlotManager.CloseSlot</c>.</summary>
+        Public Property LastExitDecisionBarTime As DateTimeOffset = DateTimeOffset.MinValue
 
         ''' <summary>Most recent ADX value from the 15-second monitoring tick. Updated live; 0 until first tick.</summary>
         Public Property CurrentAdx As Single = 0F

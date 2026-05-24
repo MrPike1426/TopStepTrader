@@ -1,8 +1,39 @@
 Imports System.Globalization
 Imports System.Windows
 Imports System.Windows.Data
+Imports System.Windows.Media
 
 Namespace TopStepTrader.UI.Infrastructure
+
+    ''' <summary>
+    ''' FEAT-67 F3: Resolves a string resource-key like "BullIconGreen" to the actual
+    ''' <see cref="ImageSource"/> defined in the application's resource dictionary. The
+    ''' Ultimate Scalper watchlist's direction-icon column binds an Image's Source through
+    ''' this converter; when the row's <c>DirectionIconKey</c> is an empty string the
+    ''' converter returns Nothing so the Image renders empty.
+    ''' </summary>
+    Public Class StringKeyToImageSourceConverter
+        Implements IValueConverter
+
+        Public Function Convert(value As Object, targetType As Type,
+                                parameter As Object, culture As CultureInfo) As Object _
+            Implements IValueConverter.Convert
+            Dim key = TryCast(value, String)
+            If String.IsNullOrEmpty(key) Then Return Nothing
+            Dim app = Application.Current
+            If app Is Nothing Then Return Nothing
+            If app.Resources.Contains(key) Then
+                Return TryCast(app.Resources(key), ImageSource)
+            End If
+            Return Nothing
+        End Function
+
+        Public Function ConvertBack(value As Object, targetType As Type,
+                                    parameter As Object, culture As CultureInfo) As Object _
+            Implements IValueConverter.ConvertBack
+            Throw New NotSupportedException()
+        End Function
+    End Class
 
     ''' <summary>
     ''' Converts a string resource-key like "BuyBrush" to the actual SolidColorBrush

@@ -117,6 +117,7 @@ Namespace TopStepTrader.UI.ViewModels
             slot.Health              = SlotHealth.Healthy
             slot.MissCount           = 0
             slot.LastSnapshotOkUtc   = DateTime.MinValue
+            slot.NetPosLastSeen      = 0
             slot.UnrealizedPnl       = 0D
             slot.EntryReason         = FormatEntryReason(entryAdx)
             slot.ConsecutiveExitBars = 0
@@ -178,6 +179,7 @@ Namespace TopStepTrader.UI.ViewModels
                 s.AccountId    = 0
                 s.MissCount    = 0
                 s.LastSnapshotOkUtc = DateTime.MinValue
+                s.NetPosLastSeen = 0
                 s.UnrealizedPnl = 0D
                 s.EntryReason  = String.Empty
                 s.EntryTime    = DateTime.MinValue
@@ -194,6 +196,8 @@ Namespace TopStepTrader.UI.ViewModels
                 s.LivePriceUtc       = DateTime.MinValue
                 s.PriceStaleCount    = 0
                 s.LivePriceSource = LivePriceSource.None
+                s.LastTickSnapshotBarTime = DateTimeOffset.MinValue
+                s.LastExitDecisionBarTime = DateTimeOffset.MinValue
             End If
         End Sub
 
@@ -228,16 +232,20 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         ''' <summary>
-        ''' FEAT-54: Returns True only when a re-subscription is required —
-        ''' the slot's <c>Side</c> has flipped, or its <c>Contracts</c> count differs
-        ''' from <paramref name="newContracts"/>. <c>EntryPrice</c> drift alone returns
-        ''' False because <see cref="ILivePnLService"/> self-corrects entry price internally
-        ''' and re-subscribing on every VWAP fill churns the MarketHub ref-count.
+        ''' FEAT-54 / BUG-92: Returns True only when a re-subscription is required —
+        ''' the <paramref name="priorSide"/> has flipped, or <paramref name="priorContracts"/>
+        ''' differs from <paramref name="newContracts"/>. <c>EntryPrice</c> drift alone
+        ''' returns False because <see cref="ILivePnLService"/> self-corrects entry price
+        ''' internally and re-subscribing on every VWAP fill churns the MarketHub ref-count.
+        '''
+        ''' BUG-92: callers must capture the slot's side/contracts <em>before</em> any
+        ''' <see cref="SyncFromBrokerVwap"/> call, otherwise the broker-driven contracts
+        ''' overwrite hides the delta from this check.
         ''' </summary>
-        Public Function NeedsResubscribe(slot As PositionSlot, newSide As String, newContracts As Integer) As Boolean
-            If slot Is Nothing OrElse Not slot.IsOpen Then Return False
-            If Not String.Equals(slot.Side, newSide, StringComparison.OrdinalIgnoreCase) Then Return True
-            If slot.Contracts <> newContracts Then Return True
+        Public Function NeedsResubscribe(priorSide As String, priorContracts As Integer,
+                                         newSide As String, newContracts As Integer) As Boolean
+            If Not String.Equals(priorSide, newSide, StringComparison.OrdinalIgnoreCase) Then Return True
+            If priorContracts <> newContracts Then Return True
             Return False
         End Function
 
@@ -263,18 +271,25 @@ Namespace TopStepTrader.UI.ViewModels
             Return 0
         End Function
 
-        ''' <summary>Returns the number of contracts to place based on ADX strength band (fixed: Decaff=1, Latte=2, Espresso=3).</summary>
+        ''' <summary>
+        ''' Returns the number of contracts to place based on ADX strength band
+        ''' (base 1/2/3 for Latte/Cappuccino/Espresso) multiplied by the active
+        ''' <see cref="SuperTrendPlusConfig.LeverageMultiplier"/>.
+        ''' </summary>
         Public Function ContractsForAdx(adx As Single) As Integer
-            If adx >= _config.AdxStrongThreshold Then Return 3
-            If adx >= _config.AdxModerateThreshold Then Return 2
-            Return 1
+            Dim lev As Integer = Math.Max(1, _config.LeverageMultiplier)
+            If adx >= _config.AdxStrongThreshold Then Return 3 * lev
+            If adx >= _config.AdxModerateThreshold Then Return 2 * lev
+            Return 1 * lev
         End Function
 
-        Private Shared Function FormatEntryReason(adx As Single) As String
+        Private Function FormatEntryReason(adx As Single) As String
             Dim adxInt = CInt(Math.Round(adx))
-            If adx >= 60 Then Return $"ADX {adxInt} — L3: Espresso"
-            If adx >= 40 Then Return $"ADX {adxInt} — L2: Latte"
-            Return $"ADX {adxInt} — L1: Mellow Birds"
+            Dim lev As Integer = Math.Max(1, _config.LeverageMultiplier)
+            Dim levSuffix As String = If(lev > 1, $" ×{lev}", String.Empty)
+            If adx >= 60 Then Return $"ADX {adxInt} — L3: Espresso{levSuffix}"
+            If adx >= 40 Then Return $"ADX {adxInt} — L2: Latte{levSuffix}"
+            Return $"ADX {adxInt} — L1: Mellow Birds{levSuffix}"
         End Function
 
     End Class

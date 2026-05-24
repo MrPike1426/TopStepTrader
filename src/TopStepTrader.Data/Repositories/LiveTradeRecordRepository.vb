@@ -35,6 +35,22 @@ Namespace TopStepTrader.Data.Repositories
             Await _db.SaveChangesAsync()
         End Function
 
+        Public Async Function ReconcileExitAsync(id As Long,
+                                                 exitPrice As Decimal,
+                                                 pnl As Decimal,
+                                                 exitOrderId As Long,
+                                                 exitTime As DateTimeOffset?) As Task _
+            Implements ILiveTradeRecordRepository.ReconcileExitAsync
+            Dim entity = Await _db.LiveTradeRecords.FindAsync(id)
+            If entity Is Nothing Then Return
+            entity.ExitPrice = exitPrice
+            entity.PnL = pnl
+            entity.ExitOrderId = exitOrderId
+            If exitTime.HasValue Then entity.ExitTime = exitTime.Value
+            entity.UpdatedAt = DateTimeOffset.UtcNow
+            Await _db.SaveChangesAsync()
+        End Function
+
         Public Async Function UpdateEntryPriceAsync(id As Long, entryPrice As Decimal) As Task _
             Implements ILiveTradeRecordRepository.UpdateEntryPriceAsync
             Dim entity = Await _db.LiveTradeRecords.FindAsync(id)

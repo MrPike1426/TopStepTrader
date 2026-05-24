@@ -51,6 +51,7 @@ Namespace TopStepTrader.Data
             services.AddScoped(Of ILiveTradeRecordRepository, LiveTradeRecordRepository)()
             services.AddScoped(Of ITradeStopAdjustmentRepository, TradeStopAdjustmentRepository)()
             services.AddScoped(Of ITradeSnapshotRepository, TradeSnapshotRepository)()
+            services.AddScoped(Of ITradeTickSnapshotRepository, TradeTickSnapshotRepository)()
 
         End Sub
 

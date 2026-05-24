@@ -23,6 +23,7 @@ Namespace TopStepTrader.Data
         Public Property PersonaSettings As DbSet(Of PersonaSettingsEntity)
         Public Property ContractCache As DbSet(Of ContractCacheEntity)
         Public Property SuperTrendPlusConfig As DbSet(Of SuperTrendPlusConfigEntity)
+        Public Property UltimateScalperConfig As DbSet(Of UltimateScalperConfigEntity)
 
         Protected Overrides Sub OnModelCreating(modelBuilder As ModelBuilder)
             MyBase.OnModelCreating(modelBuilder)
@@ -88,6 +89,11 @@ Namespace TopStepTrader.Data
             ' SuperTrendPlusConfig — singleton row (id=1), no auto-increment
             modelBuilder.Entity(Of SuperTrendPlusConfigEntity)() _
                 .ToTable("SuperTrendPlusConfig") _
+                .HasKey(Function(c) c.Id)
+
+            ' UltimateScalperConfig — singleton row (id=1), no auto-increment (FEAT-64)
+            modelBuilder.Entity(Of UltimateScalperConfigEntity)() _
+                .ToTable("UltimateScalperConfig") _
                 .HasKey(Function(c) c.Id)
 
         End Sub
@@ -445,6 +451,88 @@ Namespace TopStepTrader.Data
                 End Try
             Finally
                 If mustClose8 Then conn.Close()
+            End Try
+
+            ' ── FEAT-63: $-denominated TP ladder column ──────────────────────────
+            Dim mustClose9 = (conn.State <> ConnectionState.Open)
+            If mustClose9 Then conn.Open()
+            Try
+                Try
+                    Using cmd = conn.CreateCommand()
+                        cmd.CommandText = "ALTER TABLE ""SuperTrendPlusConfig"" ADD COLUMN ""LadderTpDollars"" TEXT NOT NULL DEFAULT '0'"
+                        cmd.ExecuteNonQuery()
+                    End Using
+                Catch ex As Exception
+                    If Not ex.Message.Contains("duplicate column") Then Throw
+                End Try
+            Finally
+                If mustClose9 Then conn.Close()
+            End Try
+
+            ' ── FEAT-64: Ultimate Scalper config singleton table ──────────────────
+            Dim mustClose10 = (conn.State <> ConnectionState.Open)
+            If mustClose10 Then conn.Open()
+            Try
+                Dim scalperDdl = New String() {
+                    "CREATE TABLE IF NOT EXISTS ""UltimateScalperConfig"" (
+                         ""Id""                          INTEGER NOT NULL PRIMARY KEY,
+                         ""MaLength""                    INTEGER NOT NULL DEFAULT 200,
+                         ""RsiLength""                   INTEGER NOT NULL DEFAULT 14,
+                         ""RsiOverbought""               REAL    NOT NULL DEFAULT 70.0,
+                         ""RsiOversold""                 REAL    NOT NULL DEFAULT 30.0,
+                         ""MaxBarsSinceMidlineCross""    INTEGER NOT NULL DEFAULT 10,
+                         ""SafetyCeilingTpDollars""      TEXT    NOT NULL DEFAULT '200',
+                         ""MinSlEditStepTicks""          INTEGER NOT NULL DEFAULT 1,
+                         ""MaxSlEditsPerSecond""         INTEGER NOT NULL DEFAULT 5,
+                         ""MesInitialStopDollars""       TEXT    NOT NULL DEFAULT '20',
+                         ""MesBreakevenSnapDollars""     TEXT    NOT NULL DEFAULT '7',
+                         ""MesTrailDistanceDollars""     TEXT    NOT NULL DEFAULT '7',
+                         ""MnqInitialStopDollars""       TEXT    NOT NULL DEFAULT '40',
+                         ""MnqBreakevenSnapDollars""     TEXT    NOT NULL DEFAULT '12',
+                         ""MnqTrailDistanceDollars""     TEXT    NOT NULL DEFAULT '12',
+                         ""MgcInitialStopDollars""       TEXT    NOT NULL DEFAULT '30',
+                         ""MgcBreakevenSnapDollars""     TEXT    NOT NULL DEFAULT '10',
+                         ""MgcTrailDistanceDollars""     TEXT    NOT NULL DEFAULT '10')"
+                }
+                For Each ddl In scalperDdl
+                    Using cmd = conn.CreateCommand()
+                        cmd.CommandText = ddl
+                        cmd.ExecuteNonQuery()
+                    End Using
+                Next
+
+                ' Idempotent ALTER for installs created before the Leverage column existed.
+                Try
+                    Using cmd = conn.CreateCommand()
+                        cmd.CommandText = "ALTER TABLE ""UltimateScalperConfig"" ADD COLUMN ""Leverage"" INTEGER NOT NULL DEFAULT 1"
+                        cmd.ExecuteNonQuery()
+                    End Using
+                Catch ex As Exception
+                    If Not ex.Message.Contains("duplicate column") Then Throw
+                End Try
+
+                ' FEAT-69: idempotent ALTERs for the pre-staged stop-entry knobs.
+                Dim feat69Columns = New (Name As String, Ddl As String)() {
+                    ("PreStagedEntriesEnabled", "ALTER TABLE ""UltimateScalperConfig"" ADD COLUMN ""PreStagedEntriesEnabled"" INTEGER NOT NULL DEFAULT 1"),
+                    ("EntryTriggerOffsetTicks", "ALTER TABLE ""UltimateScalperConfig"" ADD COLUMN ""EntryTriggerOffsetTicks"" INTEGER NOT NULL DEFAULT 1"),
+                    ("RepriceThresholdTicks", "ALTER TABLE ""UltimateScalperConfig"" ADD COLUMN ""RepriceThresholdTicks"" INTEGER NOT NULL DEFAULT 2"),
+                    ("ArmStaleMinutes", "ALTER TABLE ""UltimateScalperConfig"" ADD COLUMN ""ArmStaleMinutes"" INTEGER NOT NULL DEFAULT 30"),
+                    ("ReArmDebounceSeconds", "ALTER TABLE ""UltimateScalperConfig"" ADD COLUMN ""ReArmDebounceSeconds"" INTEGER NOT NULL DEFAULT 30"),
+                    ("MaxBrokerCallsPerMinute", "ALTER TABLE ""UltimateScalperConfig"" ADD COLUMN ""MaxBrokerCallsPerMinute"" INTEGER NOT NULL DEFAULT 80"),
+                    ("MaxConcurrentPositions", "ALTER TABLE ""UltimateScalperConfig"" ADD COLUMN ""MaxConcurrentPositions"" INTEGER NOT NULL DEFAULT 1")
+                }
+                For Each col In feat69Columns
+                    Try
+                        Using cmd = conn.CreateCommand()
+                            cmd.CommandText = col.Ddl
+                            cmd.ExecuteNonQuery()
+                        End Using
+                    Catch ex As Exception
+                        If Not ex.Message.Contains("duplicate column") Then Throw
+                    End Try
+                Next
+            Finally
+                If mustClose10 Then conn.Close()
             End Try
         End Sub
 

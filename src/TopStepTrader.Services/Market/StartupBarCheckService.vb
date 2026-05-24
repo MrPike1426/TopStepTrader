@@ -58,13 +58,16 @@ Namespace TopStepTrader.Services.Market
 
         Private ReadOnly _barRepository As BarRepository
         Private ReadOnly _barCollectionService As IBarCollectionService
+        Private ReadOnly _memoCache As BarEnsureMemoCache
         Private ReadOnly _logger As ILogger(Of StartupBarCheckService)
 
         Public Sub New(barRepository As BarRepository,
                        barCollectionService As IBarCollectionService,
+                       memoCache As BarEnsureMemoCache,
                        logger As ILogger(Of StartupBarCheckService))
             _barRepository = barRepository
             _barCollectionService = barCollectionService
+            _memoCache = memoCache
             _logger = logger
         End Sub
 
@@ -125,6 +128,11 @@ Namespace TopStepTrader.Services.Market
                     _logger.LogInformation(
                         "StartupBarCheck backfill: {Contract} {Tf} {From:d} → {To:d}",
                         item.ContractId, item.Timeframe, startDate, endDate)
+                    ' FEAT-68: on app boot the first ensure for each contract+timeframe must
+                    ' always go to disk regardless of any prior session's memoization. The
+                    ' singleton dictionary doesn't persist across restarts, but doing this
+                    ' explicitly also guards against hot-reload scenarios.
+                    _memoCache?.Invalidate(item.ContractId, item.Timeframe)
                     Await _barCollectionService.EnsureBarsAsync(
                         item.ContractId, startDate, endDate, item.Timeframe, progress, cancel)
                 Catch ex As OperationCanceledException

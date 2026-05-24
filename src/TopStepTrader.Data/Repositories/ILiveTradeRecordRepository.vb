@@ -10,6 +10,19 @@ Namespace TopStepTrader.Data.Repositories
         Function CloseAsync(id As Long, exitTime As DateTimeOffset, exitPrice As Decimal,
                             pnl As Decimal, exitReason As String) As Task
 
+        ''' <summary>
+        ''' BUG-92: amends an already-closed record with broker-confirmed exit data. Used by
+        ''' the post-flatten reconciliation pass when the broker stream returns the actual
+        ''' ExecutePrice on the closing fill, which can differ from the engine-derived ExitPrice
+        ''' persisted at close-decision time. <paramref name="exitOrderId"/> stores the broker's
+        ''' closing order ID and doubles as the "broker-reconciled" flag (non-zero ⇒ reconciled).
+        ''' </summary>
+        Function ReconcileExitAsync(id As Long,
+                                    exitPrice As Decimal,
+                                    pnl As Decimal,
+                                    exitOrderId As Long,
+                                    exitTime As DateTimeOffset?) As Task
+
         Function UpdateEntryPriceAsync(id As Long, entryPrice As Decimal) As Task
 
         Function ResolveTopStepXTradeIdAsync(id As Long, topStepXTradeId As Long) As Task

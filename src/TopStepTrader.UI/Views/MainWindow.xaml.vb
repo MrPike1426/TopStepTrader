@@ -77,6 +77,8 @@ Namespace TopStepTrader.UI
                     MainContent.Content = _viewModelLocator.DashboardView
                 Case "SuperTrendPlus"
                     MainContent.Content = _viewModelLocator.SuperTrendPlusView
+                Case "UltimateScalper"
+                    MainContent.Content = _viewModelLocator.UltimateScalperView
                 Case "Settings"
                     MainContent.Content = _viewModelLocator.SettingsView
                 Case "TradePostMortem"

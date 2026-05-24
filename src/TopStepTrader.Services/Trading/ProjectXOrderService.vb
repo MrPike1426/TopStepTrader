@@ -36,6 +36,7 @@ Namespace TopStepTrader.Services.Trading
         Private ReadOnly _catalog As TopStepXInstrumentCatalog
         Private ReadOnly _logger As ILogger(Of ProjectXOrderService)
         Private ReadOnly _hubClient As UserHubClient
+        Private ReadOnly _positionsCache As IOpenPositionsCache
 
         Public Event OrderFilled As EventHandler(Of OrderFilledEventArgs) Implements IOrderService.OrderFilled
         Public Event OrderRejected As EventHandler(Of OrderRejectedEventArgs) Implements IOrderService.OrderRejected
@@ -47,7 +48,8 @@ Namespace TopStepTrader.Services.Trading
                        session As ITradingSessionContext,
                        catalog As TopStepXInstrumentCatalog,
                        logger As ILogger(Of ProjectXOrderService),
-                       hubClient As UserHubClient)
+                       hubClient As UserHubClient,
+                       positionsCache As IOpenPositionsCache)
             _orderClient = orderClient
             _orderRepo = orderRepo
             _accountService = accountService
@@ -55,6 +57,7 @@ Namespace TopStepTrader.Services.Trading
             _catalog = catalog
             _logger = logger
             _hubClient = hubClient
+            _positionsCache = positionsCache
             ' Bridge the SignalR real-time position stream into the IOrderService.PositionUpdated event.
             ' The REST searchOpen endpoint returns openPnl=0; the hub push carries the live value.
             AddHandler _hubClient.PositionUpdated, AddressOf OnHubPositionUpdated
@@ -67,6 +70,10 @@ Namespace TopStepTrader.Services.Trading
         Private Sub OnHubPositionUpdated(sender As Object, e As PXPositionUpdateEventArgs)
             Dim data = e?.PositionData
             If data Is Nothing OrElse String.IsNullOrEmpty(data.ContractId) Then Return
+            ' PERF-02 F3d: invalidate BEFORE raising so handlers that re-read via
+            ' GetLivePositionSnapshotAsync see fresh state, not the stale cached entry.
+            Dim accountId As Long = If(_session?.SelectedAccount?.Id, 0L)
+            If accountId <> 0L Then _positionsCache.Invalidate(accountId)
             RaiseEvent PositionUpdated(Me, New Core.Events.PositionUpdateEventArgs(
                 data.ContractId, data.NetPos, CDec(data.NetPrice), CDec(data.OpenPnL)))
         End Sub
@@ -352,11 +359,16 @@ Namespace TopStepTrader.Services.Trading
 
         Public Async Function GetLivePositionSnapshotAsync(accountId As Long, contractId As String,
                                                             Optional positionId As Long? = Nothing,
+                                                            Optional bypassCache As Boolean = False,
                                                             Optional cancel As CancellationToken = Nothing) _
             As Task(Of LivePositionSnapshot) Implements IOrderService.GetLivePositionSnapshotAsync
             Try
                 Dim resolvedId = Await ResolveToActivePxContractIdAsync(contractId, cancel)
-                Dim resp = Await _orderClient.SearchOpenPositionsAsync(accountId, cancel)
+                Dim resp = Await _positionsCache.GetOrFetchAsync(
+                    accountId,
+                    Function(c) _orderClient.SearchOpenPositionsAsync(accountId, c),
+                    bypassCache:=bypassCache,
+                    cancel:=cancel)
                 If resp?.Positions Is Nothing Then Return Nothing
 
                 ' When a specific positionId is supplied, search across ALL positions by ID —
@@ -480,6 +492,7 @@ Namespace TopStepTrader.Services.Trading
                 FlattenDiag(closeLine)
                 _logger.LogInformation(
                     "TopStepX FlattenContract: closed {Contract} — success={Ok}", resolvedId, resp.Success)
+                If resp.Success Then _positionsCache.Invalidate(accountId)
                 Return resp.Success
             Catch ex As Exception
                 FlattenDiag($"EXCEPTION: {ex.GetType().Name}: {ex.Message}")
@@ -643,6 +656,7 @@ Namespace TopStepTrader.Services.Trading
                     End If
                 End If
 
+                If overallSuccess Then _positionsCache.Invalidate(accountId)
                 Return overallSuccess
 
             Catch ex As Exception
@@ -711,6 +725,7 @@ Namespace TopStepTrader.Services.Trading
                 _logger.LogInformation(
                     "TopStepX PartialClose: {Contract} size={Size} success={Ok} code={Code} msg={Msg}",
                     resolvedId, size, resp.Success, resp.ErrorCode, resp.ErrorMessage)
+                If resp.Success Then _positionsCache.Invalidate(accountId)
                 Return resp.Success
             Catch ex As Exception
                 _logger.LogWarning(ex, "PartialCloseContractAsync failed for {Contract}", contractId)

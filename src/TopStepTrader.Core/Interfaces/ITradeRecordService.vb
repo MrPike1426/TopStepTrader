@@ -43,6 +43,13 @@ Namespace TopStepTrader.Core.Interfaces
                                         triggerReason As String,
                                         Optional notes As String = Nothing) As Task
 
+        ''' <summary>
+        ''' FEAT-59: Persists a per-closed-bar tick snapshot row for a live trade. Best-effort;
+        ''' failures are logged and swallowed so the management tick never blocks on this write.
+        ''' Callers are expected to throttle to one call per unique <c>BarTimestamp</c>.
+        ''' </summary>
+        Function LogTickSnapshotAsync(liveTradeRecordId As Long, snapshot As TradeTickSnapshot) As Task
+
         ''' <summary>Returns all stop adjustments for a trade in chronological order.</summary>
         Function GetStopAdjustmentsAsync(liveTradeRecordId As Long) As Task(Of IList(Of TradeStopAdjustment))
 
@@ -57,6 +64,15 @@ Namespace TopStepTrader.Core.Interfaces
         ''' Triggered from a Settings menu action or via the --backfill-snapshots startup arg.
         ''' </summary>
         Function BackfillSnapshotsAsync(accountId As Long) As Task
+
+        ''' <summary>
+        ''' BUG-92: Walks every closed LiveTradeRecord whose ExitOrderId is still 0 (i.e.,
+        ''' never reconciled against the broker tape) and rewrites ExitPrice/PnL/ExitOrderId
+        ''' from the broker's closing-fill ExecutePrice. Also syncs the linked TradeOutcome.
+        ''' Triggered from the Settings menu or the --backfill-exit-prices startup arg.
+        ''' Returns the count of records that were reconciled.
+        ''' </summary>
+        Function BackfillExitPricesAsync(accountId As Long) As Task(Of Integer)
 
         ''' <summary>
         ''' FEAT-57: Persists a TradeSignal row and returns its Id. Used by the live trade

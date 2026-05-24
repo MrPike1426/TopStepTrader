@@ -13,10 +13,12 @@
                 <ResourceDictionary Source="Styles/DataGrids.xaml"/>
                 <ResourceDictionary Source="Styles/ComboBoxes3.xaml"/>
                 <ResourceDictionary Source="Styles/DatePickerTheme.xaml"/>
+                <ResourceDictionary Source="Styles/Icons.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Register converters so StaticResource lookups succeed during InitializeComponent -->
             <converters:BrushKeyConverter x:Key="BrushKeyConverter"/>
+            <converters:StringKeyToImageSourceConverter x:Key="StringKeyToImageSourceConverter"/>
             <converters:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
             <converters:BoolToBorderThicknessConverter x:Key="BoolToBorderThicknessConverter"/>
             <converters:BoolInverseConverter x:Key="BoolInverseConverter"/>

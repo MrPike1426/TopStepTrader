@@ -66,6 +66,15 @@ Namespace TopStepTrader.Core.Models
         ''' When non-empty, this replaces the SL/TP multiple lines in the pre-trade AI prompt.
         ''' </summary>
         Public Property ExitStrategyDescription As String = String.Empty
+
+        ''' <summary>
+        ''' UAT-03 F1: optional recent bar history (oldest first) that the pre-trade check
+        ''' should review alongside the macro/session filter. When present, the prompt also
+        ''' performs price-action review equivalent to the Mid-trade check at entry, so the
+        ''' two checks see the same data and can no longer disagree on it. Empty / Nothing
+        ''' falls back to the original macro-only behaviour for backward compatibility.
+        ''' </summary>
+        Public Property RecentBars As IReadOnlyList(Of MarketBar) = Nothing
     End Class
 
 End Namespace

@@ -28,6 +28,8 @@
     <SolidColorBrush x:Key="CardBrush"           Color="{StaticResource CardColor}"/>
     <SolidColorBrush x:Key="BorderBrush"         Color="{StaticResource BorderColor}"/>
     <SolidColorBrush x:Key="AccentBrush"         Color="{StaticResource AccentColor}"/>
+    <!-- FEAT-67 F2: low-saturation accent for transient row-update flash on the scalper watchlist. -->
+    <SolidColorBrush x:Key="AccentBrushDim"      Color="#4D27AE60"/>
     <SolidColorBrush x:Key="BuyBrush"            Color="{StaticResource BuyColor}"/>
     <SolidColorBrush x:Key="SellBrush"           Color="{StaticResource SellColor}"/>
     <SolidColorBrush x:Key="WarningBrush"        Color="{StaticResource WarningColor}"/>
