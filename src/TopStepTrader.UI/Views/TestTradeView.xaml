@@ -1,0 +1,95 @@
+<UserControl x:Class="TopStepTrader.UI.Views.TestTradeView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="{StaticResource BackgroundBrush}">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,20,24,24">
+
+            <TextBlock Text="🧪  Test Trade"
+                       Style="{StaticResource PageTitleStyle}"
+                       Margin="0,0,0,4"/>
+            <TextBlock Text="Diagnostic: verify TopStepX accepts a Stop Market parent with attached stopLossBracket. Stop Market + bracket SL only."
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="11"
+                       Margin="0,0,0,18"
+                       TextWrapping="Wrap"/>
+
+            <!-- ── Inputs ── -->
+            <Border Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16,12" Margin="0,0,0,16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Column="0" Grid.Row="0" Text="Symbol"
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
+                    <ComboBox Grid.Column="0" Grid.Row="1" Margin="0,4,8,0"
+                              ItemsSource="{Binding Symbols}"
+                              SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"/>
+
+                    <TextBlock Grid.Column="1" Grid.Row="0" Text="Trigger offset (ticks)"
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
+                    <TextBox Grid.Column="1" Grid.Row="1" Margin="0,4,8,0"
+                             Text="{Binding TriggerOffsetTicks, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <TextBlock Grid.Column="2" Grid.Row="0" Text="Initial Stop ($)"
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
+                    <TextBox Grid.Column="2" Grid.Row="1" Margin="0,4,8,0"
+                             Text="{Binding InitialStopDollars, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <TextBlock Grid.Column="3" Grid.Row="0" Text="Contracts (max 2)"
+                               Foreground="{StaticResource TextSecondaryBrush}" FontSize="11"/>
+                    <TextBox Grid.Column="3" Grid.Row="1" Margin="0,4,0,0"
+                             Text="{Binding Contracts, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                </Grid>
+            </Border>
+
+            <!-- ── Buttons ── -->
+            <Grid Margin="0,0,0,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0" Content="BUY (Stop)"
+                        Command="{Binding BuyStopCommand}"
+                        Background="#1F8A4C" Foreground="White"
+                        FontWeight="Bold" FontSize="14"
+                        Padding="0,14" Margin="0,0,6,0"/>
+                <Button Grid.Column="1" Content="SELL (Stop)"
+                        Command="{Binding SellStopCommand}"
+                        Background="#B0303A" Foreground="White"
+                        FontWeight="Bold" FontSize="14"
+                        Padding="0,14" Margin="6,0,6,0"/>
+                <Button Grid.Column="2" Content="Cancel last"
+                        Command="{Binding CancelLastCommand}"
+                        Padding="14,10" Margin="6,0,0,0"/>
+            </Grid>
+
+            <!-- ── Result panel ── -->
+            <TextBlock Text="Result"
+                       Foreground="{StaticResource TextSecondaryBrush}"
+                       FontSize="11" Margin="0,0,0,4"/>
+            <TextBox IsReadOnly="True" AcceptsReturn="True"
+                     FontFamily="Consolas" FontSize="12"
+                     Height="260"
+                     Text="{Binding ResultLog, Mode=OneWay}"
+                     VerticalScrollBarVisibility="Auto"
+                     TextWrapping="NoWrap"/>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

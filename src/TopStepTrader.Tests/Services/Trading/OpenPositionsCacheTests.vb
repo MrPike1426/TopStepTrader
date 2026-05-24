@@ -20,10 +20,20 @@ Namespace TopStepTrader.Tests.Services.Trading
             Return New PXPositionSearchResponse With {.Positions = New List(Of PXPositionDto)()}
         End Function
 
-        Private Shared Function MakeFetcher(resp As PXPositionSearchResponse, ByRef callCount As Integer) _
+        ''' <summary>
+        ''' Mutable counter passed by reference into the fetcher lambda. VB.NET prohibits
+        ''' capturing a ByRef parameter inside a lambda body, so callers hold a Counter and
+        ''' read <c>Count</c> directly to assert how many times the fetcher was invoked.
+        ''' </summary>
+        Private NotInheritable Class Counter
+            Public Count As Integer
+        End Class
+
+        Private Shared Function MakeFetcher(resp As PXPositionSearchResponse, counter As Counter) _
             As Func(Of CancellationToken, Task(Of PXPositionSearchResponse))
             Return Async Function(c As CancellationToken)
-                       callCount += 1
+                       Await Task.Yield()
+                       counter.Count += 1
                        Return resp
                    End Function
         End Function
@@ -32,13 +42,13 @@ Namespace TopStepTrader.Tests.Services.Trading
 
         <Fact>
         Public Async Function GetOrFetchAsync_FirstCall_InvokesFetcher() As Task
-            Dim calls = 0
+            Dim calls As New Counter()
             Dim resp = MakeResponse()
             Dim cache As New OpenPositionsCache()
 
             Dim result = Await cache.GetOrFetchAsync(AccountA, MakeFetcher(resp, calls))
 
-            Assert.Equal(1, calls)
+            Assert.Equal(1, calls.Count)
             Assert.Same(resp, result)
         End Function
 
@@ -46,14 +56,14 @@ Namespace TopStepTrader.Tests.Services.Trading
 
         <Fact>
         Public Async Function GetOrFetchAsync_SecondCallWithinTtl_UsesCache() As Task
-            Dim calls = 0
+            Dim calls As New Counter()
             Dim resp = MakeResponse()
             Dim cache As New OpenPositionsCache()
 
             Dim r1 = Await cache.GetOrFetchAsync(AccountA, MakeFetcher(resp, calls))
             Dim r2 = Await cache.GetOrFetchAsync(AccountA, MakeFetcher(resp, calls))
 
-            Assert.Equal(1, calls)
+            Assert.Equal(1, calls.Count)
             Assert.Same(r1, r2)
         End Function
 
@@ -61,7 +71,7 @@ Namespace TopStepTrader.Tests.Services.Trading
 
         <Fact>
         Public Async Function GetOrFetchAsync_AfterTtlExpiry_RefetchesFromBroker() As Task
-            Dim calls = 0
+            Dim calls As New Counter()
             Dim resp = MakeResponse()
             Dim cache As New OpenPositionsCache(ttl:=TimeSpan.FromMilliseconds(50))
 
@@ -69,14 +79,14 @@ Namespace TopStepTrader.Tests.Services.Trading
             Await Task.Delay(100)
             Await cache.GetOrFetchAsync(AccountA, MakeFetcher(resp, calls))
 
-            Assert.Equal(2, calls)
+            Assert.Equal(2, calls.Count)
         End Function
 
         ' ── T4 ──────────────────────────────────────────────────────────────────
 
         <Fact>
         Public Async Function GetOrFetchAsync_BypassCacheTrue_AlwaysFetches() As Task
-            Dim calls = 0
+            Dim calls As New Counter()
             Dim resp = MakeResponse()
             Dim cache As New OpenPositionsCache()
 
@@ -84,17 +94,17 @@ Namespace TopStepTrader.Tests.Services.Trading
             Await cache.GetOrFetchAsync(AccountA, MakeFetcher(resp, calls))
             ' Bypass — should fetch again and update cache
             Dim bypassResp = MakeResponse()
-            Dim bypassCalls = 0
+            Dim bypassCalls As New Counter()
             Dim r2 = Await cache.GetOrFetchAsync(AccountA, MakeFetcher(bypassResp, bypassCalls), bypassCache:=True)
 
-            Assert.Equal(1, calls)
-            Assert.Equal(1, bypassCalls)
+            Assert.Equal(1, calls.Count)
+            Assert.Equal(1, bypassCalls.Count)
             Assert.Same(bypassResp, r2)
 
             ' Third call (default) should return the bypass response, not the original
-            Dim defaultCalls = 0
+            Dim defaultCalls As New Counter()
             Dim r3 = Await cache.GetOrFetchAsync(AccountA, MakeFetcher(New PXPositionSearchResponse(), defaultCalls))
-            Assert.Equal(0, defaultCalls)
+            Assert.Equal(0, defaultCalls.Count)
             Assert.Same(bypassResp, r3)
         End Function
 
@@ -127,15 +137,15 @@ Namespace TopStepTrader.Tests.Services.Trading
             Dim results = Await Task.WhenAll(tasks)
 
             Assert.Equal(1, fetchCount)
-            Assert.All(results, Function(r) Assert.Same(resp, r))
+            Assert.All(results, Sub(r) Assert.Same(resp, r))
         End Function
 
         ' ── T6 ──────────────────────────────────────────────────────────────────
 
         <Fact>
         Public Async Function GetOrFetchAsync_DifferentAccounts_DoNotShareCache() As Task
-            Dim callsA = 0
-            Dim callsB = 0
+            Dim callsA As New Counter()
+            Dim callsB As New Counter()
             Dim respA = MakeResponse()
             Dim respB = MakeResponse()
             Dim cache As New OpenPositionsCache()
@@ -146,8 +156,8 @@ Namespace TopStepTrader.Tests.Services.Trading
             Dim rA2 = Await cache.GetOrFetchAsync(AccountA, MakeFetcher(respA, callsA))
             Dim rB2 = Await cache.GetOrFetchAsync(AccountB, MakeFetcher(respB, callsB))
 
-            Assert.Equal(1, callsA)
-            Assert.Equal(1, callsB)
+            Assert.Equal(1, callsA.Count)
+            Assert.Equal(1, callsB.Count)
             Assert.Same(respA, rA1)
             Assert.Same(respA, rA2)
             Assert.Same(respB, rB1)
@@ -158,7 +168,7 @@ Namespace TopStepTrader.Tests.Services.Trading
 
         <Fact>
         Public Async Function Invalidate_RemovesEntry_NextGetFetches() As Task
-            Dim calls = 0
+            Dim calls As New Counter()
             Dim resp = MakeResponse()
             Dim cache As New OpenPositionsCache()
 
@@ -166,7 +176,7 @@ Namespace TopStepTrader.Tests.Services.Trading
             cache.Invalidate(AccountA)
             Await cache.GetOrFetchAsync(AccountA, MakeFetcher(resp, calls))
 
-            Assert.Equal(2, calls)
+            Assert.Equal(2, calls.Count)
         End Function
 
         ' ── T8 ──────────────────────────────────────────────────────────────────
@@ -189,11 +199,11 @@ Namespace TopStepTrader.Tests.Services.Trading
 
             ' Second call must retry the fetcher (exception not cached)
             Dim goodResp = MakeResponse()
-            Dim goodCalls = 0
+            Dim goodCalls As New Counter()
             Dim result = Await cache.GetOrFetchAsync(AccountA, MakeFetcher(goodResp, goodCalls))
 
             Assert.Equal(1, calls)
-            Assert.Equal(1, goodCalls)
+            Assert.Equal(1, goodCalls.Count)
             Assert.Same(goodResp, result)
         End Function
 

@@ -82,6 +82,27 @@ Namespace TopStepTrader.Data.Repositories
             Return Await _db.LiveTradeRecords.FindAsync(id)
         End Function
 
+        Public Async Function FindByEntryOrderIdAsync(externalOrderId As Long) As Task(Of LiveTradeRecordEntity) _
+            Implements ILiveTradeRecordRepository.FindByEntryOrderIdAsync
+            If externalOrderId = 0L Then Return Nothing
+            Return Await _db.LiveTradeRecords _
+                .Where(Function(r) r.EntryOrderId = externalOrderId) _
+                .OrderByDescending(Function(r) r.Id) _
+                .FirstOrDefaultAsync()
+        End Function
+
+        Public Async Function FindOpenByContractIdAsync(contractId As String) As Task(Of LiveTradeRecordEntity) _
+            Implements ILiveTradeRecordRepository.FindOpenByContractIdAsync
+            If String.IsNullOrEmpty(contractId) Then Return Nothing
+            ' BUG-94 F1: broker hub reports the exact PX contract id we wrote at fill time;
+            ' no root-symbol fallback is needed here (unlike the broker-side fallback in
+            ' GetLivePositionSnapshotAsync that handles quarterly rolls).
+            Return Await _db.LiveTradeRecords _
+                .Where(Function(r) r.IsOpen AndAlso r.ContractId = contractId) _
+                .OrderByDescending(Function(r) r.Id) _
+                .FirstOrDefaultAsync()
+        End Function
+
         Public Async Function GetRecentAsync(count As Integer,
                                              Optional symbolFilter As String = Nothing,
                                              Optional strategyFilter As String = Nothing,

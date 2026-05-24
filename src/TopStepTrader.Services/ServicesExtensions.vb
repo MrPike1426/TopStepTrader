@@ -137,6 +137,12 @@ Namespace TopStepTrader.Services
             ' ── Trade history recording (Singleton — called from Transient VMs)
             services.AddSingleton(Of ITradeRecordService, TradeRecordService)()
 
+            ' ── BUG-93 F2: broker-fill audit floor — writes a LiveTradeRecord for every
+            '    broker fill the strategy layer does not attribute. Hosted so the
+            '    subscription is established at app start and cleared at shutdown.
+            services.AddSingleton(Of BrokerFillTradeLogger)()
+            services.AddHostedService(Function(sp) sp.GetRequiredService(Of BrokerFillTradeLogger)())
+
             ' ── FEAT-60: closes the ML feedback loop — pulls resolved real-world
             '    outcomes from TradeOutcomeRepository, aligns them to entry bars,
             '    and feeds them into SignalModelTrainer.TrainAndSave as labels.

@@ -53,6 +53,16 @@ Namespace TopStepTrader.Core.Interfaces
                                               Optional cancel As CancellationToken = Nothing) As Task(Of LivePositionSnapshot)
 
         ''' <summary>
+        ''' BUG-94 F2: returns every open broker position for the account (one
+        ''' <see cref="LivePositionSnapshot"/> per contract with <c>NetPos &lt;&gt; 0</c>).
+        ''' Used by the orphan-scan path inside <c>TradeReconciliationWorker</c> to cross-check
+        ''' broker positions against the app-side <c>LiveTradeRecord</c> audit trail without
+        ''' a per-contract round-trip.
+        ''' </summary>
+        Function GetOpenPositionsAsync(accountId As Long,
+                                       Optional cancel As CancellationToken = Nothing) As Task(Of IEnumerable(Of LivePositionSnapshot))
+
+        ''' <summary>
         ''' Closes all live positions for a specific instrument (used by reversal flush).
         ''' Returns True if all closures succeeded or there were no positions to close.
         ''' </summary>

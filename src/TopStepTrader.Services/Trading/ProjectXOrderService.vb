@@ -1,3 +1,4 @@
+Imports System.Collections.Concurrent
 Imports System.IO
 Imports System.Threading
 Imports Microsoft.Extensions.Logging
@@ -5,6 +6,7 @@ Imports TopStepTrader.API.Adapters
 Imports TopStepTrader.API.Hubs
 Imports TopStepTrader.API.Http.ProjectX
 Imports TopStepTrader.API.Models.Requests
+Imports TopStepTrader.API.Models.Responses
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Events
 Imports TopStepTrader.Core.Interfaces
@@ -38,6 +40,21 @@ Namespace TopStepTrader.Services.Trading
         Private ReadOnly _hubClient As UserHubClient
         Private ReadOnly _positionsCache As IOpenPositionsCache
 
+        ' ── BUG-93 F1: hub→OrderFilled bridge state ─────────────────────────
+        ' GatewayUserOrder may emit multiple updates per order (Working→Filled, partial-fill
+        ' price updates after Filled). Track per-orderId so OnHubOrderUpdated raises
+        ' OrderFilled exactly once per terminal-filled status.
+        Private ReadOnly _filledOrderIds As New ConcurrentDictionary(Of Long, Boolean)
+
+        ''' <summary>BUG-93 F1: PXUserOrderData.Status code for "Filled" — mirrors MapPXOrderStatus.</summary>
+        Friend Const PxOrderStatusFilled As Integer = 2
+
+        ''' <summary>BUG-93 F1: retry budget for resolving ExternalPositionId via SearchOpenPositionsAsync.</summary>
+        Friend Const PositionResolveRetries As Integer = 5
+
+        ''' <summary>BUG-93 F1: spacing between position-id resolution retries.</summary>
+        Friend Shared ReadOnly PositionResolveRetryDelay As TimeSpan = TimeSpan.FromSeconds(1)
+
         Public Event OrderFilled As EventHandler(Of OrderFilledEventArgs) Implements IOrderService.OrderFilled
         Public Event OrderRejected As EventHandler(Of OrderRejectedEventArgs) Implements IOrderService.OrderRejected
         Public Event PositionUpdated As EventHandler(Of Core.Events.PositionUpdateEventArgs) Implements IOrderService.PositionUpdated
@@ -61,6 +78,10 @@ Namespace TopStepTrader.Services.Trading
             ' Bridge the SignalR real-time position stream into the IOrderService.PositionUpdated event.
             ' The REST searchOpen endpoint returns openPnl=0; the hub push carries the live value.
             AddHandler _hubClient.PositionUpdated, AddressOf OnHubPositionUpdated
+            ' BUG-93 F1: bridge GatewayUserOrder fill pushes into IOrderService.OrderFilled.
+            ' Without this, the FEAT-69 pre-staged stop-entry lifecycle never runs — no SL
+            ' attach, no live-position card, no strategy-attributed LiveTradeRecord.
+            AddHandler _hubClient.OrderUpdated, AddressOf OnHubOrderUpdated
         End Sub
 
         ''' <summary>
@@ -77,6 +98,136 @@ Namespace TopStepTrader.Services.Trading
             RaiseEvent PositionUpdated(Me, New Core.Events.PositionUpdateEventArgs(
                 data.ContractId, data.NetPos, CDec(data.NetPrice), CDec(data.OpenPnL)))
         End Sub
+
+        ''' <summary>
+        ''' BUG-93 F1: bridges a SignalR <c>GatewayUserOrder</c> "Filled" push to the
+        ''' <see cref="IOrderService.OrderFilled"/> event. Without this, the FEAT-69 pre-staged
+        ''' stop-entry lifecycle never runs: <c>ScalperStopEntryManager.OnOrderFilled</c> never
+        ''' receives the fill, no protective-SL post-attach fires, no live-position card appears,
+        ''' and no strategy-attributed <c>LiveTradeRecord</c> is written. (BUG-95 makes the SL
+        ''' attach atomically at placement so the resolution latency here is acceptable.)
+        '''
+        ''' Per-orderId dedup: <c>GatewayUserOrder</c> can emit multiple updates per order
+        ''' (Working → Filled transitions; partial-fill AvgFillPrice refreshes). We raise
+        ''' <c>OrderFilled</c> at most once per order id so the scalper manager's match-by-
+        ''' BrokerOrderId path cannot re-enter for the same fill.
+        ''' </summary>
+        Private Sub OnHubOrderUpdated(sender As Object, e As PXOrderUpdateEventArgs)
+            Dim data = e?.OrderData
+            If data Is Nothing Then Return
+            If Not TryAcceptFillEvent(data.Status, data.Id, _filledOrderIds) Then Return
+
+            ' Prefer the active session account so the position lookup hits the right book.
+            ' Fall back to the account on the push when no session account is set yet.
+            Dim accountId As Long = If(_session?.SelectedAccount?.Id, data.AccountId)
+            If accountId = 0L Then accountId = data.AccountId
+
+#Disable Warning BC42358
+            Task.Run(Async Function()
+                         Try
+                             Dim order = Await BuildFilledOrderAsync(data, accountId)
+                             RaiseEvent OrderFilled(Me, New OrderFilledEventArgs(order))
+                         Catch ex As Exception
+                             _logger.LogWarning(ex,
+                                 "OnHubOrderUpdated: failed to raise OrderFilled for orderId={Id}", data.Id)
+                         End Try
+                     End Function)
+#Enable Warning BC42358
+        End Sub
+
+        ''' <summary>
+        ''' BUG-93 F1: filter+dedup gate. Returns True when the event is a terminal Filled status
+        ''' AND has not been raised yet for this order id. Side-effects the dedup set on success.
+        ''' Extracted as Friend Shared so tests can drive every status/dedup permutation without
+        ''' constructing the full service (PXOrderClient is concrete and not test-fakeable).
+        ''' </summary>
+        Friend Shared Function TryAcceptFillEvent(status As Integer,
+                                                   orderId As Long,
+                                                   dedup As ConcurrentDictionary(Of Long, Boolean)) As Boolean
+            If status <> PxOrderStatusFilled Then Return False
+            Return dedup.TryAdd(orderId, True)
+        End Function
+
+        ''' <summary>
+        ''' BUG-93 F1: instance helper that converts the hub DTO to an Order and resolves
+        ''' <c>ExternalPositionId</c> via <c>SearchOpenPositionsAsync</c>. When the lookup
+        ''' budget exhausts, <c>ExternalPositionId</c> is left Nothing and a warning is logged;
+        ''' BUG-95's atomic bracket means a temporary missing position-id is no longer a safety
+        ''' issue (broker enforces the SL).
+        ''' </summary>
+        Private Async Function BuildFilledOrderAsync(data As PXUserOrderData, accountId As Long) As Task(Of Order)
+            Dim positionSearch As Func(Of Long, CancellationToken, Task(Of PXPositionSearchResponse)) =
+                Function(acc, ct) _orderClient.SearchOpenPositionsAsync(acc, ct)
+            Return Await BuildFilledOrderForTestingAsync(data, accountId, positionSearch, _logger,
+                                                         PositionResolveRetries, PositionResolveRetryDelay)
+        End Function
+
+        ''' <summary>
+        ''' BUG-93 F1 — Friend Shared test seam: full hub DTO → Order conversion plus position-id
+        ''' resolution. Tests pass a stub <paramref name="positionSearch"/> delegate; the production
+        ''' path passes <c>_orderClient.SearchOpenPositionsAsync</c>. <paramref name="retryDelay"/>
+        ''' is parameterised so tests can shorten the 5 × 1 s default to milliseconds.
+        ''' </summary>
+        Friend Shared Async Function BuildFilledOrderForTestingAsync(
+            data As PXUserOrderData,
+            accountId As Long,
+            positionSearch As Func(Of Long, CancellationToken, Task(Of PXPositionSearchResponse)),
+            logger As ILogger,
+            retries As Integer,
+            retryDelay As TimeSpan,
+            Optional cancel As CancellationToken = Nothing) As Task(Of Order)
+            Dim order = BrokerModelAdapter.FromPX(data)
+            Dim posId = Await ResolvePositionIdForFillAsync(
+                order.ContractId, accountId, positionSearch, logger, retries, retryDelay, cancel)
+            If posId.HasValue Then
+                order.ExternalPositionId = posId.Value
+            ElseIf logger IsNot Nothing AndAlso order.ExternalOrderId.HasValue Then
+                logger.LogWarning(
+                    "OrderFilled: position-id resolution exhausted retries for orderId={Id} contract={Contract} — raising with ExternalPositionId=Nothing",
+                    order.ExternalOrderId.Value, order.ContractId)
+            End If
+            Return order
+        End Function
+
+        ''' <summary>
+        ''' BUG-93 F1: polls <paramref name="positionSearch"/> up to <paramref name="retries"/> times
+        ''' (with <paramref name="retryDelay"/> spacing) for an open position on the order's contract
+        ''' with non-zero NetPos, and returns its broker positionId. Returns Nothing if the retry
+        ''' budget exhausts. Any per-attempt exception is logged at Debug and treated as a miss.
+        ''' </summary>
+        Friend Shared Async Function ResolvePositionIdForFillAsync(
+            contractId As String,
+            accountId As Long,
+            positionSearch As Func(Of Long, CancellationToken, Task(Of PXPositionSearchResponse)),
+            logger As ILogger,
+            retries As Integer,
+            retryDelay As TimeSpan,
+            Optional cancel As CancellationToken = Nothing) As Task(Of Long?)
+            If positionSearch Is Nothing OrElse retries <= 0 Then Return Nothing
+            For attempt = 0 To retries - 1
+                If cancel.IsCancellationRequested Then Return Nothing
+                Try
+                    Dim resp = Await positionSearch(accountId, cancel)
+                    If resp?.Positions IsNot Nothing Then
+                        Dim match = resp.Positions.FirstOrDefault(
+                            Function(p) String.Equals(p.ContractId, contractId, StringComparison.OrdinalIgnoreCase) AndAlso
+                                        p.NetPos <> 0)
+                        If match IsNot Nothing Then Return match.Id
+                    End If
+                Catch ex As Exception
+                    logger?.LogDebug(ex,
+                        "ResolvePositionIdForFill: attempt {Attempt}/{Total} threw for {Contract} — will retry",
+                        attempt + 1, retries, contractId)
+                End Try
+                If attempt < retries - 1 Then
+                    Try
+                        Await Task.Delay(retryDelay, cancel)
+                    Catch
+                    End Try
+                End If
+            Next
+            Return Nothing
+        End Function
 
         Public Async Function PlaceOrderAsync(order As Order) As Task(Of Order) _
             Implements IOrderService.PlaceOrderAsync
@@ -432,18 +583,79 @@ Namespace TopStepTrader.Services.Trading
 
                 Return New LivePositionSnapshot With {
                     .PositionId = rep.Id,
+                    .ContractId = rep.ContractId,
                     .UnrealizedPnlUsd = rawPnl,
                     .OpenedAtUtc = DateTimeOffset.UtcNow,
                     .IsBuy = isBuyPosition,
                     .OpenRate = weightedAvg,
                     .Amount = totalUnits,    ' contract count — used by tile display for futures
                     .Units = totalUnits,
-                    .PositionCount = matches.Count
+                    .PositionCount = matches.Count,
+                    .NetPos = rep.NetPos
                 }
             Catch ex As Exception
                 _logger.LogWarning(ex, "GetLivePositionSnapshot failed for {Contract}", contractId)
                 Return Nothing
             End Try
+        End Function
+
+        ''' <summary>
+        ''' BUG-94 F2: returns one <see cref="LivePositionSnapshot"/> per broker position
+        ''' with <c>NetPos &lt;&gt; 0</c>. Wraps <c>SearchOpenPositionsAsync</c> directly and
+        ''' does NOT pass through <c>IOpenPositionsCache</c> — the orphan scan runs on a
+        ''' 5-minute cadence so cache reuse is unnecessary, and the scan must see truth even
+        ''' when a cached snapshot from the per-contract path is still warm.
+        ''' </summary>
+        Public Async Function GetOpenPositionsAsync(accountId As Long,
+                                                    Optional cancel As CancellationToken = Nothing) _
+            As Task(Of IEnumerable(Of LivePositionSnapshot)) Implements IOrderService.GetOpenPositionsAsync
+            Try
+                Dim resp = Await _orderClient.SearchOpenPositionsAsync(accountId, cancel)
+                If resp?.Positions Is Nothing OrElse resp.Positions.Count = 0 Then
+                    Return Enumerable.Empty(Of LivePositionSnapshot)()
+                End If
+                Dim list As New List(Of LivePositionSnapshot)()
+                For Each p In resp.Positions
+                    If Math.Abs(p.NetPos) = 0 Then Continue For
+                    list.Add(New LivePositionSnapshot With {
+                        .PositionId = p.Id,
+                        .ContractId = p.ContractId,
+                        .UnrealizedPnlUsd = CDec(p.OpenPnL),
+                        .OpenedAtUtc = ParseCreationTimestampOrDefault(p.CreationTimestamp),
+                        .IsBuy = p.NetPos > 0,
+                        .OpenRate = CDec(p.NetPrice),
+                        .Amount = CDec(Math.Abs(p.NetPos)),
+                        .Units = CDec(Math.Abs(p.NetPos)),
+                        .PositionCount = 1,
+                        .NetPos = p.NetPos
+                    })
+                Next
+                Return list
+            Catch ex As Exception
+                _logger.LogWarning(ex, "GetOpenPositionsAsync failed for account {Account}", accountId)
+                Return Enumerable.Empty(Of LivePositionSnapshot)()
+            End Try
+        End Function
+
+        ''' <summary>
+        ''' BUG-94 F2: parses <c>PXPositionDto.CreationTimestamp</c> for the orphan-scan path.
+        ''' The PX /api/Position/searchOpen endpoint does NOT populate this field (it is only
+        ''' returned by /api/Position/search). When absent we fall back to UtcNow so the
+        ''' grace period suppresses the alarm for this scan — the position will be re-tested
+        ''' on the next scan with a fresh "first seen" baseline. A follow-up should make the
+        ''' broker stream surface the real opened-at time.
+        ''' </summary>
+        Private Function ParseCreationTimestampOrDefault(raw As String) As DateTimeOffset
+            If String.IsNullOrWhiteSpace(raw) Then
+                _logger.LogDebug("GetOpenPositions: PXPositionDto.CreationTimestamp empty (expected on /searchOpen) — falling back to UtcNow")
+                Return DateTimeOffset.UtcNow
+            End If
+            Dim parsed As DateTimeOffset
+            If DateTimeOffset.TryParse(raw, Nothing, Globalization.DateTimeStyles.RoundtripKind, parsed) Then
+                Return parsed
+            End If
+            _logger.LogWarning("GetOpenPositions: could not parse CreationTimestamp '{Raw}' — falling back to UtcNow", raw)
+            Return DateTimeOffset.UtcNow
         End Function
 
         ''' <summary>

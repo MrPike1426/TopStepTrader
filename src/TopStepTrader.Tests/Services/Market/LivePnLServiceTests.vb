@@ -2,6 +2,7 @@ Imports System.Threading
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Logging.Abstractions
 Imports TopStepTrader.API.Hubs
+Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Services.Market
@@ -129,7 +130,7 @@ Namespace TopStepTrader.Tests.Services.Market
             Dim feed = New StubQuoteFeed()
             Dim svc = New LivePnLService(feed, factory, NullLogger(Of LivePnLService).Instance)
 
-            Using svc.SubscribePrice("MNQ", Sub(t) End Sub)
+            Using svc.SubscribePrice("MNQ", Sub(t) Return)
                 ' ContractId must contain "MNQ" for root-substring match in OnQuoteReceived.
                 feed.RaiseQuote(New Quote With {.ContractId = "CON.F.US.MNQ.U26", .LastPrice = 22000D})
 
@@ -153,7 +154,7 @@ Namespace TopStepTrader.Tests.Services.Market
             Dim feed = New StubQuoteFeed()
             Dim svc = New LivePnLService(feed, factory, NullLogger(Of LivePnLService).Instance)
 
-            Using svc.SubscribePrice("MNQ", Sub(t) End Sub)
+            Using svc.SubscribePrice("MNQ", Sub(t) Return)
                 ' No quote events — GetQuotesPerSec5s returns 0.
                 Await svc.PollBarFallbackAsync("MNQ")
 

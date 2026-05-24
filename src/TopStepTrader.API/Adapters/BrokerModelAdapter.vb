@@ -1,3 +1,4 @@
+Imports TopStepTrader.API.Hubs
 Imports TopStepTrader.API.Models.Responses
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Enums
@@ -33,6 +34,27 @@ Namespace TopStepTrader.API.Adapters
                 .AccountId = dto.AccountId,
                 .ContractId = dto.ContractId,
                 .PlacedAt = DateTimeOffset.FromUnixTimeMilliseconds(dto.CreationTimestamp),
+                .OrderType = MapPXOrderType(dto.OrderType),
+                .Side = MapPXSide(dto.Side),
+                .Quantity = dto.Size,
+                .LimitPrice = If(dto.LimitPrice.HasValue, CDec(dto.LimitPrice.Value), CType(Nothing, Decimal?)),
+                .StopPrice = If(dto.StopPrice.HasValue, CDec(dto.StopPrice.Value), CType(Nothing, Decimal?)),
+                .Status = MapPXOrderStatus(dto.Status),
+                .FillPrice = If(dto.AvgFillPrice.HasValue, CDec(dto.AvgFillPrice.Value), CType(Nothing, Decimal?))
+            }
+        End Function
+
+        ''' <summary>
+        ''' BUG-93 F1: maps a SignalR <c>GatewayUserOrder</c> push (PXUserOrderData) to the shared
+        ''' Order model. Used by the hub→OrderFilled bridge in ProjectXOrderService. The push DTO
+        ''' does not carry a positionId; <c>ExternalPositionId</c> is left Nothing and resolved by
+        ''' the bridge via <c>SearchOpenPositionsAsync</c> before the OrderFilled event is raised.
+        ''' </summary>
+        Public Function FromPX(dto As PXUserOrderData) As Order
+            Return New Order With {
+                .ExternalOrderId = dto.Id,
+                .AccountId = dto.AccountId,
+                .ContractId = dto.ContractId,
                 .OrderType = MapPXOrderType(dto.OrderType),
                 .Side = MapPXSide(dto.Side),
                 .Quantity = dto.Size,

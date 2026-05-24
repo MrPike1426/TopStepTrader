@@ -3,6 +3,8 @@ Imports System.Runtime.CompilerServices
 Imports System.Windows
 Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.Core.Enums
+Imports TopStepTrader.Core.Events
+Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Data
@@ -32,6 +34,7 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private ReadOnly _configRepository As UltimateScalperConfigRepository
         Private ReadOnly _orchestrator As UltimateScalperOrchestrator
+        Private ReadOnly _orderService As IOrderService
         Private ReadOnly _logger As ILogger(Of UltimateScalperViewModel)
         Private ReadOnly _rowBySymbol As New Dictionary(Of String, ScalperWatchlistRowVm)(StringComparer.OrdinalIgnoreCase)
         Private ReadOnly _warmupBarCounts As New Dictionary(Of String, Integer)(StringComparer.OrdinalIgnoreCase)
@@ -39,9 +42,11 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public Sub New(configRepository As UltimateScalperConfigRepository,
                        orchestrator As UltimateScalperOrchestrator,
+                       orderService As IOrderService,
                        logger As ILogger(Of UltimateScalperViewModel))
             _configRepository = configRepository
             _orchestrator = orchestrator
+            _orderService = orderService
             _logger = logger
 
             WatchlistRows = New ObservableCollection(Of ScalperWatchlistRowVm) From {
@@ -64,6 +69,7 @@ Namespace TopStepTrader.UI.ViewModels
             AddHandler _orchestrator.TrailUpdated, AddressOf OnTrailUpdated
             AddHandler _orchestrator.ScanCompleted, AddressOf OnScanCompleted
             AddHandler _orchestrator.WatchlistArmedChanged, AddressOf OnWatchlistArmedChanged
+            AddHandler _orderService.OrderRejected, AddressOf OnOrderRejected
 
             ' Fire-and-forget initial load; UI shows defaults until it returns.
             Dim ignored = LoadConfigAsync()
@@ -419,6 +425,44 @@ Namespace TopStepTrader.UI.ViewModels
                            End Sub)
         End Sub
 
+        ' BUG-96: broker order rejection → signal log Notes column.
+        Private Sub OnOrderRejected(sender As Object, e As OrderRejectedEventArgs)
+            If e Is Nothing OrElse e.Order Is Nothing Then Return
+            Dim symbol = ResolveWatchlistSymbol(e.Order.ContractId)
+            If String.IsNullOrEmpty(symbol) Then Return
+            DispatchAction(Sub()
+                               Dim entry = New ScalperSignalLogEntry With {
+                                   .TimestampUtc = DateTime.UtcNow,
+                                   .Symbol = symbol,
+                                   .Side = If(e.Order.Side = OrderSide.Buy, "Buy", "Sell"),
+                                   .Close = If(e.Order.StopPrice.HasValue, e.Order.StopPrice.Value, 0D),
+                                   .Rsi = Double.NaN,
+                                   .Notes = "Rejected: " & If(String.IsNullOrEmpty(e.Reason), "(no reason)", e.Reason)
+                               }
+                               SignalLog.Insert(0, entry)
+                               While SignalLog.Count > MaxSignalLogEntries
+                                   SignalLog.RemoveAt(SignalLog.Count - 1)
+                               End While
+                           End Sub)
+        End Sub
+
+        ''' <summary>
+        ''' Maps a PX contract id (e.g. "CON.F.US.MES.M26") back to the scalper watchlist
+        ''' root symbol. Returns String.Empty when the contract is outside the watchlist so
+        ''' rejections from other strategies (e.g. SuperTrendPlus on M2K) don't pollute the
+        ''' scalper signal log.
+        ''' </summary>
+        Private Shared Function ResolveWatchlistSymbol(contractId As String) As String
+            If String.IsNullOrEmpty(contractId) Then Return String.Empty
+            Dim parts = contractId.Split("."c)
+            For Each sym In UltimateScalperOrchestrator.WatchlistSymbols
+                For Each p In parts
+                    If String.Equals(p, sym, StringComparison.OrdinalIgnoreCase) Then Return sym
+                Next
+            Next
+            Return String.Empty
+        End Function
+
         Private Sub OnOrchestratorEnabledChanged(sender As Object, enabled As Boolean)
             DispatchAction(Sub()
                                OnPropertyChanged(NameOf(IsEnabled))
@@ -531,6 +575,7 @@ Namespace TopStepTrader.UI.ViewModels
             RemoveHandler _orchestrator.TrailUpdated, AddressOf OnTrailUpdated
             RemoveHandler _orchestrator.ScanCompleted, AddressOf OnScanCompleted
             RemoveHandler _orchestrator.WatchlistArmedChanged, AddressOf OnWatchlistArmedChanged
+            RemoveHandler _orderService.OrderRejected, AddressOf OnOrderRejected
         End Sub
 
     End Class

@@ -91,6 +91,9 @@ Namespace TopStepTrader.Tests.Services.Scalper
             Public Function PartialCloseContractAsync(accountId As Long, contractId As String, size As Integer, Optional cancel As CancellationToken = Nothing) As Task(Of Boolean) Implements IOrderService.PartialCloseContractAsync
                 Throw New NotImplementedException()
             End Function
+            Public Function GetOpenPositionsAsync(accountId As Long, Optional cancel As CancellationToken = Nothing) As Task(Of IEnumerable(Of LivePositionSnapshot)) Implements IOrderService.GetOpenPositionsAsync
+                Return Task.FromResult(Of IEnumerable(Of LivePositionSnapshot))(New List(Of LivePositionSnapshot)())
+            End Function
 
             ' Suppress 42024 (unused event) for events VB requires we declare for Implements.
 #Disable Warning BC42024

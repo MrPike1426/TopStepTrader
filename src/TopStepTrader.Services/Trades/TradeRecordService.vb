@@ -189,6 +189,41 @@ Namespace TopStepTrader.Services.Trades
             End Try
         End Function
 
+        Public Async Function FindByEntryOrderIdAsync(externalOrderId As Long) As Task(Of LiveTradeRecord) _
+            Implements ITradeRecordService.FindByEntryOrderIdAsync
+            If externalOrderId = 0L Then Return Nothing
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
+                    Dim entity = Await repo.FindByEntryOrderIdAsync(externalOrderId)
+                    Return If(entity Is Nothing, Nothing, ToModel(entity))
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.FindByEntryOrderIdAsync failed for orderId={Id}", externalOrderId)
+                Return Nothing
+            End Try
+        End Function
+
+        Public Async Function FindOpenByContractIdAsync(accountId As Long, contractId As String) As Task(Of LiveTradeRecord) _
+            Implements ITradeRecordService.FindOpenByContractIdAsync
+            ' BUG-94 F1: accountId is currently unused at the persistence layer because
+            ' LiveTradeRecordEntity does not carry an AccountId column. The caller already
+            ' filters to a single selected account upstream (TradeReconciliationWorker only
+            ' runs against _session.SelectedAccount.Id). Kept on the interface to future-proof
+            ' once accountId is added to the entity.
+            If String.IsNullOrEmpty(contractId) Then Return Nothing
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
+                    Dim entity = Await repo.FindOpenByContractIdAsync(contractId)
+                    Return If(entity Is Nothing, Nothing, ToModel(entity))
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TradeRecordService.FindOpenByContractIdAsync failed for contractId={Id}", contractId)
+                Return Nothing
+            End Try
+        End Function
+
         ''' <summary>
         ''' BUG-86 F1: cap on how far back the broker fill search will reach. Records whose
         ''' EntryTime is older than this are skipped with a warning instead of widening the

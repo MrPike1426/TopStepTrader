@@ -8,5 +8,6 @@
     <Project Path="src/TopStepTrader.UI/TopStepTrader.UI.vbproj">
       <Platform Project="x64" />
     </Project>
+    <Project Path="src/TopStepTrader.Tests/TopStepTrader.Tests.vbproj" />
   </Folder>
 </Solution>

@@ -32,6 +32,22 @@ Namespace TopStepTrader.Core.Interfaces
         Function GetTradeByIdAsync(id As Long) As Task(Of LiveTradeRecord)
 
         ''' <summary>
+        ''' BUG-93 F2: returns the LiveTradeRecord whose <c>EntryOrderId</c> matches the
+        ''' broker-assigned order id (or Nothing). Used by <c>BrokerFillTradeLogger</c> to
+        ''' no-op when a strategy has already attributed the fill, keeping the audit floor
+        ''' idempotent under the strategy-then-logger race.
+        ''' </summary>
+        Function FindByEntryOrderIdAsync(externalOrderId As Long) As Task(Of LiveTradeRecord)
+
+        ''' <summary>
+        ''' BUG-94 F1: returns any open LiveTradeRecord whose AccountId+ContractId match
+        ''' (or Nothing when no row exists). Used by the orphan-scan path inside
+        ''' <c>TradeReconciliationWorker</c> to cross-check broker-reported positions
+        ''' against the app-side audit trail.
+        ''' </summary>
+        Function FindOpenByContractIdAsync(accountId As Long, contractId As String) As Task(Of LiveTradeRecord)
+
+        ''' <summary>
         ''' On app startup, finds IsOpen records in the DB and attempts to resolve their
         ''' exit fills via the TopStepX trade history API.
         ''' </summary>

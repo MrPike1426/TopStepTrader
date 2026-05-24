@@ -102,6 +102,11 @@ Namespace TopStepTrader.Tests.Services.Trading
                 Implements IOrderService.PartialCloseContractAsync
                 Return Task.FromResult(True)
             End Function
+            Public Function GetOpenPositionsAsync(accountId As Long,
+                                                   Optional cancel As CancellationToken = Nothing) As Task(Of IEnumerable(Of LivePositionSnapshot)) _
+                Implements IOrderService.GetOpenPositionsAsync
+                Return Task.FromResult(Of IEnumerable(Of LivePositionSnapshot))(New List(Of LivePositionSnapshot)())
+            End Function
         End Class
 
         Private Class StubBarService
@@ -160,6 +165,14 @@ Namespace TopStepTrader.Tests.Services.Trading
             End Function
             Public Function GetTradeByIdAsync(id As Long) As Task(Of LiveTradeRecord) _
                 Implements ITradeRecordService.GetTradeByIdAsync
+                Return Task.FromResult(Of LiveTradeRecord)(Nothing)
+            End Function
+            Public Function FindByEntryOrderIdAsync(externalOrderId As Long) As Task(Of LiveTradeRecord) _
+                Implements ITradeRecordService.FindByEntryOrderIdAsync
+                Return Task.FromResult(Of LiveTradeRecord)(Nothing)
+            End Function
+            Public Function FindOpenByContractIdAsync(accountId As Long, contractId As String) As Task(Of LiveTradeRecord) _
+                Implements ITradeRecordService.FindOpenByContractIdAsync
                 Return Task.FromResult(Of LiveTradeRecord)(Nothing)
             End Function
             Public Function RecoverOpenTradesAsync(accountId As Long) As Task _

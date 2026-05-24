@@ -86,6 +86,13 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        ''' <summary>BUG-94 F6: Test Trade diagnostic tab.</summary>
+        Public ReadOnly Property TestTradeView As Views.TestTradeView
+            Get
+                Return Resolve(Of Views.TestTradeView)("TestTrade")
+            End Get
+        End Property
+
         Public Sub Dispose() Implements IDisposable.Dispose
             If Not _disposed Then
                 _instances.Clear()

@@ -32,6 +32,21 @@ Namespace TopStepTrader.Data.Repositories
         ''' <summary>BUG-64: efficient single-record lookup via primary key.</summary>
         Function GetByIdAsync(id As Long) As Task(Of LiveTradeRecordEntity)
 
+        ''' <summary>
+        ''' BUG-93 F2: lookup by broker entry-order id. Returns the LiveTradeRecord whose
+        ''' <c>EntryOrderId</c> matches the broker-assigned order id (or Nothing). Used by the
+        ''' broker-fill persistence floor to no-op when a strategy has already attributed the fill.
+        ''' </summary>
+        Function FindByEntryOrderIdAsync(externalOrderId As Long) As Task(Of LiveTradeRecordEntity)
+
+        ''' <summary>
+        ''' BUG-94 F1: returns any open LiveTradeRecord whose <c>ContractId</c> matches the
+        ''' supplied broker contract id. Note: <c>LiveTradeRecordEntity</c> does not currently
+        ''' carry an AccountId column — the caller is expected to filter to the active account
+        ''' upstream (the worker always reconciles a single selected account at a time).
+        ''' </summary>
+        Function FindOpenByContractIdAsync(contractId As String) As Task(Of LiveTradeRecordEntity)
+
         Function GetRecentAsync(count As Integer,
                                 Optional symbolFilter As String = Nothing,
                                 Optional strategyFilter As String = Nothing,

@@ -58,6 +58,7 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.Configure(Of MLSettings)(ctx.Configuration.GetSection("ML"))
                         services.Configure(Of ClaudeSettings)(ctx.Configuration.GetSection("Claude"))
                         services.Configure(Of PersonasSettings)(ctx.Configuration.GetSection("Personas"))
+                        services.Configure(Of SafetyNetSettings)(ctx.Configuration.GetSection("SafetyNet"))
 
                         ' ── Data, API, ML, Services layers ────────────────────────
                         services.AddDataServices(ctx.Configuration)
@@ -91,10 +92,16 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of SuperTrendPlusViewModel)()
                         services.AddTransient(Of UltimateScalperView)()          ' FEAT-64
                         services.AddTransient(Of UltimateScalperViewModel)()     ' FEAT-64
+                        services.AddTransient(Of TestTradeView)()                ' BUG-94 F6
+                        services.AddTransient(Of TestTradeViewModel)()           ' BUG-94 F6
                         services.AddTransient(Of ApiKeysView)()
                         services.AddTransient(Of PersonaView)()
                         services.AddTransient(Of DebugTradeViewerViewModel)()
                         services.AddTransient(Of DebugTradeViewerView)()
+
+                        ' BUG-94 F4: orphan-alarm banner. Singleton — must outlive view navigation
+                        ' so banners survive when the user is on a non-Dashboard tab.
+                        services.AddSingleton(Of OrphanAlarmBannerViewModel)()
 
                         ' Main window
                         services.AddSingleton(Of MainWindow)()

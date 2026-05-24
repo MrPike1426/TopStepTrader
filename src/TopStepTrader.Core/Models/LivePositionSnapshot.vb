@@ -7,6 +7,12 @@ Namespace TopStepTrader.Core.Models
     Public Class LivePositionSnapshot
         ''' <summary>Broker positionId.</summary>
         Public Property PositionId As Long
+        ''' <summary>
+        ''' BUG-94 F2: PX contract id reported by the broker for the open position. Populated
+        ''' by <c>GetOpenPositionsAsync</c> so the orphan-scan path can correlate broker
+        ''' positions against <c>LiveTradeRecord.ContractId</c> without an extra REST round-trip.
+        ''' </summary>
+        Public Property ContractId As String = String.Empty
         ''' <summary>Unrealised P&amp;L in USD, as reported directly by the broker.</summary>
         Public Property UnrealizedPnlUsd As Decimal
         ''' <summary>UTC timestamp the position was opened, parsed from the API response.</summary>
@@ -24,6 +30,12 @@ Namespace TopStepTrader.Core.Models
         Public Property Units As Decimal
         ''' <summary>Number of open positions aggregated into this snapshot.</summary>
         Public Property PositionCount As Integer
+        ''' <summary>
+        ''' BUG-94 F2: signed net position. Positive when long, negative when short. Derived
+        ''' by <c>GetOpenPositionsAsync</c> from the broker's PositionType + Size so the
+        ''' orphan scan can compute auto-SL side without re-reading the PX DTO.
+        ''' </summary>
+        Public Property NetPos As Integer
     End Class
 
 End Namespace

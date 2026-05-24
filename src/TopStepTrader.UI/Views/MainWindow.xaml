@@ -16,9 +16,45 @@
             <ColumnDefinition Width="200"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- BUG-94 F4: orphan-position alarm banner -->
+        <Border Grid.Column="1" Grid.Row="0"
+                Background="#7A2A2A" BorderBrush="#FF5555" BorderThickness="0,0,0,2"
+                Padding="14,8"
+                Visibility="{Binding OrphanAlarm.IsActive, Converter={StaticResource BoolToVisibilityConverter}, RelativeSource={RelativeSource AncestorType=Window}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="{Binding OrphanAlarm.BannerTitle, RelativeSource={RelativeSource AncestorType=Window}}"
+                               FontWeight="Bold" FontSize="13" Foreground="White"/>
+                    <TextBlock Text="{Binding OrphanAlarm.BannerDetail, RelativeSource={RelativeSource AncestorType=Window}}"
+                               FontSize="11" Foreground="#FFDADA" Margin="0,2,0,0"/>
+                    <TextBlock Text="{Binding OrphanAlarm.AutoSlLine, RelativeSource={RelativeSource AncestorType=Window}}"
+                               FontSize="11" Foreground="#FFDADA"/>
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Content="Flatten now"
+                        Command="{Binding OrphanAlarm.FlattenCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                        Margin="8,0,8,0" Padding="12,4"
+                        Background="#FF5555" Foreground="White" BorderBrush="#FF7777"/>
+                <Button Grid.Column="2"
+                        Content="✕"
+                        Command="{Binding OrphanAlarm.DismissCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                        Padding="10,4"
+                        Background="Transparent" Foreground="White" BorderBrush="#FF7777"/>
+            </Grid>
+        </Border>
 
         <!-- Navigation Sidebar -->
-        <Border Grid.Column="0" Background="{StaticResource SidebarBrush}">
+        <Border Grid.Column="0" Grid.Row="0" Grid.RowSpan="2" Background="{StaticResource SidebarBrush}">
             <StackPanel Margin="0,20,0,0">
                 <TextBlock Text="TopStep AI Trader"
                            Foreground="{StaticResource AccentBrush}"
@@ -30,6 +66,7 @@
                 <Button Content="⚡  Ultimate Scalper" Tag="UltimateScalper" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="&#x1F30A;  SlipStream" Tag="SlipStream" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="&#x1F50D;  Trade Post-Mortem" Tag="TradePostMortem" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                <Button Content="&#x1F9EA;  Test Trade" Tag="TestTrade" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
 
                 <!-- Config Section Separator -->
                 <Border Margin="16,16,16,8" Height="1" Background="{StaticResource BorderBrush}" Opacity="0.4"/>
@@ -52,7 +89,7 @@
         </Border>
 
         <!-- Main Content Area -->
-        <ContentControl Grid.Column="1"
+        <ContentControl Grid.Column="1" Grid.Row="1"
                         x:Name="MainContent"
                         Margin="0"/>
     </Grid>

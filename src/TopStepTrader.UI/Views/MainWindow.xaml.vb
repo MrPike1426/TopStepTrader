@@ -22,10 +22,16 @@ Namespace TopStepTrader.UI
         Private ReadOnly _viewModelLocator As ViewModelLocator
         Private ReadOnly _session As ITradingSessionContext
 
-        Public Sub New(viewModelLocator As ViewModelLocator, session As ITradingSessionContext)
+        ''' <summary>BUG-94 F4: banner VM bound from MainWindow.xaml via DataContext=Self.</summary>
+        Public ReadOnly Property OrphanAlarm As OrphanAlarmBannerViewModel
+
+        Public Sub New(viewModelLocator As ViewModelLocator,
+                       session As ITradingSessionContext,
+                       orphanAlarm As OrphanAlarmBannerViewModel)
             InitializeComponent()
             _viewModelLocator = viewModelLocator
             _session = session
+            Me.OrphanAlarm = orphanAlarm
             DataContext = Me
             AddHandler _session.AccountChanged, AddressOf OnSessionAccountChanged
             AddHandler Me.Closing, AddressOf OnWindowClosing
@@ -85,6 +91,8 @@ Namespace TopStepTrader.UI
                     MainContent.Content = _viewModelLocator.SettingsView
                 Case "TradePostMortem"
                     MainContent.Content = _viewModelLocator.DebugTradeViewerView
+                Case "TestTrade"
+                    MainContent.Content = _viewModelLocator.TestTradeView
                 Case "Persona"
                     MainContent.Content = _viewModelLocator.PersonaView
                 Case "ApiKeys"

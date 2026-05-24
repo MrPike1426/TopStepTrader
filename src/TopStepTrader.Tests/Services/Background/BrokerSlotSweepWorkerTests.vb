@@ -140,6 +140,11 @@ Namespace TopStepTrader.Tests.Services.Background
                 Implements IOrderService.PartialCloseContractAsync
                 Throw New NotImplementedException()
             End Function
+            Public Function GetOpenPositionsAsync(accountId As Long,
+                                                   Optional cancel As CancellationToken = Nothing) As Task(Of IEnumerable(Of LivePositionSnapshot)) _
+                Implements IOrderService.GetOpenPositionsAsync
+                Return Task.FromResult(Of IEnumerable(Of LivePositionSnapshot))(New List(Of LivePositionSnapshot)())
+            End Function
         End Class
 
         ' ── Helpers ─────────────────────────────────────────────────────────
