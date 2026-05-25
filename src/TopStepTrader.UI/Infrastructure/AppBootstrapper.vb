@@ -92,6 +92,10 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of SuperTrendPlusViewModel)()
                         services.AddTransient(Of UltimateScalperView)()          ' FEAT-64
                         services.AddTransient(Of UltimateScalperViewModel)()     ' FEAT-64
+                        services.AddTransient(Of SlipStreamView)()               ' FEAT-70
+                        services.AddTransient(Of SlipStreamViewModel)()          ' FEAT-70
+                        services.AddTransient(Of BreakAndBounceView)()           ' FEAT-62
+                        services.AddTransient(Of BreakAndBounceViewModel)()      ' FEAT-62
                         services.AddTransient(Of TestTradeView)()                ' BUG-94 F6
                         services.AddTransient(Of TestTradeViewModel)()           ' BUG-94 F6
                         services.AddTransient(Of ApiKeysView)()

@@ -25,6 +25,7 @@ Namespace TopStepTrader.Data
         Public Property SuperTrendPlusConfig As DbSet(Of SuperTrendPlusConfigEntity)
         Public Property UltimateScalperConfig As DbSet(Of UltimateScalperConfigEntity)
         Public Property SlipStreamConfig As DbSet(Of SlipStreamConfigEntity)
+        Public Property BreakAndBounceConfig As DbSet(Of BreakAndBounceConfigEntity)
 
         Protected Overrides Sub OnModelCreating(modelBuilder As ModelBuilder)
             MyBase.OnModelCreating(modelBuilder)
@@ -100,6 +101,11 @@ Namespace TopStepTrader.Data
             ' SlipStreamConfig — singleton row (id=1), no auto-increment (FEAT-70)
             modelBuilder.Entity(Of SlipStreamConfigEntity)() _
                 .ToTable("SlipStreamConfig") _
+                .HasKey(Function(c) c.Id)
+
+            ' BreakAndBounceConfig — singleton row (id=1), no auto-increment (FEAT-62)
+            modelBuilder.Entity(Of BreakAndBounceConfigEntity)() _
+                .ToTable("BreakAndBounceConfig") _
                 .HasKey(Function(c) c.Id)
 
         End Sub
@@ -600,6 +606,39 @@ Namespace TopStepTrader.Data
                 Next
             Finally
                 If mustClose11 Then conn.Close()
+            End Try
+
+            ' ── FEAT-62: BreakAndBounce config singleton table ───────────────────
+            Dim mustClose12 = (conn.State <> ConnectionState.Open)
+            If mustClose12 Then conn.Open()
+            Try
+                Dim bbDdl = New String() {
+                    "CREATE TABLE IF NOT EXISTS ""BreakAndBounceConfig"" (
+                         ""Id""                              INTEGER NOT NULL PRIMARY KEY,
+                         ""EntryWindow""                     TEXT    NOT NULL DEFAULT '0830-1100',
+                         ""FlatWindow""                      TEXT    NOT NULL DEFAULT '1450-1500',
+                         ""BreakoutTimeframe""               TEXT    NOT NULL DEFAULT '15min',
+                         ""RetestTimeframe""                 TEXT    NOT NULL DEFAULT '5min',
+                         ""MinimumStopDistanceTicks""        INTEGER NOT NULL DEFAULT 8,
+                         ""MinimumStopAtrFraction""          REAL    NOT NULL DEFAULT 0.5,
+                         ""AtrLength""                       INTEGER NOT NULL DEFAULT 14,
+                         ""InvalidateDirOnCounterBreakout""  INTEGER NOT NULL DEFAULT 1,
+                         ""InvalidateDirOnWindowExpiry""     INTEGER NOT NULL DEFAULT 1,
+                         ""ContractsPerEntry""               INTEGER NOT NULL DEFAULT 1,
+                         ""AiVetoEnabled""                   INTEGER NOT NULL DEFAULT 1,
+                         ""EnableLong""                      INTEGER NOT NULL DEFAULT 1,
+                         ""EnableShort""                     INTEGER NOT NULL DEFAULT 1,
+                         ""MinSlEditStepTicks""              INTEGER NOT NULL DEFAULT 1,
+                         ""MaxConcurrentPositions""          INTEGER NOT NULL DEFAULT 1)"
+                }
+                For Each ddl In bbDdl
+                    Using cmd = conn.CreateCommand()
+                        cmd.CommandText = ddl
+                        cmd.ExecuteNonQuery()
+                    End Using
+                Next
+            Finally
+                If mustClose12 Then conn.Close()
             End Try
         End Sub
 

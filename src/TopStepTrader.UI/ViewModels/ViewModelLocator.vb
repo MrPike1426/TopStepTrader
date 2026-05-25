@@ -68,6 +68,13 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        ''' <summary>FEAT-62: Break and Bounce tab.</summary>
+        Public ReadOnly Property BreakAndBounceView As Views.BreakAndBounceView
+            Get
+                Return Resolve(Of Views.BreakAndBounceView)("BreakAndBounce")
+            End Get
+        End Property
+
         Public ReadOnly Property ApiKeysView As Views.ApiKeysView
             Get
                 Return Resolve(Of Views.ApiKeysView)("ApiKeys")

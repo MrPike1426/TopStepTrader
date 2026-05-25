@@ -13,6 +13,8 @@ Imports TopStepTrader.Services.Personas
 Imports TopStepTrader.Services.PostMortem
 Imports TopStepTrader.Services.Scalper
 Imports TopStepTrader.Services.SlipStream
+Imports TopStepTrader.Services.BreakAndBounce
+Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.Services.Trades
 Imports TopStepTrader.Services.Trading
 Imports TopStepTrader.Services.Training
@@ -30,6 +32,7 @@ Namespace TopStepTrader.Services
             services.AddScoped(Of SuperTrendPlusConfigRepository)()
             services.AddScoped(Of UltimateScalperConfigRepository)()  ' FEAT-64
             services.AddScoped(Of SlipStreamConfigRepository)()       ' FEAT-70
+            services.AddScoped(Of BreakAndBounceConfigRepository)()   ' FEAT-62
 
             ' ── FEAT-64: Ultimate Scalper. Config resolved once per scope from the
             '    repository so both the orchestrator and the signal detector share
@@ -62,6 +65,25 @@ Namespace TopStepTrader.Services
             services.AddScoped(Of ISlipStreamSignalDetector, SlipStreamSignalDetector)()
             services.AddSingleton(Of SlipStreamOrchestrator)()
             services.AddHostedService(Function(sp) sp.GetRequiredService(Of SlipStreamOrchestrator)())
+
+            ' ── FEAT-62: Break and Bounce daily-range strategy.
+            services.AddScoped(Of BreakAndBounceConfig)(Function(sp)
+                                                             Dim repo = sp.GetRequiredService(Of BreakAndBounceConfigRepository)()
+                                                             Return repo.LoadAsync().GetAwaiter().GetResult()
+                                                         End Function)
+            ' Tracker holds per-symbol breakout-bias state for the singleton orchestrator;
+            ' must outlive a single signal-detector scope or the bias resets every 30 s.
+            services.AddSingleton(Of BreakoutStateTracker)(Function(sp)
+                                                                Using scope = sp.GetRequiredService(Of IServiceScopeFactory)().CreateScope()
+                                                                    Dim cfg = scope.ServiceProvider.GetRequiredService(Of BreakAndBounceConfig)()
+                                                                    Return New BreakoutStateTracker(cfg)
+                                                                End Using
+                                                            End Function)
+            ' Cache survives across scans (per UTC day), so singleton.
+            services.AddSingleton(Of IDailyRangeService, DailyRangeService)()
+            services.AddScoped(Of IBreakAndBounceSignalDetector, BreakAndBounceSignalDetector)()
+            services.AddSingleton(Of BreakAndBounceOrchestrator)()
+            services.AddHostedService(Function(sp) sp.GetRequiredService(Of BreakAndBounceOrchestrator)())
 
             ' ── API key store — Singleton: one file-backed store for the session lifetime
             services.AddSingleton(Of IApiKeyStore, ApiKeyStore)()
