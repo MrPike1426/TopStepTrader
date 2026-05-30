@@ -39,6 +39,14 @@ Namespace TopStepTrader.Core.Models
         ''' if available — saves the VM a second lookup in the post-close unsubscribe path.</summary>
         Public Property ClosingPxContractId As String
 
+        ''' <summary>
+        ''' BUG-100: provenance of <see cref="ExitPrice"/> / <see cref="RealizedPnlUsd"/>:
+        ''' <c>"hub"</c> (SignalR fill push), <c>"rest-poll"</c> (REST history fallback),
+        ''' or <c>"engine-fallback"</c> (no broker fill within the timeout — values kept
+        ''' from the pre-flatten engine estimate).
+        ''' </summary>
+        Public Property CloseFillSource As String = String.Empty
+
     End Class
 
 End Namespace

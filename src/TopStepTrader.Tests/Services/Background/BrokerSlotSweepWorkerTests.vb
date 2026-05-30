@@ -129,6 +129,11 @@ Namespace TopStepTrader.Tests.Services.Background
                 Implements IOrderService.FlattenContractAsync
                 Throw New NotImplementedException()
             End Function
+            Public Function FlattenContractWithFillAsync(accountId As Long, contractId As String,
+                                                          Optional cancel As CancellationToken = Nothing) As Task(Of (Success As Boolean, Fill As BrokerCloseFill)) _
+                Implements IOrderService.FlattenContractWithFillAsync
+                Throw New NotImplementedException()
+            End Function
             Public Function EditPositionSlTpAsync(positionId As Long, slRate As Decimal?, tpRate As Decimal?,
                                                    Optional enableTsl As Boolean = False,
                                                    Optional cancel As CancellationToken = Nothing) As Task(Of Boolean) _

@@ -131,17 +131,26 @@ Namespace TopStepTrader.Core.Settings
         Public Property UseSession As Boolean = True
 
         ''' <summary>
-        ''' Trading session window in exchange time, "HHmm-HHmm". Signals only fire inside this
-        ''' window. Default "0830-1500" — RTH for US index futures.
+        ''' Trading session window, "HHmm-HHmm", interpreted in <see cref="SessionTimeZone"/>.
+        ''' Signals only fire inside this window. Default "0830-1500" — RTH for US index futures
+        ''' when paired with the default Central time zone.
         ''' </summary>
         Public Property SessionWindow As String = "0830-1500"
 
         ''' <summary>
-        ''' Force-flat window in exchange time, "HHmm-HHmm". Any open SlipStream position is
-        ''' unconditionally closed once this window opens. Default "1450-1500" — last 10 min
-        ''' of the RTH session.
+        ''' Force-flat window, "HHmm-HHmm", interpreted in <see cref="SessionTimeZone"/>. Any
+        ''' open SlipStream position is unconditionally closed once this window opens. Default
+        ''' "1450-1500" — last 10 min of the RTH session in Central time.
         ''' </summary>
         Public Property FlatWindow As String = "1450-1500"
+
+        ''' <summary>
+        ''' Time zone in which <see cref="SessionWindow"/> and <see cref="FlatWindow"/> are
+        ''' interpreted. Windows time zone id (e.g. "Central Standard Time", "GMT Standard Time")
+        ''' with IANA fallback (e.g. "America/Chicago", "Europe/London"). DST is respected.
+        ''' Default "Central Standard Time" — CME exchange time.
+        ''' </summary>
+        Public Property SessionTimeZone As String = "Central Standard Time"
 
         ''' <summary>Cooldown after an exit, in signal-timeframe bars. Default 3.</summary>
         Public Property CooldownBars As Integer = 3

@@ -17,10 +17,10 @@ Namespace TopStepTrader.Services.SlipStream
     ''' symbols this is cheap (~250 signal bars + ~720 HTF bars × 3 symbols every 30s);
     ''' incremental caching is a future optimisation.
     '''
-    ''' Signal-side timezone note: the session window is interpreted in US Central Time
-    ''' (CME exchange time). Bar timestamps are stored as UTC; the detector converts via
-    ''' <see cref="TimeZoneInfo.FindSystemTimeZoneById"/> on the "Central Standard Time"
-    ''' id which respects daylight saving.
+    ''' Signal-side timezone note: the session window is interpreted in
+    ''' <see cref="SlipStreamConfig.SessionTimeZone"/>. Bar timestamps are stored as UTC;
+    ''' the detector resolves the configured tz id via <see cref="TimeZoneInfo.FindSystemTimeZoneById"/>
+    ''' (Windows id first, IANA fallback) and respects daylight saving.
     ''' </summary>
     Public Class SlipStreamSignalDetector
         Implements ISlipStreamSignalDetector
@@ -29,9 +29,6 @@ Namespace TopStepTrader.Services.SlipStream
         Private ReadOnly _barCollection As IBarCollectionService
         Private ReadOnly _config As SlipStreamConfig
         Private ReadOnly _logger As ILogger(Of SlipStreamSignalDetector)
-
-        ''' <summary>CME exchange time zone — interpreted across DST transitions.</summary>
-        Private Shared ReadOnly s_exchangeTz As TimeZoneInfo = ResolveExchangeTz()
 
         Public Sub New(barIngestion As IBarIngestionService,
                        barCollection As IBarCollectionService,
@@ -202,9 +199,10 @@ Namespace TopStepTrader.Services.SlipStream
             Dim pullbackLong As Boolean = (CDbl(lastBar.Close) >= emaFastLast) AndAlso (CDbl(lastBar.Low) <= emaFastLast)
             Dim pullbackShort As Boolean = (CDbl(lastBar.Close) <= emaFastLast) AndAlso (CDbl(lastBar.High) >= emaFastLast)
 
-            ' Session / flat windows.
-            Dim inSession = (Not _config.UseSession) OrElse IsTimestampInWindow(lastBar.Timestamp, _config.SessionWindow)
-            Dim inFlat = _config.UseSession AndAlso IsTimestampInWindow(lastBar.Timestamp, _config.FlatWindow)
+            ' Session / flat windows. Resolve the tz once per evaluation.
+            Dim sessionTz = ResolveTimeZone(_config.SessionTimeZone)
+            Dim inSession = (Not _config.UseSession) OrElse IsTimestampInWindow(lastBar.Timestamp, _config.SessionWindow, sessionTz)
+            Dim inFlat = _config.UseSession AndAlso IsTimestampInWindow(lastBar.Timestamp, _config.FlatWindow, sessionTz)
 
             ' Trend bias.
             Dim trendLong As Boolean = (CDbl(lastBar.Close) > emaSlowLast) AndAlso (emaFastLast > emaSlowLast)
@@ -465,17 +463,21 @@ Namespace TopStepTrader.Services.SlipStream
 
         ' ─── Session / timezone helpers ────────────────────────────────────────
 
-        ''' <summary>Returns True when the UTC timestamp's exchange-time HHmm falls inside "HHmm-HHmm".</summary>
-        Friend Shared Function IsTimestampInWindow(utcTs As DateTimeOffset, window As String) As Boolean
+        ''' <summary>
+        ''' Returns True when the UTC timestamp, converted to <paramref name="tz"/>, has an
+        ''' HHmm value that falls inside "HHmm-HHmm". Overnight wrap (start &gt; end) supported.
+        ''' </summary>
+        Friend Shared Function IsTimestampInWindow(utcTs As DateTimeOffset, window As String, tz As TimeZoneInfo) As Boolean
             If String.IsNullOrWhiteSpace(window) Then Return False
+            If tz Is Nothing Then tz = TimeZoneInfo.Utc
             Dim parts = window.Split("-"c)
             If parts.Length <> 2 Then Return False
             Dim startHm As Integer, endHm As Integer
             If Not Integer.TryParse(parts(0).Trim(), startHm) Then Return False
             If Not Integer.TryParse(parts(1).Trim(), endHm) Then Return False
 
-            Dim exchangeLocal = TimeZoneInfo.ConvertTime(utcTs, s_exchangeTz)
-            Dim hm = exchangeLocal.Hour * 100 + exchangeLocal.Minute
+            Dim localTs = TimeZoneInfo.ConvertTime(utcTs, tz)
+            Dim hm = localTs.Hour * 100 + localTs.Minute
             If startHm <= endHm Then
                 Return hm >= startHm AndAlso hm < endHm
             Else
@@ -484,8 +486,35 @@ Namespace TopStepTrader.Services.SlipStream
             End If
         End Function
 
-        Private Shared Function ResolveExchangeTz() As TimeZoneInfo
-            ' Windows id first; fall back to IANA id when running on a non-Windows host.
+        ''' <summary>
+        ''' Resolves a Windows or IANA time zone id to a <see cref="TimeZoneInfo"/>. Tries the
+        ''' supplied id first, then the same id with Windows↔IANA swap for cross-platform
+        ''' portability, and finally falls back to Central time then UTC if nothing resolves.
+        ''' Empty input returns the Central default.
+        ''' </summary>
+        Friend Shared Function ResolveTimeZone(tzId As String) As TimeZoneInfo
+            If String.IsNullOrWhiteSpace(tzId) Then tzId = "Central Standard Time"
+            Try
+                Return TimeZoneInfo.FindSystemTimeZoneById(tzId)
+            Catch
+            End Try
+            ' Cross-platform fallback: common Windows↔IANA aliases for the ids we ship.
+            Dim alias_ As String = Nothing
+            Select Case tzId
+                Case "Central Standard Time" : alias_ = "America/Chicago"
+                Case "America/Chicago" : alias_ = "Central Standard Time"
+                Case "GMT Standard Time" : alias_ = "Europe/London"
+                Case "Europe/London" : alias_ = "GMT Standard Time"
+                Case "Eastern Standard Time" : alias_ = "America/New_York"
+                Case "America/New_York" : alias_ = "Eastern Standard Time"
+            End Select
+            If alias_ IsNot Nothing Then
+                Try
+                    Return TimeZoneInfo.FindSystemTimeZoneById(alias_)
+                Catch
+                End Try
+            End If
+            ' Last-resort fallbacks: Central (current default) then UTC.
             Try
                 Return TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time")
             Catch

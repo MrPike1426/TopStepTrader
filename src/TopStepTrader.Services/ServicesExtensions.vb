@@ -11,6 +11,7 @@ Imports TopStepTrader.Services.Diagnostics
 Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.Personas
 Imports TopStepTrader.Services.PostMortem
+Imports TopStepTrader.Services.Risk
 Imports TopStepTrader.Services.Scalper
 Imports TopStepTrader.Services.SlipStream
 Imports TopStepTrader.Services.BreakAndBounce
@@ -194,6 +195,12 @@ Namespace TopStepTrader.Services
             services.AddHostedService(Function(sp) sp.GetRequiredService(Of BarIngestionWorker)())
             services.AddHostedService(Function(sp) sp.GetRequiredService(Of TradeReconciliationWorker)())
             services.AddHostedService(Function(sp) sp.GetRequiredService(Of BrokerSlotSweepWorker)())
+
+            ' ── FEAT-71: Daily loss-cap kill switch. Singleton + hosted (background ticker).
+            services.AddDailyLossGuard()
+
+            ' ── FEAT-72: Adaptive watchlist (scorer + preferences + hosted refresh).
+            services.AddAdaptiveWatchlist()
 
         End Sub
 

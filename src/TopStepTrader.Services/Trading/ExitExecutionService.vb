@@ -55,33 +55,73 @@ Namespace TopStepTrader.Services.Trading
             Dim fcContext = FavouriteContracts.TryGetBySymbolResolved(closingInstrument, _contractResolver)
             Dim closingPxContractId As String = If(fcContext IsNot Nothing, fcContext.PxContractId, Nothing)
 
-            ' BUG-82 F3: compute engine-derived exit price from unrealised P&L + tick metadata.
-            Dim exitPx As Decimal? = Nothing
+            ' BUG-82 F3 / BUG-100: engine-derived fallback used only when broker fill capture
+            ' fails (hub+REST miss). Compute it now so we always have a value to persist when
+            ' FlattenContractWithFillAsync returns Fill = Nothing.
+            Dim engineExitPx As Decimal? = Nothing
             If slot.EntryPrice <> 0D AndAlso fcContext IsNot Nothing AndAlso fcContext.PxTickSize > 0D Then
                 Dim ticks = slot.UnrealizedPnl / (fcContext.PxTickValue * slot.Contracts)
                 Dim direction = If(slot.Side = "Buy", 1D, -1D)
-                exitPx = Math.Round(slot.EntryPrice + direction * ticks * fcContext.PxTickSize, 6)
+                engineExitPx = Math.Round(slot.EntryPrice + direction * ticks * fcContext.PxTickSize, 6)
             End If
 
             Dim closeTime As DateTimeOffset = DateTimeOffset.UtcNow
-            Dim closePx As Decimal = If(exitPx.HasValue, exitPx.Value, 0D)
+            Dim closePx As Decimal = If(engineExitPx.HasValue, engineExitPx.Value, 0D)
             Dim closePnl As Decimal = slot.UnrealizedPnl
+            Dim closeFillSource As String = "engine-fallback"
+            Dim exitPxResult As Decimal? = engineExitPx
 
-            ' ── Persist close record before flattening (while slot data is still valid) ──
+            ' ── BUG-100: flatten FIRST so the close fill can drive persistence ──
+            ' The legacy ordering (persist → flatten) was inverted because closes were
+            ' previously "fire and forget" relative to the broker; now the broker is the
+            ' source of truth for ExitPrice. The slot's instrument / outcome ids do not
+            ' need post-flatten validity — they were captured above.
+            If slot.AccountId <> 0 AndAlso Not String.IsNullOrEmpty(closingInstrument) Then
+                Try
+                    Dim flattenResult = Await _orderService.FlattenContractWithFillAsync(slot.AccountId, closingInstrument)
+                    If flattenResult.Fill IsNot Nothing AndAlso fcContext IsNot Nothing AndAlso fcContext.PxTickSize > 0D Then
+                        Dim fill = flattenResult.Fill
+                        Dim diff = If(slot.Side = "Buy",
+                                      fill.FillPrice - slot.EntryPrice,
+                                      slot.EntryPrice - fill.FillPrice)
+                        Dim closeTicks = diff / fcContext.PxTickSize
+                        closePx = fill.FillPrice
+                        closePnl = Math.Round(closeTicks * fcContext.PxTickValue * slot.Contracts, 2)
+                        closeTime = fill.FillTimeUtc
+                        closeFillSource = fill.Source
+                        exitPxResult = closePx
+                        _logger.LogInformation(
+                            "ExitExec [Slot {Idx}] reconciled close: source={Source} fillPx={Px} fillTime={Time:o} pnl={Pnl}",
+                            slot.SlotIndex, fill.Source, fill.FillPrice, fill.FillTimeUtc, closePnl)
+                    Else
+                        _logger.LogWarning(
+                            "ExitExec [Slot {Idx}] no broker close-fill received; persisting engine-derived ExitPrice={Px}",
+                            slot.SlotIndex, closePx)
+                    End If
+                    _logger.LogInformation("ExitExec [Slot {Idx}] flatten {Contract}: brackets cancelled + position closed",
+                                           slot.SlotIndex, closingInstrument)
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "ExitExec [Slot {Idx}] flatten failed for {Contract} — slot will be cleared anyway",
+                                       slot.SlotIndex, closingInstrument)
+                End Try
+            End If
+
+            ' ── Persist the close record with the reconciled values ──
             If slot.TradeRecordId > 0 Then
                 Try
                     Await _tradeRecordService.CloseTradeAsync(slot.TradeRecordId,
                                                               closeTime,
                                                               closePx,
                                                               closePnl,
-                                                              exitReason)
+                                                              exitReason,
+                                                              closeFillSource)
                 Catch ex As Exception
                     _logger.LogWarning(ex, "ExitExec [Slot {Idx}] failed to close trade record {Id}",
                                        slot.SlotIndex, slot.TradeRecordId)
                 End Try
             End If
 
-            ' FEAT-57 / FEAT-58: resolve outcome + lifespan record.
+            ' FEAT-57 / FEAT-58: resolve outcome + lifespan record with reconciled values.
             Dim rMultiple As Decimal? = Nothing
             If slot.TradeOutcomeId > 0 Then
                 Try
@@ -106,29 +146,15 @@ Namespace TopStepTrader.Services.Trading
                 End Try
             End If
 
-            ' ── Close the live position on TopStepX ──
-            ' Without this, the real position stays open on the exchange while the slot
-            ' clears in-memory, causing EvaluateSlotEntriesAsync to re-enter the same
-            ' instrument on the next tick (BUG-35).
-            If slot.AccountId <> 0 AndAlso Not String.IsNullOrEmpty(closingInstrument) Then
-                Try
-                    Await _orderService.FlattenContractAsync(slot.AccountId, closingInstrument)
-                    _logger.LogInformation("ExitExec [Slot {Idx}] flatten {Contract}: brackets cancelled + position closed",
-                                           slot.SlotIndex, closingInstrument)
-                Catch ex As Exception
-                    _logger.LogWarning(ex, "ExitExec [Slot {Idx}] flatten failed for {Contract} — slot will be cleared anyway",
-                                       slot.SlotIndex, closingInstrument)
-                End Try
-            End If
-
             Return New ExitExecutionResult With {
                 .Released = True,
-                .ExitPrice = exitPx,
+                .ExitPrice = exitPxResult,
                 .RealizedPnlUsd = closePnl,
                 .RMultiple = rMultiple,
                 .ClosingInstrument = closingInstrument,
                 .ClosingSlotIndex = closingSlotIndex,
-                .ClosingPxContractId = closingPxContractId
+                .ClosingPxContractId = closingPxContractId,
+                .CloseFillSource = closeFillSource
             }
         End Function
 
@@ -155,7 +181,7 @@ Namespace TopStepTrader.Services.Trading
             Dim barsInTrade As Integer = If(timeframeMinutes > 0, CInt(Math.Floor(durationMins / timeframeMinutes)), 0)
             Dim rMultiple As Single = If(slot.InitialRiskDollars > 0D,
                                           CSng(closePnl / slot.InitialRiskDollars), 0F)
-            Dim exitSession As String = ResolveSessionWindow(DateTime.UtcNow)
+            Dim exitSession As String = SessionWindowResolver.Resolve(DateTime.UtcNow)
             Dim entrySession As String = If(String.IsNullOrEmpty(slot.EntrySessionWindow),
                                              exitSession, slot.EntrySessionWindow)
 
@@ -176,17 +202,6 @@ Namespace TopStepTrader.Services.Trading
                 .CrossedSessionBoundary = Not String.Equals(entrySession, exitSession, StringComparison.OrdinalIgnoreCase),
                 .RMultiple = rMultiple
             }
-        End Function
-
-        Private Shared Function ResolveSessionWindow(utc As DateTime) As String
-            Dim h As Integer = utc.Hour
-            Select Case h
-                Case 0 To 6   : Return "Asia"
-                Case 7 To 11  : Return "London"
-                Case 12 To 13 : Return "US-Pre"
-                Case 14 To 20 : Return "US-RTH"
-                Case Else     : Return "US-Post"
-            End Select
         End Function
 
     End Class

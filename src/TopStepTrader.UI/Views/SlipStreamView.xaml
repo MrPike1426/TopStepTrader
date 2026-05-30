@@ -178,7 +178,18 @@
                         <CheckBox Content="Session filter" IsChecked="{Binding UseSession, Mode=TwoWay}" Foreground="White" Margin="0,0,12,0"/>
                         <CheckBox Content="HTF bias filter" IsChecked="{Binding UseHtfFilter, Mode=TwoWay}" Foreground="White" Margin="0,0,12,0"/>
                         <TextBlock Text="HTF:" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                        <TextBox Text="{Binding HtfTimeframe, UpdateSourceTrigger=LostFocus}" Width="60"/>
+                        <TextBox Text="{Binding HtfTimeframe, UpdateSourceTrigger=LostFocus}" Width="60" Margin="0,0,12,0"/>
+                        <TextBlock Text="Session TZ:" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"
+                                   ToolTip="Windows time zone id (e.g. 'Central Standard Time', 'GMT Standard Time') or IANA id (e.g. 'America/Chicago', 'Europe/London'). Session and Flat windows are interpreted in this zone."/>
+                        <ComboBox IsEditable="True"
+                                  Text="{Binding SessionTimeZone, UpdateSourceTrigger=LostFocus}"
+                                  Width="180"
+                                  ToolTip="Windows time zone id or IANA id. DST is respected.">
+                            <ComboBoxItem Content="Central Standard Time"/>
+                            <ComboBoxItem Content="GMT Standard Time"/>
+                            <ComboBoxItem Content="Eastern Standard Time"/>
+                            <ComboBoxItem Content="UTC"/>
+                        </ComboBox>
                     </StackPanel>
                 </StackPanel>
             </Border>

@@ -78,13 +78,35 @@ Namespace TopStepTrader.Services.Trades
 
         Public Async Function CloseTradeAsync(id As Long, exitTime As DateTimeOffset,
                                               exitPrice As Decimal, pnL As Decimal,
-                                              exitReason As String) As Task _
+                                              exitReason As String,
+                                              Optional closeFillSource As String = Nothing) As Task _
             Implements ITradeRecordService.CloseTradeAsync
             If id = 0 Then Return
             Try
                 Using scope = _scopeFactory.CreateScope()
                     Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
-                    Await repo.CloseAsync(id, exitTime, exitPrice, pnL, exitReason)
+                    ' BUG-102 F2: close-time integrity gate. A record with EntryPrice=0 at close
+                    ' would poison every aggregate computed downstream. Attempt one more broker-
+                    ' driven resolution before the close persists; on failure, log the unresolved
+                    ' path and still proceed — the historical row is not blocked from closing.
+                    Dim existing = Await repo.GetByIdAsync(id)
+                    If existing IsNot Nothing AndAlso existing.EntryPrice = 0D Then
+                        _logger.LogWarning(
+                            "CloseTradeAsync: record {Id} has EntryPrice=0 at close (entryOrderId={Oid}) — attempting resolution (BUG-102 F2)",
+                            id, existing.EntryOrderId)
+                        Dim resolved As Decimal = Await TryResolveEntryPriceAsync(existing)
+                        If resolved > 0D Then
+                            Await repo.UpdateEntryPriceAsync(id, resolved)
+                            _logger.LogInformation(
+                                "CloseTradeAsync: record {Id} EntryPrice resolved to {Price:F4} pre-close (BUG-102 F2)",
+                                id, resolved)
+                        Else
+                            _logger.LogWarning(
+                                "CloseTradeAsync: record {Id} EntryPrice unresolvable — closing with EntryPrice=0; row will appear in F3 audit",
+                                id)
+                        End If
+                    End If
+                    Await repo.CloseAsync(id, exitTime, exitPrice, pnL, exitReason, closeFillSource)
                 End Using
             Catch ex As Exception
                 _logger.LogWarning(ex, "TradeRecordService.CloseTradeAsync failed for record {Id}", id)
@@ -93,22 +115,35 @@ Namespace TopStepTrader.Services.Trades
             ' FEAT-50: capture broker snapshots after the close is persisted.
             ' BUG-63: do NOT block CloseTradeAsync on PX REST calls. Schedule
             ' on the threadpool with full try/catch — trading hot path stays clean.
+            ' OBS-07 F1: emit one structured "scheduled" log line every time, and
+            ' explicitly Warning-log the skip path so silent zero-row outcomes
+            ' (hypothesis B in OBS-07) are observable in DebugLog.
             Dim accountId As Long = If(_session?.SelectedAccount?.Id, 0L)
-            If accountId <> 0 Then
-                Dim svc = DirectCast(Me, ITradeRecordService)
-                Dim log = _logger
-                Dim recordId = id
-                Dim acc = accountId
-                #Disable Warning BC42358
-                                Task.Run(Async Function()
-                                             Try
-                                                 Await svc.CaptureClosingSnapshotsAsync(recordId, acc)
-                                             Catch ex As Exception
-                                                 log.LogWarning(ex, "TradeRecordService.CaptureClosingSnapshotsAsync (background) failed for record {Id}", recordId)
-                                             End Try
-                                         End Function)
-                #Enable Warning BC42358
+            If accountId = 0L Then
+                _logger.LogWarning("{Message}", FormatAccountIdSkipWarning(id))
+                Return
             End If
+
+            _logger.LogInformation(
+                "CaptureClosingSnapshots scheduled for record {Id} accountId={AccountId}",
+                id, accountId)
+
+            Dim svc = DirectCast(Me, ITradeRecordService)
+            Dim log = _logger
+            Dim recordId = id
+            Dim acc = accountId
+            #Disable Warning BC42358
+                            Task.Run(Async Function()
+                                         Try
+                                             Await svc.CaptureClosingSnapshotsAsync(recordId, acc)
+                                             log.LogInformation(
+                                                 "CaptureClosingSnapshots task completed for record {Id}",
+                                                 recordId)
+                                         Catch ex As Exception
+                                             log.LogWarning(ex, "TradeRecordService.CaptureClosingSnapshotsAsync (background) failed for record {Id}", recordId)
+                                         End Try
+                                     End Function)
+            #Enable Warning BC42358
         End Function
 
         Public Async Function UpdateEntryPriceAsync(id As Long, entryPrice As Decimal) As Task _
@@ -122,6 +157,86 @@ Namespace TopStepTrader.Services.Trades
             Catch ex As Exception
                 _logger.LogWarning(ex, "TradeRecordService.UpdateEntryPriceAsync failed for record {Id}", id)
             End Try
+        End Function
+
+        ''' <summary>
+        ''' BUG-102 F2/F3: live broker-driven entry-price resolution for records that carry
+        ''' EntryPrice=0. Searches the order + trade history around the recorded EntryTime,
+        ''' feeds the responses to <see cref="ResolveEntryPriceFromBrokerFills"/>, and returns
+        ''' the resolved price (or 0 when neither source yields a non-zero value).
+        ''' </summary>
+        Private Async Function TryResolveEntryPriceAsync(entity As LiveTradeRecordEntity) As Task(Of Decimal)
+            If entity Is Nothing Then Return 0D
+            Dim accountId As Long = If(_session?.SelectedAccount?.Id, 0L)
+            If accountId = 0L Then Return 0D
+
+            Dim sinceMs = entity.EntryTime.AddMinutes(-5).ToUnixTimeMilliseconds()
+            Dim untilMs = entity.EntryTime.AddMinutes(60).ToUnixTimeMilliseconds()
+
+            Dim orders As IList(Of API.Models.Responses.PXOrderDto) = Nothing
+            Dim trades As IList(Of API.Models.Responses.PXTradeDto) = Nothing
+            Try
+                Dim resp = Await _orderClient.SearchOrdersAsync(accountId, sinceMs, untilMs)
+                orders = resp?.Orders
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TryResolveEntryPriceAsync: SearchOrdersAsync failed for record {Id}", entity.Id)
+            End Try
+            Try
+                Dim resp = Await _orderClient.SearchTradesAsync(accountId, sinceMs, untilMs)
+                trades = resp?.Trades
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TryResolveEntryPriceAsync: SearchTradesAsync failed for record {Id}", entity.Id)
+            End Try
+
+            Return ResolveEntryPriceFromBrokerFills(entity, orders, trades)
+        End Function
+
+        ''' <summary>
+        ''' BUG-102 F2: pure helper that derives a non-zero entry price from broker order +
+        ''' trade history. Prefers the entry order's <c>AvgFillPrice</c>; falls back to the
+        ''' first trade fill whose <c>OrderId</c> matches <c>EntryOrderId</c>; finally falls
+        ''' back to the earliest entry-side fill on the contract at/after <c>EntryTime</c>.
+        ''' Returns 0 when none of those sources yields a non-zero value.
+        ''' </summary>
+        Friend Shared Function ResolveEntryPriceFromBrokerFills(entity As LiveTradeRecordEntity,
+                                                                  orders As IList(Of API.Models.Responses.PXOrderDto),
+                                                                  trades As IList(Of API.Models.Responses.PXTradeDto)) As Decimal
+            If entity Is Nothing Then Return 0D
+
+            ' 1. Entry order's AvgFillPrice.
+            If entity.EntryOrderId <> 0L AndAlso orders IsNot Nothing Then
+                Dim matchOrder = orders.FirstOrDefault(Function(o) o.Id = entity.EntryOrderId)
+                If matchOrder IsNot Nothing AndAlso matchOrder.AvgFillPrice.HasValue AndAlso matchOrder.AvgFillPrice.Value > 0R Then
+                    Return CDec(matchOrder.AvgFillPrice.Value)
+                End If
+            End If
+
+            ' 2. Trade fill whose OrderId matches the entry order id.
+            If entity.EntryOrderId <> 0L AndAlso trades IsNot Nothing Then
+                Dim matchByOrder = trades _
+                    .Where(Function(t) t.OrderId = entity.EntryOrderId AndAlso t.Price > 0R) _
+                    .OrderBy(Function(t) ParseTs(t.CreationTimestamp)) _
+                    .FirstOrDefault()
+                If matchByOrder IsNot Nothing Then Return CDec(matchByOrder.Price)
+            End If
+
+            ' 3. Earliest entry-side fill on the contract at/after EntryTime.
+            If trades IsNot Nothing AndAlso Not String.IsNullOrEmpty(entity.ContractId) Then
+                Dim entrySide As Integer = If(entity.Direction = "Long", 0, 1)
+                Dim entryMs = entity.EntryTime.ToUnixTimeMilliseconds()
+                Dim rootPrefix = TryResolveContractRootPrefix(entity.ContractId)
+                Dim matcher = BuildContractMatcher(entity.ContractId, rootPrefix)
+                Dim matchAny = trades _
+                    .Where(Function(t) matcher(t.ContractId) AndAlso
+                                       t.Side = entrySide AndAlso
+                                       t.Price > 0R AndAlso
+                                       ParseTs(t.CreationTimestamp) >= entryMs) _
+                    .OrderBy(Function(t) ParseTs(t.CreationTimestamp)) _
+                    .FirstOrDefault()
+                If matchAny IsNot Nothing Then Return CDec(matchAny.Price)
+            End If
+
+            Return 0D
         End Function
 
         Public Async Function ResolveTopStepXTradeIdAsync(recordId As Long, topStepXTradeId As Long) As Task _
@@ -653,7 +768,19 @@ Namespace TopStepTrader.Services.Trades
                 _logger.LogWarning(ex, "CaptureClosingSnapshots: failed to load record {Id}", recordId)
                 Return
             End Try
-            If entity Is Nothing Then Return
+            If entity Is Nothing Then
+                _logger.LogWarning(
+                    "CaptureClosingSnapshots: record {Id} not found in LiveTradeRecords — aborting",
+                    recordId)
+                Return
+            End If
+
+            ' OBS-07 F1: entity-loaded waypoint — covers hypothesis E (DB-path drift),
+            ' makes the in-context record shape visible alongside any matcher decisions.
+            _logger.LogInformation(
+                "CaptureClosingSnapshots: record {Id} entity loaded contract={Contract} symbol={Symbol} entryTime={EntryTime:o} exitTime={ExitTime}",
+                recordId, entity.ContractId, entity.Symbol, entity.EntryTime,
+                If(entity.ExitTime.HasValue, entity.ExitTime.Value.ToString("o"), "open"))
 
             Dim startTs = entity.EntryTime.AddMinutes(-1).ToUnixTimeMilliseconds()
             Dim endTimeRef = If(entity.ExitTime.HasValue, entity.ExitTime.Value, DateTimeOffset.UtcNow)
@@ -667,6 +794,12 @@ Namespace TopStepTrader.Services.Trades
             ' ContractId when no favourite is found (legacy rows / unknown symbols).
             Dim rootPrefix As String = TryResolveContractRootPrefix(entity.ContractId)
             Dim contractIdMatcher As Func(Of String, Boolean) = BuildContractMatcher(entity.ContractId, rootPrefix)
+            ' OBS-07 F1: rootPrefix waypoint — covers hypothesis C (matcher mis-resolution).
+            _logger.LogInformation(
+                "CaptureClosingSnapshots: record {Id} rootPrefix={Prefix} (raw ContractId={ContractId})",
+                recordId,
+                If(String.IsNullOrEmpty(rootPrefix), "(literal-fallback)", rootPrefix),
+                entity.ContractId)
 
             ' BUG-63: run the 3 PX search calls in parallel with a hard timeout.
             Dim cts As New Threading.CancellationTokenSource(TimeSpan.FromSeconds(10))
@@ -679,64 +812,38 @@ Namespace TopStepTrader.Services.Trades
                 ' individual failures already logged inside SafePxCallAsync
             End Try
 
-            Dim orderRows As New List(Of TradeOrderSnapshotEntity)()
             Dim ordersResp = ordersTask.Result
-            If ordersResp IsNot Nothing AndAlso ordersResp.Orders IsNot Nothing Then
-                For Each o In ordersResp.Orders.Where(Function(x) contractIdMatcher(x.ContractId))
-                    orderRows.Add(New TradeOrderSnapshotEntity With {
-                        .LiveTradeRecordId = recordId,
-                        .TopStepXOrderId = o.Id,
-                        .ContractId = o.ContractId,
-                        .OrderType = MapOrderType(o.OrderType),
-                        .Side = MapSide(o.Side),
-                        .Status = MapOrderStatus(o.Status),
-                        .Size = o.Size,
-                        .LimitPrice = If(o.LimitPrice.HasValue, o.LimitPrice.Value.ToString("G", Globalization.CultureInfo.InvariantCulture), Nothing),
-                        .StopPrice = If(o.StopPrice.HasValue, o.StopPrice.Value.ToString("G", Globalization.CultureInfo.InvariantCulture), Nothing),
-                        .FilledPrice = If(o.AvgFillPrice.HasValue, o.AvgFillPrice.Value.ToString("G", Globalization.CultureInfo.InvariantCulture), Nothing),
-                        .CreatedAt = If(String.IsNullOrEmpty(o.CreationTimestamp), DateTimeOffset.UtcNow.ToString("o"), o.CreationTimestamp),
-                        .UpdatedAt = Nothing,
-                        .RawJson = SafeSerialize(o)
-                    })
-                Next
-            End If
-
-            Dim positionRows As New List(Of TradePositionSnapshotEntity)()
             Dim positionsResp = positionsTask.Result
-            If positionsResp IsNot Nothing AndAlso positionsResp.Positions IsNot Nothing Then
-                For Each p In positionsResp.Positions.Where(Function(x) contractIdMatcher(x.ContractId))
-                    positionRows.Add(New TradePositionSnapshotEntity With {
-                        .LiveTradeRecordId = recordId,
-                        .TopStepXPositionId = p.Id,
-                        .ContractId = p.ContractId,
-                        .Side = If(p.PositionType = 1, "Buy", "Sell"),
-                        .Size = p.Size,
-                        .AvgEntryPrice = p.AveragePrice.ToString("G", Globalization.CultureInfo.InvariantCulture),
-                        .RealisedPnL = p.OpenPnL.ToString("G", Globalization.CultureInfo.InvariantCulture),
-                        .OpenedAt = If(String.IsNullOrEmpty(p.CreationTimestamp), entity.EntryTime.UtcDateTime.ToString("o"), p.CreationTimestamp),
-                        .ClosedAt = If(entity.ExitTime.HasValue, entity.ExitTime.Value.UtcDateTime.ToString("o"), Nothing),
-                        .RawJson = SafeSerialize(p)
-                    })
-                Next
-            End If
-
-            Dim fillRows As New List(Of TradeFillSnapshotEntity)()
             Dim tradesResp = tradesTask.Result
-            If tradesResp IsNot Nothing AndAlso tradesResp.Trades IsNot Nothing Then
-                For Each t In tradesResp.Trades.Where(Function(x) contractIdMatcher(x.ContractId))
-                    fillRows.Add(New TradeFillSnapshotEntity With {
-                        .LiveTradeRecordId = recordId,
-                        .TopStepXTradeId = t.Id,
-                        .TopStepXOrderId = t.OrderId,
-                        .ContractId = t.ContractId,
-                        .Side = MapSide(t.Side),
-                        .Size = t.Size,
-                        .Price = t.Price.ToString("G", Globalization.CultureInfo.InvariantCulture),
-                        .Timestamp = If(String.IsNullOrEmpty(t.CreationTimestamp), DateTimeOffset.UtcNow.ToString("o"), t.CreationTimestamp),
-                        .RawJson = SafeSerialize(t)
-                    })
-                Next
-            End If
+
+            ' OBS-07 F1: broker-response counts waypoint — covers hypothesis D
+            ' (SafePxCallAsync silently returning Nothing on timeout/error).
+            _logger.LogInformation(
+                "CaptureClosingSnapshots: record {Id} broker responses — orders={OrdersCount} positions={PositionsCount} trades={TradesCount}",
+                recordId,
+                If(ordersResp Is Nothing, "(null)", If(ordersResp.Orders Is Nothing, "0", ordersResp.Orders.Count.ToString())),
+                If(positionsResp Is Nothing, "(null)", If(positionsResp.Positions Is Nothing, "0", positionsResp.Positions.Count.ToString())),
+                If(tradesResp Is Nothing, "(null)", If(tradesResp.Trades Is Nothing, "0", tradesResp.Trades.Count.ToString())))
+
+            Dim orderRows = MapMatchingOrders(If(ordersResp?.Orders, New List(Of API.Models.Responses.PXOrderDto)()),
+                                               contractIdMatcher, recordId)
+            Dim positionRows = MapMatchingPositions(If(positionsResp?.Positions, New List(Of API.Models.Responses.PXPositionDto)()),
+                                                     contractIdMatcher, recordId,
+                                                     entity.EntryTime, entity.ExitTime)
+            Dim fillRows = MapMatchingFills(If(tradesResp?.Trades, New List(Of API.Models.Responses.PXTradeDto)()),
+                                             contractIdMatcher, recordId)
+
+            ' OBS-07 F1: matcher-rejection waypoints — emit one Warning per response shape
+            ' that arrived non-empty yet had every row rejected by the matcher (hypothesis C).
+            EmitMatcherRejectionWarning(ordersResp?.Orders, contractIdMatcher, recordId,
+                                         "orders", rootPrefix, entity.ContractId,
+                                         Function(o) o.ContractId)
+            EmitMatcherRejectionWarning(positionsResp?.Positions, contractIdMatcher, recordId,
+                                         "positions", rootPrefix, entity.ContractId,
+                                         Function(p) p.ContractId)
+            EmitMatcherRejectionWarning(tradesResp?.Trades, contractIdMatcher, recordId,
+                                         "trades", rootPrefix, entity.ContractId,
+                                         Function(t) t.ContractId)
 
             Try
                 Using scope = _scopeFactory.CreateScope()
@@ -900,6 +1007,138 @@ Namespace TopStepTrader.Services.Trades
         End Function
 
         ''' <summary>
+        ''' OBS-07 F1: when the broker returns rows but the contract matcher rejects every
+        ''' single one, emit a structured Warning naming the matcher prefix and a sample of
+        ''' the rejected ContractIds so the next paper-session close immediately surfaces
+        ''' hypothesis C from the OBS-07 ticket (matcher mis-resolution).
+        ''' </summary>
+        Private Sub EmitMatcherRejectionWarning(Of T)(rows As IList(Of T),
+                                                       matcher As Func(Of String, Boolean),
+                                                       recordId As Long,
+                                                       kind As String,
+                                                       rootPrefix As String,
+                                                       literalContractId As String,
+                                                       contractIdSelector As Func(Of T, String))
+            Dim diag = DetectMatcherRejection(rows, matcher, contractIdSelector)
+            If Not diag.Rejected Then Return
+            Dim matcherLabel = If(String.IsNullOrEmpty(rootPrefix),
+                                   $"literal='{literalContractId}'",
+                                   $"prefix='{rootPrefix}'")
+            _logger.LogWarning(
+                "CaptureClosingSnapshots: record {Id} matcher rejected all {Count} {Kind} (sample={Sample}) — matcher={Matcher}",
+                recordId, diag.Count, kind, diag.Sample, matcherLabel)
+        End Sub
+
+        ''' <summary>
+        ''' OBS-07 F4: pure detector. Returns (Rejected=True, Count, Sample) when the
+        ''' broker response has rows but the matcher accepts none of them; otherwise
+        ''' Rejected=False. Tests use this to verify matcher-rejection paths without a
+        ''' logger capture.
+        ''' </summary>
+        Friend Shared Function DetectMatcherRejection(Of T)(rows As IList(Of T),
+                                                             matcher As Func(Of String, Boolean),
+                                                             contractIdSelector As Func(Of T, String)) _
+            As (Rejected As Boolean, Count As Integer, Sample As String)
+            If rows Is Nothing OrElse rows.Count = 0 Then Return (False, 0, String.Empty)
+            Dim accepted = Enumerable.Count(rows, Function(x) matcher(contractIdSelector(x)))
+            If accepted > 0 Then Return (False, rows.Count, String.Empty)
+            Dim sample = String.Join(", ",
+                rows.Take(3) _
+                    .Select(Function(x) If(contractIdSelector(x), "(null)")))
+            Return (True, rows.Count, sample)
+        End Function
+
+        ''' <summary>
+        ''' OBS-07 F4: pure mapper. Filters PXOrderDtos by the contract matcher and
+        ''' converts the survivors to TradeOrderSnapshotEntity rows ready for persistence.
+        ''' </summary>
+        Friend Shared Function MapMatchingOrders(orders As IList(Of API.Models.Responses.PXOrderDto),
+                                                   matcher As Func(Of String, Boolean),
+                                                   recordId As Long) As List(Of TradeOrderSnapshotEntity)
+            Dim result As New List(Of TradeOrderSnapshotEntity)()
+            If orders Is Nothing OrElse matcher Is Nothing Then Return result
+            For Each o In orders.Where(Function(x) matcher(x.ContractId))
+                result.Add(New TradeOrderSnapshotEntity With {
+                    .LiveTradeRecordId = recordId,
+                    .TopStepXOrderId = o.Id,
+                    .ContractId = o.ContractId,
+                    .OrderType = MapOrderType(o.OrderType),
+                    .Side = MapSide(o.Side),
+                    .Status = MapOrderStatus(o.Status),
+                    .Size = o.Size,
+                    .LimitPrice = If(o.LimitPrice.HasValue, o.LimitPrice.Value.ToString("G", Globalization.CultureInfo.InvariantCulture), Nothing),
+                    .StopPrice = If(o.StopPrice.HasValue, o.StopPrice.Value.ToString("G", Globalization.CultureInfo.InvariantCulture), Nothing),
+                    .FilledPrice = If(o.AvgFillPrice.HasValue, o.AvgFillPrice.Value.ToString("G", Globalization.CultureInfo.InvariantCulture), Nothing),
+                    .CreatedAt = If(String.IsNullOrEmpty(o.CreationTimestamp), DateTimeOffset.UtcNow.ToString("o"), o.CreationTimestamp),
+                    .UpdatedAt = Nothing,
+                    .RawJson = SafeSerialize(o)
+                })
+            Next
+            Return result
+        End Function
+
+        ''' <summary>
+        ''' OBS-07 F4: pure mapper for broker-side position rows.
+        ''' </summary>
+        Friend Shared Function MapMatchingPositions(positions As IList(Of API.Models.Responses.PXPositionDto),
+                                                     matcher As Func(Of String, Boolean),
+                                                     recordId As Long,
+                                                     entryTime As DateTimeOffset,
+                                                     exitTime As DateTimeOffset?) As List(Of TradePositionSnapshotEntity)
+            Dim result As New List(Of TradePositionSnapshotEntity)()
+            If positions Is Nothing OrElse matcher Is Nothing Then Return result
+            For Each p In positions.Where(Function(x) matcher(x.ContractId))
+                result.Add(New TradePositionSnapshotEntity With {
+                    .LiveTradeRecordId = recordId,
+                    .TopStepXPositionId = p.Id,
+                    .ContractId = p.ContractId,
+                    .Side = If(p.PositionType = 1, "Buy", "Sell"),
+                    .Size = p.Size,
+                    .AvgEntryPrice = p.AveragePrice.ToString("G", Globalization.CultureInfo.InvariantCulture),
+                    .RealisedPnL = p.OpenPnL.ToString("G", Globalization.CultureInfo.InvariantCulture),
+                    .OpenedAt = If(String.IsNullOrEmpty(p.CreationTimestamp), entryTime.UtcDateTime.ToString("o"), p.CreationTimestamp),
+                    .ClosedAt = If(exitTime.HasValue, exitTime.Value.UtcDateTime.ToString("o"), Nothing),
+                    .RawJson = SafeSerialize(p)
+                })
+            Next
+            Return result
+        End Function
+
+        ''' <summary>
+        ''' OBS-07 F4: pure mapper for broker-side fill rows.
+        ''' </summary>
+        Friend Shared Function MapMatchingFills(trades As IList(Of API.Models.Responses.PXTradeDto),
+                                                  matcher As Func(Of String, Boolean),
+                                                  recordId As Long) As List(Of TradeFillSnapshotEntity)
+            Dim result As New List(Of TradeFillSnapshotEntity)()
+            If trades Is Nothing OrElse matcher Is Nothing Then Return result
+            For Each t In trades.Where(Function(x) matcher(x.ContractId))
+                result.Add(New TradeFillSnapshotEntity With {
+                    .LiveTradeRecordId = recordId,
+                    .TopStepXTradeId = t.Id,
+                    .TopStepXOrderId = t.OrderId,
+                    .ContractId = t.ContractId,
+                    .Side = MapSide(t.Side),
+                    .Size = t.Size,
+                    .Price = t.Price.ToString("G", Globalization.CultureInfo.InvariantCulture),
+                    .Timestamp = If(String.IsNullOrEmpty(t.CreationTimestamp), DateTimeOffset.UtcNow.ToString("o"), t.CreationTimestamp),
+                    .RawJson = SafeSerialize(t)
+                })
+            Next
+            Return result
+        End Function
+
+        ''' <summary>
+        ''' OBS-07 F4: pure helper for the accountId-zero skip path. Returns the
+        ''' canonical warning message format so tests can assert the wording without
+        ''' a logger-capture harness, and the production scheduler in
+        ''' <c>CloseTradeAsync</c> reuses the same message.
+        ''' </summary>
+        Friend Shared Function FormatAccountIdSkipWarning(recordId As Long) As String
+            Return $"CaptureClosingSnapshots skipped for record {recordId} — no SelectedAccount (accountId=0); broker snapshots will not be captured"
+        End Function
+
+        ''' <summary>
         ''' BUG-92: helper exposed for unit tests so we can drive ContractId resolution without
         ''' loading the full FavouriteContracts table. Returns "CON.F.US.&lt;root&gt;." when the
         ''' record's symbol resolves to a favourite with a PxRootSymbol, otherwise Nothing.
@@ -1029,6 +1268,59 @@ Namespace TopStepTrader.Services.Trades
             Return reconciledCount
         End Function
 
+        Public Async Function AuditZeroEntryPriceRowsAsync(accountId As Long) As Task(Of EntryPriceAuditResult) _
+            Implements ITradeRecordService.AuditZeroEntryPriceRowsAsync
+            Dim result As New EntryPriceAuditResult()
+            If accountId = 0L Then Return result
+
+            Dim candidates As List(Of LiveTradeRecordEntity)
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
+                    Dim closed = Await repo.GetRecentAsync(5000, closedOnly:=True)
+                    candidates = closed.Where(Function(r) r.EntryPrice = 0D).ToList()
+                End Using
+            Catch ex As Exception
+                _logger.LogWarning(ex, "AuditZeroEntryPriceRowsAsync: failed to read closed records")
+                Return result
+            End Try
+
+            result.Audited = candidates.Count
+            If candidates.Count = 0 Then
+                _logger.LogInformation("AuditZeroEntryPriceRowsAsync: no candidate rows found")
+                Return result
+            End If
+
+            _logger.LogInformation("AuditZeroEntryPriceRowsAsync: {Count} candidate row(s) found", candidates.Count)
+            For Each rec In candidates
+                Try
+                    Dim resolved As Decimal = Await TryResolveEntryPriceAsync(rec)
+                    If resolved > 0D Then
+                        Using scope = _scopeFactory.CreateScope()
+                            Dim repo = scope.ServiceProvider.GetRequiredService(Of ILiveTradeRecordRepository)()
+                            Await repo.UpdateEntryPriceAsync(rec.Id, resolved)
+                        End Using
+                        result.Repaired += 1
+                        _logger.LogInformation("AuditZeroEntryPriceRowsAsync: repaired record {Id} EntryPrice→{Price:F4}", rec.Id, resolved)
+                    Else
+                        result.Unresolvable += 1
+                        _logger.LogWarning(
+                            "AuditZeroEntryPriceRowsAsync: record {Id} ({Symbol}, EntryTime={Entry:o}) unresolvable — manual handling required",
+                            rec.Id, rec.Symbol, rec.EntryTime)
+                    End If
+                    Await Task.Delay(100)
+                Catch ex As Exception
+                    result.Unresolvable += 1
+                    _logger.LogWarning(ex, "AuditZeroEntryPriceRowsAsync: resolution threw for record {Id}", rec.Id)
+                End Try
+            Next
+
+            _logger.LogInformation(
+                "AuditZeroEntryPriceRowsAsync complete: audited={Audited} repaired={Repaired} unresolvable={Unresolvable}",
+                result.Audited, result.Repaired, result.Unresolvable)
+            Return result
+        End Function
+
         Private Shared Function MapSide(side As Integer) As String
             Return If(side = 0, "Buy", "Sell")
         End Function
@@ -1066,6 +1358,9 @@ Namespace TopStepTrader.Services.Trades
         ''' <summary>
         ''' BUG-63: wraps a PX REST call so the parallel WhenAll for snapshot capture
         ''' never throws \u2014 each failure is logged independently and returns Nothing.
+        ''' OBS-07 F1: when the wrapped response inherits PXBaseResponse and reports
+        ''' Success=False, log the broker errorCode/errorMessage at Warning so the
+        ''' postmortem CLI can grep-mine the failure mode (covers hypothesis D).
         ''' </summary>
         Private Async Function SafePxCallAsync(Of TResp As Class)(invoker As Func(Of Task(Of TResp)),
                                                                   cancel As Threading.CancellationToken,
@@ -1074,7 +1369,14 @@ Namespace TopStepTrader.Services.Trades
             Try
                 Dim t = invoker()
                 If t Is Nothing Then Return Nothing
-                Return Await t.WaitAsync(cancel)
+                Dim resp = Await t.WaitAsync(cancel)
+                Dim baseResp = TryCast(CObj(resp), API.Models.Responses.PXBaseResponse)
+                If baseResp IsNot Nothing AndAlso Not baseResp.Success Then
+                    _logger.LogWarning(
+                        "CaptureClosingSnapshots: {Call} returned Success=false for record {Id} errorCode={Code} errorMessage={Msg}",
+                        callName, recordId, baseResp.ErrorCode, If(baseResp.ErrorMessage, "(none)"))
+                End If
+                Return resp
             Catch ex As Exception
                 _logger.LogWarning(ex, "CaptureClosingSnapshots: {Call} failed for record {Id}", callName, recordId)
                 Return Nothing

@@ -8,7 +8,8 @@ Namespace TopStepTrader.Data.Repositories
         Function AddAsync(entity As LiveTradeRecordEntity) As Task(Of Long)
 
         Function CloseAsync(id As Long, exitTime As DateTimeOffset, exitPrice As Decimal,
-                            pnl As Decimal, exitReason As String) As Task
+                            pnl As Decimal, exitReason As String,
+                            Optional closeFillSource As String = Nothing) As Task
 
         ''' <summary>
         ''' BUG-92: amends an already-closed record with broker-confirmed exit data. Used by
@@ -53,6 +54,16 @@ Namespace TopStepTrader.Data.Repositories
                                 Optional personaFilter As String = Nothing,
                                 Optional pnlFilter As PnLFilterType = PnLFilterType.All,
                                 Optional closedOnly As Boolean = False) As Task(Of IList(Of LiveTradeRecordEntity))
+
+        ''' <summary>
+        ''' FEAT-71: Sum of <c>PnL</c> across closed records whose <c>ExitTime</c> is at or
+        ''' after <paramref name="sinceUtc"/>. Skips rows where <c>PnL</c> is NULL (close
+        ''' fill not yet reconciled). Returns 0 when no rows match. Net of fees/commission
+        ''' is NOT applied here — the caller can subtract <c>CommissionUsd + FeesUsd</c>
+        ''' separately if needed; default $0.50/contract round-trip rounds to negligible
+        ''' against a $1.5k cap so this is intentionally gross.
+        ''' </summary>
+        Function SumRealisedPnlSinceAsync(sinceUtc As DateTimeOffset) As Task(Of Decimal)
 
     End Interface
 

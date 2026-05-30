@@ -150,6 +150,7 @@ Namespace TopStepTrader.Services.Trading
                         contractId, initialStopTicks, fc.PhasedTrailMaxInitialStopTicks)
                     initialStopTicks = fc.PhasedTrailMaxInitialStopTicks
                 End If
+
                 stopTicks = initialStopTicks
             End If
             _logger.LogInformation("Entry bracket for {Contract}: SL={SL} ticks (flip-only; no hard TP) lastClose={Close}, stLine={St}",
@@ -446,7 +447,7 @@ Namespace TopStepTrader.Services.Trading
                         ' FEAT-58: indicator + context snapshot linked to the outcome
                         If slot.TradeOutcomeId > 0 Then
                             Try
-                                Dim entrySession As String = ResolveSessionWindow(DateTime.UtcNow)
+                                Dim entrySession As String = SessionWindowResolver.Resolve(DateTime.UtcNow)
                                 slot.EntrySessionWindow = entrySession
 
                                 Dim snapBars = Await _barService.GetLiveBarsAsync(contractId, request.TimeframeForBars, BarsToFetch)
@@ -533,17 +534,6 @@ Namespace TopStepTrader.Services.Trading
                 _logger.LogWarning(ex, "Entry [Slot {Idx}] failed to open trade record for {Contract}",
                                    slot.SlotIndex, contractId)
             End Try
-        End Function
-
-        Private Shared Function ResolveSessionWindow(utc As DateTime) As String
-            Dim h As Integer = utc.Hour
-            Select Case h
-                Case 0 To 6   : Return "Asia"
-                Case 7 To 11  : Return "London"
-                Case 12 To 13 : Return "US-Pre"
-                Case 14 To 20 : Return "US-RTH"
-                Case Else     : Return "US-Post"
-            End Select
         End Function
 
         Private Sub ReleaseSlot(request As EntryExecutionRequest)

@@ -211,6 +211,9 @@ Namespace TopStepTrader.Tests.Services.Trades
             Public Function FlattenContractAsync(accountId As Long, contractId As String, Optional cancel As CancellationToken = Nothing) As Task(Of Boolean) Implements IOrderService.FlattenContractAsync
                 Throw New NotImplementedException()
             End Function
+            Public Function FlattenContractWithFillAsync(accountId As Long, contractId As String, Optional cancel As CancellationToken = Nothing) As Task(Of (Success As Boolean, Fill As BrokerCloseFill)) Implements IOrderService.FlattenContractWithFillAsync
+                Throw New NotImplementedException()
+            End Function
             Public Function EditPositionSlTpAsync(positionId As Long, slRate As Decimal?, tpRate As Decimal?, Optional enableTsl As Boolean = False, Optional cancel As CancellationToken = Nothing) As Task(Of Boolean) Implements IOrderService.EditPositionSlTpAsync
                 Throw New NotImplementedException()
             End Function
@@ -265,7 +268,8 @@ Namespace TopStepTrader.Tests.Services.Trades
 
             ' ── Unused ITradeRecordService members ──────────────────────────
             Public Function CloseTradeAsync(id As Long, exitTime As DateTimeOffset, exitPrice As Decimal,
-                                              pnL As Decimal, exitReason As String) As Task _
+                                              pnL As Decimal, exitReason As String,
+                                              Optional closeFillSource As String = Nothing) As Task _
                 Implements ITradeRecordService.CloseTradeAsync
                 Return Task.CompletedTask
             End Function
@@ -341,6 +345,10 @@ Namespace TopStepTrader.Tests.Services.Trades
             Public Function SaveLifespanRecordAsync(tradeOutcomeId As Long, record As TradeLifespan) As Task _
                 Implements ITradeRecordService.SaveLifespanRecordAsync
                 Return Task.CompletedTask
+            End Function
+            Public Function AuditZeroEntryPriceRowsAsync(accountId As Long) As Task(Of EntryPriceAuditResult) _
+                Implements ITradeRecordService.AuditZeroEntryPriceRowsAsync
+                Return Task.FromResult(New EntryPriceAuditResult())
             End Function
         End Class
 

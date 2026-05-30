@@ -579,6 +579,7 @@ Namespace TopStepTrader.Data
                          ""UseSession""                  INTEGER NOT NULL DEFAULT 1,
                          ""SessionWindow""               TEXT    NOT NULL DEFAULT '0830-1500',
                          ""FlatWindow""                  TEXT    NOT NULL DEFAULT '1450-1500',
+                         ""SessionTimeZone""             TEXT    NOT NULL DEFAULT 'Central Standard Time',
                          ""CooldownBars""                INTEGER NOT NULL DEFAULT 3,
                          ""EnableLong""                  INTEGER NOT NULL DEFAULT 1,
                          ""EnableShort""                 INTEGER NOT NULL DEFAULT 1,
@@ -603,6 +604,21 @@ Namespace TopStepTrader.Data
                         cmd.CommandText = ddl
                         cmd.ExecuteNonQuery()
                     End Using
+                Next
+
+                ' Idempotent ALTER for installs created before SessionTimeZone existed.
+                Dim slipAlters = New String() {
+                    "ALTER TABLE ""SlipStreamConfig"" ADD COLUMN ""SessionTimeZone"" TEXT NOT NULL DEFAULT 'Central Standard Time'"
+                }
+                For Each ddl In slipAlters
+                    Try
+                        Using cmd = conn.CreateCommand()
+                            cmd.CommandText = ddl
+                            cmd.ExecuteNonQuery()
+                        End Using
+                    Catch ex As Exception
+                        If Not ex.Message.Contains("duplicate column") Then Throw
+                    End Try
                 Next
             Finally
                 If mustClose11 Then conn.Close()

@@ -114,7 +114,8 @@ Namespace TopStepTrader.Data
                 cmd.ExecuteNonQuery()
 
                 For Each sql In New String() {
-                    "ALTER TABLE ""LiveTradeRecords"" ADD COLUMN ""Timeframe"" TEXT NOT NULL DEFAULT ''"
+                    "ALTER TABLE ""LiveTradeRecords"" ADD COLUMN ""Timeframe"" TEXT NOT NULL DEFAULT ''",
+                    "ALTER TABLE ""LiveTradeRecords"" ADD COLUMN ""CloseFillSource"" TEXT NULL"
                 }
                     cmd.CommandText = sql
                     Try

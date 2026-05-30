@@ -245,6 +245,20 @@ Namespace TopStepTrader.UI.ViewModels
         Friend Distances As New Queue(Of Decimal)
     End Class
 
+    ''' <summary>STRAT-40 F3: a candidate that survived the strategy-TF gates but is waiting
+    ''' for a lower-TF SuperTrend to flip into agreement. Stored per-contract in
+    ''' <c>SuperTrendPlusViewModel._deferredCandidates</c> and re-evaluated on each tick.</summary>
+    Friend NotInheritable Class DeferredCandidate
+        Public Property ContractId As String
+        Public Property InstrumentIndex As Integer
+        Public Property Side As String
+        Public Property BarTimeOfSignal As DateTimeOffset
+        Public Property StLineAtSignal As Decimal
+        Public Property LastCloseAtSignal As Decimal
+        Public Property FirstDeferredUtc As DateTimeOffset
+        Public Property AdxAtSignal As Single
+    End Class
+
     ''' <summary>
     ''' BUG-90 — Four independent channels exist to detect a broker-side close on an
     ''' occupied slot. They are intentionally redundant: any single channel can fail
@@ -274,19 +288,16 @@ Namespace TopStepTrader.UI.ViewModels
     ''' </summary>
     Public Class SuperTrendPlusViewModel
         Inherits ViewModelBase
-        Implements IDisposable, Core.Interfaces.IOpenSlotReleaseSink
+        Implements IDisposable, Core.Interfaces.IOpenSlotReleaseSink, Core.Interfaces.IOpenSlotInstrumentSource
 
-        ' Root symbols and friendly display names are driven directly from FavouriteContracts —
-        ' no hardcoded parallel arrays, so a single change in GetDefaults() is enough.
-        Private Shared ReadOnly _stDefaults As IReadOnlyList(Of Core.Trading.FavouriteContract) =
-            Core.Trading.FavouriteContracts.GetDefaults().Where(Function(f) Not String.IsNullOrEmpty(f.PxRootSymbol)).ToList()
-        Private Shared ReadOnly Instruments As String() = _stDefaults.Select(Function(f) f.PxRootSymbol).ToArray()
-        Private Shared ReadOnly InstrumentLabels As String() = _stDefaults.Select(
-            Function(f)
-                Dim root = If(f.PxRootSymbol = "MCLE", "MCL", f.PxRootSymbol).ToUpperInvariant()
-                Dim name = If(String.IsNullOrWhiteSpace(f.DisplayName), f.PxRootSymbol, f.DisplayName).ToUpperInvariant()
-                Return root & ": " & name
-            End Function).ToArray()
+        ' FEAT-72: root symbols and labels are derived per-instance — when the adaptive
+        ' watchlist toggle is OFF (default) they mirror FavouriteContracts.GetDefaults
+        ' exactly (existing behaviour); when ON they reflect the current adaptive selection
+        ' captured at VM construction. Mid-flight refreshes are not applied to these
+        ' arrays — re-navigating to the tab picks up a refreshed watchlist.
+        Private ReadOnly _stDefaults As IReadOnlyList(Of Core.Trading.FavouriteContract)
+        Private ReadOnly Instruments As String()
+        Private ReadOnly InstrumentLabels As String()
         Private Const BarsToFetch As Integer = 60
         Private Const EntryStaggerMs As Integer = 5000
         Private Const SlotUpdateStaggerMs As Integer = 2000
@@ -354,6 +365,15 @@ Namespace TopStepTrader.UI.ViewModels
 
         Private ReadOnly _approachHistory As New Dictionary(Of String, ApproachState)
         Private ReadOnly _prevStDirByInstrument As New Dictionary(Of String, Single)()
+
+        ''' <summary>STRAT-40 F3: per-contract deferred-entry queue. Populated when the
+        ''' strategy-TF SuperTrend has flipped (or remains active) but the lower-TF
+        ''' SuperTrend disagrees — the candidate is held until either (a) the lower TF
+        ''' flips into agreement, (b) the strategy-TF signal evaporates, or (c) the
+        ''' candidate ages out per <c>Config.MultiTfDeferMaxAgeMinutes</c>. Key is
+        ''' the contract ID; a fresher same-contract candidate deliberately overwrites
+        ''' an older one. Cleared on monitoring stop.</summary>
+        Private ReadOnly _deferredCandidates As New ConcurrentDictionary(Of String, DeferredCandidate)(StringComparer.OrdinalIgnoreCase)
         Private ReadOnly _exitEngine As ExitSignalEngine
         ''' <summary>FEAT-61: enriches the captured TradeSetupSnapshot with the indicator columns
         ''' that the live SuperTrend+ strategy does not itself compute (Ichimoku, EMA21/50, MACD,
@@ -374,6 +394,15 @@ Namespace TopStepTrader.UI.ViewModels
         ''' delegates DB / broker side-effects to this service and only retains the UI cleanup
         ''' (slot box reset, debug-capture EndTrade, MarketHub unsubscribe, SlotManager close).</summary>
         Private ReadOnly _exitExecution As IExitExecutionService
+
+        ''' <summary>FEAT-71: account-wide daily-loss kill switch. Gates new entries.</summary>
+        Private ReadOnly _dailyLossGuard As IDailyLossGuard
+        Private _dailyLossPnlSource As IOpenSlotPnlSource
+
+        ''' <summary>FEAT-72: adaptive watchlist service; supplies the per-VM Instruments
+        ''' set at construction when the toggle is ON, and pins this VM's open slot
+        ''' instruments so they cannot drop out of the global watchlist.</summary>
+        Private ReadOnly _adaptiveWatchlist As AdaptiveWatchlistService
         ''' <summary>Instruments whose slot has been released at least once this monitoring session.
         ''' Cleared on Start. Used to enforce the 15s BB-middle re-entry sense-check (FEAT-47).</summary>
         Private ReadOnly _instrumentsReleasedThisSession As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
@@ -434,13 +463,6 @@ Namespace TopStepTrader.UI.ViewModels
                 SetProperty(_useEarlyMode, value)
             End Set
         End Property
-
-        ' ── P&L Guard (re-usable take-profit / max-loss override) ───────────────
-        ''' <summary>Per-session P&L Guard settings (defaults: TP $50, SL $100).
-        ''' When either threshold is breached the slot is flattened with reason
-        ''' "P&L Close". When both are Off the engine's normal trade-management
-        ''' rules (ATR-based stop ladder) apply unchanged.</summary>
-        Public ReadOnly Property PnLGuard As New PnLGuardSettings()
 
         ' ── Entry mode selector (combobox replacement of legacy radios) ─────────
         Public Const EntryModeBarClose As String = "Bar Close"
@@ -710,7 +732,9 @@ Namespace TopStepTrader.UI.ViewModels
                        Optional sweepRegistry As Core.Trading.OpenSlotReleaseSinkRegistry = Nothing,
                        Optional entryExecution As IEntryExecutionService = Nothing,
                        Optional positionMgmt As IPositionManagementService = Nothing,
-                       Optional exitExecution As IExitExecutionService = Nothing)
+                       Optional exitExecution As IExitExecutionService = Nothing,
+                       Optional dailyLossGuard As IDailyLossGuard = Nothing,
+                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing)
             _barService = barService
             _orderService = orderService
             _session = session
@@ -733,6 +757,21 @@ Namespace TopStepTrader.UI.ViewModels
             _entryExecution = entryExecution
             _positionMgmt = positionMgmt
             _exitExecution = exitExecution
+            _dailyLossGuard = dailyLossGuard
+            If _dailyLossGuard IsNot Nothing Then
+                _dailyLossPnlSource = New SlotManagerPnlSource(_slotManager)
+                _dailyLossGuard.RegisterOpenSlotPnlSource(_dailyLossPnlSource)
+            End If
+            _adaptiveWatchlist = adaptiveWatchlist
+            _stDefaults = ResolveInstrumentSet(_adaptiveWatchlist)
+            Instruments = _stDefaults.Select(Function(f) f.PxRootSymbol).ToArray()
+            InstrumentLabels = _stDefaults.Select(
+                Function(f)
+                    Dim root = If(f.PxRootSymbol = "MCLE", "MCL", f.PxRootSymbol).ToUpperInvariant()
+                    Dim name = If(String.IsNullOrWhiteSpace(f.DisplayName), f.PxRootSymbol, f.DisplayName).ToUpperInvariant()
+                    Return root & ": " & name
+                End Function).ToArray()
+            _adaptiveWatchlist?.RegisterOpenSlotSource(Me)
             StartStopCommand = New RelayCommand(AddressOf OnStartStop)
             AiCheckSlot1Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot1))
             AiCheckSlot2Command = New RelayCommand(Async Sub() Await RunMidTradeCheckAsync(Slot2))
@@ -968,6 +1007,9 @@ Namespace TopStepTrader.UI.ViewModels
             End If
             _lastQuotePrices.Clear()
             _prevStDirByInstrument.Clear()
+            ' STRAT-40 F3: deferred-entry queue must not survive a strategy stop —
+            ' a stale candidate carrying yesterday's signal would fire at startup.
+            _deferredCandidates.Clear()
             ' FEAT-54: dispose every active slot live-price subscription before resetting
             ' slot state so we never leak a MarketHub ref-count past Stop Monitoring.
             For Each s In _slotManager.Slots
@@ -1106,6 +1148,26 @@ Namespace TopStepTrader.UI.ViewModels
             For i = 0 To Instruments.Length - 1
                 Dim contractId = Instruments(i)
                 Dim wRow = WatchlistItems(i)
+
+                ' STRAT-42 F4: per-contract session-hours gate. Skip evaluation when the
+                ' contract is outside its trading window. The skip does NOT count toward
+                ' the anyFreshBar / _allMarketsClosed throttle — a single closed contract
+                ' must not stop the timer for the rest of the watchlist.
+                If Not ContractSessionHours.IsContractTradingNow(contractId, DateTime.UtcNow) Then
+                    Dim opensAt = ContractSessionHours.NextOpenUtc(contractId, DateTime.UtcNow)
+                    _logger.LogInformation(
+                        "ST+ ScanWatchlist [{Contract}] contract closed — next session opens at {OpensAt:u}",
+                        contractId, opensAt)
+                    Application.Current?.Dispatcher?.Invoke(
+                        Sub()
+                            wRow.Signal = "closed"
+                            wRow.Arrow = "–"
+                            wRow.RowColor = Brushes.Gray
+                            wRow.SignalReason = String.Format("Contract closed — next session opens at {0:u}", opensAt)
+                        End Sub)
+                    Continue For
+                End If
+
                 Dim bars As IList(Of MarketBar)
                 Try
                     bars = Await _barService.GetLiveBarsAsync(contractId, tf, BarsToFetch)
@@ -1138,12 +1200,15 @@ Namespace TopStepTrader.UI.ViewModels
                 If staleAgeMins > tfMinutesScan * 3 Then
                     _logger.LogInformation("ST+ ScanWatchlist [{Contract}] STALE — last bar {Age:F0} min ago (threshold={Threshold}min)",
                                            contractId, staleAgeMins, tfMinutesScan * 3)
+                    ' STRAT-42 F3: replaced "Market closed" with a freshness-based message. The
+                    ' previous wording implied an exchange closure even during legitimate
+                    ' low-volume overnight sessions where bars can lag.
                     Application.Current?.Dispatcher?.Invoke(
                         Sub()
-                            wRow.Signal = "closed"
+                            wRow.Signal = "stale"
                             wRow.Arrow = "–"
                             wRow.RowColor = Brushes.Gray
-                            wRow.SignalReason = String.Format("Market closed — last bar {0:F0} min ago", staleAgeMins)
+                            wRow.SignalReason = String.Format("Awaiting bar — last bar {0:F0} min ago", staleAgeMins)
                         End Sub)
                     Continue For
                 End If
@@ -1294,6 +1359,9 @@ Namespace TopStepTrader.UI.ViewModels
                     End Sub)
 
             Next
+            ' STRAT-42 F3/F2d: throttle reviewed. _allMarketsClosed flips back to False the moment
+            ' any single contract returns a fresh bar on the next tick, so the 60-second back-off
+            ' lifts immediately. Preserve.
             _allMarketsClosed = Not anyFreshBar
 
             Return cache
@@ -1384,27 +1452,91 @@ Namespace TopStepTrader.UI.ViewModels
                 Dim isShort As Boolean = stDir < 0 AndAlso Not Single.IsNaN(adxVal) AndAlso minusDi > plusDi
                 Dim isActive As Boolean = Not Single.IsNaN(adxVal) AndAlso adxVal >= PersonaMinAdx
 
-                ' BB median direction filter: 1 hour of BB middle slope must agree with ST direction.
-                ' Blocks entries where a high-ADX SuperTrend signal fires into a rolling-over trend average.
-                Dim bbLookback As Integer = If(_selectedTimeframe = "5min", 12, If(_selectedTimeframe = "1hr", 2, 4))
-                Dim bbMedianAgrees As Boolean = True
-                If closes.Count >= 20 + bbLookback Then
-                    Dim bbResult = TechnicalIndicators.BollingerBands(closes, period:=20, stdDevMultiplier:=2.0)
-                    Dim bbMidNow = bbResult.Middle(n)
-                    Dim bbMidPrev = bbResult.Middle(n - bbLookback)
-                    If Not Single.IsNaN(bbMidNow) AndAlso Not Single.IsNaN(bbMidPrev) Then
-                        Dim bbSlope = bbMidNow - bbMidPrev
-                        If isLong AndAlso bbSlope < 0F Then
-                            bbMedianAgrees = False
-                        ElseIf isShort AndAlso bbSlope > 0F Then
-                            bbMedianAgrees = False
+                ' STRAT-40 F3: deferred-candidate queue check. If a candidate was held on a
+                ' prior tick waiting for a lower-TF flip, re-evaluate here. Three outcomes:
+                '   (a) direction evaporated → drop, fall through to fresh evaluation;
+                '   (b) too old → drop, fall through to fresh evaluation;
+                '   (c) lower TF now agrees → promote (skip fresh eval for this contract);
+                '   (d) lower TF still disagrees → keep deferred (skip fresh eval).
+                Dim deferred As DeferredCandidate = Nothing
+                If Config.MultiTfConfirmationEnabled AndAlso
+                   _deferredCandidates.TryGetValue(contractId, deferred) Then
+                    Dim dirMatches As Boolean =
+                        (String.Equals(deferred.Side, "Buy", StringComparison.OrdinalIgnoreCase) AndAlso isLong) OrElse
+                        (String.Equals(deferred.Side, "Sell", StringComparison.OrdinalIgnoreCase) AndAlso isShort)
+                    Dim ageMin As Double = (DateTimeOffset.UtcNow - deferred.FirstDeferredUtc).TotalMinutes
+                    Dim maxAge As Double = CDbl(Config.MultiTfDeferMaxAgeMinutes)
+
+                    If Not dirMatches Then
+                        Dim dropped As DeferredCandidate = Nothing
+                        _deferredCandidates.TryRemove(contractId, dropped)
+                        _logger.LogInformation(
+                            "ST+ [{Contract}] deferred candidate dropped — strategy-TF direction evaporated (was {Side})",
+                            contractId, deferred.Side)
+                    ElseIf ageMin > maxAge Then
+                        Dim dropped As DeferredCandidate = Nothing
+                        _deferredCandidates.TryRemove(contractId, dropped)
+                        _logger.LogInformation(
+                            "ST+ [{Contract}] deferred candidate dropped — age {Age:F1}m > {Max}m",
+                            contractId, ageMin, Config.MultiTfDeferMaxAgeMinutes)
+                    Else
+                        ' Re-check lower TF; promote on agreement, keep on disagreement.
+                        Dim lowerBars = Await GetLowerTfBarsAsync(contractId)
+                        Dim isLongDeferred = String.Equals(deferred.Side, "Buy", StringComparison.OrdinalIgnoreCase)
+                        Dim ltRes = EntryQualityGate.EvaluateLowerTfAgreement(
+                            lowerBars, isLongDeferred, stPeriod:=10, stMultiplier:=_stMultiplier)
+                        If Not ltRes.IsBlocked Then
+                            _logger.LogInformation(
+                                "ST+ [{Contract}] promoting deferred candidate — {Reason} (age {Age:F1}m)",
+                                contractId, ltRes.Reason, ageMin)
+                            candidates.Add((deferred.ContractId, deferred.InstrumentIndex, deferred.Side,
+                                            deferred.AdxAtSignal, deferred.BarTimeOfSignal,
+                                            deferred.StLineAtSignal, deferred.LastCloseAtSignal))
+                            Dim dropped As DeferredCandidate = Nothing
+                            _deferredCandidates.TryRemove(contractId, dropped)
+                            Dim adxStrPromote = If(Single.IsNaN(adxVal), "ADX:--",
+                                String.Format("ADX:{0:D2}", CInt(Math.Floor(adxVal))))
+                            UpdateSlotSymbolRows(i, If(isLongDeferred, "UP", "DN"), adxStrPromote,
+                                                 If(isLongDeferred, "LONG", "SHORT"),
+                                                 If(isLongDeferred, CType(Brushes.LimeGreen, Brush), CType(Brushes.Red, Brush)))
+                            Continue For
+                        Else
+                            _logger.LogInformation(
+                                "ST+ [{Contract}] candidate deferred — waiting for lower TF ({Reason}, age {Age:F1}m)",
+                                contractId, ltRes.Reason, ageMin)
+                            Dim adxStrDefer = If(Single.IsNaN(adxVal), "ADX:--",
+                                String.Format("ADX:{0:D2}", CInt(Math.Floor(adxVal))))
+                            UpdateSlotSymbolRows(i, If(isLongDeferred, "UP", "DN"), adxStrDefer,
+                                                 "deferred", Brushes.Gold)
+                            Continue For
                         End If
                     End If
                 End If
-                If Not bbMedianAgrees Then
-                    _logger.LogInformation(
-                        "ST+ [{Contract}] BB median filter — slope conflicts with {Dir}; entry suppressed",
-                        contractId, If(isLong, "LONG", "SHORT"))
+
+                ' STRAT-40 F1: BB-median slope filter with relax-on-flip. The legacy filter
+                ' blocked every short flip during the multi-week rally (BB-mid up-sloping →
+                ' 6:1 long bias from 2026-05-19). EvaluateBbMedianRelaxOnFlip bypasses the
+                ' slope check when a fresh SuperTrend flip occurs in a strong-ADX regime;
+                ' otherwise the standard slope-agrees rule still applies.
+                Dim bbLookback As Integer = If(_selectedTimeframe = "5min", 12, If(_selectedTimeframe = "1hr", 2, 4))
+                Dim bbMedianAgrees As Boolean = True
+                If isLong OrElse isShort Then
+                    Dim closesSingleBb As IList(Of Single) = closes.Select(Function(d) CSng(d)).ToList()
+                    Dim bbRelax = EntryQualityGate.EvaluateBbMedianRelaxOnFlip(
+                        closesSingleBb, isLong, isFlip, adxVal,
+                        bbLookback, Config.BbMedianRelaxAdxThreshold)
+                    If bbRelax.IsBlocked Then
+                        bbMedianAgrees = False
+                        _logger.LogInformation(
+                            "ST+ [{Contract}] {Reason} — entry suppressed",
+                            contractId, bbRelax.Reason)
+                    Else
+                        ' Surface the relax-path reason at Information so the AI/Entry log
+                        ' explicitly shows "BB-median bypassed: fresh flip with ADX >= strong".
+                        _logger.LogInformation(
+                            "ST+ [{Contract}] {Reason}",
+                            contractId, bbRelax.Reason)
+                    End If
                 End If
 
                 ' UAT-03 F2/F3/F6: deterministic entry-quality gates layered on the existing
@@ -1467,6 +1599,36 @@ Namespace TopStepTrader.UI.ViewModels
                         _logger.LogInformation(
                             "ST+ [{Contract}] Monday morning HTF gate — 1H ST disagrees, blocking entry.", contractId)
                         isFavourable = False
+                    End If
+                End If
+
+                ' STRAT-40 F2/F3: lower-TF SuperTrend agreement. A favourable strategy-TF
+                ' candidate is held back when the lower TF has not yet flipped — instead of
+                ' dropping it, we enqueue it for re-check on subsequent ticks. Note: per-contract
+                ' overwrite is deliberate (a fresher candidate replaces an older one).
+                If isFavourable AndAlso Config.MultiTfConfirmationEnabled Then
+                    Dim lowerBars = Await GetLowerTfBarsAsync(contractId)
+                    Dim ltRes = EntryQualityGate.EvaluateLowerTfAgreement(
+                        lowerBars, isLong, stPeriod:=10, stMultiplier:=_stMultiplier)
+                    If ltRes.IsBlocked Then
+                        _logger.LogInformation(
+                            "ST+ [{Contract}] candidate deferred — waiting for lower TF ({Reason})",
+                            contractId, ltRes.Reason)
+                        Dim sideDefer As String = If(isLong, "Buy", "Sell")
+                        _deferredCandidates(contractId) = New DeferredCandidate With {
+                            .ContractId = contractId,
+                            .InstrumentIndex = i,
+                            .Side = sideDefer,
+                            .BarTimeOfSignal = bars(n).Timestamp,
+                            .StLineAtSignal = stLine,
+                            .LastCloseAtSignal = CDec(closes(n)),
+                            .FirstDeferredUtc = DateTimeOffset.UtcNow,
+                            .AdxAtSignal = adxVal
+                        }
+                        isFavourable = False
+                    Else
+                        _logger.LogInformation(
+                            "ST+ [{Contract}] {Reason}", contractId, ltRes.Reason)
                     End If
                 End If
 
@@ -1544,6 +1706,17 @@ Namespace TopStepTrader.UI.ViewModels
                     Exit For
                 End If
 
+                ' FEAT-71: daily-loss guard hard stop. Suppress this contract and continue the
+                ' loop so watchlist UI still updates; the cap applies to the account, not to
+                ' an individual instrument, so it short-circuits all candidates equally.
+                If _dailyLossGuard IsNot Nothing AndAlso Not _dailyLossGuard.CanEnterNewTrade() Then
+                    Dim guardState = _dailyLossGuard.GetState()
+                    _logger.LogInformation(
+                        "ST+ Entry suppressed — DailyLossGuard halted: {Reason} (combined={Combined:F2}, limit={Limit:F2})",
+                        guardState.Reason, guardState.CombinedDailyPnl, guardState.LimitDollars)
+                    Exit For
+                End If
+
                 ' Guard: skip if a FireEntryAsync call for this instrument is already in-flight
                 ' (prevents duplicate market orders on the next 15-second tick while PlaceOrder awaits)
                 If _slotManager.Slots.Any(Function(s) s.IsEntryInFlight AndAlso
@@ -1579,6 +1752,9 @@ Namespace TopStepTrader.UI.ViewModels
                 If opened IsNot Nothing Then
                     _logger.LogInformation("ST+ SlotManager opened slot {Idx} for {Contract} {Side} ADX={Adx:F1} (rank by ADX)",
                                            opened.SlotIndex, candidate.ContractId, candidate.Side, candidate.AdxVal)
+                    ' STRAT-40 F3: real entry on this contract retires any deferred candidate.
+                    Dim droppedOnOpen As DeferredCandidate = Nothing
+                    _deferredCandidates.TryRemove(candidate.ContractId, droppedOnOpen)
                     Await FireEntryAsync(opened, candidate.ContractId, candidate.Side,
                                         candidate.StLine, candidate.LastClose, candidate.BarTime)
                     Await Task.Delay(EntryStaggerMs)
@@ -1615,6 +1791,44 @@ Namespace TopStepTrader.UI.ViewModels
             Catch ex As Exception
                 _logger.LogWarning(ex, "ST+ Monday morning 1H check failed for {Contract} — allowing entry", contractId)
                 Return True
+            End Try
+        End Function
+
+        ''' <summary>STRAT-40 F4: resolves <see cref="SuperTrendPlusConfig.MultiTfLowerTimeframe"/>
+        ''' to a <see cref="BarTimeframe"/> enum. Falls back to <c>ThreeMinute</c> on any
+        ''' unrecognised string so a typo never silently disables the multi-TF check.</summary>
+        Private Shared Function ResolveLowerTimeframe(label As String) As BarTimeframe
+            If String.IsNullOrWhiteSpace(label) Then Return BarTimeframe.ThreeMinute
+            Select Case label.Trim().ToLowerInvariant()
+                Case "1min" : Return BarTimeframe.OneMinute
+                Case "3min" : Return BarTimeframe.ThreeMinute
+                Case "5min" : Return BarTimeframe.FiveMinute
+                Case "15min" : Return BarTimeframe.FifteenMinute
+                Case "30min" : Return BarTimeframe.ThirtyMinute
+                Case "1hr", "1hour", "60min" : Return BarTimeframe.OneHour
+                Case Else : Return BarTimeframe.ThreeMinute
+            End Select
+        End Function
+
+        ''' <summary>STRAT-40 F4: fetches lower-TF bars for the multi-TF agreement check
+        ''' and strips the forming bar (mirrors the BUG-101 pattern in
+        ''' <see cref="Bb15sConfirmsDirectionAsync"/>). Returns Nothing on any fetch failure
+        ''' so <see cref="EntryQualityGate.EvaluateLowerTfAgreement"/> fails open.</summary>
+        Private Async Function GetLowerTfBarsAsync(contractId As String) As Task(Of IList(Of MarketBar))
+            Try
+                Dim tf = ResolveLowerTimeframe(Config.MultiTfLowerTimeframe)
+                Dim tfMinutes = Math.Max(1, CInt(tf))
+                Dim raw = Await _barService.GetLiveBarsAsync(contractId, tf, 30)
+                If raw Is Nothing OrElse raw.Count = 0 Then Return Nothing
+                ' Strip forming bar: last bar younger than its timeframe is incomplete.
+                Dim ageSec As Double = (DateTime.UtcNow - raw(raw.Count - 1).Timestamp).TotalSeconds
+                If ageSec < tfMinutes * 60.0 AndAlso raw.Count > 1 Then
+                    Return raw.Take(raw.Count - 1).ToList()
+                End If
+                Return raw
+            Catch ex As Exception
+                _logger.LogWarning(ex, "ST+ lower-TF bar fetch failed for {Contract} — failing open", contractId)
+                Return Nothing
             End Try
         End Function
 
@@ -1778,6 +1992,16 @@ Namespace TopStepTrader.UI.ViewModels
             Next
 
             If bestContractId Is Nothing Then Return
+
+            ' FEAT-71: daily-loss guard hard stop applies before any per-instrument live-position
+            ' lookups so we don't burn REST calls on entries that will be rejected anyway.
+            If _dailyLossGuard IsNot Nothing AndAlso Not _dailyLossGuard.CanEnterNewTrade() Then
+                Dim guardState = _dailyLossGuard.GetState()
+                _logger.LogInformation(
+                    "ST+ EvaluateEarlyEntry suppressed — DailyLossGuard halted: {Reason} (combined={Combined:F2}, limit={Limit:F2})",
+                    guardState.Reason, guardState.CombinedDailyPnl, guardState.LimitDollars)
+                Return
+            End If
 
             ' Guard: skip if a FireEntryAsync call for this instrument is already in-flight
             If _slotManager.Slots.Any(Function(s) s.IsEntryInFlight AndAlso
@@ -2305,6 +2529,7 @@ Namespace TopStepTrader.UI.ViewModels
                             UpdatePositionDisplay(box, slot, pnlForDisplay, priceForDisplay)
                         End If
                     End Sub)
+
             Catch ex As Exception
                 ' Never let a hub-thread exception crash the SignalR connection.
                 _logger.LogWarning(ex, "ST+ OnHubPositionUpdated handler error")
@@ -2421,6 +2646,10 @@ Namespace TopStepTrader.UI.ViewModels
         Private Function BuildTickContext(slot As PositionSlot,
                                            tf As BarTimeframe,
                                            barCache As Dictionary(Of Integer, IList(Of MarketBar))) As PositionManagementTickContext
+            ' STRAT-41: cap is min(config soft cap, 2 × leverage) so the post-pullback size
+            ' never exceeds the per-persona leverage envelope. Default cap = 2 contracts.
+            Dim leverage As Integer = Math.Max(1, Config.LeverageMultiplier)
+            Dim maxAfterScaleIn As Integer = Math.Min(Config.MaxContractsAfterScaleIn, 2 * leverage)
             Return New PositionManagementTickContext With {
                 .StrategyTimeframe = tf,
                 .AsOfUtc = DateTime.UtcNow,
@@ -2429,14 +2658,16 @@ Namespace TopStepTrader.UI.ViewModels
                 .StMultiplier = _stMultiplier,
                 .ExitScoreThreshold = Config.ExitScoreThreshold,
                 .EarlyModeMaxAgeMinutes = Config.EarlyModeMaxAgeMinutes,
-                .PnLGuard = PnLGuard,
-                .AggregatedInstrumentPnl = AggregateInstrumentPnl(slot),
                 .IsPrimaryForBracketEdit = IsPrimaryForBracketEdit(slot),
                 .IsDebugCaptureEnabled = _isDebugCaptureEnabled,
                 .BandForAdx = AddressOf _slotManager.BandForAdx,
                 .OnScaleInRequested = Function(s, addContracts) ScaleInSlotAsync(s, addContracts),
                 .LeverageMultiplier = Config.LeverageMultiplier,
                 .LadderTpDollars = Config.LadderTpDollars,
+                .PullbackScaleInEnabled = Config.PullbackScaleInEnabled,
+                .PullbackAtrFactor = Config.PullbackAtrFactor,
+                .PullbackScaleInContracts = Config.PullbackScaleInContracts,
+                .MaxContractsAfterScaleIn = maxAfterScaleIn,
                 .Bars = TryGetCachedBars(slot, barCache)
             }
         End Function
@@ -2477,17 +2708,6 @@ Namespace TopStepTrader.UI.ViewModels
                 End If
             Next
             Return Nothing
-        End Function
-
-        ''' <summary>BUG-78: total unrealised P&amp;L across every open slot on the same instrument.
-        ''' Used by the P&amp;L Guard so the threshold fires on aggregate per-instrument exposure
-        ''' rather than the contribution of a single slot.</summary>
-        Private Function AggregateInstrumentPnl(slot As PositionSlot) As Decimal
-            If slot Is Nothing OrElse String.IsNullOrEmpty(slot.Instrument) Then Return 0D
-            Return _slotManager.Slots.
-                Where(Function(s) s.IsOpen AndAlso
-                                  String.Equals(s.Instrument, slot.Instrument, StringComparison.OrdinalIgnoreCase)).
-                Sum(Function(s) s.UnrealizedPnl)
         End Function
 
         ''' <summary>True when this slot is the lowest-indexed open slot on its instrument and
@@ -2888,19 +3108,9 @@ Namespace TopStepTrader.UI.ViewModels
             End Select
         End Function
 
-        ' FEAT-58: Coarse-grained UTC session window mapping for ML feature persistence.
-        ' Tracks the major futures sessions that drive volatility regime — finer resolution
-        ' (Asian open / NY lunch / London close) can be layered later without schema changes.
-        Private Shared Function ResolveSessionWindow(utc As DateTime) As String
-            Dim h As Integer = utc.Hour
-            Select Case h
-                Case 0 To 6   : Return "Asia"
-                Case 7 To 11  : Return "London"
-                Case 12 To 13 : Return "US-Pre"
-                Case 14 To 20 : Return "US-RTH"
-                Case Else     : Return "US-Post"
-            End Select
-        End Function
+        ' STRAT-42: ResolveSessionWindow unified into TopStepTrader.Core.Trading.SessionWindowResolver.
+        ' Original local copy was dead code (no call sites in this VM); deleted as part of the 23-hour
+        ' coverage audit. Use SessionWindowResolver.Resolve(utc) if a label is needed here in future.
 
         Private Shared Function HealthBrushFor(health As SlotHealth) As Brush
             Select Case health
@@ -3086,6 +3296,12 @@ Namespace TopStepTrader.UI.ViewModels
                 ' BUG-90 F1: ensure the VM is removed from the sweep registry even when
                 ' Dispose is called without a prior StopMonitoring.
                 _sweepRegistry?.Unregister(Me)
+                ' FEAT-71: unhook the daily-loss guard PnL source registered at construction.
+                If _dailyLossGuard IsNot Nothing AndAlso _dailyLossPnlSource IsNot Nothing Then
+                    _dailyLossGuard.UnregisterOpenSlotPnlSource(_dailyLossPnlSource)
+                End If
+                ' FEAT-72: unhook the adaptive watchlist open-slot pin.
+                _adaptiveWatchlist?.UnregisterOpenSlotSource(Me)
                 ' StopMonitoring disposes the timer and resets all in-memory slot state,
                 ' preventing lingering entry desires (e.g. M2K) after app exit.
                 If _isMonitoring Then
@@ -3103,6 +3319,38 @@ Namespace TopStepTrader.UI.ViewModels
                 Next
             End If
         End Sub
+
+        ''' <summary>
+        ''' FEAT-72: returns the FavouriteContract list that drives this VM's Instruments /
+        ''' WatchlistItems. When the adaptive toggle is ON and the live watchlist has at
+        ''' least one contract, that selection is used; otherwise <see cref="FavouriteContracts.GetDefaults"/>
+        ''' is returned (existing behaviour preserved).
+        ''' </summary>
+        Private Shared Function ResolveInstrumentSet(adaptive As AdaptiveWatchlistService) As IReadOnlyList(Of FavouriteContract)
+            If adaptive IsNot Nothing AndAlso adaptive.IsEnabled Then
+                Dim live = adaptive.GetCurrentWatchlist()
+                If live IsNot Nothing AndAlso live.Count > 0 Then
+                    Dim filtered = live.Where(Function(c) c IsNot Nothing AndAlso Not String.IsNullOrEmpty(c.PxRootSymbol)).ToList()
+                    If filtered.Count > 0 Then Return filtered
+                End If
+            End If
+            Return FavouriteContracts.GetDefaults().
+                Where(Function(f) Not String.IsNullOrEmpty(f.PxRootSymbol)).
+                ToList()
+        End Function
+
+        ''' <summary>FEAT-72: pin root symbols with open slots so they cannot be dropped from
+        ''' the adaptive watchlist under live exposure.</summary>
+        Public Function GetOpenInstrumentRootSymbols() As IEnumerable(Of String) _
+            Implements Core.Interfaces.IOpenSlotInstrumentSource.GetOpenInstrumentRootSymbols
+            Dim result As New List(Of String)
+            For Each slot In _slotManager.Slots
+                If slot IsNot Nothing AndAlso slot.IsOpen AndAlso Not String.IsNullOrEmpty(slot.Instrument) Then
+                    result.Add(slot.Instrument)
+                End If
+            Next
+            Return result
+        End Function
 
     End Class
 

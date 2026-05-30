@@ -31,6 +31,31 @@
 
             <!-- Active Broker Banner + BUG-86 F3 Stale-Open Banner -->
             <StackPanel Grid.Row="2">
+
+                <!-- FEAT-71: Daily-loss kill-switch banner. Hidden while CanEnterNewTrade is true. -->
+                <Border Background="{StaticResource SellBrush}"
+                        CornerRadius="6" Padding="16,10" Margin="0,0,0,8"
+                        Visibility="{Binding GuardBannerVisibility}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🛑  DAILY LOSS LIMIT HIT"
+                                   FontSize="13" FontWeight="Bold"
+                                   Foreground="White" VerticalAlignment="Center"
+                                   Margin="0,0,16,0"/>
+                        <TextBlock Text="{Binding GuardHaltMessage}"
+                                   Foreground="White"
+                                   FontSize="12" VerticalAlignment="Center"
+                                   TextWrapping="Wrap" MaxWidth="640"/>
+                        <TextBlock Text="{Binding GuardCombinedPnl, StringFormat='   Combined PnL: {0:C2}'}"
+                                   Foreground="White" FontWeight="SemiBold"
+                                   FontSize="12" VerticalAlignment="Center"
+                                   Margin="12,0,0,0"/>
+                        <Button Content="Reset"
+                                Command="{Binding ResetGuardCommand}"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Margin="20,0,0,0" Padding="14,4" FontSize="11"/>
+                    </StackPanel>
+                </Border>
+
                 <Border Background="{StaticResource SurfaceBrush}"
                         CornerRadius="6" Padding="16,10">
                     <StackPanel Orientation="Horizontal">

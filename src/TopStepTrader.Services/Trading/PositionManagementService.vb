@@ -165,7 +165,10 @@ Namespace TopStepTrader.Services.Trading
                 _logger.LogInformation("PosMgmt [Slot {Idx}] {Contract} PositionId resolved from snapshot: {PosId}",
                                        slot.SlotIndex, slot.Instrument, slot.PositionId)
             End If
-            If snapshot.OpenRate <> 0D AndAlso slot.EntryPrice = 0D Then
+            ' BUG-102 F1: backfill runs whenever slot.EntryPrice is still missing — even when
+            ' snapshot.OpenRate is 0 (the prior gate skipped this path and produced ghost rows
+            ' with EntryPrice=0). The internal fallback chain now resolves a usable value.
+            If slot.EntryPrice = 0D Then
                 Await BackfillEntryAndStopAsync(slot, snapshot)
             End If
 
@@ -187,6 +190,7 @@ Namespace TopStepTrader.Services.Trading
             latestPnl = snapshot.UnrealizedPnlUsd
             slot.UnrealizedPnl = latestPnl
 
+            Dim tfMinutes As Integer = Math.Max(1, CInt(tickContext.StrategyTimeframe))
             Dim bars As IList(Of MarketBar) = tickContext.Bars
             If bars Is Nothing OrElse bars.Count < 14 Then
                 Try
@@ -203,6 +207,12 @@ Namespace TopStepTrader.Services.Trading
                     result.CurrentClose = currentClose
                     Return result
                 End Try
+                ' BUG-101: strip forming strategy-TF bar from the refetched series before any
+                ' indicator math. The VM cache (ScanWatchlistAsync) already strips at population
+                ' time, so this is the safety net for the direct-refetch path. Gated on Count > 1
+                ' so a borderline response never collapses; the existing < 14 guard below catches
+                ' the case where the strip leaves too few bars.
+                bars = StripFormingBar(bars, tfMinutes, slot, "refetch")
             End If
             If bars Is Nothing OrElse bars.Count < 14 Then
                 result.LatestPnl = latestPnl
@@ -211,7 +221,6 @@ Namespace TopStepTrader.Services.Trading
             End If
 
             ' BUG-81: stale strategy-bar guard with live fallback.
-            Dim tfMinutes As Integer = Math.Max(1, CInt(tickContext.StrategyTimeframe))
             Dim latestBarAge As TimeSpan = DateTimeOffset.UtcNow - bars(bars.Count - 1).Timestamp
             If latestBarAge.TotalMinutes > 2.0 * tfMinutes Then
                 _logger.LogWarning(
@@ -219,6 +228,8 @@ Namespace TopStepTrader.Services.Trading
                     slot.SlotIndex, slot.Instrument, bars(bars.Count - 1).Timestamp, latestBarAge.TotalMinutes, tfMinutes)
                 Try
                     Dim liveBars = Await _barService.GetLiveBarsAsync(slot.Instrument, tickContext.StrategyTimeframe, BarsToFetch, live:=True)
+                    ' BUG-101: same forming-bar strip on the live-fallback series.
+                    liveBars = StripFormingBar(liveBars, tfMinutes, slot, "live-fallback")
                     If liveBars IsNot Nothing AndAlso liveBars.Count >= 14 Then
                         bars = liveBars
                     End If
@@ -261,20 +272,6 @@ Namespace TopStepTrader.Services.Trading
                         Dim riskTicks = slot.InitialRisk / fc3.PxTickSize
                         slot.InitialRiskDollars = Math.Round(riskTicks * fc3.PxTickValue * slot.Contracts, 2)
                     End If
-                End If
-            End If
-
-            ' ── P&L Guard override ──
-            ' BUG-78: aggregate unrealised P&L across all open slots on the same instrument.
-            ' The caller supplies the aggregated value via TickContext.AggregatedInstrumentPnl.
-            If slot.IsOpen AndAlso slot.EntryPrice <> 0D AndAlso
-               tickContext.PnLGuard IsNot Nothing AndAlso tickContext.PnLGuard.IsActive Then
-                If tickContext.PnLGuard.ShouldFlatten(tickContext.AggregatedInstrumentPnl) Then
-                    _logger.LogInformation(
-                        "PosMgmt [Slot {Idx}] {Contract} P&L Guard breach — aggregated={Agg:F2} (slot={Slot:F2}) tp={Tp} sl={Sl}",
-                        slot.SlotIndex, slot.Instrument, tickContext.AggregatedInstrumentPnl, latestPnl,
-                        tickContext.PnLGuard.TakeProfitThreshold, tickContext.PnLGuard.StopLossThreshold)
-                    Return ExitRequested(Core.Settings.PnLGuardSettings.ExitReasonText, "pnl-guard", latestPnl, currentClose)
                 End If
             End If
 
@@ -329,23 +326,41 @@ Namespace TopStepTrader.Services.Trading
             Dim priceToStNow = If(slot.EntryPrice <> 0D AndAlso stLine <> 0D,
                                   CSng(Math.Abs(currentClose - stLine)), 0F)
 
-            ' STRAT-31: scale in as ADX strengthens. Strategy supplies the band classifier.
-            ' Band delta is multiplied by the leverage multiplier so a 3× user adding +1 band
-            ' adds +3 contracts; total caps at 3 × leverage to mirror the entry-time math.
+            ' STRAT-41: pullback-gated scale-in. Replaces the original STRAT-31 ADX-band
+            ' ratchet, which added contracts at trend peaks (worst-price doubling-down).
+            ' This adds size only when price has retraced to within PullbackAtrFactor × ATR
+            ' of the SuperTrend line, DI still favours the side, and we have not already
+            ' scaled in on this slot. Capped at MaxContractsAfterScaleIn (default 2).
             If Not slot.IsEarlyModeEntry AndAlso slot.EntryPrice <> 0D AndAlso
-               tickContext.BandForAdx IsNot Nothing Then
-                If Not Single.IsNaN(adxNow) Then
-                    Dim currentBand = tickContext.BandForAdx(adxNow)
-                    Dim lev As Integer = Math.Max(1, tickContext.LeverageMultiplier)
-                    Dim maxContracts As Integer = 3 * lev
-                    If currentBand > slot.LastAdxBand AndAlso slot.Contracts < maxContracts Then
-                        Dim addContracts = Math.Min((currentBand - slot.LastAdxBand) * lev,
-                                                    maxContracts - slot.Contracts)
-                        If addContracts > 0 AndAlso tickContext.OnScaleInRequested IsNot Nothing Then
-                            Await tickContext.OnScaleInRequested(slot, addContracts)
+               tickContext.PullbackScaleInEnabled AndAlso
+               Not slot.HasScaledInOnPullback AndAlso
+               slot.Contracts < tickContext.MaxContractsAfterScaleIn AndAlso
+               Not Single.IsNaN(adxNow) Then
+                ' Resolve ATR in *price units* (matches atr14Exit's raw output) so the
+                ' threshold is a price distance directly comparable to currentClose - stLine.
+                Dim atrNowSng As Single = atr14Exit(n)
+                If Not Single.IsNaN(atrNowSng) AndAlso atrNowSng > 0F AndAlso stLine <> 0D Then
+                    Dim atrNow As Decimal = CDec(atrNowSng)
+                    Dim distanceFromSt As Decimal = If(slot.Side = "Buy",
+                                                       currentClose - stLine,
+                                                       stLine - currentClose)
+                    Dim pullbackThreshold As Decimal = atrNow * tickContext.PullbackAtrFactor
+                    If distanceFromSt > 0D AndAlso distanceFromSt <= pullbackThreshold Then
+                        Dim plusOk = (slot.Side = "Buy" AndAlso diPlusNow > diMinusNow)
+                        Dim minusOk = (slot.Side = "Sell" AndAlso diMinusNow > diPlusNow)
+                        If plusOk OrElse minusOk Then
+                            Dim addContracts As Integer = Math.Min(
+                                tickContext.PullbackScaleInContracts,
+                                tickContext.MaxContractsAfterScaleIn - slot.Contracts)
+                            If addContracts > 0 AndAlso tickContext.OnScaleInRequested IsNot Nothing Then
+                                _logger.LogInformation(
+                                    "PosMgmt [Slot {Idx}] {Contract} pullback scale-in — distFromSt={Dist:F4} thr={Thr:F4} adx={Adx:F1} adding={Add}c",
+                                    slot.SlotIndex, slot.Instrument, distanceFromSt, pullbackThreshold, adxNow, addContracts)
+                                Await tickContext.OnScaleInRequested(slot, addContracts)
+                                slot.HasScaledInOnPullback = True
+                            End If
                         End If
                     End If
-                    slot.LastAdxBand = Math.Max(slot.LastAdxBand, currentBand)
                 End If
             End If
 
@@ -699,6 +714,9 @@ Namespace TopStepTrader.Services.Trading
         Private Async Function BackfillEntryAndStopAsync(slot As PositionSlot,
                                                           snapshot As LivePositionSnapshot) As Task
             Dim confirmedEntry As Decimal = 0D
+            Dim estimated As Boolean = False
+
+            ' Step 1: broker-confirmed execute price for the entry order.
             If slot.EntryOrderId.HasValue Then
                 Try
                     Dim fillPx = Await _orderService.TryGetOrderFillPriceAsync(
@@ -713,8 +731,60 @@ Namespace TopStepTrader.Services.Trading
                     _logger.LogWarning(ex, "PosMgmt [Slot {Idx}] TryGetOrderFillPriceAsync failed for {Contract}", slot.SlotIndex, slot.Instrument)
                 End Try
             End If
-            If confirmedEntry = 0D Then confirmedEntry = snapshot.OpenRate
-            slot.EntryPrice = confirmedEntry
+
+            ' Step 2: per-slot live-position snapshot's OpenRate.
+            If confirmedEntry = 0D AndAlso snapshot IsNot Nothing AndAlso snapshot.OpenRate > 0D Then
+                confirmedEntry = snapshot.OpenRate
+                _logger.LogInformation(
+                    "PosMgmt [Slot {Idx}] {Contract} EntryPrice from snapshot.OpenRate: {Price:F2}",
+                    slot.SlotIndex, slot.Instrument, confirmedEntry)
+            End If
+
+            ' Step 3 (BUG-102 F1): account-wide open positions list — a separate REST path that
+            ' bypasses the per-slot snapshot cache and can surface the rate when the per-slot
+            ' snapshot is stale or has a 0 OpenRate.
+            If confirmedEntry = 0D Then
+                Try
+                    Dim allOpen = Await _orderService.GetOpenPositionsAsync(slot.AccountId)
+                    If allOpen IsNot Nothing Then
+                        Dim match = allOpen.FirstOrDefault(
+                            Function(p) String.Equals(p.ContractId, slot.Instrument, StringComparison.OrdinalIgnoreCase))
+                        If match IsNot Nothing AndAlso match.OpenRate > 0D Then
+                            confirmedEntry = match.OpenRate
+                            _logger.LogInformation(
+                                "PosMgmt [Slot {Idx}] {Contract} EntryPrice from account positions: {Price:F2}",
+                                slot.SlotIndex, slot.Instrument, confirmedEntry)
+                        End If
+                    End If
+                Catch ex As Exception
+                    _logger.LogWarning(ex, "PosMgmt [Slot {Idx}] GetOpenPositionsAsync fallback failed for {Contract}",
+                                       slot.SlotIndex, slot.Instrument)
+                End Try
+            End If
+
+            ' Step 4 (BUG-102 F1): last-resort live-price estimate. Marks the slot as estimated.
+            If confirmedEntry = 0D Then
+                If slot.LivePrice > 0D Then
+                    confirmedEntry = slot.LivePrice
+                    estimated = True
+                    _logger.LogWarning(
+                        "PosMgmt [Slot {Idx}] {Contract} BackfillEntry — broker entry-price unresolved (orderId={OId}, snapshot.OpenRate={Rate}); using live-price estimate {Price:F2} — IsEntryPriceEstimated=True",
+                        slot.SlotIndex, slot.Instrument,
+                        If(slot.EntryOrderId.HasValue, slot.EntryOrderId.Value.ToString(), "n/a"),
+                        snapshot?.OpenRate, confirmedEntry)
+                Else
+                    _logger.LogWarning(
+                        "PosMgmt [Slot {Idx}] {Contract} BackfillEntry — could not resolve a non-zero entry price (orderId={OId}, snapshot.OpenRate={Rate}); leaving slot.EntryPrice at 0 — IsEntryPriceEstimated=True",
+                        slot.SlotIndex, slot.Instrument,
+                        If(slot.EntryOrderId.HasValue, slot.EntryOrderId.Value.ToString(), "n/a"),
+                        snapshot?.OpenRate)
+                    estimated = True
+                End If
+            End If
+
+            ' Never overwrite a non-zero seed with 0.
+            If confirmedEntry > 0D Then slot.EntryPrice = confirmedEntry
+            slot.IsEntryPriceEstimated = estimated
 
             ' Pull the initial stop price from the live Stop Market bracket order (BUG-82 F1).
             Dim priorBracketStop As Decimal? = Nothing
@@ -757,19 +827,28 @@ Namespace TopStepTrader.Services.Trading
             End If
 
             If slot.TradeRecordId > 0 Then
-                Dim svc = _tradeRecordService
-                Dim rid = slot.TradeRecordId
-                Dim entryForUpdate = confirmedEntry
-                Dim log = _logger
+                If confirmedEntry > 0D Then
+                    Dim svc = _tradeRecordService
+                    Dim rid = slot.TradeRecordId
+                    Dim entryForUpdate = confirmedEntry
+                    Dim log = _logger
 #Disable Warning BC42358
-                Task.Run(Async Function() As Task
-                             Try
-                                 Await svc.UpdateEntryPriceAsync(rid, entryForUpdate)
-                             Catch ex As Exception
-                                 log.LogWarning(ex, "PosMgmt UpdateEntryPriceAsync failed for record {Id}", rid)
-                             End Try
-                         End Function)
+                    Task.Run(Async Function() As Task
+                                 Try
+                                     Await svc.UpdateEntryPriceAsync(rid, entryForUpdate)
+                                 Catch ex As Exception
+                                     log.LogWarning(ex, "PosMgmt UpdateEntryPriceAsync failed for record {Id}", rid)
+                                 End Try
+                             End Function)
 #Enable Warning BC42358
+                Else
+                    ' BUG-102 F1: never persist a 0 EntryPrice — the existing repo guard would
+                    ' short-circuit anyway, but the explicit log surfaces the unresolved path
+                    ' for diagnostics. The F2 close-time gate gives this row one more chance.
+                    _logger.LogWarning(
+                        "PosMgmt UpdateEntryPriceAsync suppressed for record {Id} — backfill resolved EntryPrice=0 (BUG-102 F1)",
+                        slot.TradeRecordId)
+                End If
             End If
 
             If _debugCapture IsNot Nothing AndAlso Not String.IsNullOrEmpty(slot.DebugTradeId) Then
@@ -784,6 +863,26 @@ Namespace TopStepTrader.Services.Trading
                     .Source = "Local"
                 })
             End If
+        End Function
+
+        ''' <summary>
+        ''' BUG-101: drops the trailing in-progress strategy-TF bar from a refetched series.
+        ''' The TopStepX paper/live bar endpoints return the forming bar mid-period; including
+        ''' it inflates SuperTrend's upper/lower envelope and ratchets the broker SL on intra-bar
+        ''' noise. Mirrors the strip applied in <c>SuperTrendPlusViewModel.ScanWatchlistAsync</c>.
+        ''' Returns the input unchanged when there are 0–1 bars or the final bar is fully closed.
+        ''' </summary>
+        Private Function StripFormingBar(bars As IList(Of MarketBar),
+                                          tfMinutes As Integer,
+                                          slot As PositionSlot,
+                                          source As String) As IList(Of MarketBar)
+            If bars Is Nothing OrElse bars.Count <= 1 Then Return bars
+            Dim lastBarAge = (DateTimeOffset.UtcNow - bars(bars.Count - 1).Timestamp).TotalMinutes
+            If lastBarAge >= tfMinutes Then Return bars
+            _logger.LogInformation(
+                "PosMgmt [Slot {Idx}] {Contract} stripping forming strategy-TF bar ({Source}, age={Age:F1}min < tf={Tf}min). bars: {Before} -> {After}",
+                slot.SlotIndex, slot.Instrument, source, lastBarAge, tfMinutes, bars.Count, bars.Count - 1)
+            Return bars.Take(bars.Count - 1).ToList()
         End Function
 
         Private Shared Function ExitRequested(reason As String,

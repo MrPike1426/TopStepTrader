@@ -186,6 +186,162 @@ Namespace TopStepTrader.Tests.Services.Trades
             Assert.Null(plan)
         End Sub
 
+        ' ── BUG-102 F4-d: ResolveEntryPriceFromBrokerFills ────────────────────────
+
+        Private Shared Function MnqEntry(entryOrderId As Long, direction As String,
+                                          Optional entryPrice As Decimal = 0D) As LiveTradeRecordEntity
+            Return New LiveTradeRecordEntity With {
+                .Id = 200L,
+                .Symbol = "MNQ",
+                .ContractId = "MNQ",
+                .Direction = direction,
+                .EntryPrice = entryPrice,
+                .Sizes = 1,
+                .EntryOrderId = entryOrderId,
+                .EntryTime = New DateTimeOffset(2026, 5, 20, 16, 27, 0, TimeSpan.Zero),
+                .IsOpen = False
+            }
+        End Function
+
+        <Fact>
+        Public Sub ResolveEntryPriceFromBrokerFills_OrderAvgFillPrice_PreferredOverTrades()
+            Dim entity = MnqEntry(entryOrderId:=4242L, direction:="Long")
+            Dim orders As IList(Of PXOrderDto) = New List(Of PXOrderDto) From {
+                New PXOrderDto With {
+                    .Id = 4242L,
+                    .ContractId = "CON.F.US.MNQ.U26",
+                    .AvgFillPrice = 21345.5
+                }
+            }
+            ' A stray trade fill at a different price; the order's AvgFillPrice should win.
+            Dim trades As IList(Of PXTradeDto) = New List(Of PXTradeDto) From {
+                New PXTradeDto With {
+                    .OrderId = 4242L,
+                    .Side = 0,
+                    .Price = 99999.0,
+                    .ContractId = "CON.F.US.MNQ.U26",
+                    .CreationTimestamp = entity.EntryTime.AddSeconds(1).ToUnixTimeMilliseconds().ToString()
+                }
+            }
+
+            Dim resolved = TradeRecordService.ResolveEntryPriceFromBrokerFills(entity, orders, trades)
+            Assert.Equal(21345.5D, resolved)
+        End Sub
+
+        <Fact>
+        Public Sub ResolveEntryPriceFromBrokerFills_NoOrder_FallsBackToTradeByOrderId()
+            Dim entity = MnqEntry(entryOrderId:=4242L, direction:="Long")
+            Dim trades As IList(Of PXTradeDto) = New List(Of PXTradeDto) From {
+                New PXTradeDto With {
+                    .OrderId = 4242L,
+                    .Side = 0,
+                    .Price = 21300.25,
+                    .ContractId = "CON.F.US.MNQ.U26",
+                    .CreationTimestamp = entity.EntryTime.AddSeconds(2).ToUnixTimeMilliseconds().ToString()
+                }
+            }
+
+            Dim resolved = TradeRecordService.ResolveEntryPriceFromBrokerFills(entity, Nothing, trades)
+            Assert.Equal(21300.25D, resolved)
+        End Sub
+
+        <Fact>
+        Public Sub ResolveEntryPriceFromBrokerFills_NoEntryOrderId_FallsBackToFirstSideMatch()
+            ' Reconciled-from-broker rows may not carry the entry order id. The matcher
+            ' should still find the first long-side fill on the contract at/after EntryTime.
+            Dim entity = MnqEntry(entryOrderId:=0L, direction:="Long")
+            Dim entryMs = entity.EntryTime.ToUnixTimeMilliseconds()
+            Dim trades As IList(Of PXTradeDto) = New List(Of PXTradeDto) From {
+                New PXTradeDto With {
+                    .OrderId = 1L,
+                    .Side = 0,
+                    .Price = 21500.0,
+                    .ContractId = "CON.F.US.MNQ.U26",
+                    .CreationTimestamp = (entryMs + 1000L).ToString()
+                },
+                New PXTradeDto With {
+                    .OrderId = 2L,
+                    .Side = 0,
+                    .Price = 21550.0,
+                    .ContractId = "CON.F.US.MNQ.U26",
+                    .CreationTimestamp = (entryMs + 5000L).ToString()
+                }
+            }
+
+            Dim resolved = TradeRecordService.ResolveEntryPriceFromBrokerFills(entity, Nothing, trades)
+            Assert.Equal(21500.0D, resolved)   ' earliest matching fill wins
+        End Sub
+
+        <Fact>
+        Public Sub ResolveEntryPriceFromBrokerFills_ShortTrade_UsesSellSide()
+            Dim entity = MnqEntry(entryOrderId:=0L, direction:="Short")
+            Dim entryMs = entity.EntryTime.ToUnixTimeMilliseconds()
+            ' Short entries are Side=1 (Sell). A Buy-side fill must NOT match the fallback.
+            Dim trades As IList(Of PXTradeDto) = New List(Of PXTradeDto) From {
+                New PXTradeDto With {
+                    .OrderId = 1L,
+                    .Side = 0,
+                    .Price = 99999.0,
+                    .ContractId = "CON.F.US.MNQ.U26",
+                    .CreationTimestamp = (entryMs + 1000L).ToString()
+                },
+                New PXTradeDto With {
+                    .OrderId = 2L,
+                    .Side = 1,
+                    .Price = 21470.0,
+                    .ContractId = "CON.F.US.MNQ.U26",
+                    .CreationTimestamp = (entryMs + 2000L).ToString()
+                }
+            }
+
+            Dim resolved = TradeRecordService.ResolveEntryPriceFromBrokerFills(entity, Nothing, trades)
+            Assert.Equal(21470.0D, resolved)
+        End Sub
+
+        <Fact>
+        Public Sub ResolveEntryPriceFromBrokerFills_FillBeforeEntryTime_NotUsed()
+            Dim entity = MnqEntry(entryOrderId:=0L, direction:="Long")
+            Dim entryMs = entity.EntryTime.ToUnixTimeMilliseconds()
+            Dim trades As IList(Of PXTradeDto) = New List(Of PXTradeDto) From {
+                New PXTradeDto With {
+                    .OrderId = 1L,
+                    .Side = 0,
+                    .Price = 21000.0,
+                    .ContractId = "CON.F.US.MNQ.U26",
+                    .CreationTimestamp = (entryMs - 60000L).ToString()  ' 1 minute before entry
+                }
+            }
+
+            Dim resolved = TradeRecordService.ResolveEntryPriceFromBrokerFills(entity, Nothing, trades)
+            Assert.Equal(0D, resolved)
+        End Sub
+
+        <Fact>
+        Public Sub ResolveEntryPriceFromBrokerFills_NoBrokerData_ReturnsZero()
+            Dim entity = MnqEntry(entryOrderId:=4242L, direction:="Long")
+            Assert.Equal(0D, TradeRecordService.ResolveEntryPriceFromBrokerFills(entity, Nothing, Nothing))
+            Assert.Equal(0D, TradeRecordService.ResolveEntryPriceFromBrokerFills(
+                entity, New List(Of PXOrderDto)(), New List(Of PXTradeDto)()))
+        End Sub
+
+        <Fact>
+        Public Sub ResolveEntryPriceFromBrokerFills_DifferentContract_FilteredOut()
+            Dim entity = MnqEntry(entryOrderId:=0L, direction:="Long")
+            Dim entryMs = entity.EntryTime.ToUnixTimeMilliseconds()
+            Dim trades As IList(Of PXTradeDto) = New List(Of PXTradeDto) From {
+                New PXTradeDto With {
+                    .OrderId = 1L,
+                    .Side = 0,
+                    .Price = 21500.0,
+                    .ContractId = "CON.F.US.MES.U26",   ' wrong contract
+                    .CreationTimestamp = (entryMs + 1000L).ToString()
+                }
+            }
+
+            Dim resolved = TradeRecordService.ResolveEntryPriceFromBrokerFills(entity, Nothing, trades)
+            Assert.Equal(0D, resolved)
+        End Sub
+
         <Fact>
         Public Sub ComputeExitReconciliation_OrdersFilter_NarrowsToClosingOrderIds()
             ' When orders are supplied, only fills whose OrderId is a closing market order

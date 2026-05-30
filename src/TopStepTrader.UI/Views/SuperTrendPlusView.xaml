@@ -306,7 +306,7 @@
                     BorderBrush="{StaticResource AccentBrush}" BorderThickness="0,0,0,2">
                 <StackPanel>
 
-                    <!-- Row 1: Account, Timeframe, Leverage, P&L Guard, TP Ladder, Entry Mode -->
+                    <!-- Row 1: Account, Timeframe, Leverage, TP Ladder, Entry Mode -->
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>  <!-- 0  Account -->
@@ -315,12 +315,10 @@
                             <ColumnDefinition Width="16"/>    <!-- 3  gap -->
                             <ColumnDefinition Width="Auto"/>  <!-- 4  Leverage -->
                             <ColumnDefinition Width="16"/>    <!-- 5  gap -->
-                            <ColumnDefinition Width="Auto"/>  <!-- 6  P&L Guard -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 6  TP Ladder (FEAT-63) -->
                             <ColumnDefinition Width="16"/>    <!-- 7  gap -->
-                            <ColumnDefinition Width="Auto"/>  <!-- 8  TP Ladder (FEAT-63) -->
-                            <ColumnDefinition Width="16"/>    <!-- 9  gap -->
-                            <ColumnDefinition Width="Auto"/>  <!-- 10 Enter on -->
-                            <ColumnDefinition Width="*"/>     <!-- 11 stretch -->
+                            <ColumnDefinition Width="Auto"/>  <!-- 8  Enter on -->
+                            <ColumnDefinition Width="*"/>     <!-- 9  stretch -->
                         </Grid.ColumnDefinitions>
 
                         <ComboBox Grid.Column="0"
@@ -350,11 +348,7 @@
                             </ComboBox>
                         </StackPanel>
 
-                        <controls:PnLGuardControl Grid.Column="6"
-                                                  Settings="{Binding PnLGuard}"
-                                                  VerticalAlignment="Center"/>
-
-                        <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center"
+                        <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center"
                                     ToolTip="When > 0, ladder mode is active. Once total unrealised P&amp;L crosses 10% above a multiple of this value, the stop ratchets up to that multiple ($50 ladder: $55→SL $50, $105→SL $100, $155→SL $150). E1–E9 force-close exits (SuperTrend flip, degradation score) are suppressed while ladder is active; phased stops keep ratcheting in parallel — whichever stop is more conservative wins. Set to 0 to disable.">
                             <TextBlock Text="TP ladder ($):"
                                        Foreground="{StaticResource TextSecondaryBrush}"
@@ -364,7 +358,7 @@
                                      HorizontalContentAlignment="Right"/>
                         </StackPanel>
 
-                        <StackPanel Grid.Column="10" Orientation="Horizontal" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="8" Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="Enter on:"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"/>

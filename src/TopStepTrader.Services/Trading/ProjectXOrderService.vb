@@ -46,6 +46,25 @@ Namespace TopStepTrader.Services.Trading
         ' OrderFilled exactly once per terminal-filled status.
         Private ReadOnly _filledOrderIds As New ConcurrentDictionary(Of Long, Boolean)
 
+        ' ── BUG-100: hub→FlattenContractWithFillAsync bridge state ──────────
+        ' Waiters registered by FlattenContractWithFillAsync just before CloseContract;
+        ' OnHubOrderUpdated signals the first matching fill (Status=Filled, contract match,
+        ' timestamp >= RequestStartMs). Indexed by uppercase ContractId for O(1) dispatch
+        ' across the SignalR callback thread.
+        Private ReadOnly _closeFillWaiters As New ConcurrentDictionary(Of String, ConcurrentBag(Of ClosingFillWaiter))
+
+        ''' <summary>BUG-100: how long to await the SignalR closing-fill push before falling back to REST.</summary>
+        Friend Shared ReadOnly CloseFillHubTimeout As TimeSpan = TimeSpan.FromSeconds(3)
+
+        ''' <summary>BUG-100: hard ceiling across hub-wait + REST-poll fallback.</summary>
+        Friend Shared ReadOnly CloseFillOverallTimeout As TimeSpan = TimeSpan.FromSeconds(5)
+
+        Friend Class ClosingFillWaiter
+            Public Property RequestStartMs As Long
+            Public Property Tcs As TaskCompletionSource(Of BrokerCloseFill)
+            Public Property RootPrefix As String
+        End Class
+
         ''' <summary>BUG-93 F1: PXUserOrderData.Status code for "Filled" — mirrors MapPXOrderStatus.</summary>
         Friend Const PxOrderStatusFilled As Integer = 2
 
@@ -115,6 +134,16 @@ Namespace TopStepTrader.Services.Trading
         Private Sub OnHubOrderUpdated(sender As Object, e As PXOrderUpdateEventArgs)
             Dim data = e?.OrderData
             If data Is Nothing Then Return
+
+            ' BUG-100: signal any registered closing-fill waiter for this contract BEFORE the
+            ' OrderFilled dedup gate runs. The waiter only cares about a Filled status push
+            ' with a usable AvgFillPrice; the dedup gate is for OrderFilled subscribers, not
+            ' for FlattenContractWithFillAsync. Signal happens off the SignalR callback thread
+            ' (TaskCompletionSource.TrySetResult is non-blocking).
+            If data.Status = PxOrderStatusFilled AndAlso data.AvgFillPrice.HasValue AndAlso data.AvgFillPrice.Value > 0 Then
+                SignalClosingFillWaiters(data)
+            End If
+
             If Not TryAcceptFillEvent(data.Status, data.Id, _filledOrderIds) Then Return
 
             ' Prefer the active session account so the position lookup hits the right book.
@@ -134,6 +163,53 @@ Namespace TopStepTrader.Services.Trading
                      End Function)
 #Enable Warning BC42358
         End Sub
+
+        ''' <summary>
+        ''' BUG-100: dispatches a Filled <see cref="PXUserOrderData"/> push to every waiter
+        ''' registered for the matching contract. A waiter "matches" when the contract id
+        ''' equals its literal target OR starts with its root prefix, and the broker
+        ''' timestamp is at-or-after RequestStartMs. The first matching waiter consumes the
+        ''' push; siblings (rare — two concurrent flatten calls on the same contract) stay
+        ''' registered for their next opportunity.
+        ''' </summary>
+        Private Sub SignalClosingFillWaiters(data As PXUserOrderData)
+            Dim key = (If(data.ContractId, String.Empty)).ToUpperInvariant()
+            Dim bag As ConcurrentBag(Of ClosingFillWaiter) = Nothing
+            If Not _closeFillWaiters.TryGetValue(key, bag) OrElse bag Is Nothing Then
+                ' Root-prefix fallback: scan every registered waiter (rare path).
+                For Each kv In _closeFillWaiters
+                    If TrySignalFromBag(kv.Value, data) Then Return
+                Next
+                Return
+            End If
+            TrySignalFromBag(bag, data)
+        End Sub
+
+        Private Shared Function TrySignalFromBag(bag As ConcurrentBag(Of ClosingFillWaiter),
+                                                  data As PXUserOrderData) As Boolean
+            If bag Is Nothing Then Return False
+            For Each waiter In bag
+                If waiter Is Nothing OrElse waiter.Tcs Is Nothing Then Continue For
+                If waiter.Tcs.Task.IsCompleted Then Continue For
+                If data.CreationTimestamp < waiter.RequestStartMs Then Continue For
+                Dim contractOk As Boolean = False
+                If Not String.IsNullOrEmpty(waiter.RootPrefix) AndAlso
+                   Not String.IsNullOrEmpty(data.ContractId) AndAlso
+                   data.ContractId.StartsWith(waiter.RootPrefix, StringComparison.OrdinalIgnoreCase) Then
+                    contractOk = True
+                End If
+                If Not contractOk Then Continue For
+                Dim fill As New BrokerCloseFill With {
+                    .FillPrice = CDec(data.AvgFillPrice.Value),
+                    .FillTimeUtc = DateTimeOffset.FromUnixTimeMilliseconds(data.CreationTimestamp),
+                    .FillSize = data.Size,
+                    .OrderId = data.Id,
+                    .Source = "hub"
+                }
+                If waiter.Tcs.TrySetResult(fill) Then Return True
+            Next
+            Return False
+        End Function
 
         ''' <summary>
         ''' BUG-93 F1: filter+dedup gate. Returns True when the event is a terminal Filled status
@@ -662,13 +738,62 @@ Namespace TopStepTrader.Services.Trading
         ''' Synthetic OCO flatten: cancels any working stop orders for this contract
         ''' (the resting SL bracket) before sending the position close.
         ''' This prevents the SL from triggering after the position is already closed.
+        ''' BUG-100: thin wrapper around <see cref="FlattenContractWithFillAsync"/> so legacy
+        ''' callers that only care about Success keep working unchanged.
         ''' </summary>
         Public Async Function FlattenContractAsync(accountId As Long, contractId As String,
                                                     Optional cancel As CancellationToken = Nothing) _
             As Task(Of Boolean) Implements IOrderService.FlattenContractAsync
+            Dim result = Await FlattenContractWithFillAsync(accountId, contractId, cancel)
+            Return result.Success
+        End Function
+
+        ''' <summary>
+        ''' BUG-100: same as <see cref="FlattenContractAsync"/> but also returns the
+        ''' broker-confirmed closing fill so callers can persist truthful ExitPrice/PnL.
+        ''' Awaits the SignalR <c>GatewayUserOrder</c> Filled push for up to
+        ''' <see cref="CloseFillHubTimeout"/>; on hub miss, falls back to
+        ''' <c>SearchTradesAsync</c> within an overall budget of
+        ''' <see cref="CloseFillOverallTimeout"/>. When both fail the tuple's Fill is
+        ''' Nothing and the caller is expected to treat that as "engine-fallback".
+        ''' </summary>
+        Public Async Function FlattenContractWithFillAsync(accountId As Long, contractId As String,
+                                                            Optional cancel As CancellationToken = Nothing) _
+            As Task(Of (Success As Boolean, Fill As BrokerCloseFill)) _
+            Implements IOrderService.FlattenContractWithFillAsync
+            Dim waiterRegistered As Boolean = False
+            Dim waiterKey As String = Nothing
+            Dim waiter As ClosingFillWaiter = Nothing
             Try
                 Dim resolvedId = Await ResolveToActivePxContractIdAsync(contractId, cancel)
                 FlattenDiag($"BEGIN flatten: input='{contractId}' resolved='{resolvedId}' account={accountId}")
+
+                ' BUG-100: register the closing-fill waiter BEFORE cancelling brackets or
+                ' calling CloseContract so we cannot miss a race-fast hub push that lands
+                ' between CloseContractAsync's return and the await below.
+                Dim fav = FavouriteContracts.TryGetBySymbolResolved(contractId)
+                Dim rootPrefix As String = If(fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxRootSymbol),
+                                              $"CON.F.US.{fav.PxRootSymbol}.",
+                                              resolvedId)
+                Dim requestStartUtc = DateTimeOffset.UtcNow
+                waiter = New ClosingFillWaiter With {
+                    .RequestStartMs = requestStartUtc.ToUnixTimeMilliseconds(),
+                    .Tcs = New TaskCompletionSource(Of BrokerCloseFill)(TaskCreationOptions.RunContinuationsAsynchronously),
+                    .RootPrefix = rootPrefix
+                }
+                waiterKey = (If(resolvedId, String.Empty)).ToUpperInvariant()
+                _closeFillWaiters.AddOrUpdate(
+                    waiterKey,
+                    Function(k)
+                        Dim b As New ConcurrentBag(Of ClosingFillWaiter)()
+                        b.Add(waiter)
+                        Return b
+                    End Function,
+                    Function(k, existing)
+                        existing.Add(waiter)
+                        Return existing
+                    End Function)
+                waiterRegistered = True
 
                 ' ── Cancel both bracket legs before closing ──────────────────────────
                 ' With platform-level OCO enabled, both a Stop (type=4) SL and a Limit (type=1) TP
@@ -705,12 +830,137 @@ Namespace TopStepTrader.Services.Trading
                 _logger.LogInformation(
                     "TopStepX FlattenContract: closed {Contract} — success={Ok}", resolvedId, resp.Success)
                 If resp.Success Then _positionsCache.Invalidate(accountId)
-                Return resp.Success
+                If Not resp.Success Then Return (False, CType(Nothing, BrokerCloseFill))
+
+                ' ── Await hub fill (preferred), fall back to REST poll ──────────────
+                Dim fill = Await AwaitClosingFillAsync(accountId, resolvedId, waiter, requestStartUtc, cancel)
+                Return (True, fill)
             Catch ex As Exception
                 FlattenDiag($"EXCEPTION: {ex.GetType().Name}: {ex.Message}")
-                _logger.LogWarning(ex, "FlattenContract failed for {Contract}", contractId)
-                Return False
+                _logger.LogWarning(ex, "FlattenContractWithFill failed for {Contract}", contractId)
+                Return (False, CType(Nothing, BrokerCloseFill))
+            Finally
+                If waiterRegistered AndAlso waiter IsNot Nothing Then
+                    waiter.Tcs.TrySetCanceled()
+                    ' Don't bother evicting from the bag — it will be GC'd with the dict entry
+                    ' and our TrySignal loop skips completed waiters cheaply.
+                End If
             End Try
+        End Function
+
+        ''' <summary>
+        ''' BUG-100: awaits the registered hub waiter for <see cref="CloseFillHubTimeout"/>; on
+        ''' timeout falls back to <c>SearchTradesAsync</c> within <see cref="CloseFillOverallTimeout"/>.
+        ''' Returns Nothing when no closing fill can be identified.
+        ''' </summary>
+        Private Async Function AwaitClosingFillAsync(accountId As Long,
+                                                      resolvedId As String,
+                                                      waiter As ClosingFillWaiter,
+                                                      requestStartUtc As DateTimeOffset,
+                                                      cancel As CancellationToken) As Task(Of BrokerCloseFill)
+            ' Hub wait
+            Try
+                Dim hubTask = waiter.Tcs.Task
+                Dim winner = Await Task.WhenAny(hubTask, Task.Delay(CloseFillHubTimeout, cancel))
+                If winner Is hubTask AndAlso hubTask.Status = TaskStatus.RanToCompletion Then
+                    Dim fill = hubTask.Result
+                    If fill IsNot Nothing Then
+                        _logger.LogInformation(
+                            "FlattenContractWithFill: hub fill {Price} @ {Time:o} (orderId={OrderId}) for {Contract}",
+                            fill.FillPrice, fill.FillTimeUtc, fill.OrderId, resolvedId)
+                        Return fill
+                    End If
+                End If
+            Catch ex As Exception
+                _logger.LogDebug(ex, "FlattenContractWithFill: hub wait threw for {Contract}", resolvedId)
+            End Try
+
+            ' REST fallback
+            Try
+                Dim remaining = CloseFillOverallTimeout - (DateTimeOffset.UtcNow - requestStartUtc)
+                If remaining <= TimeSpan.Zero Then
+                    _logger.LogWarning(
+                        "FlattenContractWithFill: hub timeout AND no time left for REST fallback for {Contract}",
+                        resolvedId)
+                    Return Nothing
+                End If
+                Using cts As New CancellationTokenSource(remaining)
+                    Dim linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancel)
+                    Try
+                        Dim startMs = requestStartUtc.AddSeconds(-5).ToUnixTimeMilliseconds()
+                        Dim endMs = DateTimeOffset.UtcNow.AddSeconds(5).ToUnixTimeMilliseconds()
+                        Dim trades = Await _orderClient.SearchTradesAsync(accountId, startMs, endMs, linked.Token)
+                        Dim fill = PickClosingFill(trades?.Trades, resolvedId, requestStartUtc)
+                        If fill IsNot Nothing Then
+                            _logger.LogInformation(
+                                "FlattenContractWithFill: rest-poll fill {Price} @ {Time:o} (orderId={OrderId}) for {Contract}",
+                                fill.FillPrice, fill.FillTimeUtc, fill.OrderId, resolvedId)
+                            Return fill
+                        End If
+                    Finally
+                        linked.Dispose()
+                    End Try
+                End Using
+            Catch ex As Exception
+                _logger.LogDebug(ex, "FlattenContractWithFill: rest-poll fallback failed for {Contract}", resolvedId)
+            End Try
+
+            _logger.LogWarning(
+                "FlattenContractWithFill: no broker close-fill captured for {Contract} within {Timeout} — caller will engine-fallback",
+                resolvedId, CloseFillOverallTimeout)
+            Return Nothing
+        End Function
+
+        ''' <summary>
+        ''' BUG-100: picks the latest fill on the contract at or after <paramref name="requestStartUtc"/>
+        ''' as the closing fill. When multiple fills share a single OrderId, computes the VWAP.
+        ''' Friend Shared so tests can drive every fill-shape scenario without a REST mock.
+        ''' </summary>
+        Friend Shared Function PickClosingFill(trades As IList(Of API.Models.Responses.PXTradeDto),
+                                                 resolvedId As String,
+                                                 requestStartUtc As DateTimeOffset) As BrokerCloseFill
+            If trades Is Nothing OrElse trades.Count = 0 OrElse String.IsNullOrEmpty(resolvedId) Then Return Nothing
+            Dim startMs = requestStartUtc.ToUnixTimeMilliseconds()
+            Dim fav = FavouriteContracts.TryGetBySymbolResolved(resolvedId)
+            Dim rootPrefix As String = If(fav IsNot Nothing AndAlso Not String.IsNullOrEmpty(fav.PxRootSymbol),
+                                          $"CON.F.US.{fav.PxRootSymbol}.",
+                                          Nothing)
+            Dim matches = trades.Where(Function(t)
+                                           If String.IsNullOrEmpty(t.ContractId) Then Return False
+                                           Dim tsMs As Long
+                                           Long.TryParse(t.CreationTimestamp, tsMs)
+                                           If tsMs < startMs Then Return False
+                                           If String.Equals(t.ContractId, resolvedId, StringComparison.OrdinalIgnoreCase) Then Return True
+                                           If Not String.IsNullOrEmpty(rootPrefix) AndAlso
+                                              t.ContractId.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase) Then Return True
+                                           Return False
+                                       End Function).ToList()
+            If matches.Count = 0 Then Return Nothing
+
+            ' Group by OrderId and pick the most recent group (the closing market order's fills).
+            Dim grouped = matches.GroupBy(Function(t) t.OrderId).
+                Select(Function(g)
+                           Dim latest = g.Max(Function(t) ParseLongOrZero(t.CreationTimestamp))
+                           Return New With {.OrderId = g.Key, .LatestMs = latest, .Fills = g.ToList()}
+                       End Function).
+                OrderByDescending(Function(x) x.LatestMs).
+                First()
+            Dim totalSize As Decimal = grouped.Fills.Sum(Function(t) CDec(t.Size))
+            If totalSize <= 0D Then Return Nothing
+            Dim vwap As Decimal = grouped.Fills.Sum(Function(t) CDec(t.Price) * CDec(t.Size)) / totalSize
+            Return New BrokerCloseFill With {
+                .FillPrice = Math.Round(vwap, 6),
+                .FillTimeUtc = DateTimeOffset.FromUnixTimeMilliseconds(grouped.LatestMs),
+                .FillSize = CInt(totalSize),
+                .OrderId = grouped.OrderId,
+                .Source = "rest-poll"
+            }
+        End Function
+
+        Private Shared Function ParseLongOrZero(raw As String) As Long
+            Dim v As Long
+            Long.TryParse(raw, v)
+            Return v
         End Function
 
         ''' <summary>

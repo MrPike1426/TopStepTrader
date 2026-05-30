@@ -19,6 +19,14 @@ Namespace TopStepTrader.Core.Models
 
         Public Property EntryPrice As Decimal
 
+        ''' <summary>
+        ''' BUG-102 F1: True when <c>EntryPrice</c> was populated from a non-broker-confirmed
+        ''' source (live-price proxy, last-resort estimate) because all three broker resolution
+        ''' steps in <c>BackfillEntryAndStopAsync</c> returned zero. Telemetry-only; consumed
+        ''' by post-close diagnostics so estimated rows can be flagged in aggregates.
+        ''' </summary>
+        Public Property IsEntryPriceEstimated As Boolean = False
+
         Public Property EntryBarTime As DateTimeOffset = DateTimeOffset.MinValue
 
         Public Property EntryAdx As Single
@@ -103,11 +111,19 @@ Namespace TopStepTrader.Core.Models
         Public Property IsEarlyModeEntry As Boolean = False
 
         ''' <summary>
-        ''' ADX band (0/1/2/3) at the time this slot was opened. Ratchets upward as ADX strengthens;
-        ''' never decreases. Used by the scale-in logic to detect when ADX crosses into a higher band
-        ''' and additional contracts should be added to the position.
+        ''' STRAT-41: retired. Was the ratchet for the STRAT-31 ADX-band scale-in path,
+        ''' which is no longer read by entry/exit logic. Kept on the slot for telemetry
+        ''' continuity (in-tab card + LiveTradeRecords) — do not consume in new code.
+        ''' Drop in a follow-up cleanup ticket once telemetry consumers migrate.
         ''' </summary>
         Public Property LastAdxBand As Integer = 0
+
+        ''' <summary>
+        ''' STRAT-41: True after this slot has scaled in once via the pullback-gated path.
+        ''' Prevents the pullback scale-in from firing more than once per slot lifetime.
+        ''' Reset to False in <c>SlotManager.TryOpenSlot</c>.
+        ''' </summary>
+        Public Property HasScaledInOnPullback As Boolean = False
 
         ''' <summary>TopStepX broker order ID for the entry fill (from PXPlaceOrderResponse.OrderId). Used to resolve the Trades panel ID.</summary>
         Public Property EntryOrderId As Long?

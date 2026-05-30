@@ -1,5 +1,4 @@
 Imports TopStepTrader.Core.Enums
-Imports TopStepTrader.Core.Settings
 
 Namespace TopStepTrader.Core.Models
 
@@ -42,16 +41,6 @@ Namespace TopStepTrader.Core.Models
         ''' <c>SuperTrendPlusConfig.EarlyModeMaxAgeMinutes</c>.</summary>
         Public Property EarlyModeMaxAgeMinutes As Integer = 0
 
-        ''' <summary>Optional P&amp;L Guard configuration. When <see cref="PnLGuardSettings.IsActive"/>
-        ''' is True the service aggregates <see cref="AggregatedInstrumentPnl"/> and applies
-        ''' <see cref="PnLGuardSettings.ShouldFlatten"/>.</summary>
-        Public Property PnLGuard As PnLGuardSettings
-
-        ''' <summary>Aggregated unrealised P&amp;L across all open slots on the same instrument.
-        ''' Caller-computed because the VM owns the slot collection. Read only when
-        ''' <see cref="PnLGuard"/> reports active.</summary>
-        Public Property AggregatedInstrumentPnl As Decimal
-
         ''' <summary>True if this slot is the primary owner of the bracket SL edit for its instrument
         ''' (i.e. it has the lowest <c>SlotIndex</c> among open slots on the same contract). When False
         ''' the service defers the broker stop modify and only stamps slot state — the primary slot
@@ -69,9 +58,29 @@ Namespace TopStepTrader.Core.Models
         ''' <c>IDebugTradeCaptureService</c>.</summary>
         Public Property IsDebugCaptureEnabled As Boolean = False
 
-        ''' <summary>Strategy-supplied ADX-band classifier used by the scale-in path. Required
-        ''' for scale-in to fire; when Nothing the service skips the scale-in evaluation.</summary>
+        ''' <summary>Strategy-supplied ADX-band classifier. Used only by the STRAT-40
+        ''' BB-median relax check (and any future band-aware entry-quality gate); the
+        ''' STRAT-31 scale-in path that originally consumed this is retired.</summary>
         Public Property BandForAdx As Func(Of Single, Integer)
+
+        ''' <summary>STRAT-41: when True the pullback-gated scale-in block in
+        ''' <c>EvaluateTickAsync</c> evaluates per tick. Defaults False so personas without
+        ''' the toggle wired do not silently get the new behaviour.</summary>
+        Public Property PullbackScaleInEnabled As Boolean = False
+
+        ''' <summary>STRAT-41: pullback distance from the SuperTrend line, in ATR units.
+        ''' Default 0.5 ATR — "within half an ATR" of the ST line is "the price has come
+        ''' back to structure".</summary>
+        Public Property PullbackAtrFactor As Decimal = 0.5D
+
+        ''' <summary>STRAT-41: contracts added per pullback scale-in. Default 1 — we
+        ''' deliberately *shrink* exposure compared to the STRAT-31 design.</summary>
+        Public Property PullbackScaleInContracts As Integer = 1
+
+        ''' <summary>STRAT-41: hard cap on slot size after pullback scale-in fires. VM
+        ''' clamps further by leverage. Default 2 — matches the BUG-99 + STRAT-41
+        ''' "shrink to recover" risk posture.</summary>
+        Public Property MaxContractsAfterScaleIn As Integer = 2
 
         ''' <summary>
         ''' UI-selected leverage multiplier (1, 2, or 3) — scales both the per-band

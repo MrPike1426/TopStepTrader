@@ -156,6 +156,180 @@ Namespace TopStepTrader.Tests.Trading
             Assert.Equal(EntryGateOutcome.Allow, result.Outcome)
         End Sub
 
+        ' ──────────────────────────────────────────────────────────────────────
+        '  STRAT-40 F1 — BB-median relax-on-flip (F5-a)
+        ' ──────────────────────────────────────────────────────────────────────
+
+        ''' <summary>Builds 30 closes that slope steadily upward; with bbLookback=4 the
+        ''' BB-mid slope is positive.</summary>
+        Private Shared Function UpSlopeCloses() As IList(Of Single)
+            Dim out As New List(Of Single)
+            For i = 0 To 29
+                out.Add(7400F + CSng(i) * 0.5F)
+            Next
+            Return out
+        End Function
+
+        ''' <summary>Steadily falling closes for a down-sloping BB-mid.</summary>
+        Private Shared Function DownSlopeCloses() As IList(Of Single)
+            Dim out As New List(Of Single)
+            For i = 0 To 29
+                out.Add(7500F - CSng(i) * 0.5F)
+            Next
+            Return out
+        End Function
+
+        <Fact>
+        Public Sub BbMedianRelax_FlipPlusStrongAdx_Bypassed()
+            ' Up-sloping BB-mid + SHORT flip + ADX 35 → relax path lets the entry through
+            ' even though the slope opposes the SHORT direction. Mirrors the long-bias
+            ' fix on the multi-week index rally.
+            Dim closes = UpSlopeCloses()
+            Dim result = EntryQualityGate.EvaluateBbMedianRelaxOnFlip(
+                closes, isLong:=False, isFlip:=True, adxValue:=35.0F,
+                bbLookback:=4, strongAdxThreshold:=30.0F)
+            Assert.Equal(EntryGateOutcome.Allow, result.Outcome)
+            Assert.Contains("BB-median bypassed", result.Reason)
+        End Sub
+
+        <Fact>
+        Public Sub BbMedianRelax_NoFlipOpposingSlope_Blocked()
+            ' Up-sloping BB-mid + SHORT (no flip) → standard slope check fires and blocks.
+            Dim closes = UpSlopeCloses()
+            Dim result = EntryQualityGate.EvaluateBbMedianRelaxOnFlip(
+                closes, isLong:=False, isFlip:=False, adxValue:=35.0F,
+                bbLookback:=4, strongAdxThreshold:=30.0F)
+            Assert.Equal(EntryGateOutcome.BlockBbMedianSlope, result.Outcome)
+            Assert.Contains("BB-median slope conflicts", result.Reason)
+        End Sub
+
+        <Fact>
+        Public Sub BbMedianRelax_FlipButLowAdx_Blocked()
+            ' Flip is present but ADX is below the relax threshold — the relax path does
+            ' not apply, so the standard slope check still blocks.
+            Dim closes = UpSlopeCloses()
+            Dim result = EntryQualityGate.EvaluateBbMedianRelaxOnFlip(
+                closes, isLong:=False, isFlip:=True, adxValue:=22.0F,
+                bbLookback:=4, strongAdxThreshold:=30.0F)
+            Assert.Equal(EntryGateOutcome.BlockBbMedianSlope, result.Outcome)
+        End Sub
+
+        <Fact>
+        Public Sub BbMedianRelax_SlopeAgrees_Allowed()
+            ' Up-sloping BB-mid + LONG re-entry (no flip) → standard slope check passes.
+            Dim closes = UpSlopeCloses()
+            Dim result = EntryQualityGate.EvaluateBbMedianRelaxOnFlip(
+                closes, isLong:=True, isFlip:=False, adxValue:=20.0F,
+                bbLookback:=4, strongAdxThreshold:=30.0F)
+            Assert.Equal(EntryGateOutcome.Allow, result.Outcome)
+        End Sub
+
+        <Fact>
+        Public Sub BbMedianRelax_DownslopeSupportsShort_Allowed()
+            ' Down-sloping BB-mid + SHORT → slope agrees so the gate passes.
+            Dim closes = DownSlopeCloses()
+            Dim result = EntryQualityGate.EvaluateBbMedianRelaxOnFlip(
+                closes, isLong:=False, isFlip:=False, adxValue:=20.0F,
+                bbLookback:=4, strongAdxThreshold:=30.0F)
+            Assert.Equal(EntryGateOutcome.Allow, result.Outcome)
+        End Sub
+
+        <Fact>
+        Public Sub BbMedianRelax_InsufficientBars_AllowedFailOpen()
+            Dim closes As IList(Of Single) = New List(Of Single) From {7400F, 7401F, 7402F, 7403F}
+            Dim result = EntryQualityGate.EvaluateBbMedianRelaxOnFlip(
+                closes, isLong:=True, isFlip:=False, adxValue:=25.0F,
+                bbLookback:=4, strongAdxThreshold:=30.0F)
+            Assert.Equal(EntryGateOutcome.Allow, result.Outcome)
+            Assert.Contains("insufficient bars", result.Reason)
+        End Sub
+
+        ' ──────────────────────────────────────────────────────────────────────
+        '  STRAT-40 F2 — lower-TF agreement (F5-b)
+        ' ──────────────────────────────────────────────────────────────────────
+
+        ''' <summary>Builds 30 lower-TF bars in a steady uptrend so SuperTrend direction
+        ''' is +1 by the end.</summary>
+        Private Shared Function UptrendLowerTfBars() As IList(Of MarketBar)
+            Dim bars As New List(Of MarketBar)
+            For i = 0 To 29
+                Dim close = 100.0F + 0.5F * i
+                bars.Add(New MarketBar With {
+                    .Timestamp = New DateTimeOffset(2026, 5, 20, 0, 0, 0, TimeSpan.Zero).AddMinutes(3 * i),
+                    .Open = close - 0.05F,
+                    .High = close + 0.10F,
+                    .Low = close - 0.10F,
+                    .Close = close,
+                    .Volume = 1000
+                })
+            Next
+            Return bars
+        End Function
+
+        ''' <summary>Steadily-falling lower-TF bars so SuperTrend direction is -1.</summary>
+        Private Shared Function DowntrendLowerTfBars() As IList(Of MarketBar)
+            Dim bars As New List(Of MarketBar)
+            For i = 0 To 29
+                Dim close = 200.0F - 0.5F * i
+                bars.Add(New MarketBar With {
+                    .Timestamp = New DateTimeOffset(2026, 5, 20, 0, 0, 0, TimeSpan.Zero).AddMinutes(3 * i),
+                    .Open = close + 0.05F,
+                    .High = close + 0.10F,
+                    .Low = close - 0.10F,
+                    .Close = close,
+                    .Volume = 1000
+                })
+            Next
+            Return bars
+        End Function
+
+        <Fact>
+        Public Sub LowerTf_UptrendAgreesWithLong_Allowed()
+            Dim bars = UptrendLowerTfBars()
+            Dim result = EntryQualityGate.EvaluateLowerTfAgreement(
+                bars, isLong:=True, stPeriod:=10, stMultiplier:=3.0R)
+            Assert.Equal(EntryGateOutcome.Allow, result.Outcome)
+            Assert.Contains("Lower-TF agrees", result.Reason)
+        End Sub
+
+        <Fact>
+        Public Sub LowerTf_UptrendDisagreesWithShort_Blocked()
+            Dim bars = UptrendLowerTfBars()
+            Dim result = EntryQualityGate.EvaluateLowerTfAgreement(
+                bars, isLong:=False, stPeriod:=10, stMultiplier:=3.0R)
+            Assert.Equal(EntryGateOutcome.BlockLowerTfDisagrees, result.Outcome)
+            Assert.Contains("Lower-TF disagrees", result.Reason)
+            Assert.Contains("defer", result.Reason)
+        End Sub
+
+        <Fact>
+        Public Sub LowerTf_DowntrendAgreesWithShort_Allowed()
+            Dim bars = DowntrendLowerTfBars()
+            Dim result = EntryQualityGate.EvaluateLowerTfAgreement(
+                bars, isLong:=False, stPeriod:=10, stMultiplier:=3.0R)
+            Assert.Equal(EntryGateOutcome.Allow, result.Outcome)
+        End Sub
+
+        <Fact>
+        Public Sub LowerTf_DowntrendDisagreesWithLong_Blocked()
+            Dim bars = DowntrendLowerTfBars()
+            Dim result = EntryQualityGate.EvaluateLowerTfAgreement(
+                bars, isLong:=True, stPeriod:=10, stMultiplier:=3.0R)
+            Assert.Equal(EntryGateOutcome.BlockLowerTfDisagrees, result.Outcome)
+        End Sub
+
+        <Fact>
+        Public Sub LowerTf_InsufficientBars_AllowedFailOpen()
+            Dim bars As IList(Of MarketBar) = New List(Of MarketBar) From {
+                MakeBar(0, 100F, 101F, 99F, 100F),
+                MakeBar(3, 100F, 102F, 99F, 101F)
+            }
+            Dim result = EntryQualityGate.EvaluateLowerTfAgreement(
+                bars, isLong:=True, stPeriod:=10, stMultiplier:=3.0R)
+            Assert.Equal(EntryGateOutcome.Allow, result.Outcome)
+            Assert.Contains("insufficient bars", result.Reason)
+        End Sub
+
     End Class
 
 End Namespace

@@ -1,10 +1,12 @@
 Imports System.Collections.Concurrent
 Imports System.Threading
+Imports Microsoft.Extensions.Logging
 Imports Microsoft.Extensions.Logging.Abstractions
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Events
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
+Imports TopStepTrader.ML.Features
 Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.Trading
 Imports Xunit
@@ -38,6 +40,9 @@ Namespace TopStepTrader.Tests.Services.Trading
             Public Property ThrowOnSnapshot As Boolean = False
             Public Property BracketStop As Decimal? = 99.5D
             Public Property EditAcceptsAlways As Boolean = True
+            Public Property FillPriceResult As Decimal? = Nothing
+            Public Property OpenPositionsResult As IEnumerable(Of LivePositionSnapshot) =
+                CType(New List(Of LivePositionSnapshot)(), IEnumerable(Of LivePositionSnapshot))
             Public SnapshotCallCount As Integer = 0
             Public EditCalls As New List(Of (PositionId As Long, Sl As Decimal?, Tp As Decimal?))
 
@@ -73,7 +78,7 @@ Namespace TopStepTrader.Tests.Services.Trading
             Public Function TryGetOrderFillPriceAsync(externalOrderId As Long, accountId As Long,
                                                        Optional cancel As CancellationToken = Nothing) As Task(Of Decimal?) _
                 Implements IOrderService.TryGetOrderFillPriceAsync
-                Return Task.FromResult(Of Decimal?)(Nothing)
+                Return Task.FromResult(FillPriceResult)
             End Function
             Public Function TryGetBracketStopPriceAsync(accountId As Long, contractId As String,
                                                          Optional cancel As CancellationToken = Nothing) As Task(Of Decimal?) _
@@ -90,6 +95,11 @@ Namespace TopStepTrader.Tests.Services.Trading
                 Implements IOrderService.FlattenContractAsync
                 Return Task.FromResult(True)
             End Function
+            Public Function FlattenContractWithFillAsync(accountId As Long, contractId As String,
+                                                          Optional cancel As CancellationToken = Nothing) As Task(Of (Success As Boolean, Fill As BrokerCloseFill)) _
+                Implements IOrderService.FlattenContractWithFillAsync
+                Return Task.FromResult((True, CType(Nothing, BrokerCloseFill)))
+            End Function
             Public Function EditPositionSlTpAsync(positionId As Long, slRate As Decimal?, tpRate As Decimal?,
                                                    Optional enableTsl As Boolean = False,
                                                    Optional cancel As CancellationToken = Nothing) As Task(Of Boolean) _
@@ -105,12 +115,13 @@ Namespace TopStepTrader.Tests.Services.Trading
             Public Function GetOpenPositionsAsync(accountId As Long,
                                                    Optional cancel As CancellationToken = Nothing) As Task(Of IEnumerable(Of LivePositionSnapshot)) _
                 Implements IOrderService.GetOpenPositionsAsync
-                Return Task.FromResult(Of IEnumerable(Of LivePositionSnapshot))(New List(Of LivePositionSnapshot)())
+                Return Task.FromResult(OpenPositionsResult)
             End Function
         End Class
 
         Private Class StubBarService
             Implements IBarIngestionService
+            Public Property LiveBarsResult As IList(Of MarketBar) = New List(Of MarketBar)
             Public Function IngestAsync(contractId As String, timeframe As BarTimeframe,
                                           Optional barsToFetch As Integer = 500,
                                           Optional cancel As CancellationToken = Nothing) As Task(Of Integer) _
@@ -132,23 +143,27 @@ Namespace TopStepTrader.Tests.Services.Trading
                                                Optional cancel As CancellationToken = Nothing,
                                                Optional live As Boolean = False) As Task(Of IList(Of MarketBar)) _
                 Implements IBarIngestionService.GetLiveBarsAsync
-                Return Task.FromResult(Of IList(Of MarketBar))(New List(Of MarketBar))
+                Return Task.FromResult(LiveBarsResult)
             End Function
         End Class
 
         Private Class StubTradeRecordService
             Implements ITradeRecordService
             Public StopAdjustments As New ConcurrentBag(Of (RecordId As Long, OldStop As Decimal, NewStop As Decimal, Phase As String))
+            Public TickSnapshots As New ConcurrentBag(Of TradeTickSnapshot)
+            Public UpdateEntryPriceCalls As New ConcurrentBag(Of (RecordId As Long, EntryPrice As Decimal))
             Public Function OpenTradeAsync(record As LiveTradeRecord) As Task(Of Long) Implements ITradeRecordService.OpenTradeAsync
                 Return Task.FromResult(0L)
             End Function
             Public Function CloseTradeAsync(id As Long, exitTime As DateTimeOffset, exitPrice As Decimal,
-                                              pnL As Decimal, exitReason As String) As Task _
+                                              pnL As Decimal, exitReason As String,
+                                              Optional closeFillSource As String = Nothing) As Task _
                 Implements ITradeRecordService.CloseTradeAsync
                 Return Task.CompletedTask
             End Function
             Public Function UpdateEntryPriceAsync(id As Long, entryPrice As Decimal) As Task _
                 Implements ITradeRecordService.UpdateEntryPriceAsync
+                UpdateEntryPriceCalls.Add((id, entryPrice))
                 Return Task.CompletedTask
             End Function
             Public Function ResolveTopStepXTradeIdAsync(recordId As Long, topStepXTradeId As Long) As Task _
@@ -189,6 +204,7 @@ Namespace TopStepTrader.Tests.Services.Trading
             End Function
             Public Function LogTickSnapshotAsync(liveTradeRecordId As Long, snapshot As TradeTickSnapshot) As Task _
                 Implements ITradeRecordService.LogTickSnapshotAsync
+                TickSnapshots.Add(snapshot)
                 Return Task.CompletedTask
             End Function
             Public Function GetStopAdjustmentsAsync(liveTradeRecordId As Long) As Task(Of IList(Of TradeStopAdjustment)) _
@@ -229,6 +245,10 @@ Namespace TopStepTrader.Tests.Services.Trading
                 Implements ITradeRecordService.SaveLifespanRecordAsync
                 Return Task.CompletedTask
             End Function
+            Public Function AuditZeroEntryPriceRowsAsync(accountId As Long) As Task(Of EntryPriceAuditResult) _
+                Implements ITradeRecordService.AuditZeroEntryPriceRowsAsync
+                Return Task.FromResult(New EntryPriceAuditResult())
+            End Function
         End Class
 
         Private Class StubContractResolver
@@ -258,11 +278,32 @@ Namespace TopStepTrader.Tests.Services.Trading
         Private Shared Function MakeService(orderSvc As IOrderService,
                                               barSvc As IBarIngestionService,
                                               tradeRec As ITradeRecordService,
-                                              resolver As IContractResolutionService) As PositionManagementService
+                                              resolver As IContractResolutionService,
+                                              Optional logger As ILogger(Of PositionManagementService) = Nothing) As PositionManagementService
             Dim engine As New ExitSignalEngine(NullLogger(Of ExitSignalEngine).Instance)
             Return New PositionManagementService(orderSvc, barSvc, resolver, tradeRec, engine,
-                                                  NullLogger(Of PositionManagementService).Instance)
+                                                  If(logger, NullLogger(Of PositionManagementService).Instance))
         End Function
+
+        ''' <summary>BUG-102 F4: captures Warning lines for assertion.</summary>
+        Private Class CapturingLogger(Of T)
+            Implements ILogger(Of T)
+
+            Public ReadOnly Warnings As New List(Of String)()
+
+            Public Function BeginScope(Of TState)(state As TState) As IDisposable Implements ILogger.BeginScope
+                Return Nothing
+            End Function
+            Public Function IsEnabled(logLevel As LogLevel) As Boolean Implements ILogger.IsEnabled
+                Return True
+            End Function
+            Public Sub Log(Of TState)(logLevel As LogLevel, eventId As EventId, state As TState, exception As Exception,
+                                       formatter As Func(Of TState, Exception, String)) Implements ILogger.Log
+                If logLevel = LogLevel.Warning AndAlso formatter IsNot Nothing Then
+                    Warnings.Add(formatter(state, exception))
+                End If
+            End Sub
+        End Class
 
         Private Shared Function MakeOpenSlot() As PositionSlot
             Return New PositionSlot With {
@@ -481,6 +522,151 @@ Namespace TopStepTrader.Tests.Services.Trading
             Assert.Equal("ExitEngine: SuperTrend flip", r.ExitReason)
         End Function
 
+        ' ── (e) BUG-101: forming-bar strip on refetch path ───────────────────
+
+        ''' <summary>Builds 19 closed 5-minute bars in a steady uptrend, then a 20th forming
+        ''' bar (age 30s) whose High is an artificial spike. The forming bar's intra-period
+        ''' high is exactly the input that BUG-101 says must not reach the SuperTrend math.</summary>
+        Private Shared Function BarsWithFormingSpike(now As DateTime) As IList(Of MarketBar)
+            Const Tf As Integer = 5
+            Dim bars As New List(Of MarketBar)
+            ' 19 closed bars at 5-min spacing, ending at now - 5min.
+            For i = 0 To 18
+                Dim ts = New DateTimeOffset(now.AddMinutes(-Tf * (19 - i)), TimeSpan.Zero)
+                Dim close = 100D + 0.5D * i
+                bars.Add(New MarketBar With {
+                    .Timestamp = ts,
+                    .Open = close - 0.10D,
+                    .High = close + 0.20D,
+                    .Low = close - 0.20D,
+                    .Close = close,
+                    .Volume = 1000
+                })
+            Next
+            ' Forming bar: age 30s, with a spike-high 50x the normal bar range.
+            Dim formingClose = 100D + 0.5D * 19
+            bars.Add(New MarketBar With {
+                .Timestamp = New DateTimeOffset(now.AddSeconds(-30), TimeSpan.Zero),
+                .Open = formingClose - 0.10D,
+                .High = formingClose + 50D,
+                .Low = formingClose - 0.20D,
+                .Close = formingClose,
+                .Volume = 1000
+            })
+            Return bars
+        End Function
+
+        <Fact>
+        Public Async Function E_FormingBarStrip_RefetchPath_ExcludesSpikeFromSuperTrend() As Task
+            Dim now = DateTime.UtcNow
+            Dim feedBars = BarsWithFormingSpike(now)
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            Dim barSvc As New StubBarService With {.LiveBarsResult = feedBars}
+            Dim tradeRec As New StubTradeRecordService
+            Dim resolver As New StubContractResolver
+            Dim svc = MakeService(orderSvc, barSvc, tradeRec, resolver)
+
+            Dim slot = MakeOpenSlot()
+            slot.IsEarlyModeEntry = False
+            slot.TradeRecordId = 9L  ' enables fire-and-forget tick-snapshot persist
+            slot.LivePrice = 0D
+
+            ' tickContext.Bars = Nothing forces the refetch path.
+            Dim ctx As New PositionManagementTickContext With {
+                .Bars = Nothing,
+                .StrategyTimeframe = BarTimeframe.FiveMinute,
+                .AsOfUtc = now,
+                .StMultiplier = 3.0R,
+                .ExitScoreThreshold = 7,
+                .EarlyModeMaxAgeMinutes = 30,
+                .IsPrimaryForBracketEdit = True,
+                .IsDebugCaptureEnabled = False
+            }
+
+            Dim r = Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+
+            Assert.Equal(PositionManagementOutcome.Continue, r.Outcome)
+
+            ' Compute the SuperTrend line both with and without the forming bar; the spike's
+            ' inflated High makes these values diverge by orders of magnitude, so the test is
+            ' robust to indicator internals.
+            Dim strippedHighs = feedBars.Take(19).Select(Function(b) b.High).ToList()
+            Dim strippedLows = feedBars.Take(19).Select(Function(b) b.Low).ToList()
+            Dim strippedCloses = feedBars.Take(19).Select(Function(b) b.Close).ToList()
+            Dim stStripped = TechnicalIndicators.SuperTrend(strippedHighs, strippedLows, strippedCloses,
+                                                             period:=10, multiplier:=3.0R)
+            Dim expectedStLine = CDec(stStripped.Line(strippedHighs.Count - 1))
+
+            Dim unstrippedHighs = feedBars.Select(Function(b) b.High).ToList()
+            Dim unstrippedLows = feedBars.Select(Function(b) b.Low).ToList()
+            Dim unstrippedCloses = feedBars.Select(Function(b) b.Close).ToList()
+            Dim stUnstripped = TechnicalIndicators.SuperTrend(unstrippedHighs, unstrippedLows, unstrippedCloses,
+                                                               period:=10, multiplier:=3.0R)
+            Dim unstrippedStLine = CDec(stUnstripped.Line(unstrippedHighs.Count - 1))
+            Assert.True(Math.Abs(unstrippedStLine - expectedStLine) > 1D,
+                        "Test fixture failed to produce a measurable spike — the stripped vs. unstripped ST lines should differ.")
+
+            ' The fire-and-forget LogTickSnapshotAsync must record the ST line computed on the
+            ' stripped 19-bar series, with BarTimestamp matching the last *closed* bar.
+            Await WaitForCondition(Function() Not tradeRec.TickSnapshots.IsEmpty, TimeSpan.FromSeconds(2))
+            Assert.NotEmpty(tradeRec.TickSnapshots)
+            Dim snap = tradeRec.TickSnapshots.First()
+            Assert.Equal(feedBars(18).Timestamp, snap.BarTimestamp)
+            Assert.Equal(CSng(expectedStLine), snap.SuperTrendLine, 3)
+        End Function
+
+        ' ── (f) BUG-101: closed forming bar (age >= tf) preserved ────────────
+
+        <Fact>
+        Public Async Function F_FormingBarStrip_ClosedLastBar_BarsCountPreserved() As Task
+            Dim now = DateTime.UtcNow
+            Dim feedBars As New List(Of MarketBar)
+            ' 20 closed 5-minute bars; the most recent bar is older than tf so no strip should occur.
+            For i = 0 To 19
+                Dim ts = New DateTimeOffset(now.AddMinutes(-5 * (20 - i)), TimeSpan.Zero)
+                Dim close = 100D + 0.5D * i
+                feedBars.Add(New MarketBar With {
+                    .Timestamp = ts,
+                    .Open = close - 0.10D,
+                    .High = close + 0.20D,
+                    .Low = close - 0.20D,
+                    .Close = close,
+                    .Volume = 1000
+                })
+            Next
+
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            Dim barSvc As New StubBarService With {.LiveBarsResult = feedBars}
+            Dim tradeRec As New StubTradeRecordService
+            Dim resolver As New StubContractResolver
+            Dim svc = MakeService(orderSvc, barSvc, tradeRec, resolver)
+
+            Dim slot = MakeOpenSlot()
+            slot.IsEarlyModeEntry = False
+            slot.TradeRecordId = 11L
+            slot.LivePrice = 0D
+
+            Dim ctx As New PositionManagementTickContext With {
+                .Bars = Nothing,
+                .StrategyTimeframe = BarTimeframe.FiveMinute,
+                .AsOfUtc = now,
+                .StMultiplier = 3.0R,
+                .ExitScoreThreshold = 7,
+                .EarlyModeMaxAgeMinutes = 30,
+                .IsPrimaryForBracketEdit = True,
+                .IsDebugCaptureEnabled = False
+            }
+
+            Dim r = Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+            Assert.Equal(PositionManagementOutcome.Continue, r.Outcome)
+
+            Await WaitForCondition(Function() Not tradeRec.TickSnapshots.IsEmpty, TimeSpan.FromSeconds(2))
+            Assert.NotEmpty(tradeRec.TickSnapshots)
+            ' Last bar timestamp survives unstripped → strip was correctly age-gated.
+            Dim snap = tradeRec.TickSnapshots.First()
+            Assert.Equal(feedBars(19).Timestamp, snap.BarTimestamp)
+        End Function
+
         Private Shared Async Function WaitForCondition(predicate As Func(Of Boolean),
                                                          timeout As TimeSpan) As Task
             Dim deadline = DateTime.UtcNow + timeout
@@ -488,6 +674,350 @@ Namespace TopStepTrader.Tests.Services.Trading
                 If predicate() Then Return
                 Await Task.Delay(25)
             End While
+        End Function
+
+        ' ── (g) BUG-102 F4-a: all broker resolution fails, LivePrice estimate kicks in ────
+
+        ''' <summary>Builds a slot in the pre-backfill state (EntryPrice=0) with a known
+        ''' LivePrice so the F1 fallback chain has a non-zero last-resort source.</summary>
+        Private Shared Function MakeUnbackfilledSlot(Optional livePrice As Decimal = 99.25D) As PositionSlot
+            Dim slot = MakeOpenSlot()
+            slot.EntryPrice = 0D
+            slot.StopPrice = 0D
+            slot.LivePrice = livePrice
+            slot.EntryOrderId = 7777L
+            slot.TradeRecordId = 123L
+            Return slot
+        End Function
+
+        Private Shared Function MakeSnapshotWithOpenRate(openRate As Decimal) As LivePositionSnapshot
+            Return New LivePositionSnapshot With {
+                .PositionId = 555L,
+                .OpenRate = openRate,
+                .Units = 1D,
+                .Amount = 1D,
+                .IsBuy = True,
+                .UnrealizedPnlUsd = 0D,
+                .PositionCount = 1
+            }
+        End Function
+
+        <Fact>
+        Public Async Function G_BackfillEntry_AllBrokerSourcesFail_UsesLivePriceEstimate() As Task
+            ' All three broker steps fail: TryGetOrderFillPriceAsync = Nothing, snapshot.OpenRate = 0,
+            ' GetOpenPositionsAsync = empty. slot.LivePrice = 99.25 provides the last-resort estimate.
+            Dim orderSvc As New StubOrderService With {
+                .SnapshotResult = MakeSnapshotWithOpenRate(0D),
+                .FillPriceResult = Nothing,
+                .OpenPositionsResult = CType(New List(Of LivePositionSnapshot)(), IEnumerable(Of LivePositionSnapshot))
+            }
+            Dim barSvc As New StubBarService
+            Dim tradeRec As New StubTradeRecordService
+            Dim resolver As New StubContractResolver
+            Dim warnLogger As New CapturingLogger(Of PositionManagementService)()
+            Dim svc = MakeService(orderSvc, barSvc, tradeRec, resolver, warnLogger)
+
+            Dim slot = MakeUnbackfilledSlot(livePrice:=99.25D)
+            Dim ctx = MakeTickContext(FlatBars(DateTimeOffset.UtcNow.AddMinutes(-15 * 29)))
+
+            Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+
+            Assert.Equal(99.25D, slot.EntryPrice)
+            Assert.True(slot.IsEntryPriceEstimated)
+            Assert.Contains(warnLogger.Warnings,
+                Function(m) m.IndexOf("live-price estimate", StringComparison.OrdinalIgnoreCase) >= 0)
+            ' No UpdateEntryPriceAsync call with 0 — and the estimated value also must not be persisted
+            ' (the F1 suppression only allows non-zero confirmed prices through).
+            Assert.DoesNotContain(tradeRec.UpdateEntryPriceCalls, Function(c) c.EntryPrice = 0D)
+        End Function
+
+        ' ── (h) BUG-102 F4-b: fill-price succeeds, OpenRate=0 — not estimated ────
+
+        <Fact>
+        Public Async Function H_BackfillEntry_FillPriceWins_NotEstimated() As Task
+            Dim orderSvc As New StubOrderService With {
+                .SnapshotResult = MakeSnapshotWithOpenRate(0D),
+                .FillPriceResult = CType(101.5D, Decimal?)
+            }
+            Dim barSvc As New StubBarService
+            Dim tradeRec As New StubTradeRecordService
+            Dim resolver As New StubContractResolver
+            Dim svc = MakeService(orderSvc, barSvc, tradeRec, resolver)
+
+            Dim slot = MakeUnbackfilledSlot(livePrice:=99.25D)
+            Dim ctx = MakeTickContext(FlatBars(DateTimeOffset.UtcNow.AddMinutes(-15 * 29)))
+
+            Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+
+            Assert.Equal(101.5D, slot.EntryPrice)
+            Assert.False(slot.IsEntryPriceEstimated)
+            ' UpdateEntryPriceAsync is fire-and-forget; wait briefly.
+            Await WaitForCondition(Function() Not tradeRec.UpdateEntryPriceCalls.IsEmpty, TimeSpan.FromSeconds(2))
+            Assert.Contains(tradeRec.UpdateEntryPriceCalls, Function(c) c.EntryPrice = 101.5D)
+        End Function
+
+        ' ── (i) BUG-102 F4-c: every source fails and LivePrice is 0 — slot stays at 0 ────
+
+        <Fact>
+        Public Async Function I_BackfillEntry_AllSourcesFail_NoUpdateEntryPriceWithZero() As Task
+            Dim orderSvc As New StubOrderService With {
+                .SnapshotResult = MakeSnapshotWithOpenRate(0D),
+                .FillPriceResult = Nothing
+            }
+            Dim barSvc As New StubBarService
+            Dim tradeRec As New StubTradeRecordService
+            Dim resolver As New StubContractResolver
+            Dim warnLogger As New CapturingLogger(Of PositionManagementService)()
+            Dim svc = MakeService(orderSvc, barSvc, tradeRec, resolver, warnLogger)
+
+            Dim slot = MakeUnbackfilledSlot(livePrice:=0D)
+            Dim ctx = MakeTickContext(FlatBars(DateTimeOffset.UtcNow.AddMinutes(-15 * 29)))
+
+            Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+
+            Assert.Equal(0D, slot.EntryPrice)
+            Assert.True(slot.IsEntryPriceEstimated)
+            Assert.Contains(warnLogger.Warnings,
+                Function(m) m.IndexOf("could not resolve a non-zero entry price", StringComparison.OrdinalIgnoreCase) >= 0)
+            ' UpdateEntryPriceAsync must NEVER be invoked with 0 — give the fire-and-forget a moment
+            ' to run, then assert no such call landed.
+            Await Task.Delay(100)
+            Assert.DoesNotContain(tradeRec.UpdateEntryPriceCalls, Function(c) c.EntryPrice = 0D)
+        End Function
+
+        ' ── STRAT-41 — Pullback-gated scale-in (F4) ──────────────────────────
+
+        ''' <summary>Captures (slot, addContracts) tuples passed to OnScaleInRequested.</summary>
+        Private Class ScaleInCapture
+            Public Calls As New List(Of (Slot As PositionSlot, AddContracts As Integer))
+            Public Function HandleAsync(s As PositionSlot, n As Integer) As Task
+                ' Snapshot the slot's Side + Contracts at the call moment.
+                Calls.Add((s, n))
+                Return Task.CompletedTask
+            End Function
+        End Class
+
+        Private Shared Function MakeStrat41TickContext(bars As IList(Of MarketBar),
+                                                         scaleInCapture As ScaleInCapture,
+                                                         Optional pullbackEnabled As Boolean = True,
+                                                         Optional maxAfterScaleIn As Integer = 2,
+                                                         Optional pullbackContracts As Integer = 1,
+                                                         Optional pullbackFactor As Decimal = 0.5D) As PositionManagementTickContext
+            Return New PositionManagementTickContext With {
+                .Bars = bars,
+                .StrategyTimeframe = BarTimeframe.FifteenMinute,
+                .AsOfUtc = DateTime.UtcNow,
+                .StMultiplier = 3.0R,
+                .ExitScoreThreshold = 7,
+                .EarlyModeMaxAgeMinutes = 30,
+                .IsPrimaryForBracketEdit = True,
+                .IsDebugCaptureEnabled = False,
+                .LeverageMultiplier = 1,
+                .BandForAdx = Function(adx As Single)
+                                  ' Synthetic ratchet: any positive ADX maps to a band so the
+                                  ' legacy STRAT-31 path would have fired here. STRAT-41 F4-a
+                                  ' verifies it no longer does.
+                                  If adx >= 60.0F Then Return 3
+                                  If adx >= 40.0F Then Return 2
+                                  If adx >= 25.0F Then Return 1
+                                  Return 0
+                              End Function,
+                .OnScaleInRequested = AddressOf scaleInCapture.HandleAsync,
+                .PullbackScaleInEnabled = pullbackEnabled,
+                .PullbackAtrFactor = pullbackFactor,
+                .PullbackScaleInContracts = pullbackContracts,
+                .MaxContractsAfterScaleIn = maxAfterScaleIn
+            }
+        End Function
+
+        ''' <summary>Computes (stLine, atrNow) on the supplied bars using the same
+        ''' indicator code the service uses, so tests can position LivePrice in/out of
+        ''' the pullback band without depending on indicator internals.</summary>
+        Private Shared Function ResolveStLineAndAtr(bars As IList(Of MarketBar)) As (StLine As Decimal, Atr As Decimal)
+            Dim highs = bars.Select(Function(b) CDec(b.High)).ToList()
+            Dim lows = bars.Select(Function(b) CDec(b.Low)).ToList()
+            Dim closes = bars.Select(Function(b) CDec(b.Close)).ToList()
+            Dim st = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=10, multiplier:=3.0R)
+            Dim atrArr = TechnicalIndicators.ATR(highs, lows, closes, period:=14)
+            Dim n = bars.Count - 1
+            Return (CDec(st.Line(n)), CDec(atrArr(n)))
+        End Function
+
+        <Fact>
+        Public Async Function S41a_Strat31Retired_NoScaleInOnRisingBands() As Task
+            ' Rising ADX would have triggered the legacy STRAT-31 band ratchet — but with
+            ' the new path the only way to scale in is pullback, and this fixture sits
+            ' well above the ST line (no pullback). Expect zero scale-in calls.
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            Dim barSvc As New StubBarService
+            Dim tradeRec As New StubTradeRecordService
+            Dim resolver As New StubContractResolver
+            Dim svc = MakeService(orderSvc, barSvc, tradeRec, resolver)
+
+            Dim bars = UptrendBars(DateTimeOffset.UtcNow.AddMinutes(-15 * 29), count:=30, basePrice:=100D, priceStep:=0.5D)
+            Dim sa = ResolveStLineAndAtr(bars)
+            Dim slot = MakeOpenSlot()
+            slot.IsEarlyModeEntry = False
+            ' Park LivePrice well above the ST line so distance >> 0.5 × ATR (trend extension).
+            slot.LivePrice = sa.StLine + 5D * sa.Atr
+
+            Dim cap As New ScaleInCapture
+            Dim ctx = MakeStrat41TickContext(bars, cap)
+
+            Dim r = Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+
+            Assert.Equal(PositionManagementOutcome.Continue, r.Outcome)
+            Assert.Empty(cap.Calls)
+            Assert.False(slot.HasScaledInOnPullback)
+        End Function
+
+        <Fact>
+        Public Async Function S41b_PullbackHappyPath_AddsOneContract() As Task
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            Dim barSvc As New StubBarService
+            Dim tradeRec As New StubTradeRecordService
+            Dim resolver As New StubContractResolver
+            Dim svc = MakeService(orderSvc, barSvc, tradeRec, resolver)
+
+            ' Uptrend → DI+ > DI- and ST direction = Buy. Park LivePrice inside the
+            ' pullback band (within 0.5 × ATR of ST line).
+            Dim bars = UptrendBars(DateTimeOffset.UtcNow.AddMinutes(-15 * 29), count:=30, basePrice:=100D, priceStep:=0.5D)
+            Dim sa = ResolveStLineAndAtr(bars)
+            Assert.True(sa.Atr > 0D, "Fixture must produce a positive ATR.")
+
+            Dim slot = MakeOpenSlot()
+            slot.IsEarlyModeEntry = False
+            slot.Contracts = 1
+            ' distance = LivePrice - stLine; want 0 < distance < 0.5 × ATR.
+            slot.LivePrice = sa.StLine + 0.25D * sa.Atr
+
+            Dim cap As New ScaleInCapture
+            Dim ctx = MakeStrat41TickContext(bars, cap)
+
+            Dim r = Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+
+            Assert.Equal(PositionManagementOutcome.Continue, r.Outcome)
+            Assert.Single(cap.Calls)
+            Assert.Equal(1, cap.Calls(0).AddContracts)
+            Assert.True(slot.HasScaledInOnPullback)
+        End Function
+
+        <Fact>
+        Public Async Function S41c_TrendExtension_NoScaleIn() As Task
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            Dim barSvc As New StubBarService
+            Dim tradeRec As New StubTradeRecordService
+            Dim resolver As New StubContractResolver
+            Dim svc = MakeService(orderSvc, barSvc, tradeRec, resolver)
+
+            Dim bars = UptrendBars(DateTimeOffset.UtcNow.AddMinutes(-15 * 29), count:=30, basePrice:=100D, priceStep:=0.5D)
+            Dim sa = ResolveStLineAndAtr(bars)
+            Dim slot = MakeOpenSlot()
+            slot.IsEarlyModeEntry = False
+            slot.Contracts = 1
+            ' Way above the ST line — outside the pullback band.
+            slot.LivePrice = sa.StLine + 3D * sa.Atr
+
+            Dim cap As New ScaleInCapture
+            Dim ctx = MakeStrat41TickContext(bars, cap)
+
+            Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+
+            Assert.Empty(cap.Calls)
+            Assert.False(slot.HasScaledInOnPullback)
+        End Function
+
+        <Fact>
+        Public Async Function S41d_Idempotency_NoSecondScaleIn() As Task
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            Dim barSvc As New StubBarService
+            Dim tradeRec As New StubTradeRecordService
+            Dim resolver As New StubContractResolver
+            Dim svc = MakeService(orderSvc, barSvc, tradeRec, resolver)
+
+            Dim bars = UptrendBars(DateTimeOffset.UtcNow.AddMinutes(-15 * 29), count:=30, basePrice:=100D, priceStep:=0.5D)
+            Dim sa = ResolveStLineAndAtr(bars)
+            Dim slot = MakeOpenSlot()
+            slot.IsEarlyModeEntry = False
+            slot.Contracts = 1
+            ' Already scaled-in once (HasScaledInOnPullback set by a prior tick).
+            slot.HasScaledInOnPullback = True
+            ' Even though we're sitting in a perfect pullback now, the latch blocks a 2nd add.
+            slot.LivePrice = sa.StLine + 0.25D * sa.Atr
+
+            Dim cap As New ScaleInCapture
+            Dim ctx = MakeStrat41TickContext(bars, cap)
+
+            Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+
+            Assert.Empty(cap.Calls)
+            Assert.True(slot.HasScaledInOnPullback)
+        End Function
+
+        <Fact>
+        Public Async Function S41e_CounterDi_VetoesScaleIn() As Task
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            Dim barSvc As New StubBarService
+            Dim tradeRec As New StubTradeRecordService
+            Dim resolver As New StubContractResolver
+            Dim svc = MakeService(orderSvc, barSvc, tradeRec, resolver)
+
+            ' Construct a slot whose side opposes the trend so the DI veto fires in
+            ' isolation: an uptrend fixture (DI+ > DI-) but the slot is "Sell". To keep
+            ' the geometry check passing (so the DI gate is what blocks, not geometry),
+            ' park LivePrice just below the ST line — Sell distance = stLine - LivePrice
+            ' is positive and within the threshold.
+            Dim bars = UptrendBars(DateTimeOffset.UtcNow.AddMinutes(-15 * 29), count:=30, basePrice:=100D, priceStep:=0.5D)
+            Dim sa = ResolveStLineAndAtr(bars)
+            Dim highsDec = bars.Select(Function(b) CDec(b.High)).ToList()
+            Dim lowsDec = bars.Select(Function(b) CDec(b.Low)).ToList()
+            Dim closesDec = bars.Select(Function(b) CDec(b.Close)).ToList()
+            Dim dmi = TechnicalIndicators.DMI(highsDec, lowsDec, closesDec, period:=14)
+            Dim n = bars.Count - 1
+            ' Sanity-check the fixture: on the uptrend, DI+ > DI- (so a Sell slot's
+            ' minusOk gate is False → veto fires).
+            Assert.True(dmi.PlusDI(n) > dmi.MinusDI(n),
+                        $"Fixture invariant: expected DI+ > DI- on uptrend last bar; got +DI={dmi.PlusDI(n):F2} -DI={dmi.MinusDI(n):F2}.")
+
+            Dim slot = MakeOpenSlot()
+            slot.IsEarlyModeEntry = False
+            slot.Side = "Sell"
+            slot.Contracts = 1
+            ' Sell-side geometry: distance = stLine - currentClose. Park below the ST
+            ' line so the *distance* check passes; the DI gate is then the sole vetoer.
+            slot.LivePrice = sa.StLine - 0.25D * sa.Atr
+
+            Dim cap As New ScaleInCapture
+            Dim ctx = MakeStrat41TickContext(bars, cap)
+
+            Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+
+            Assert.Empty(cap.Calls)
+            Assert.False(slot.HasScaledInOnPullback)
+        End Function
+
+        <Fact>
+        Public Async Function S41f_AtCap_NoScaleIn() As Task
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            Dim barSvc As New StubBarService
+            Dim tradeRec As New StubTradeRecordService
+            Dim resolver As New StubContractResolver
+            Dim svc = MakeService(orderSvc, barSvc, tradeRec, resolver)
+
+            Dim bars = UptrendBars(DateTimeOffset.UtcNow.AddMinutes(-15 * 29), count:=30, basePrice:=100D, priceStep:=0.5D)
+            Dim sa = ResolveStLineAndAtr(bars)
+            Dim slot = MakeOpenSlot()
+            slot.IsEarlyModeEntry = False
+            slot.Contracts = 2   ' Already at MaxContractsAfterScaleIn = 2 default.
+            slot.LivePrice = sa.StLine + 0.25D * sa.Atr
+
+            Dim cap As New ScaleInCapture
+            Dim ctx = MakeStrat41TickContext(bars, cap)
+
+            Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+
+            Assert.Empty(cap.Calls)
+            Assert.False(slot.HasScaledInOnPullback)
         End Function
 
     End Class

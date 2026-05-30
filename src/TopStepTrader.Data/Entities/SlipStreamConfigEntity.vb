@@ -55,6 +55,7 @@ Namespace TopStepTrader.Data.Entities
         Public Property UseSession As Boolean = True
         Public Property SessionWindow As String = "0830-1500"
         Public Property FlatWindow As String = "1450-1500"
+        Public Property SessionTimeZone As String = "Central Standard Time"
         Public Property CooldownBars As Integer = 3
         Public Property EnableLong As Boolean = True
         Public Property EnableShort As Boolean = True

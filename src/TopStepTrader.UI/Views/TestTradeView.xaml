@@ -79,6 +79,13 @@
                         Padding="14,10" Margin="6,0,0,0"/>
             </Grid>
 
+            <!-- ── BUG-102 F3: Audit EntryPrice=0 rows ── -->
+            <Button Content="Audit EntryPrice=0 rows"
+                    Command="{Binding AuditEntryPriceCommand}"
+                    HorizontalAlignment="Left"
+                    Padding="14,8" Margin="0,0,0,16"
+                    ToolTip="Walks every closed LiveTradeRecord with EntryPrice=0 and attempts broker-driven repair. Unresolvable rows are logged for manual handling."/>
+
             <!-- ── Result panel ── -->
             <TextBlock Text="Result"
                        Foreground="{StaticResource TextSecondaryBrush}"
@@ -89,6 +96,77 @@
                      Text="{Binding ResultLog, Mode=OneWay}"
                      VerticalScrollBarVisibility="Auto"
                      TextWrapping="NoWrap"/>
+
+            <!-- ── OBS-07 F2: Snapshot Health tile ── -->
+            <Border Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                    CornerRadius="6" Padding="16,12" Margin="0,20,0,0"
+                    DataContext="{Binding SnapshotHealth}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0"
+                                   Text="Snapshot Health"
+                                   FontWeight="Bold" FontSize="13"
+                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                        <TextBlock Grid.Column="1"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextSecondaryBrush}">
+                            <Run Text="last refresh: "/>
+                            <Run Text="{Binding LastRefreshDisplay, Mode=OneWay}"/>
+                        </TextBlock>
+                    </Grid>
+                    <TextBlock Text="{Binding SummaryLine, Mode=OneWay}"
+                               FontFamily="Consolas" FontSize="12"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               Margin="0,0,0,8"/>
+                    <ItemsControl ItemsSource="{Binding Recent}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="18"/>
+                                        <ColumnDefinition Width="80"/>
+                                        <ColumnDefinition Width="60"/>
+                                        <ColumnDefinition Width="80"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding StatusGlyph}"
+                                               FontSize="14">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#B0303A"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasSnapshots}" Value="True">
+                                                        <Setter Property="Foreground" Value="#1F8A4C"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding TradeId}"
+                                               FontFamily="Consolas" FontSize="12"/>
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding Symbol}"
+                                               FontFamily="Consolas" FontSize="12"/>
+                                    <TextBlock Grid.Column="3"
+                                               Text="{Binding ExitTimeDisplay}"
+                                               FontFamily="Consolas" FontSize="12"/>
+                                    <TextBlock Grid.Column="4"
+                                               Text="{Binding StatusLabel}"
+                                               FontFamily="Consolas" FontSize="11"
+                                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
 
         </StackPanel>
     </ScrollViewer>

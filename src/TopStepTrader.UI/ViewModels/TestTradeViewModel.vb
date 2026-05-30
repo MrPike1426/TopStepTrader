@@ -29,6 +29,7 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _orderService As IOrderService
         Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _bars As IBarIngestionService
+        Private ReadOnly _tradeRecordService As ITradeRecordService
         Private ReadOnly _logger As ILogger(Of TestTradeViewModel)
 
         Private _selectedSymbol As String = "MES"
@@ -42,10 +43,14 @@ Namespace TopStepTrader.UI.ViewModels
         Public Sub New(orderService As IOrderService,
                        session As ITradingSessionContext,
                        bars As IBarIngestionService,
+                       tradeRecordService As ITradeRecordService,
+                       snapshotHealth As SnapshotHealthViewModel,
                        logger As ILogger(Of TestTradeViewModel))
             _orderService = orderService
             _session = session
             _bars = bars
+            _tradeRecordService = tradeRecordService
+            SnapshotHealth = snapshotHealth
             _logger = logger
 
             For Each s In UltimateScalperOrchestrator.WatchlistSymbols
@@ -56,6 +61,7 @@ Namespace TopStepTrader.UI.ViewModels
             SellStopCommand = New RelayCommand(Sub() FireAsync(OrderSide.Sell))
             CancelLastCommand = New RelayCommand(Sub() CancelLastAsync(),
                                                   Function() _lastTestOrderId.HasValue)
+            AuditEntryPriceCommand = New RelayCommand(Sub() AuditEntryPriceAsync())
         End Sub
 
         Public ReadOnly Property Symbols As New ObservableCollection(Of String)()
@@ -109,6 +115,11 @@ Namespace TopStepTrader.UI.ViewModels
         Public ReadOnly Property BuyStopCommand As ICommand
         Public ReadOnly Property SellStopCommand As ICommand
         Public ReadOnly Property CancelLastCommand As ICommand
+        ''' <summary>BUG-102 F3: audits LiveTradeRecords with EntryPrice=0 and attempts broker-driven repair.</summary>
+        Public ReadOnly Property AuditEntryPriceCommand As ICommand
+
+        ''' <summary>OBS-07 F2: Snapshot Health tile bound under the Diagnostics view.</summary>
+        Public ReadOnly Property SnapshotHealth As SnapshotHealthViewModel
 
         Private Async Sub FireAsync(side As OrderSide)
             Try
@@ -227,6 +238,27 @@ Namespace TopStepTrader.UI.ViewModels
             _lastTestOrderId = Nothing
             _lastTestContractResolved = String.Empty
             RelayCommand.RaiseCanExecuteChanged()
+        End Sub
+
+        ''' <summary>
+        ''' BUG-102 F3: dev-only audit of LiveTradeRecords whose <c>EntryPrice = 0</c>.
+        ''' Surfaces the count and attempts broker-driven repair on rows whose context is
+        ''' still resolvable; logs unresolvable rows for manual handling.
+        ''' </summary>
+        Private Async Sub AuditEntryPriceAsync()
+            Try
+                Dim accountId As Long = If(_session?.SelectedAccount?.Id, 0L)
+                If accountId = 0L Then
+                    Append("Audit EntryPrice=0: no account selected.")
+                    Return
+                End If
+                Append("Audit EntryPrice=0: starting…")
+                Dim result = Await _tradeRecordService.AuditZeroEntryPriceRowsAsync(accountId)
+                Append($"Audit EntryPrice=0 complete: audited {result.Audited}; repaired {result.Repaired}; unresolvable {result.Unresolvable}.")
+            Catch ex As Exception
+                _logger.LogWarning(ex, "TestTrade AuditEntryPrice threw")
+                Append($"✗ Audit EntryPrice=0 threw: {ex.Message}")
+            End Try
         End Sub
 
         Private Sub Append(line As String)

@@ -62,6 +62,7 @@ Namespace TopStepTrader.Data
                 existing.UseSession = incoming.UseSession
                 existing.SessionWindow = incoming.SessionWindow
                 existing.FlatWindow = incoming.FlatWindow
+                existing.SessionTimeZone = incoming.SessionTimeZone
                 existing.CooldownBars = incoming.CooldownBars
                 existing.EnableLong = incoming.EnableLong
                 existing.EnableShort = incoming.EnableShort
@@ -111,6 +112,7 @@ Namespace TopStepTrader.Data
             cfg.UseSession = entity.UseSession
             cfg.SessionWindow = If(String.IsNullOrWhiteSpace(entity.SessionWindow), "0830-1500", entity.SessionWindow)
             cfg.FlatWindow = If(String.IsNullOrWhiteSpace(entity.FlatWindow), "1450-1500", entity.FlatWindow)
+            cfg.SessionTimeZone = If(String.IsNullOrWhiteSpace(entity.SessionTimeZone), "Central Standard Time", entity.SessionTimeZone)
             cfg.CooldownBars = If(entity.CooldownBars < 0, 3, entity.CooldownBars)
             cfg.EnableLong = entity.EnableLong
             cfg.EnableShort = entity.EnableShort
@@ -170,6 +172,7 @@ Namespace TopStepTrader.Data
             e.UseSession = config.UseSession
             e.SessionWindow = config.SessionWindow
             e.FlatWindow = config.FlatWindow
+            e.SessionTimeZone = config.SessionTimeZone
             e.CooldownBars = config.CooldownBars
             e.EnableLong = config.EnableLong
             e.EnableShort = config.EnableShort

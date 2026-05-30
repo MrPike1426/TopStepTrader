@@ -71,6 +71,19 @@ Namespace TopStepTrader.Core.Interfaces
                                       Optional cancel As CancellationToken = Nothing) As Task(Of Boolean)
 
         ''' <summary>
+        ''' BUG-100: closes the contract AND awaits the broker-confirmed closing fill so the
+        ''' caller can persist a truthful ExitPrice/PnL. The hub-side <c>GatewayUserOrder</c>
+        ''' push is the preferred source (sub-second). On hub timeout the implementation falls
+        ''' back to the REST search-history endpoint. When neither yields a fill within the
+        ''' overall timeout, <see cref="BrokerCloseFill"/> is returned as <c>Nothing</c> and
+        ''' the caller is expected to fall back to its engine-derived value.
+        ''' </summary>
+        Function FlattenContractWithFillAsync(accountId As Long,
+                                              contractId As String,
+                                              Optional cancel As CancellationToken = Nothing) _
+            As Task(Of (Success As Boolean, Fill As BrokerCloseFill))
+
+        ''' <summary>
         ''' Updates the SL and/or TP of an open position on the broker.
         ''' Used by the stepped trailing bracket to push free-ride levels to the broker
         ''' so positions are protected even if the engine is stopped.

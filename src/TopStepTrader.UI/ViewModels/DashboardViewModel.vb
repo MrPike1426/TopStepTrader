@@ -2,6 +2,7 @@ Imports System.Collections.ObjectModel
 Imports System.Windows
 Imports Microsoft.Extensions.Logging
 Imports Microsoft.Extensions.Options
+Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Events
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
@@ -24,6 +25,8 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _userPrefs As IUserPreferencesService
         Private ReadOnly _tradeRecord As ITradeRecordService
         Private ReadOnly _logger As ILogger(Of DashboardViewModel)
+        ''' <summary>FEAT-71: surfaces the daily-loss kill-switch state on the dashboard banner.</summary>
+        Private ReadOnly _dailyLossGuard As IDailyLossGuard
 
         ''' <summary>
         ''' BUG-86 F3: an open trade older than this is flagged as stale on the
@@ -330,12 +333,54 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── FEAT-71 — Daily-loss kill-switch banner state ───────────────────
+
+        Private _guardIsHalted As Boolean = False
+        Public Property GuardIsHalted As Boolean
+            Get
+                Return _guardIsHalted
+            End Get
+            Private Set(value As Boolean)
+                If SetProperty(_guardIsHalted, value) Then
+                    OnPropertyChanged(NameOf(GuardBannerVisibility))
+                    RelayCommand.RaiseCanExecuteChanged()
+                End If
+            End Set
+        End Property
+
+        Public ReadOnly Property GuardBannerVisibility As Visibility
+            Get
+                Return If(_guardIsHalted, Visibility.Visible, Visibility.Collapsed)
+            End Get
+        End Property
+
+        Private _guardHaltMessage As String = String.Empty
+        Public Property GuardHaltMessage As String
+            Get
+                Return _guardHaltMessage
+            End Get
+            Private Set(value As String)
+                SetProperty(_guardHaltMessage, value)
+            End Set
+        End Property
+
+        Private _guardCombinedPnl As Decimal = 0D
+        Public Property GuardCombinedPnl As Decimal
+            Get
+                Return _guardCombinedPnl
+            End Get
+            Private Set(value As Decimal)
+                SetProperty(_guardCombinedPnl, value)
+            End Set
+        End Property
+
         ' ── Commands ─────────────────────────────────────────────────────────
 
         Public ReadOnly Property RefreshCommand As RelayCommand
         Public ReadOnly Property ApplyRiskCommand As RelayCommand
         Public ReadOnly Property ConnectCommand As RelayCommand
         Public ReadOnly Property ReconcileNowCommand As RelayCommand
+        Public ReadOnly Property ResetGuardCommand As RelayCommand
 
         ' ── Constructor ──────────────────────────────────────────────────────
 
@@ -346,7 +391,8 @@ Namespace TopStepTrader.UI.ViewModels
                        riskOptions As IOptions(Of RiskSettings),
                        userPrefs As IUserPreferencesService,
                        tradeRecord As ITradeRecordService,
-                       logger As ILogger(Of DashboardViewModel))
+                       logger As ILogger(Of DashboardViewModel),
+                       Optional dailyLossGuard As IDailyLossGuard = Nothing)
             _accountService = accountService
             _authService = authService
             _balanceHistoryService = balanceHistoryService
@@ -355,6 +401,7 @@ Namespace TopStepTrader.UI.ViewModels
             _userPrefs = userPrefs
             _tradeRecord = tradeRecord
             _logger = logger
+            _dailyLossGuard = dailyLossGuard
 
             ' Initialize from persisted session state (loaded from user-prefs.json at app startup)
             _autoExecutionEnabled = _session.AutoExecutionEnabled
@@ -369,6 +416,15 @@ Namespace TopStepTrader.UI.ViewModels
             ConnectCommand = New RelayCommand(AddressOf ExecuteConnect)
             ReconcileNowCommand = New RelayCommand(AddressOf ExecuteReconcileNow,
                                                    Function() Not _isReconciling)
+            ResetGuardCommand = New RelayCommand(AddressOf ExecuteResetGuard,
+                                                 Function() _guardIsHalted)
+
+            If _dailyLossGuard IsNot Nothing Then
+                Dim initial = _dailyLossGuard.GetState()
+                ApplyGuardState(initial)
+                AddHandler _dailyLossGuard.Halted, AddressOf OnGuardHalted
+                AddHandler _dailyLossGuard.Released, AddressOf OnGuardReleased
+            End If
         End Sub
 
         ' ── Data loading ─────────────────────────────────────────────────────
@@ -585,6 +641,46 @@ Namespace TopStepTrader.UI.ViewModels
             If Application.Current?.Dispatcher IsNot Nothing Then
                 Application.Current.Dispatcher.Invoke(action)
             End If
+        End Sub
+
+        ' ── FEAT-71 — Daily-loss guard event handlers / reset path ──────────
+
+        Private Sub OnGuardHalted(sender As Object, state As DailyLossGuardState)
+            Dispatch(Sub() ApplyGuardState(state))
+        End Sub
+
+        Private Sub OnGuardReleased(sender As Object, e As EventArgs)
+            Dispatch(Sub()
+                         If _dailyLossGuard Is Nothing Then Return
+                         ApplyGuardState(_dailyLossGuard.GetState())
+                     End Sub)
+        End Sub
+
+        Private Sub ApplyGuardState(state As DailyLossGuardState)
+            If state Is Nothing Then Return
+            GuardCombinedPnl = state.CombinedDailyPnl
+            GuardHaltMessage = If(String.IsNullOrEmpty(state.HaltMessage),
+                                   "Daily loss limit reached. New entries are disabled.",
+                                   state.HaltMessage)
+            GuardIsHalted = state.IsHalted
+        End Sub
+
+        Private Sub ExecuteResetGuard(param As Object)
+            If _dailyLossGuard Is Nothing Then Return
+            Dim confirm = MessageBox.Show(
+                $"Reset daily loss guard? Combined PnL is currently {_guardCombinedPnl:C2}.",
+                "Confirm Reset",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No)
+            If confirm <> MessageBoxResult.Yes Then Return
+            Task.Run(Async Function() As Task
+                         Try
+                             Await _dailyLossGuard.ResetAsync("Manual reset by user")
+                         Catch ex As Exception
+                             _logger.LogWarning(ex, "DailyLossGuard reset failed")
+                         End Try
+                     End Function)
         End Sub
 
     End Class

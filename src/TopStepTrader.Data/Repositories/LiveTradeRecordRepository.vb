@@ -22,7 +22,8 @@ Namespace TopStepTrader.Data.Repositories
 
         Public Async Function CloseAsync(id As Long, exitTime As DateTimeOffset,
                                          exitPrice As Decimal, pnl As Decimal,
-                                         exitReason As String) As Task _
+                                         exitReason As String,
+                                         Optional closeFillSource As String = Nothing) As Task _
             Implements ILiveTradeRecordRepository.CloseAsync
             Dim entity = Await _db.LiveTradeRecords.FindAsync(id)
             If entity Is Nothing Then Return
@@ -31,6 +32,12 @@ Namespace TopStepTrader.Data.Repositories
             entity.PnL = pnl
             entity.ExitReason = exitReason
             entity.IsOpen = False
+            ' BUG-100: persist broker-fill provenance only when the caller supplied it.
+            ' Pre-BUG-100 callers (RecoverOpenTradesAsync, BUG-94 reconciliation) leave
+            ' the column NULL — which is the expected "unknown source" sentinel.
+            If Not String.IsNullOrEmpty(closeFillSource) Then
+                entity.CloseFillSource = closeFillSource
+            End If
             entity.UpdatedAt = DateTimeOffset.UtcNow
             Await _db.SaveChangesAsync()
         End Function
@@ -94,9 +101,11 @@ Namespace TopStepTrader.Data.Repositories
         Public Async Function FindOpenByContractIdAsync(contractId As String) As Task(Of LiveTradeRecordEntity) _
             Implements ILiveTradeRecordRepository.FindOpenByContractIdAsync
             If String.IsNullOrEmpty(contractId) Then Return Nothing
-            ' BUG-94 F1: broker hub reports the exact PX contract id we wrote at fill time;
-            ' no root-symbol fallback is needed here (unlike the broker-side fallback in
-            ' GetLivePositionSnapshotAsync that handles quarterly rolls).
+            ' BUG-98: literal equality on ContractId. The caller is responsible for normalising
+            ' to the persisted shape — strategy-attributed rows store the short root symbol
+            ' (e.g. "MES"), but BrokerFill-Unattributed rows store the full PX id (e.g.
+            ' "CON.F.US.MES.U26"). TradeReconciliationWorker.ScanOrphansAsync issues two
+            ' lookups (resolved root then literal id) to cover both shapes.
             Return Await _db.LiveTradeRecords _
                 .Where(Function(r) r.IsOpen AndAlso r.ContractId = contractId) _
                 .OrderByDescending(Function(r) r.Id) _
@@ -134,6 +143,29 @@ Namespace TopStepTrader.Data.Repositories
             Return Await q.OrderByDescending(Function(r) r.EntryTime) _
                           .Take(count) _
                           .ToListAsync()
+        End Function
+
+        Public Async Function SumRealisedPnlSinceAsync(sinceUtc As DateTimeOffset) As Task(Of Decimal) _
+            Implements ILiveTradeRecordRepository.SumRealisedPnlSinceAsync
+            ' EF Core's SQLite provider stores DateTimeOffset as TEXT in a format whose
+            ' parameter-binding round-trip does not sort-compare reliably against the
+            ' stored representation. Project (Id, PnL, ExitTime) into memory then filter
+            ' on the materialised DateTimeOffset values. Set is bounded by one trading
+            ' day's closed trades so the in-memory pass is negligible.
+            Dim rows = Await _db.LiveTradeRecords _
+                .Where(Function(r) Not r.IsOpen AndAlso
+                                   r.PnL.HasValue AndAlso
+                                   r.ExitTime.HasValue) _
+                .Select(Function(r) New With {Key .PnL = r.PnL, Key .ExitTime = r.ExitTime}) _
+                .ToListAsync()
+            Dim total As Decimal = 0D
+            For Each r In rows
+                If r.PnL.HasValue AndAlso r.ExitTime.HasValue AndAlso
+                   r.ExitTime.Value >= sinceUtc Then
+                    total += r.PnL.Value
+                End If
+            Next
+            Return total
         End Function
 
     End Class

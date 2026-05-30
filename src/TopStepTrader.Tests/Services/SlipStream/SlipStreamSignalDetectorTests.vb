@@ -117,25 +117,28 @@ Namespace TopStepTrader.Tests.Services.SlipStream
 
         ' ─── Session window parser ────────────────────────────────────────────
 
+        Private Shared ReadOnly s_centralTz As TimeZoneInfo = SlipStreamSignalDetector.ResolveTimeZone("Central Standard Time")
+        Private Shared ReadOnly s_londonTz As TimeZoneInfo = SlipStreamSignalDetector.ResolveTimeZone("GMT Standard Time")
+
         <Fact>
         Public Sub IsTimestampInWindow_InsideDaytimeWindow_ReturnsTrue()
             ' 2026-05-20 16:00 UTC = 11:00 Central (CDT, UTC-5). Window 0830-1500 → inside.
             Dim utcTs = New DateTimeOffset(2026, 5, 20, 16, 0, 0, TimeSpan.Zero)
-            Assert.True(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, "0830-1500"))
+            Assert.True(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, "0830-1500", s_centralTz))
         End Sub
 
         <Fact>
         Public Sub IsTimestampInWindow_BeforeWindow_ReturnsFalse()
             ' 2026-05-20 12:00 UTC = 07:00 Central. Window 0830-1500 → before.
             Dim utcTs = New DateTimeOffset(2026, 5, 20, 12, 0, 0, TimeSpan.Zero)
-            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, "0830-1500"))
+            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, "0830-1500", s_centralTz))
         End Sub
 
         <Fact>
         Public Sub IsTimestampInWindow_AfterWindow_ReturnsFalse()
             ' 2026-05-20 21:00 UTC = 16:00 Central. Window 0830-1500 → after.
             Dim utcTs = New DateTimeOffset(2026, 5, 20, 21, 0, 0, TimeSpan.Zero)
-            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, "0830-1500"))
+            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, "0830-1500", s_centralTz))
         End Sub
 
         <Fact>
@@ -143,18 +146,45 @@ Namespace TopStepTrader.Tests.Services.SlipStream
             ' Window 2300-0500 wraps midnight.
             ' 2026-05-21 06:00 UTC = 01:00 Central → inside the wrap window.
             Dim insideWrap = New DateTimeOffset(2026, 5, 21, 6, 0, 0, TimeSpan.Zero)
-            Assert.True(SlipStreamSignalDetector.IsTimestampInWindow(insideWrap, "2300-0500"))
+            Assert.True(SlipStreamSignalDetector.IsTimestampInWindow(insideWrap, "2300-0500", s_centralTz))
             ' 2026-05-21 15:00 UTC = 10:00 Central → outside.
             Dim outsideWrap = New DateTimeOffset(2026, 5, 21, 15, 0, 0, TimeSpan.Zero)
-            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(outsideWrap, "2300-0500"))
+            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(outsideWrap, "2300-0500", s_centralTz))
         End Sub
 
         <Fact>
         Public Sub IsTimestampInWindow_MalformedWindow_ReturnsFalse()
             Dim utcTs = New DateTimeOffset(2026, 5, 20, 16, 0, 0, TimeSpan.Zero)
-            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, ""))
-            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, "0830"))
-            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, "abc-def"))
+            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, "", s_centralTz))
+            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, "0830", s_centralTz))
+            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(utcTs, "abc-def", s_centralTz))
+        End Sub
+
+        <Fact>
+        Public Sub IsTimestampInWindow_LondonTimeZone_DuringBst_OpensAt0830Bst()
+            ' 2026-05-27 in London is BST (UTC+1). Session window 0830-1500 in London time:
+            '   • 07:29 UTC = 08:29 BST → outside (before open)
+            '   • 07:30 UTC = 08:30 BST → inside (at open)
+            '   • 13:59 UTC = 14:59 BST → inside (last minute)
+            '   • 14:00 UTC = 15:00 BST → outside (at close, exclusive)
+            Dim before = New DateTimeOffset(2026, 5, 27, 7, 29, 0, TimeSpan.Zero)
+            Dim atOpen = New DateTimeOffset(2026, 5, 27, 7, 30, 0, TimeSpan.Zero)
+            Dim lastMin = New DateTimeOffset(2026, 5, 27, 13, 59, 0, TimeSpan.Zero)
+            Dim atClose = New DateTimeOffset(2026, 5, 27, 14, 0, 0, TimeSpan.Zero)
+            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(before, "0830-1500", s_londonTz))
+            Assert.True(SlipStreamSignalDetector.IsTimestampInWindow(atOpen, "0830-1500", s_londonTz))
+            Assert.True(SlipStreamSignalDetector.IsTimestampInWindow(lastMin, "0830-1500", s_londonTz))
+            Assert.False(SlipStreamSignalDetector.IsTimestampInWindow(atClose, "0830-1500", s_londonTz))
+        End Sub
+
+        <Fact>
+        Public Sub ResolveTimeZone_KnownIds_ReturnExpectedZones()
+            ' Default + Central explicitly should resolve consistently.
+            Assert.NotNull(SlipStreamSignalDetector.ResolveTimeZone(""))
+            Assert.NotNull(SlipStreamSignalDetector.ResolveTimeZone("Central Standard Time"))
+            Assert.NotNull(SlipStreamSignalDetector.ResolveTimeZone("GMT Standard Time"))
+            ' Unknown id falls back to a non-null tz (Central or UTC).
+            Assert.NotNull(SlipStreamSignalDetector.ResolveTimeZone("Not A Real Time Zone Id"))
         End Sub
 
         ' ─── Timeframe parser ─────────────────────────────────────────────────

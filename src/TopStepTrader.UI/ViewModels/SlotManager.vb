@@ -123,6 +123,7 @@ Namespace TopStepTrader.UI.ViewModels
             slot.ConsecutiveExitBars = 0
             slot.IsEntryInFlight     = True   ' cleared by FireEntryAsync on accept or reject
             slot.IsEarlyModeEntry    = False
+            slot.HasScaledInOnPullback = False ' STRAT-41: reset per-slot pullback ratchet
             Return slot
         End Function
 

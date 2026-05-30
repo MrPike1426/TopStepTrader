@@ -1,4 +1,5 @@
 Imports TopStepTrader.Core.Models
+Imports TopStepTrader.ML.Features
 
 Namespace TopStepTrader.Services.Trading
 
@@ -15,6 +16,12 @@ Namespace TopStepTrader.Services.Trading
         ''' <summary>F6 — flip entry (isFlip = True) where the entry bar failed to confirm
         ''' the new direction.</summary>
         BlockConfirmationCandle
+        ''' <summary>STRAT-40 F1 — BB-median slope conflicts with proposed direction and
+        ''' the relax-on-flip path did not apply.</summary>
+        BlockBbMedianSlope
+        ''' <summary>STRAT-40 F2 — lower-TF SuperTrend disagrees with the proposed direction.
+        ''' Caller is expected to *defer* (queue) rather than drop the candidate.</summary>
+        BlockLowerTfDisagrees
     End Enum
 
     Public Class EntryGateResult
@@ -145,6 +152,123 @@ Namespace TopStepTrader.Services.Trading
                     .Reason = $"Confirmation-candle gate — flip SHORT entry but close ({entry.Close:F2}) did not break prior bar low ({prior.Low:F2})"
                 }
             End If
+        End Function
+
+        ''' <summary>STRAT-40 F1 — replaces the legacy BB-median slope filter with a
+        ''' relax-on-flip variant: a fresh SuperTrend flip in a strong-ADX regime bypasses
+        ''' the slope check, otherwise the standard "slope must agree with direction" rule
+        ''' applies. The 6:1 long bias seen since 2026-05-19 came from up-sloping BB-mid
+        ''' blocking every short flip during a multi-week index rally; this lets the
+        ''' first bar of a high-conviction reversal through.</summary>
+        ''' <param name="closes">Closing prices (oldest first). Used to recompute the
+        ''' 20-period BB middle so this function is self-contained.</param>
+        ''' <param name="isLong">True for LONG candidates, False for SHORT.</param>
+        ''' <param name="isFlip">True if SuperTrend direction just changed this tick.</param>
+        ''' <param name="adxValue">Current ADX value at the signal bar.</param>
+        ''' <param name="bbLookback">Bars between <c>bbMidNow</c> and <c>bbMidPrev</c>
+        ''' for the slope calculation (caller matches the existing VM mapping).</param>
+        ''' <param name="strongAdxThreshold">ADX at which a flip is "strong enough" to
+        ''' bypass the slope filter. Defaults to 30 — the persona-level Cappuccino entry.</param>
+        Public Function EvaluateBbMedianRelaxOnFlip(closes As IList(Of Single),
+                                                     isLong As Boolean,
+                                                     isFlip As Boolean,
+                                                     adxValue As Single,
+                                                     bbLookback As Integer,
+                                                     Optional strongAdxThreshold As Single = 30.0F) As EntryGateResult
+            If closes Is Nothing OrElse closes.Count < 20 + bbLookback OrElse bbLookback <= 0 Then
+                Return New EntryGateResult With {
+                    .Outcome = EntryGateOutcome.Allow,
+                    .Reason = "BB-median: insufficient bars"
+                }
+            End If
+
+            ' Reuse the existing TechnicalIndicators math — convert once to Decimal so we
+            ' do not diverge from the slope value the legacy block computed.
+            Dim closesDec As IList(Of Decimal) = closes.Select(Function(c) CDec(c)).ToList()
+            Dim bb = TechnicalIndicators.BollingerBands(closesDec, period:=20, stdDevMultiplier:=2.0)
+            Dim n = closesDec.Count - 1
+            Dim bbMidNow As Single = bb.Middle(n)
+            Dim bbMidPrev As Single = bb.Middle(n - bbLookback)
+
+            If Single.IsNaN(bbMidNow) OrElse Single.IsNaN(bbMidPrev) Then
+                Return New EntryGateResult With {
+                    .Outcome = EntryGateOutcome.Allow,
+                    .Reason = "BB-median: insufficient bars"
+                }
+            End If
+
+            ' Relax path: fresh flip + ADX in strong-trend band → bypass the slope wall.
+            If isFlip AndAlso Not Single.IsNaN(adxValue) AndAlso adxValue >= strongAdxThreshold Then
+                Return New EntryGateResult With {
+                    .Outcome = EntryGateOutcome.Allow,
+                    .Reason = $"BB-median bypassed: fresh flip with ADX >= strong (adx={adxValue:F1} >= {strongAdxThreshold:F1})"
+                }
+            End If
+
+            Dim bbSlope As Single = bbMidNow - bbMidPrev
+            If isLong AndAlso bbSlope < 0F Then
+                Return New EntryGateResult With {
+                    .Outcome = EntryGateOutcome.BlockBbMedianSlope,
+                    .Reason = $"BB-median slope conflicts with direction (slope={bbSlope:F3} LONG)"
+                }
+            End If
+            If Not isLong AndAlso bbSlope > 0F Then
+                Return New EntryGateResult With {
+                    .Outcome = EntryGateOutcome.BlockBbMedianSlope,
+                    .Reason = $"BB-median slope conflicts with direction (slope={bbSlope:F3} SHORT)"
+                }
+            End If
+
+            Return EntryGateResult.Allowed
+        End Function
+
+        ''' <summary>STRAT-40 F2 — stateless lower-TF agreement check. Computes SuperTrend
+        ''' on the supplied bars (caller fetches them) and returns whether the resulting
+        ''' direction agrees with the candidate side. On disagreement the caller is expected
+        ''' to *defer* the candidate (queue it until the lower TF flips or the strategy-TF
+        ''' signal evaporates) — see <c>SuperTrendPlusViewModel._deferredCandidates</c>.</summary>
+        ''' <param name="lowerTfBars">Bar series for the lower timeframe (oldest first).
+        ''' Caller is responsible for forming-bar strip and timeframe selection.</param>
+        ''' <param name="isLong">True for LONG candidates, False for SHORT.</param>
+        ''' <param name="stPeriod">SuperTrend period (mirror the strategy-TF value).</param>
+        ''' <param name="stMultiplier">SuperTrend ATR multiplier (mirror the strategy-TF value).</param>
+        Public Function EvaluateLowerTfAgreement(lowerTfBars As IList(Of MarketBar),
+                                                  isLong As Boolean,
+                                                  stPeriod As Integer,
+                                                  stMultiplier As Double) As EntryGateResult
+            If lowerTfBars Is Nothing OrElse lowerTfBars.Count < stPeriod + 1 Then
+                Return New EntryGateResult With {
+                    .Outcome = EntryGateOutcome.Allow,
+                    .Reason = "Lower-TF: insufficient bars (fail-open)"
+                }
+            End If
+
+            Dim highs = lowerTfBars.Select(Function(b) b.High).ToList()
+            Dim lows = lowerTfBars.Select(Function(b) b.Low).ToList()
+            Dim closes = lowerTfBars.Select(Function(b) b.Close).ToList()
+            Dim st = TechnicalIndicators.SuperTrend(highs, lows, closes, period:=stPeriod, multiplier:=stMultiplier)
+            Dim n = lowerTfBars.Count - 1
+            Dim dir As Single = st.Direction(n)
+
+            If Single.IsNaN(dir) OrElse dir = 0.0F Then
+                Return New EntryGateResult With {
+                    .Outcome = EntryGateOutcome.Allow,
+                    .Reason = "Lower-TF: insufficient bars (fail-open)"
+                }
+            End If
+
+            Dim agrees As Boolean = If(isLong, dir > 0, dir < 0)
+            If agrees Then
+                Return New EntryGateResult With {
+                    .Outcome = EntryGateOutcome.Allow,
+                    .Reason = $"Lower-TF agrees (dir={dir})"
+                }
+            End If
+
+            Return New EntryGateResult With {
+                .Outcome = EntryGateOutcome.BlockLowerTfDisagrees,
+                .Reason = $"Lower-TF disagrees — defer (dir={dir} candidate={If(isLong, "LONG", "SHORT")})"
+            }
         End Function
 
     End Module

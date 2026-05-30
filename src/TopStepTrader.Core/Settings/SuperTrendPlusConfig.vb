@@ -124,6 +124,61 @@ Namespace TopStepTrader.Core.Settings
         ''' </summary>
         Public Property LadderTpDollars As Decimal = 0D
 
+        ' ── STRAT-41: Pullback-gated scale-in (replaces STRAT-31 ADX-band path) ──
+        ''' <summary>
+        ''' When True, the position-management tick adds size only when price has
+        ''' retraced to within <see cref="PullbackAtrFactor"/> × ATR of the SuperTrend
+        ''' line AND DI still favours the side, and only once per slot lifetime. The
+        ''' STRAT-31 ADX-band ratchet that this replaces was adding contracts at the
+        ''' worst price (trend peaks).
+        ''' </summary>
+        Public Property PullbackScaleInEnabled As Boolean = True
+
+        ''' <summary>STRAT-41 pullback distance from the SuperTrend line, in ATR units.
+        ''' Default 0.5 — "within half an ATR" of the ST line.</summary>
+        Public Property PullbackAtrFactor As Decimal = 0.5D
+
+        ''' <summary>STRAT-41 contracts added per pullback scale-in. Default 1 —
+        ''' deliberately conservative compared to the STRAT-31 design.</summary>
+        Public Property PullbackScaleInContracts As Integer = 1
+
+        ''' <summary>STRAT-41 soft cap on slot size after pullback scale-in. VM clamps
+        ''' further by leverage. Default 2 — matches the BUG-99 + STRAT-41
+        ''' "shrink to recover" risk posture.</summary>
+        Public Property MaxContractsAfterScaleIn As Integer = 2
+
+        ' ── STRAT-40: Multi-TF entry confirmation + BB-median relax-on-flip ──────
+        ''' <summary>
+        ''' When True, every survived strategy-TF candidate must additionally agree with
+        ''' a lower-TF SuperTrend before firing. On disagreement the candidate is queued
+        ''' (deferred) until the lower TF flips, the strategy-TF signal evaporates, or
+        ''' <see cref="MultiTfDeferMaxAgeMinutes"/> elapses. Disable in dev when the
+        ''' extra <c>GetLiveBarsAsync</c> per evaluated candidate is rate-budget sensitive.
+        ''' </summary>
+        Public Property MultiTfConfirmationEnabled As Boolean = True
+
+        ''' <summary>
+        ''' Lower-timeframe label resolved by <see cref="EvaluateSlotEntriesAsync"/> when
+        ''' STRAT-40 multi-TF confirmation is active. Default 3min mirrors the user's
+        ''' framing of "does the 3m timeframe agree with the 15m timeframe". Overridable
+        ''' per-persona via the config persistence layer.
+        ''' </summary>
+        Public Property MultiTfLowerTimeframe As String = "3min"
+
+        ''' <summary>
+        ''' How long a deferred candidate may sit in the <c>_deferredCandidates</c> queue
+        ''' before it is dropped (the strategy-TF signal is assumed stale by then).
+        ''' </summary>
+        Public Property MultiTfDeferMaxAgeMinutes As Integer = 10
+
+        ''' <summary>
+        ''' ADX threshold above which a fresh SuperTrend flip bypasses the BB-median
+        ''' slope filter (STRAT-40 F1). Matches the persona-level "Cappuccino" strong-
+        ''' trend entry so high-conviction reversals are not blocked by a multi-week
+        ''' up-sloping BB-mid (the 6:1 long-bias trigger observed since 2026-05-19).
+        ''' </summary>
+        Public Property BbMedianRelaxAdxThreshold As Single = 30.0F
+
         ' ── UAT-03 F6: Entry-bar confirmation-candle gate ────────────────────────
         ''' <summary>
         ''' When True, block an entry where <c>isFlip = True</c> unless the entry bar

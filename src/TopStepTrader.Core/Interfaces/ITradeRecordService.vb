@@ -7,9 +7,16 @@ Namespace TopStepTrader.Core.Interfaces
         ''' <summary>Persists an opening trade record. Returns the new record ID (stored on the slot).</summary>
         Function OpenTradeAsync(record As LiveTradeRecord) As Task(Of Long)
 
-        ''' <summary>Marks a record closed with exit data and final P&amp;L.</summary>
+        ''' <summary>
+        ''' Marks a record closed with exit data and final P&amp;L.
+        ''' BUG-100: <paramref name="closeFillSource"/> records the provenance of
+        ''' <paramref name="exitPrice"/> — <c>"hub"</c>, <c>"rest-poll"</c>, or
+        ''' <c>"engine-fallback"</c>. Existing callers that pre-date BUG-100 may pass
+        ''' Nothing; the column ships NULL-able and unknown values stay NULL.
+        ''' </summary>
         Function CloseTradeAsync(id As Long, exitTime As DateTimeOffset, exitPrice As Decimal,
-                                 pnL As Decimal, exitReason As String) As Task
+                                 pnL As Decimal, exitReason As String,
+                                 Optional closeFillSource As String = Nothing) As Task
 
         ''' <summary>Updates the entry price once confirmed from the broker snapshot.</summary>
         Function UpdateEntryPriceAsync(id As Long, entryPrice As Decimal) As Task
@@ -126,6 +133,22 @@ Namespace TopStepTrader.Core.Interfaces
         ''' </summary>
         Function SaveLifespanRecordAsync(tradeOutcomeId As Long, record As TradeLifespan) As Task
 
+        ''' <summary>
+        ''' BUG-102 F3: walks every closed LiveTradeRecord whose <c>EntryPrice = 0</c> and
+        ''' attempts a broker-driven resolution. Returns <c>(Audited, Repaired, Unresolvable)</c>
+        ''' counts. Dev-only — invoked from the Diagnostics / Test Trade tab.
+        ''' </summary>
+        Function AuditZeroEntryPriceRowsAsync(accountId As Long) As Task(Of EntryPriceAuditResult)
+
     End Interface
+
+    ''' <summary>
+    ''' BUG-102 F3: result of <see cref="ITradeRecordService.AuditZeroEntryPriceRowsAsync"/>.
+    ''' </summary>
+    Public Class EntryPriceAuditResult
+        Public Property Audited As Integer
+        Public Property Repaired As Integer
+        Public Property Unresolvable As Integer
+    End Class
 
 End Namespace

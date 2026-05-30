@@ -48,6 +48,16 @@ Namespace TopStepTrader.Data.Entities
         Public Property IsOpen As Boolean = True
         Public Property IsRecoveredFromCrash As Boolean = False
 
+        ''' <summary>
+        ''' BUG-100: provenance of <see cref="ExitPrice"/> / <see cref="PnL"/> at close time:
+        ''' <c>"hub"</c> (SignalR fill push, preferred), <c>"rest-poll"</c> (REST history
+        ''' fallback), or <c>"engine-fallback"</c> (no broker fill captured within the
+        ''' timeout — values are the engine estimate). NULL on rows written before the
+        ''' column shipped (no backfill — see ticket Out of Scope).
+        ''' </summary>
+        <MaxLength(16)>
+        Public Property CloseFillSource As String
+
         Public Property CreatedAt As DateTimeOffset = DateTimeOffset.UtcNow
         Public Property UpdatedAt As DateTimeOffset = DateTimeOffset.UtcNow
 

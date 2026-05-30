@@ -9,6 +9,8 @@ Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Core.Trading
+Imports TopStepTrader.Services.Market
+Imports TopStepTrader.Services.Risk
 
 Namespace TopStepTrader.Services.SlipStream
 
@@ -34,9 +36,13 @@ Namespace TopStepTrader.Services.SlipStream
     ''' <c>SignalDetected</c> events are silently dropped (no DCA).
     ''' </summary>
     Public Class SlipStreamOrchestrator
-        Implements IHostedService, IDisposable
+        Implements IHostedService, IDisposable, IOpenSlotInstrumentSource
 
-        ''' <summary>Watchlist symbols. Equity-futures micros + MGC, matching UltimateScalper.</summary>
+        ''' <summary>
+        ''' Default watchlist when the FEAT-72 adaptive toggle is OFF. Equity-futures
+        ''' micros + MGC, matching UltimateScalper. When the toggle is ON the orchestrator
+        ''' iterates <see cref="AdaptiveWatchlistService.GetCurrentWatchlist"/> instead.
+        ''' </summary>
         Public Shared ReadOnly WatchlistSymbols As IReadOnlyList(Of String) =
             New String() {"MES", "MNQ", "MGC"}
 
@@ -51,6 +57,8 @@ Namespace TopStepTrader.Services.SlipStream
         Private ReadOnly _orderService As IOrderService
         Private ReadOnly _marketHub As IMarketQuoteFeed
         Private ReadOnly _logger As ILogger(Of SlipStreamOrchestrator)
+        Private ReadOnly _dailyLossGuard As IDailyLossGuard
+        Private ReadOnly _adaptiveWatchlist As AdaptiveWatchlistService
         Private ReadOnly _lastFiredAsOf As New ConcurrentDictionary(Of String, DateTimeOffset)()
         Private ReadOnly _livePositionLock As New Object()
         Private _livePosition As SlipStreamLivePosition
@@ -73,7 +81,9 @@ Namespace TopStepTrader.Services.SlipStream
                        exitExecution As IExitExecutionService,
                        orderService As IOrderService,
                        marketHub As IMarketQuoteFeed,
-                       logger As ILogger(Of SlipStreamOrchestrator))
+                       logger As ILogger(Of SlipStreamOrchestrator),
+                       Optional dailyLossGuard As IDailyLossGuard = Nothing,
+                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing)
             _scopeFactory = scopeFactory
             _session = session
             _entryExecution = entryExecution
@@ -81,8 +91,50 @@ Namespace TopStepTrader.Services.SlipStream
             _orderService = orderService
             _marketHub = marketHub
             _logger = logger
+            _dailyLossGuard = dailyLossGuard
+            _adaptiveWatchlist = adaptiveWatchlist
+            _dailyLossGuard?.RegisterOpenSlotPnlSource(New OrchestratorPnlSource(Function() GetLiveUnrealisedPnl(),
+                                                                                  Function() IsInPosition))
+            _adaptiveWatchlist?.RegisterOpenSlotSource(Me)
             _quoteHandler = AddressOf OnQuoteReceived
         End Sub
+
+        ''' <summary>FEAT-72: pin the live position's symbol into the adaptive watchlist.</summary>
+        Public Function GetOpenInstrumentRootSymbols() As IEnumerable(Of String) _
+            Implements IOpenSlotInstrumentSource.GetOpenInstrumentRootSymbols
+            Dim sym As String = Nothing
+            SyncLock _livePositionLock
+                If _livePosition IsNot Nothing Then sym = _livePosition.Symbol
+            End SyncLock
+            If String.IsNullOrEmpty(sym) Then Return Array.Empty(Of String)()
+            Return New String() {sym}
+        End Function
+
+        ''' <summary>FEAT-72: returns the adaptive watchlist symbols when the toggle is ON,
+        ''' otherwise the static <see cref="WatchlistSymbols"/> default.</summary>
+        Private Function GetActiveWatchlistSymbols() As IList(Of String)
+            If _adaptiveWatchlist IsNot Nothing AndAlso _adaptiveWatchlist.IsEnabled Then
+                Dim live = _adaptiveWatchlist.GetCurrentWatchlist()
+                If live IsNot Nothing AndAlso live.Count > 0 Then
+                    Return live.
+                        Select(Function(c) c.PxRootSymbol).
+                        Where(Function(s) Not String.IsNullOrEmpty(s)).
+                        ToList()
+                End If
+            End If
+            Return WatchlistSymbols.ToList()
+        End Function
+
+        ''' <summary>FEAT-71: snapshot of the open position's unrealised PnL for the daily-loss
+        ''' guard. Returns 0 when flat. Reads the live trail state under the same lock used
+        ''' by the entry/exit pipelines so a half-published state cannot leak.</summary>
+        Private Function GetLiveUnrealisedPnl() As Decimal
+            SyncLock _livePositionLock
+                Dim slot = _livePosition?.Slot
+                If slot Is Nothing OrElse Not slot.IsOpen Then Return 0D
+                Return slot.UnrealizedPnl
+            End SyncLock
+        End Function
 
         Public ReadOnly Property IsEnabled As Boolean
             Get
@@ -157,11 +209,22 @@ Namespace TopStepTrader.Services.SlipStream
 
         Private Async Function ScanAllSymbolsAsync(ct As CancellationToken) As Task
             Dim barsAvailable As New Dictionary(Of String, Integer)(StringComparer.OrdinalIgnoreCase)
+            Dim symbols = GetActiveWatchlistSymbols()
             Using scope = _scopeFactory.CreateScope()
                 Dim detector = scope.ServiceProvider.GetRequiredService(Of ISlipStreamSignalDetector)()
                 Dim config = scope.ServiceProvider.GetRequiredService(Of SlipStreamConfig)()
-                For Each symbol In WatchlistSymbols
+                For Each symbol In symbols
                     If ct.IsCancellationRequested Then Exit For
+
+                    ' STRAT-42 F4: per-contract session-hours gate.
+                    If Not ContractSessionHours.IsContractTradingNow(symbol, DateTime.UtcNow) Then
+                        Dim opensAt = ContractSessionHours.NextOpenUtc(symbol, DateTime.UtcNow)
+                        _logger?.LogInformation(
+                            "SlipStream [{Symbol}] contract closed — next session opens at {OpensAt:u}",
+                            symbol, opensAt)
+                        Continue For
+                    End If
+
                     Try
                         Dim eval = Await detector.EvaluateAsync(symbol, ct)
                         If eval IsNot Nothing Then barsAvailable(symbol) = eval.BarsAvailable
@@ -226,6 +289,15 @@ Namespace TopStepTrader.Services.SlipStream
             ' Single-position cap — drop signals while a SlipStream position is open.
             If _livePosition IsNot Nothing Then
                 _logger?.LogDebug("SlipStream signal dropped: live position already open ({Symbol})", _livePosition.Symbol)
+                Return
+            End If
+
+            ' FEAT-71: hard daily-loss kill switch. Suppress the entry instead of placing it.
+            If _dailyLossGuard IsNot Nothing AndAlso Not _dailyLossGuard.CanEnterNewTrade() Then
+                Dim guardState = _dailyLossGuard.GetState()
+                _logger?.LogInformation(
+                    "SlipStream Entry suppressed — DailyLossGuard halted: {Reason} (combined={Combined:F2}, limit={Limit:F2})",
+                    guardState.Reason, guardState.CombinedDailyPnl, guardState.LimitDollars)
                 Return
             End If
 
@@ -495,9 +567,12 @@ Namespace TopStepTrader.Services.SlipStream
             End SyncLock
 
             ' ── Force-flat window override ────────────────────────────────────
-            If config.UseSession AndAlso SlipStreamSignalDetector.IsTimestampInWindow(DateTimeOffset.UtcNow, config.FlatWindow) Then
-                Dim flatTask = CloseLivePositionAsync(slot, "FlatWindow")
-                Return
+            If config.UseSession Then
+                Dim sessionTz = SlipStreamSignalDetector.ResolveTimeZone(config.SessionTimeZone)
+                If SlipStreamSignalDetector.IsTimestampInWindow(DateTimeOffset.UtcNow, config.FlatWindow, sessionTz) Then
+                    Dim flatTask = CloseLivePositionAsync(slot, "FlatWindow")
+                    Return
+                End If
             End If
 
             ' ── Time stop ──────────────────────────────────────────────────────

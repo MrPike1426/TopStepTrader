@@ -9,6 +9,8 @@ Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Core.Trading
+Imports TopStepTrader.Services.Market
+Imports TopStepTrader.Services.Risk
 
 Namespace TopStepTrader.Services.BreakAndBounce
 
@@ -30,9 +32,13 @@ Namespace TopStepTrader.Services.BreakAndBounce
     ''' are silently dropped (no DCA). Matches the Q5 PDF-faithful sizing decision.
     ''' </summary>
     Public Class BreakAndBounceOrchestrator
-        Implements IHostedService, IDisposable
+        Implements IHostedService, IDisposable, IOpenSlotInstrumentSource
 
-        ''' <summary>v1 watchlist — same equity-futures micros + MGC as SlipStream/UltimateScalper.</summary>
+        ''' <summary>
+        ''' Default watchlist when the FEAT-72 adaptive toggle is OFF — same equity-futures
+        ''' micros + MGC as SlipStream/UltimateScalper. When the toggle is ON, the orchestrator
+        ''' iterates <see cref="AdaptiveWatchlistService.GetCurrentWatchlist"/> instead.
+        ''' </summary>
         Public Shared ReadOnly WatchlistSymbols As IReadOnlyList(Of String) =
             New String() {"MES", "MNQ", "MGC"}
 
@@ -45,6 +51,8 @@ Namespace TopStepTrader.Services.BreakAndBounce
         Private ReadOnly _orderService As IOrderService
         Private ReadOnly _marketHub As IMarketQuoteFeed
         Private ReadOnly _logger As ILogger(Of BreakAndBounceOrchestrator)
+        Private ReadOnly _dailyLossGuard As IDailyLossGuard
+        Private ReadOnly _adaptiveWatchlist As AdaptiveWatchlistService
         Private ReadOnly _lastFiredAsOf As New ConcurrentDictionary(Of String, DateTimeOffset)()
         Private ReadOnly _livePositionLock As New Object()
         Private _livePosition As LivePositionState
@@ -66,7 +74,9 @@ Namespace TopStepTrader.Services.BreakAndBounce
                        exitExecution As IExitExecutionService,
                        orderService As IOrderService,
                        marketHub As IMarketQuoteFeed,
-                       logger As ILogger(Of BreakAndBounceOrchestrator))
+                       logger As ILogger(Of BreakAndBounceOrchestrator),
+                       Optional dailyLossGuard As IDailyLossGuard = Nothing,
+                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing)
             _scopeFactory = scopeFactory
             _session = session
             _entryExecution = entryExecution
@@ -74,8 +84,50 @@ Namespace TopStepTrader.Services.BreakAndBounce
             _orderService = orderService
             _marketHub = marketHub
             _logger = logger
+            _dailyLossGuard = dailyLossGuard
+            _adaptiveWatchlist = adaptiveWatchlist
+            _dailyLossGuard?.RegisterOpenSlotPnlSource(New OrchestratorPnlSource(Function() GetLiveUnrealisedPnl(),
+                                                                                  Function() IsInPosition))
+            _adaptiveWatchlist?.RegisterOpenSlotSource(Me)
             _quoteHandler = AddressOf OnQuoteReceived
         End Sub
+
+        ''' <summary>FEAT-72: pin the live position's symbol into the adaptive watchlist.</summary>
+        Public Function GetOpenInstrumentRootSymbols() As IEnumerable(Of String) _
+            Implements IOpenSlotInstrumentSource.GetOpenInstrumentRootSymbols
+            Dim sym As String = Nothing
+            SyncLock _livePositionLock
+                If _livePosition IsNot Nothing Then sym = _livePosition.Symbol
+            End SyncLock
+            If String.IsNullOrEmpty(sym) Then Return Array.Empty(Of String)()
+            Return New String() {sym}
+        End Function
+
+        ''' <summary>FEAT-72: returns the adaptive watchlist symbols when the toggle is ON,
+        ''' otherwise the static <see cref="WatchlistSymbols"/> default.</summary>
+        Private Function GetActiveWatchlistSymbols() As IList(Of String)
+            If _adaptiveWatchlist IsNot Nothing AndAlso _adaptiveWatchlist.IsEnabled Then
+                Dim live = _adaptiveWatchlist.GetCurrentWatchlist()
+                If live IsNot Nothing AndAlso live.Count > 0 Then
+                    Return live.
+                        Select(Function(c) c.PxRootSymbol).
+                        Where(Function(s) Not String.IsNullOrEmpty(s)).
+                        ToList()
+                End If
+            End If
+            Return WatchlistSymbols.ToList()
+        End Function
+
+        ''' <summary>FEAT-71: snapshot of the open position's unrealised PnL for the daily-loss
+        ''' guard. Returns 0 when flat. Reads under the same lock used by the entry/exit
+        ''' pipelines so a half-published state cannot leak.</summary>
+        Private Function GetLiveUnrealisedPnl() As Decimal
+            SyncLock _livePositionLock
+                Dim slot = _livePosition?.Slot
+                If slot Is Nothing OrElse Not slot.IsOpen Then Return 0D
+                Return slot.UnrealizedPnl
+            End SyncLock
+        End Function
 
         Public ReadOnly Property IsEnabled As Boolean
             Get
@@ -142,11 +194,22 @@ Namespace TopStepTrader.Services.BreakAndBounce
         End Sub
 
         Private Async Function ScanAllSymbolsAsync(ct As CancellationToken) As Task
+            Dim symbols = GetActiveWatchlistSymbols()
             Using scope = _scopeFactory.CreateScope()
                 Dim detector = scope.ServiceProvider.GetRequiredService(Of IBreakAndBounceSignalDetector)()
                 Dim config = scope.ServiceProvider.GetRequiredService(Of BreakAndBounceConfig)()
-                For Each symbol In WatchlistSymbols
+                For Each symbol In symbols
                     If ct.IsCancellationRequested Then Exit For
+
+                    ' STRAT-42 F4: per-contract session-hours gate.
+                    If Not ContractSessionHours.IsContractTradingNow(symbol, DateTime.UtcNow) Then
+                        Dim opensAt = ContractSessionHours.NextOpenUtc(symbol, DateTime.UtcNow)
+                        _logger?.LogInformation(
+                            "BreakAndBounce [{Symbol}] contract closed — next session opens at {OpensAt:u}",
+                            symbol, opensAt)
+                        Continue For
+                    End If
+
                     Try
                         Dim eval = Await detector.EvaluateAsync(symbol, ct)
                         DispatchEvaluation(eval, config)
@@ -200,6 +263,15 @@ Namespace TopStepTrader.Services.BreakAndBounce
 
             If _livePosition IsNot Nothing Then
                 _logger?.LogDebug("BreakAndBounce signal dropped: position already open ({Symbol})", _livePosition.Symbol)
+                Return
+            End If
+
+            ' FEAT-71: hard daily-loss kill switch. Suppress the entry instead of placing it.
+            If _dailyLossGuard IsNot Nothing AndAlso Not _dailyLossGuard.CanEnterNewTrade() Then
+                Dim guardState = _dailyLossGuard.GetState()
+                _logger?.LogInformation(
+                    "BreakAndBounce Entry suppressed — DailyLossGuard halted: {Reason} (combined={Combined:F2}, limit={Limit:F2})",
+                    guardState.Reason, guardState.CombinedDailyPnl, guardState.LimitDollars)
                 Return
             End If
 
