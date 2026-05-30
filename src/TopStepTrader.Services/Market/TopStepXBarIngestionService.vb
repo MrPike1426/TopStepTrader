@@ -270,7 +270,13 @@ Namespace TopStepTrader.Services.Market
         End Function
 
         ''' <summary>Helper: returns the bar period in minutes for lookback calculation.</summary>
-        Private Shared Function _strategy_TimeframeMinutesForLiveBar(tf As BarTimeframe) As Integer
+        ''' <remarks>
+        ''' BUG-97: Daily is explicit so a 5-bar daily request gets ~8 days of lookback
+        ''' instead of falling through Case Else (5 min) and yielding only ~3 days —
+        ''' which silently dropped Friday's daily bar on Tuesday mornings (and worse
+        ''' on holiday-Monday Tuesdays), starving DailyRangeService of input.
+        ''' </remarks>
+        Friend Shared Function _strategy_TimeframeMinutesForLiveBar(tf As BarTimeframe) As Integer
             Select Case tf
                 Case BarTimeframe.OneMinute : Return 1
                 Case BarTimeframe.ThreeMinute : Return 3
@@ -278,6 +284,7 @@ Namespace TopStepTrader.Services.Market
                 Case BarTimeframe.FifteenMinute : Return 15
                 Case BarTimeframe.ThirtyMinute : Return 30
                 Case BarTimeframe.OneHour : Return 60
+                Case BarTimeframe.Daily : Return 1440
                 Case Else : Return 5
             End Select
         End Function
