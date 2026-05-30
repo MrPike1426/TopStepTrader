@@ -146,12 +146,34 @@ Namespace TopStepTrader.Services.Background
                     Continue For
                 End If
 
+                ' BUG-98: broker reports the full resolved PX contract id (e.g. "CON.F.US.M2K.M26")
+                ' but strategy-attributed LiveTradeRecord rows persist the short root symbol
+                ' (e.g. "M2K") via EntryExecutionService.PersistTradeRecordsAsync. A strict equality
+                ' lookup on either shape alone misses one population. Try the resolved root symbol
+                ' first; fall back to the literal broker id for legacy BrokerFill-Unattributed rows
+                ' that stored the full PX id directly. Only flag as orphan when BOTH miss.
+                Dim favForLookup = FavouriteContracts.TryGetBySymbolResolved(pos.ContractId)
+                Dim resolvedRoot As String = If(favForLookup IsNot Nothing AndAlso Not String.IsNullOrEmpty(favForLookup.PxRootSymbol),
+                                                favForLookup.PxRootSymbol, Nothing)
                 Dim match As LiveTradeRecord = Nothing
-                Try
-                    match = Await _tradeRecord.FindOpenByContractIdAsync(accountId, pos.ContractId)
-                Catch ex As Exception
-                    _logger.LogWarning(ex, "TradeReconciliationWorker: FindOpenByContractIdAsync failed for {Contract} — treating as orphan", pos.ContractId)
-                End Try
+                If resolvedRoot IsNot Nothing Then
+                    Try
+                        match = Await _tradeRecord.FindOpenByContractIdAsync(accountId, resolvedRoot)
+                    Catch ex As Exception
+                        _logger.LogWarning(ex, "TradeReconciliationWorker: FindOpenByContractIdAsync(resolved) failed for {Contract} (root={Root}) — falling back to literal id", pos.ContractId, resolvedRoot)
+                    End Try
+                End If
+                If match Is Nothing Then
+                    Try
+                        Dim literalMatch = Await _tradeRecord.FindOpenByContractIdAsync(accountId, pos.ContractId)
+                        If literalMatch IsNot Nothing Then
+                            _logger.LogDebug("TradeReconciliationWorker: matched LiveTradeRecord by literal PX id for {Contract} — row stored full id (likely BrokerFill-Unattributed)", pos.ContractId)
+                            match = literalMatch
+                        End If
+                    Catch ex As Exception
+                        _logger.LogWarning(ex, "TradeReconciliationWorker: FindOpenByContractIdAsync(literal) failed for {Contract} — treating as orphan", pos.ContractId)
+                    End Try
+                End If
                 If match IsNot Nothing Then Continue For
 
                 ' BUG-94 F4: dedup within AlarmedTtl.

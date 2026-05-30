@@ -22,9 +22,13 @@ Namespace TopStepTrader.Tests.Services.Background
     Public Class TradeReconciliationOrphanScanTests
 
         Private Const AccountId As Long = 100L
-        ' MES — used by the auto-SL math tests because its tick spec is the canonical
-        ' worked example in BUG-94 ($1.25/tick, 0.25 size).
-        Private Const MesContractId As String = "CON.F.US.MES.U26"
+        ' BUG-98: ContractId field-shape boundary. The broker reports the fully-resolved
+        ' PX contract id; strategy-attributed LiveTradeRecord rows persist the short root
+        ' symbol. The fixtures must use the asymmetric pair so a future regression of the
+        ' BUG-94 lookup cannot silently pass by symmetry. MES is the canonical worked
+        ' example because its tick spec ($1.25/tick, 0.25 size) drives the auto-SL math.
+        Private Const MesPxContractId As String = "CON.F.US.MES.U26"
+        Private Const MesRootSymbol As String = "MES"
 
         ' ── Test doubles ────────────────────────────────────────────────────
 
@@ -72,7 +76,7 @@ Namespace TopStepTrader.Tests.Services.Background
             Public Function OpenTradeAsync(record As LiveTradeRecord) As Task(Of Long) Implements ITradeRecordService.OpenTradeAsync
                 Return Task.FromResult(0L)
             End Function
-            Public Function CloseTradeAsync(id As Long, exitTime As DateTimeOffset, exitPrice As Decimal, pnL As Decimal, exitReason As String) As Task Implements ITradeRecordService.CloseTradeAsync
+            Public Function CloseTradeAsync(id As Long, exitTime As DateTimeOffset, exitPrice As Decimal, pnL As Decimal, exitReason As String, Optional closeFillSource As String = Nothing) As Task Implements ITradeRecordService.CloseTradeAsync
                 Return Task.CompletedTask
             End Function
             Public Function UpdateEntryPriceAsync(id As Long, entryPrice As Decimal) As Task Implements ITradeRecordService.UpdateEntryPriceAsync
@@ -128,6 +132,9 @@ Namespace TopStepTrader.Tests.Services.Background
             End Function
             Public Function SaveLifespanRecordAsync(tradeOutcomeId As Long, record As TradeLifespan) As Task Implements ITradeRecordService.SaveLifespanRecordAsync
                 Return Task.CompletedTask
+            End Function
+            Public Function AuditZeroEntryPriceRowsAsync(accountId As Long) As Task(Of EntryPriceAuditResult) Implements ITradeRecordService.AuditZeroEntryPriceRowsAsync
+                Return Task.FromResult(New EntryPriceAuditResult())
             End Function
         End Class
 
@@ -196,6 +203,9 @@ Namespace TopStepTrader.Tests.Services.Background
             Public Function FlattenContractAsync(accId As Long, contractId As String, Optional cancel As CancellationToken = Nothing) As Task(Of Boolean) Implements IOrderService.FlattenContractAsync
                 Throw New NotImplementedException()
             End Function
+            Public Function FlattenContractWithFillAsync(accId As Long, contractId As String, Optional cancel As CancellationToken = Nothing) As Task(Of (Success As Boolean, Fill As BrokerCloseFill)) Implements IOrderService.FlattenContractWithFillAsync
+                Throw New NotImplementedException()
+            End Function
             Public Function PartialCloseContractAsync(accId As Long, contractId As String, size As Integer, Optional cancel As CancellationToken = Nothing) As Task(Of Boolean) Implements IOrderService.PartialCloseContractAsync
                 Throw New NotImplementedException()
             End Function
@@ -214,7 +224,7 @@ Namespace TopStepTrader.Tests.Services.Background
         Private Shared Function MesPosition(positionId As Long, netPos As Integer, entry As Decimal, openedAt As DateTimeOffset) As LivePositionSnapshot
             Return New LivePositionSnapshot With {
                 .PositionId = positionId,
-                .ContractId = MesContractId,
+                .ContractId = MesPxContractId,
                 .UnrealizedPnlUsd = -12.5D,
                 .OpenedAtUtc = openedAt,
                 .IsBuy = netPos > 0,
@@ -248,7 +258,7 @@ Namespace TopStepTrader.Tests.Services.Background
 
             Dim evt = Assert.Single(events)
             Assert.Equal(42L, evt.PositionId)
-            Assert.Equal(MesContractId, evt.ContractId)
+            Assert.Equal(MesPxContractId, evt.ContractId)
             Assert.Equal("MES", evt.Symbol)
             Assert.Equal("Long", evt.Side)
             Assert.Equal(1, evt.Size)
@@ -257,9 +267,12 @@ Namespace TopStepTrader.Tests.Services.Background
 
         <Fact>
         Public Async Function NoOrphan_When_LiveTradeRecord_Exists() As Task
+            ' BUG-98: strategy-attributed LiveTradeRecord rows persist the short root symbol,
+            ' not the broker's full PX id. Seed by MesRootSymbol so the fixture matches
+            ' production. The worker must resolve MesPxContractId → "MES" to find this row.
             Dim now = DateTimeOffset.UtcNow
             Dim tr As New StubTradeRecordService
-            tr.Map(MesContractId) = New LiveTradeRecord With {.Id = 7, .ContractId = MesContractId, .IsOpen = True}
+            tr.Map(MesRootSymbol) = New LiveTradeRecord With {.Id = 7, .ContractId = MesRootSymbol, .IsOpen = True}
             Dim ord As New StubOrderService
             ord.Positions.Add(MesPosition(42, 1, 4000D, now.AddSeconds(-60)))
 
@@ -380,6 +393,80 @@ Namespace TopStepTrader.Tests.Services.Background
             Assert.Equal(1, ord.EditCallCount)
             Assert.True(ord.LastEditSlPrice.HasValue)
             Assert.Equal(3980D, ord.LastEditSlPrice.Value)
+        End Function
+
+        ' BUG-98: regression seal for the ContractId field-shape mismatch. The broker
+        ' reports the fully-resolved PX contract id; strategy-attributed LiveTradeRecord
+        ' rows persist the short root symbol. The worker must resolve broker → root
+        ' before the lookup, or every strategy-attributed live trade is mis-classified
+        ' as an orphan. This test fails against the pre-BUG-98 code.
+        <Fact>
+        Public Async Function Match_Succeeds_When_BrokerSendsFullPxId_AndRecordStoresShortRoot() As Task
+            Dim now = DateTimeOffset.UtcNow
+            Dim tr As New StubTradeRecordService
+            tr.Map(MesRootSymbol) = New LiveTradeRecord With {.Id = 7, .ContractId = MesRootSymbol, .IsOpen = True}
+            Dim ord As New StubOrderService
+            ord.Positions.Add(MesPosition(42, 1, 4000D, now.AddSeconds(-60)))
+
+            Dim worker = NewWorker(tr, ord, New SafetyNetSettings With {.OrphanGraceSeconds = 15})
+            Dim events = Subscribe(worker)
+
+            Await worker.ScanOrphansAsync(AccountId, CancellationToken.None)
+
+            Assert.Empty(events)
+            Assert.Equal(0, ord.EditCallCount)
+        End Function
+
+        ' BUG-98: BrokerFill-Unattributed rows (BUG-93 F2) persist the full PX contract id
+        ' directly from the broker push, not the short root. The orphan scan's literal
+        ' fallback must continue to match those legacy rows so the unattributed-fill safety
+        ' net survives a scan tick.
+        <Fact>
+        Public Async Function Match_Succeeds_For_Legacy_FullPxId_Record_Via_Literal_Fallback() As Task
+            Dim now = DateTimeOffset.UtcNow
+            Dim tr As New StubTradeRecordService
+            tr.Map(MesPxContractId) = New LiveTradeRecord With {.Id = 99, .ContractId = MesPxContractId, .IsOpen = True}
+            Dim ord As New StubOrderService
+            ord.Positions.Add(MesPosition(42, 1, 4000D, now.AddSeconds(-60)))
+
+            Dim worker = NewWorker(tr, ord, New SafetyNetSettings With {.OrphanGraceSeconds = 15})
+            Dim events = Subscribe(worker)
+
+            Await worker.ScanOrphansAsync(AccountId, CancellationToken.None)
+
+            Assert.Empty(events)
+        End Function
+
+        ' BUG-98: when the broker reports a contract id whose root is not in
+        ' FavouriteContracts (e.g. a new product, a typo), the resolved-root lookup
+        ' returns Nothing for the root — so the literal fallback is the only thing that
+        ' can match. Verify it still does.
+        <Fact>
+        Public Async Function Match_Succeeds_For_UnknownContract_Via_Literal_Fallback() As Task
+            Const UnknownPxId As String = "CON.F.US.ZZZ.X99"
+            Dim now = DateTimeOffset.UtcNow
+            Dim tr As New StubTradeRecordService
+            tr.Map(UnknownPxId) = New LiveTradeRecord With {.Id = 11, .ContractId = UnknownPxId, .IsOpen = True}
+            Dim ord As New StubOrderService
+            ord.Positions.Add(New LivePositionSnapshot With {
+                .PositionId = 88,
+                .ContractId = UnknownPxId,
+                .UnrealizedPnlUsd = 0D,
+                .OpenedAtUtc = now.AddSeconds(-60),
+                .IsBuy = True,
+                .OpenRate = 100D,
+                .Amount = 1D,
+                .Units = 1D,
+                .PositionCount = 1,
+                .NetPos = 1
+            })
+
+            Dim worker = NewWorker(tr, ord, New SafetyNetSettings With {.OrphanGraceSeconds = 15})
+            Dim events = Subscribe(worker)
+
+            Await worker.ScanOrphansAsync(AccountId, CancellationToken.None)
+
+            Assert.Empty(events)
         End Function
 
         <Fact>
