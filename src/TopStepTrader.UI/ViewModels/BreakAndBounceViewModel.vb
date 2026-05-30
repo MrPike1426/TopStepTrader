@@ -4,7 +4,9 @@ Imports Microsoft.Extensions.Logging
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Data
+Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.Services.BreakAndBounce
+Imports TopStepTrader.Services.Market
 Imports TopStepTrader.UI.ViewModels.Base
 
 Namespace TopStepTrader.UI.ViewModels
@@ -30,17 +32,15 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public Sub New(configRepository As BreakAndBounceConfigRepository,
                        orchestrator As BreakAndBounceOrchestrator,
-                       logger As ILogger(Of BreakAndBounceViewModel))
+                       logger As ILogger(Of BreakAndBounceViewModel),
+                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing)
             _configRepository = configRepository
             _orchestrator = orchestrator
             _logger = logger
 
-            WatchlistRows = New ObservableCollection(Of BreakAndBounceWatchlistRowVm) From {
-                New BreakAndBounceWatchlistRowVm("MES", "S&P 500"),
-                New BreakAndBounceWatchlistRowVm("MNQ", "Nasdaq"),
-                New BreakAndBounceWatchlistRowVm("MGC", "Gold")
-            }
-            For Each row In WatchlistRows
+            WatchlistRows = New ObservableCollection(Of BreakAndBounceWatchlistRowVm)()
+            For Each row In BuildInitialRows(adaptiveWatchlist)
+                WatchlistRows.Add(row)
                 _rowBySymbol(row.Symbol) = row
             Next
 
@@ -348,6 +348,28 @@ Namespace TopStepTrader.UI.ViewModels
             RemoveHandler _orchestrator.StopRatcheted, AddressOf OnStopRatcheted
             RemoveHandler _orchestrator.ScanCompleted, AddressOf OnScanCompleted
         End Sub
+
+        ''' <summary>FEAT-72: build the initial watchlist rows. Adaptive ON → use the
+        ''' service's current selection; OFF → the legacy MES/MNQ/MGC defaults so existing
+        ''' behaviour is preserved.</summary>
+        Private Shared Function BuildInitialRows(adaptive As AdaptiveWatchlistService) As IList(Of BreakAndBounceWatchlistRowVm)
+            Dim rows As New List(Of BreakAndBounceWatchlistRowVm)
+            If adaptive IsNot Nothing AndAlso adaptive.IsEnabled Then
+                Dim live = adaptive.GetCurrentWatchlist()
+                If live IsNot Nothing AndAlso live.Count > 0 Then
+                    For Each c In live
+                        If c Is Nothing OrElse String.IsNullOrEmpty(c.PxRootSymbol) Then Continue For
+                        Dim display = If(String.IsNullOrWhiteSpace(c.DisplayName), c.PxRootSymbol, c.DisplayName)
+                        rows.Add(New BreakAndBounceWatchlistRowVm(c.PxRootSymbol, display))
+                    Next
+                    If rows.Count > 0 Then Return rows
+                End If
+            End If
+            rows.Add(New BreakAndBounceWatchlistRowVm("MES", "S&P 500"))
+            rows.Add(New BreakAndBounceWatchlistRowVm("MNQ", "Nasdaq"))
+            rows.Add(New BreakAndBounceWatchlistRowVm("MGC", "Gold"))
+            Return rows
+        End Function
 
     End Class
 

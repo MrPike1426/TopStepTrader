@@ -5,6 +5,8 @@ Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Data
+Imports TopStepTrader.Core.Trading
+Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.SlipStream
 Imports TopStepTrader.UI.ViewModels.Base
 
@@ -35,17 +37,15 @@ Namespace TopStepTrader.UI.ViewModels
 
         Public Sub New(configRepository As SlipStreamConfigRepository,
                        orchestrator As SlipStreamOrchestrator,
-                       logger As ILogger(Of SlipStreamViewModel))
+                       logger As ILogger(Of SlipStreamViewModel),
+                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing)
             _configRepository = configRepository
             _orchestrator = orchestrator
             _logger = logger
 
-            WatchlistRows = New ObservableCollection(Of SlipStreamWatchlistRowVm) From {
-                New SlipStreamWatchlistRowVm("MES", "S&P 500"),
-                New SlipStreamWatchlistRowVm("MNQ", "Nasdaq"),
-                New SlipStreamWatchlistRowVm("MGC", "Gold")
-            }
-            For Each row In WatchlistRows
+            WatchlistRows = New ObservableCollection(Of SlipStreamWatchlistRowVm)()
+            For Each row In BuildInitialRows(adaptiveWatchlist)
+                WatchlistRows.Add(row)
                 _rowBySymbol(row.Symbol) = row
             Next
 
@@ -292,6 +292,18 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        Public Property SessionTimeZone As String
+            Get
+                Return _config.SessionTimeZone
+            End Get
+            Set(value As String)
+                If _config.SessionTimeZone = value Then Return
+                _config.SessionTimeZone = value
+                OnPropertyChanged()
+                FireAndForgetSave()
+            End Set
+        End Property
+
         Public Property UseHtfFilter As Boolean
             Get
                 Return _config.UseHtfFilter
@@ -345,7 +357,7 @@ Namespace TopStepTrader.UI.ViewModels
                 NameOf(AdxMin), NameOf(RsiLongMin), NameOf(RsiShortMax), NameOf(AtrPercentMin),
                 NameOf(ExtendAtrMult), NameOf(RiskPct), NameOf(AtrSLmult), NameOf(AtrTP1mult),
                 NameOf(Tp1Pct), NameOf(TrailMult), NameOf(TrailOffsetMult), NameOf(MaxBarsInTrade),
-                NameOf(UseSession), NameOf(SessionWindow), NameOf(FlatWindow),
+                NameOf(UseSession), NameOf(SessionWindow), NameOf(FlatWindow), NameOf(SessionTimeZone),
                 NameOf(UseHtfFilter), NameOf(HtfTimeframe),
                 NameOf(EnableLong), NameOf(EnableShort)
             }
@@ -478,6 +490,28 @@ Namespace TopStepTrader.UI.ViewModels
                 Case Else
                     Return "—"
             End Select
+        End Function
+
+        ''' <summary>FEAT-72: build the initial watchlist rows. Adaptive ON → use the
+        ''' service's current selection; OFF → the legacy MES/MNQ/MGC defaults so existing
+        ''' behaviour is preserved.</summary>
+        Private Shared Function BuildInitialRows(adaptive As AdaptiveWatchlistService) As IList(Of SlipStreamWatchlistRowVm)
+            Dim rows As New List(Of SlipStreamWatchlistRowVm)
+            If adaptive IsNot Nothing AndAlso adaptive.IsEnabled Then
+                Dim live = adaptive.GetCurrentWatchlist()
+                If live IsNot Nothing AndAlso live.Count > 0 Then
+                    For Each c In live
+                        If c Is Nothing OrElse String.IsNullOrEmpty(c.PxRootSymbol) Then Continue For
+                        Dim display = If(String.IsNullOrWhiteSpace(c.DisplayName), c.PxRootSymbol, c.DisplayName)
+                        rows.Add(New SlipStreamWatchlistRowVm(c.PxRootSymbol, display))
+                    Next
+                    If rows.Count > 0 Then Return rows
+                End If
+            End If
+            rows.Add(New SlipStreamWatchlistRowVm("MES", "S&P 500"))
+            rows.Add(New SlipStreamWatchlistRowVm("MNQ", "Nasdaq"))
+            rows.Add(New SlipStreamWatchlistRowVm("MGC", "Gold"))
+            Return rows
         End Function
 
         Private Sub DispatchAction(action As Action)

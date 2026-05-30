@@ -5,6 +5,7 @@ Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.Data.Debug
+Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.Training
 Imports TopStepTrader.UI.ViewModels.Base
 
@@ -25,6 +26,8 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _session As ITradingSessionContext
         Private ReadOnly _userPrefs As IUserPreferencesService
         Private ReadOnly _trainingOrchestrator As TrainingOrchestrator
+        Private ReadOnly _scorePrefs As IOpportunityScorePreferences
+        Private ReadOnly _adaptiveWatchlist As AdaptiveWatchlistService
 
         ' ── API Status ───────────────────────────────────────────────────────
 
@@ -159,11 +162,74 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        ' ── FEAT-72: Adaptive watchlist ─────────────────────────────────────
+
+        Private _adaptiveEnabled As Boolean
+        Public Property AdaptiveWatchlistEnabled As Boolean
+            Get
+                Return _adaptiveEnabled
+            End Get
+            Set(value As Boolean)
+                SetProperty(_adaptiveEnabled, value)
+            End Set
+        End Property
+
+        Private _adaptiveSize As Integer
+        Public Property AdaptiveWatchlistSize As Integer
+            Get
+                Return _adaptiveSize
+            End Get
+            Set(value As Integer)
+                SetProperty(_adaptiveSize, Math.Max(3, Math.Min(10, value)))
+            End Set
+        End Property
+
+        Private _adaptiveRefreshMinutes As Integer
+        Public Property AdaptiveRefreshMinutes As Integer
+            Get
+                Return _adaptiveRefreshMinutes
+            End Get
+            Set(value As Integer)
+                SetProperty(_adaptiveRefreshMinutes, Math.Max(15, Math.Min(240, value)))
+            End Set
+        End Property
+
+        Private _pinnedSymbolsCsv As String = String.Empty
+        Public Property PinnedSymbolsCsv As String
+            Get
+                Return _pinnedSymbolsCsv
+            End Get
+            Set(value As String)
+                SetProperty(_pinnedSymbolsCsv, If(value, String.Empty))
+            End Set
+        End Property
+
+        Private _blacklistedSymbolsCsv As String = String.Empty
+        Public Property BlacklistedSymbolsCsv As String
+            Get
+                Return _blacklistedSymbolsCsv
+            End Get
+            Set(value As String)
+                SetProperty(_blacklistedSymbolsCsv, If(value, String.Empty))
+            End Set
+        End Property
+
+        Public ReadOnly Property AdaptiveUniverseHint As String
+            Get
+                Return "Available roots: " &
+                       String.Join(", ", InstrumentUniverse.GetAll().
+                                          Select(Function(e) e.Contract.PxRootSymbol).
+                                          Distinct(StringComparer.OrdinalIgnoreCase))
+            End Get
+        End Property
+
         ' ── Commands ─────────────────────────────────────────────────────────
 
         Public ReadOnly Property ConnectCommand As RelayCommand
         Public ReadOnly Property ApplyRiskCommand As RelayCommand
         Public ReadOnly Property RetrainModelCommand As RelayCommand
+        Public ReadOnly Property ApplyAdaptiveCommand As RelayCommand
+        Public ReadOnly Property RefreshAdaptiveNowCommand As RelayCommand
 
         ' ── Constructor ──────────────────────────────────────────────────────
 
@@ -173,7 +239,9 @@ Namespace TopStepTrader.UI.ViewModels
                        tradingOptions As IOptions(Of TradingSettings),
                        session As ITradingSessionContext,
                        userPrefs As IUserPreferencesService,
-                       trainingOrchestrator As TrainingOrchestrator)
+                       trainingOrchestrator As TrainingOrchestrator,
+                       scorePrefs As IOpportunityScorePreferences,
+                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing)
             _authService = authService
             _apiSettings = apiOptions.Value
             _riskSettings = riskOptions.Value
@@ -181,6 +249,8 @@ Namespace TopStepTrader.UI.ViewModels
             _session = session
             _userPrefs = userPrefs
             _trainingOrchestrator = trainingOrchestrator
+            _scorePrefs = scorePrefs
+            _adaptiveWatchlist = adaptiveWatchlist
 
             ' Populate form from current settings (AutoExecution from persisted prefs via session)
             _dailyLossLimit = _riskSettings.DailyLossLimitDollars.ToString()
@@ -189,10 +259,20 @@ Namespace TopStepTrader.UI.ViewModels
             _minConfidence = _riskSettings.MinSignalConfidence.ToString("F2")
             _autoExecutionEnabled = _session.AutoExecutionEnabled
 
+            ' FEAT-72: load persisted adaptive watchlist preferences.
+            Dim s = _scorePrefs.GetSettings()
+            _adaptiveEnabled = s.AdaptiveWatchlistEnabled
+            _adaptiveSize = s.AdaptiveWatchlistMaxSize
+            _adaptiveRefreshMinutes = s.AdaptiveWatchlistRefreshMinutes
+            _pinnedSymbolsCsv = String.Join(", ", If(s.PinnedRootSymbols, New List(Of String)()))
+            _blacklistedSymbolsCsv = String.Join(", ", If(s.BlacklistedRootSymbols, New List(Of String)()))
+
             ConnectCommand = New RelayCommand(AddressOf ExecuteConnect)
             ApplyRiskCommand = New RelayCommand(AddressOf ExecuteApplyRisk)
             RetrainModelCommand = New RelayCommand(AddressOf ExecuteRetrainModel,
                                                     Function() CanRetrainModel)
+            ApplyAdaptiveCommand = New RelayCommand(AddressOf ExecuteApplyAdaptive)
+            RefreshAdaptiveNowCommand = New RelayCommand(AddressOf ExecuteRefreshAdaptive)
         End Sub
 
         Public Sub LoadDataAsync()
@@ -301,6 +381,56 @@ Namespace TopStepTrader.UI.ViewModels
                          End Try
                      End Function)
         End Sub
+
+        ''' <summary>
+        ''' FEAT-72: persist the adaptive watchlist toggle / size / refresh + pin / blacklist
+        ''' lists. AdaptiveWatchlistService subscribes to <see cref="IOpportunityScorePreferences.Changed"/>
+        ''' and refreshes automatically.
+        ''' </summary>
+        Private Sub ExecuteApplyAdaptive(param As Object)
+            Try
+                Dim settings = New OpportunityScoreSettings With {
+                    .AdaptiveWatchlistEnabled = _adaptiveEnabled,
+                    .AdaptiveWatchlistMaxSize = Math.Max(3, Math.Min(10, _adaptiveSize)),
+                    .AdaptiveWatchlistRefreshMinutes = Math.Max(15, Math.Min(240, _adaptiveRefreshMinutes)),
+                    .AdaptiveWatchlistMinTenureMinutes = _scorePrefs.GetSettings().AdaptiveWatchlistMinTenureMinutes,
+                    .ScoreBarsCount = _scorePrefs.GetSettings().ScoreBarsCount,
+                    .IndicatorLength = _scorePrefs.GetSettings().IndicatorLength,
+                    .PinnedRootSymbols = ParseCsvSymbols(_pinnedSymbolsCsv),
+                    .BlacklistedRootSymbols = ParseCsvSymbols(_blacklistedSymbolsCsv)
+                }
+                _scorePrefs.Save(settings)
+                StatusMessage = "Adaptive watchlist settings saved (refresh kicked off)"
+            Catch ex As Exception
+                StatusMessage = $"Adaptive watchlist save failed: {ex.Message}"
+            End Try
+        End Sub
+
+        Private Sub ExecuteRefreshAdaptive(param As Object)
+            If _adaptiveWatchlist Is Nothing Then
+                StatusMessage = "Adaptive watchlist service unavailable"
+                Return
+            End If
+            StatusMessage = "Adaptive watchlist refreshing…"
+            Task.Run(Async Function()
+                         Try
+                             Await _adaptiveWatchlist.RefreshNowAsync()
+                             Dispatch(Sub() StatusMessage = "Adaptive watchlist refreshed")
+                         Catch ex As Exception
+                             Dispatch(Sub() StatusMessage = $"Refresh failed: {ex.Message}")
+                         End Try
+                     End Function)
+        End Sub
+
+        Private Shared Function ParseCsvSymbols(csv As String) As List(Of String)
+            If String.IsNullOrWhiteSpace(csv) Then Return New List(Of String)()
+            Return csv.Split(New Char() {","c, ";"c, " "c, ControlChars.Tab, ControlChars.Lf, ControlChars.Cr},
+                             StringSplitOptions.RemoveEmptyEntries).
+                Select(Function(s) s.Trim().ToUpperInvariant()).
+                Where(Function(s) s.Length > 0).
+                Distinct(StringComparer.OrdinalIgnoreCase).
+                ToList()
+        End Function
 
         Private Sub Dispatch(action As Action)
             If Application.Current?.Dispatcher IsNot Nothing Then
