@@ -35,6 +35,7 @@ Namespace TopStepTrader.Services.Trading
         Private ReadOnly _exitEngine As ExitSignalEngine
         Private ReadOnly _livePnL As ILivePnLService
         Private ReadOnly _debugCapture As IDebugTradeCaptureService
+        Private ReadOnly _dailyLossGuard As IDailyLossGuard
         Private ReadOnly _logger As ILogger(Of PositionManagementService)
 
         ''' <summary>
@@ -52,7 +53,8 @@ Namespace TopStepTrader.Services.Trading
                        exitEngine As ExitSignalEngine,
                        logger As ILogger(Of PositionManagementService),
                        Optional livePnL As ILivePnLService = Nothing,
-                       Optional debugCapture As IDebugTradeCaptureService = Nothing)
+                       Optional debugCapture As IDebugTradeCaptureService = Nothing,
+                       Optional dailyLossGuard As IDailyLossGuard = Nothing)
             _orderService = orderService
             _barService = barService
             _contractResolver = contractResolver
@@ -60,6 +62,7 @@ Namespace TopStepTrader.Services.Trading
             _exitEngine = exitEngine
             _livePnL = livePnL
             _debugCapture = debugCapture
+            _dailyLossGuard = dailyLossGuard
             _logger = logger
         End Sub
 
@@ -353,11 +356,22 @@ Namespace TopStepTrader.Services.Trading
                                 tickContext.PullbackScaleInContracts,
                                 tickContext.MaxContractsAfterScaleIn - slot.Contracts)
                             If addContracts > 0 AndAlso tickContext.OnScaleInRequested IsNot Nothing Then
-                                _logger.LogInformation(
-                                    "PosMgmt [Slot {Idx}] {Contract} pullback scale-in — distFromSt={Dist:F4} thr={Thr:F4} adx={Adx:F1} adding={Add}c",
-                                    slot.SlotIndex, slot.Instrument, distanceFromSt, pullbackThreshold, adxNow, addContracts)
-                                Await tickContext.OnScaleInRequested(slot, addContracts)
-                                slot.HasScaledInOnPullback = True
+                                ' BUG-103 (LF-9): a scale-in adds exposure, so it is gated by
+                                ' the daily-loss guard exactly like a fresh entry. The latch is
+                                ' NOT set on suppression — the slot may still scale in later if
+                                ' the halt is released while the pullback window re-occurs.
+                                If _dailyLossGuard IsNot Nothing AndAlso Not _dailyLossGuard.CanEnterNewTrade() Then
+                                    Dim guardState = _dailyLossGuard.GetState()
+                                    _logger.LogInformation(
+                                        "PosMgmt [Slot {Idx}] {Contract} scale-in suppressed — DailyLossGuard halted: {Reason} (combined={Combined:F2}, limit={Limit:F2})",
+                                        slot.SlotIndex, slot.Instrument, guardState.Reason, guardState.CombinedDailyPnl, guardState.LimitDollars)
+                                Else
+                                    _logger.LogInformation(
+                                        "PosMgmt [Slot {Idx}] {Contract} pullback scale-in — distFromSt={Dist:F4} thr={Thr:F4} adx={Adx:F1} adding={Add}c",
+                                        slot.SlotIndex, slot.Instrument, distanceFromSt, pullbackThreshold, adxNow, addContracts)
+                                    Await tickContext.OnScaleInRequested(slot, addContracts)
+                                    slot.HasScaledInOnPullback = True
+                                End If
                             End If
                         End If
                     End If

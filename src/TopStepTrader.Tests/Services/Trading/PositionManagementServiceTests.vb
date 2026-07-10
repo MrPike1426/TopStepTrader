@@ -273,23 +273,58 @@ Namespace TopStepTrader.Tests.Services.Trading
             End Property
         End Class
 
+        ''' <summary>BUG-103: minimal daily-loss-guard stub — a CanEnter switch plus a
+        ''' canned state snapshot for the suppression log line.</summary>
+        Private Class StubDailyLossGuard
+            Implements IDailyLossGuard
+
+            Public Property CanEnter As Boolean = True
+            Public Property State As New DailyLossGuardState()
+            Public CanEnterCallCount As Integer = 0
+
+            Public Function GetState() As DailyLossGuardState Implements IDailyLossGuard.GetState
+                Return State
+            End Function
+            Public Function CanEnterNewTrade() As Boolean Implements IDailyLossGuard.CanEnterNewTrade
+                CanEnterCallCount += 1
+                Return CanEnter
+            End Function
+            Public Function EvaluateAsync() As Task(Of DailyLossGuardState) Implements IDailyLossGuard.EvaluateAsync
+                Return Task.FromResult(State)
+            End Function
+            Public Function ResetAsync(reason As String) As Task Implements IDailyLossGuard.ResetAsync
+                Return Task.CompletedTask
+            End Function
+            Public Sub RegisterOpenSlotPnlSource(source As IOpenSlotPnlSource) Implements IDailyLossGuard.RegisterOpenSlotPnlSource
+            End Sub
+            Public Sub UnregisterOpenSlotPnlSource(source As IOpenSlotPnlSource) Implements IDailyLossGuard.UnregisterOpenSlotPnlSource
+            End Sub
+            Public Event Halted As EventHandler(Of DailyLossGuardState) Implements IDailyLossGuard.Halted
+            Public Event Released As EventHandler Implements IDailyLossGuard.Released
+            Public Event ForceFlattened As EventHandler(Of DailyLossGuardState) Implements IDailyLossGuard.ForceFlattened
+        End Class
+
         ' ── Helpers ─────────────────────────────────────────────────────────
 
         Private Shared Function MakeService(orderSvc As IOrderService,
                                               barSvc As IBarIngestionService,
                                               tradeRec As ITradeRecordService,
                                               resolver As IContractResolutionService,
-                                              Optional logger As ILogger(Of PositionManagementService) = Nothing) As PositionManagementService
+                                              Optional logger As ILogger(Of PositionManagementService) = Nothing,
+                                              Optional guard As IDailyLossGuard = Nothing) As PositionManagementService
             Dim engine As New ExitSignalEngine(NullLogger(Of ExitSignalEngine).Instance)
             Return New PositionManagementService(orderSvc, barSvc, resolver, tradeRec, engine,
-                                                  If(logger, NullLogger(Of PositionManagementService).Instance))
+                                                  If(logger, NullLogger(Of PositionManagementService).Instance),
+                                                  dailyLossGuard:=guard)
         End Function
 
-        ''' <summary>BUG-102 F4: captures Warning lines for assertion.</summary>
+        ''' <summary>BUG-102 F4: captures Warning lines (and, for BUG-103, Information
+        ''' lines) for assertion.</summary>
         Private Class CapturingLogger(Of T)
             Implements ILogger(Of T)
 
             Public ReadOnly Warnings As New List(Of String)()
+            Public ReadOnly Infos As New List(Of String)()
 
             Public Function BeginScope(Of TState)(state As TState) As IDisposable Implements ILogger.BeginScope
                 Return Nothing
@@ -299,8 +334,11 @@ Namespace TopStepTrader.Tests.Services.Trading
             End Function
             Public Sub Log(Of TState)(logLevel As LogLevel, eventId As EventId, state As TState, exception As Exception,
                                        formatter As Func(Of TState, Exception, String)) Implements ILogger.Log
-                If logLevel = LogLevel.Warning AndAlso formatter IsNot Nothing Then
+                If formatter Is Nothing Then Return
+                If logLevel = LogLevel.Warning Then
                     Warnings.Add(formatter(state, exception))
+                ElseIf logLevel = LogLevel.Information Then
+                    Infos.Add(formatter(state, exception))
                 End If
             End Sub
         End Class
@@ -1018,6 +1056,119 @@ Namespace TopStepTrader.Tests.Services.Trading
 
             Assert.Empty(cap.Calls)
             Assert.False(slot.HasScaledInOnPullback)
+        End Function
+
+        ' ── BUG-103 (LF-9) — Scale-ins gated by the daily-loss guard ─────────
+
+        ''' <summary>Builds the S41b happy-path pullback fixture: an uptrend with the
+        ''' slot's LivePrice parked inside the pullback band so the scale-in decision
+        ''' fires and only the guard can stop it.</summary>
+        Private Shared Function MakePullbackFixture() As (Slot As PositionSlot, Bars As IList(Of MarketBar))
+            Dim bars = UptrendBars(DateTimeOffset.UtcNow.AddMinutes(-15 * 29), count:=30, basePrice:=100D, priceStep:=0.5D)
+            Dim sa = ResolveStLineAndAtr(bars)
+            Dim slot = MakeOpenSlot()
+            slot.IsEarlyModeEntry = False
+            slot.Contracts = 1
+            slot.LivePrice = sa.StLine + 0.25D * sa.Atr
+            Return (slot, bars)
+        End Function
+
+        <Fact>
+        Public Async Function B103a_GuardAllows_ScaleInProceeds() As Task
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            Dim guard As New StubDailyLossGuard With {.CanEnter = True}
+            Dim svc = MakeService(orderSvc, New StubBarService, New StubTradeRecordService, New StubContractResolver, guard:=guard)
+
+            Dim f = MakePullbackFixture()
+            Dim cap As New ScaleInCapture
+            Dim ctx = MakeStrat41TickContext(f.Bars, cap)
+
+            Await svc.UpdateAsync(f.Slot, ctx, CancellationToken.None)
+
+            Assert.True(guard.CanEnterCallCount > 0, "Guard must be consulted before the scale-in.")
+            Assert.Single(cap.Calls)
+            Assert.True(f.Slot.HasScaledInOnPullback)
+        End Function
+
+        <Fact>
+        Public Async Function B103b_HardHalted_ScaleInSuppressedAndLogged() As Task
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            Dim guard As New StubDailyLossGuard With {
+                .CanEnter = False,
+                .State = New DailyLossGuardState With {
+                    .IsHalted = True,
+                    .Reason = RiskHaltReason.DailyLossLimit,
+                    .CombinedDailyPnl = -510D,
+                    .LimitDollars = 500D
+                }
+            }
+            Dim logger As New CapturingLogger(Of PositionManagementService)
+            Dim svc = MakeService(orderSvc, New StubBarService, New StubTradeRecordService, New StubContractResolver,
+                                  logger:=logger, guard:=guard)
+
+            Dim f = MakePullbackFixture()
+            Dim cap As New ScaleInCapture
+            Dim ctx = MakeStrat41TickContext(f.Bars, cap)
+
+            Await svc.UpdateAsync(f.Slot, ctx, CancellationToken.None)
+
+            Assert.Empty(cap.Calls)
+            ' Latch stays clear: if the halt is released the slot may still scale in.
+            Assert.False(f.Slot.HasScaledInOnPullback)
+            Assert.Contains(logger.Infos,
+                Function(m) m.IndexOf("scale-in suppressed", StringComparison.OrdinalIgnoreCase) >= 0 AndAlso
+                            m.IndexOf(NameOf(RiskHaltReason.DailyLossLimit), StringComparison.OrdinalIgnoreCase) >= 0)
+        End Function
+
+        <Fact>
+        Public Async Function B103c_SoftHalted_ScaleInSuppressed() As Task
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            ' FEAT-73 soft halt: IsHalted stays False but CanEnterNewTrade() answers False.
+            Dim guard As New StubDailyLossGuard With {
+                .CanEnter = False,
+                .State = New DailyLossGuardState With {
+                    .IsHalted = False,
+                    .SoftHalted = True,
+                    .Reason = RiskHaltReason.ConsecutiveLosses
+                }
+            }
+            Dim svc = MakeService(orderSvc, New StubBarService, New StubTradeRecordService, New StubContractResolver, guard:=guard)
+
+            Dim f = MakePullbackFixture()
+            Dim cap As New ScaleInCapture
+            Dim ctx = MakeStrat41TickContext(f.Bars, cap)
+
+            Await svc.UpdateAsync(f.Slot, ctx, CancellationToken.None)
+
+            Assert.Empty(cap.Calls)
+            Assert.False(f.Slot.HasScaledInOnPullback)
+        End Function
+
+        <Fact>
+        Public Async Function B103d_StopManagementContinuesWhileHalted() As Task
+            ' Re-runs the (b) phased-stop ratchet scenario with a halted guard injected:
+            ' the guard blocks risk ADDS only — stop ratcheting must keep working.
+            Dim orderSvc As New StubOrderService With {.SnapshotResult = MakeConfirmedOpenSnapshot()}
+            Dim tradeRec As New StubTradeRecordService
+            Dim guard As New StubDailyLossGuard With {
+                .CanEnter = False,
+                .State = New DailyLossGuardState With {.IsHalted = True, .Reason = RiskHaltReason.DailyLossLimit}
+            }
+            Dim svc = MakeService(orderSvc, New StubBarService, tradeRec, New StubContractResolver, guard:=guard)
+
+            Dim slot = MakeOpenSlot()
+            slot.TradeRecordId = 7L
+            slot.LivePrice = 0D
+            slot.StopPhase = StopPhase.Initial
+
+            Dim bars = UptrendBars(DateTimeOffset.UtcNow.AddMinutes(-15 * 29))
+            Dim ctx = MakeTickContext(bars)
+
+            Dim r = Await svc.UpdateAsync(slot, ctx, CancellationToken.None)
+
+            Assert.Equal(PositionManagementOutcome.Continue, r.Outcome)
+            Assert.True(r.StopAdjusted, "Stop ratchet must keep operating while the guard is halted.")
+            Assert.NotEmpty(orderSvc.EditCalls)
         End Function
 
     End Class
