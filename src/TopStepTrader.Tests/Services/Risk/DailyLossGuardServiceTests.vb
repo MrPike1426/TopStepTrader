@@ -33,6 +33,7 @@ Namespace TopStepTrader.Tests.Services.Risk
         Private ReadOnly _tradeDbPath As String
         Private ReadOnly _provider As ServiceProvider
         Private ReadOnly _service As DailyLossGuardService
+        Private ReadOnly _extraServices As New List(Of DailyLossGuardService)()
         Private Const Limit As Decimal = -1000D
 
         Public Sub New()
@@ -55,14 +56,46 @@ Namespace TopStepTrader.Tests.Services.Risk
                 scope.ServiceProvider.GetRequiredService(Of TradeHistoryDbContext)().Database.EnsureCreated()
             End Using
 
+            ' Legacy-mode service (combine disabled): pre-FEAT-73 behaviour under test.
             _service = New DailyLossGuardService(
                 _provider.GetRequiredService(Of IServiceScopeFactory)(),
                 _provider.GetRequiredService(Of IOptions(Of RiskSettings))(),
+                Options.Create(New CombineSettings()),
+                New StubFlattener(),
                 NullLogger(Of DailyLossGuardService).Instance)
         End Sub
 
+        ''' <summary>FEAT-73: guard instance with combine mode on, sharing this fixture's databases.</summary>
+        Private Function CreateCombineService(flattener As StubFlattener,
+                                              Optional combine As CombineSettings = Nothing) As DailyLossGuardService
+            Dim svc As New DailyLossGuardService(
+                _provider.GetRequiredService(Of IServiceScopeFactory)(),
+                _provider.GetRequiredService(Of IOptions(Of RiskSettings))(),
+                Options.Create(If(combine, New CombineSettings With {.Enabled = True})),
+                flattener,
+                NullLogger(Of DailyLossGuardService).Instance)
+            _extraServices.Add(svc)
+            Return svc
+        End Function
+
+        Private Class StubFlattener
+            Implements IPositionFlattener
+            Public Property CallCount As Integer
+            Public Property LastAccountId As Long
+
+            Public Function FlattenAllAsync(accountId As Long) As Task(Of FlattenAllResult) _
+                Implements IPositionFlattener.FlattenAllAsync
+                CallCount += 1
+                LastAccountId = accountId
+                Return Task.FromResult(New FlattenAllResult With {.OrdersCancelled = True})
+            End Function
+        End Class
+
         Public Sub Dispose() Implements IDisposable.Dispose
             Try
+                For Each svc In _extraServices
+                    svc.Dispose()
+                Next
                 _service.Dispose()
                 _provider.Dispose()
                 SqliteConnection.ClearAllPools()
@@ -73,7 +106,9 @@ Namespace TopStepTrader.Tests.Services.Risk
         End Sub
 
         Private Async Function InsertClosedTradeAsync(pnl As Decimal,
-                                                       Optional exitOffset As TimeSpan? = Nothing) As Task
+                                                       Optional exitOffset As TimeSpan? = Nothing,
+                                                       Optional commission As Decimal = 0D,
+                                                       Optional fees As Decimal = 0D) As Task
             Using scope = _provider.CreateScope()
                 Dim db = scope.ServiceProvider.GetRequiredService(Of TradeHistoryDbContext)()
                 Dim now = DateTimeOffset.UtcNow
@@ -90,6 +125,8 @@ Namespace TopStepTrader.Tests.Services.Risk
                     .EntryPrice = 21000D,
                     .ExitPrice = 21000D + pnl,
                     .PnL = pnl,
+                    .CommissionUsd = commission,
+                    .FeesUsd = fees,
                     .ExitReason = "TestClose",
                     .IsOpen = False,
                     .CreatedAt = exitTime,
@@ -268,6 +305,199 @@ Namespace TopStepTrader.Tests.Services.Risk
             Dim state = Await _service.EvaluateAsync()
             Assert.True(state.IsHalted)
             Assert.Equal(0, Await CountRiskEventsAsync("DayRollover"))
+        End Function
+
+        ' ═══ FEAT-73: combine mode ═════════════════════════════════════════════
+
+        <Fact>
+        Public Async Function Combine_SoftLoss_BlocksEntries_NoFlatten_ClearsOnRecovery() As Task
+            Dim flattener As New StubFlattener()
+            Dim svc = CreateCombineService(flattener)
+
+            Await InsertClosedTradeAsync(pnl:=-600D)
+            Dim state = Await svc.EvaluateAsync()
+
+            Assert.True(state.SoftHalted)
+            Assert.False(state.IsHalted)
+            Assert.Equal(RiskHaltReason.DailyLossLimit, state.Reason)
+            Assert.False(svc.CanEnterNewTrade())
+            Assert.Equal(0, flattener.CallCount)
+
+            ' Loss-line soft halt clears automatically when combined P&L recovers.
+            Dim source As New StubPnlSource With {.Unrealised = 100D}
+            svc.RegisterOpenSlotPnlSource(source)
+            Dim recovered = Await svc.EvaluateAsync()
+
+            Assert.False(recovered.SoftHalted)
+            Assert.True(svc.CanEnterNewTrade())
+        End Function
+
+        <Fact>
+        Public Async Function Combine_HardLoss_FlattensOnce_RaisesForceFlattened_PersistsEvent() As Task
+            Dim flattener As New StubFlattener()
+            Dim svc = CreateCombineService(flattener)
+
+            Await InsertClosedTradeAsync(pnl:=-800D)
+
+            Dim forceCount As Integer = 0
+            Dim haltCount As Integer = 0
+            AddHandler svc.ForceFlattened, Sub(s, e) forceCount += 1
+            AddHandler svc.Halted, Sub(s, e) haltCount += 1
+
+            Dim state = Await svc.EvaluateAsync()
+
+            Assert.True(state.IsHalted)
+            Assert.Equal(RiskHaltReason.DailyLossLimit, state.Reason)
+            Assert.False(svc.CanEnterNewTrade())
+            Assert.Equal(1, flattener.CallCount)
+            Assert.Equal(1, forceCount)
+            Assert.Equal(1, haltCount)
+            Assert.Equal(1, Await CountRiskEventsAsync("CombineHardLoss"))
+
+            ' Re-evaluating with the same data must not flatten or fire again.
+            Await svc.EvaluateAsync()
+            Assert.Equal(1, flattener.CallCount)
+            Assert.Equal(1, forceCount)
+            Assert.Equal(1, Await CountRiskEventsAsync("CombineHardLoss"))
+        End Function
+
+        <Fact>
+        Public Async Function Combine_FeesIncludedInDailyPnl_WhenConfigured() As Task
+            ' Gross −500 stays above the −600 soft line; net of $60 commission + $45 fees
+            ' (−605) breaches it. TopStep counts fees, so the halt must fire.
+            Await InsertClosedTradeAsync(pnl:=-500D, commission:=60D, fees:=45D)
+
+            Dim withFees = CreateCombineService(New StubFlattener())
+            Dim state = Await withFees.EvaluateAsync()
+            Assert.Equal(-605D, state.RealisedDailyPnl)
+            Assert.True(state.SoftHalted)
+
+            Dim withoutFees = CreateCombineService(
+                New StubFlattener(),
+                New CombineSettings With {.Enabled = True, .IncludeFeesInDailyPnl = False})
+            Dim grossState = Await withoutFees.EvaluateAsync()
+            Assert.Equal(-500D, grossState.RealisedDailyPnl)
+            Assert.False(grossState.SoftHalted)
+        End Function
+
+        <Fact>
+        Public Async Function Combine_ProfitLock_ArmsAtTrigger_FlattensOnFloorRetrace() As Task
+            Dim flattener As New StubFlattener()
+            Dim svc = CreateCombineService(flattener)
+            Dim source As New StubPnlSource With {.Unrealised = 200D}
+            svc.RegisterOpenSlotPnlSource(source)
+
+            Dim armedState = Await svc.EvaluateAsync()
+            Assert.True(armedState.ProfitLockArmed)
+            Assert.Equal(200D, armedState.ProfitLockHighWater)
+            Assert.False(armedState.IsHalted)
+            Assert.True(svc.CanEnterNewTrade())
+
+            ' Pullback above the floor: high-water holds, still trading.
+            source.Unrealised = 180D
+            Dim holdState = Await svc.EvaluateAsync()
+            Assert.Equal(200D, holdState.ProfitLockHighWater)
+            Assert.False(holdState.IsHalted)
+
+            ' Retrace to the +100 floor: flatten + halt with DailyProfitLock.
+            source.Unrealised = 90D
+            Dim lockedState = Await svc.EvaluateAsync()
+            Assert.True(lockedState.IsHalted)
+            Assert.Equal(RiskHaltReason.DailyProfitLock, lockedState.Reason)
+            Assert.Equal(1, flattener.CallCount)
+            Assert.Equal(1, Await CountRiskEventsAsync("CombineProfitLock"))
+        End Function
+
+        <Fact>
+        Public Async Function Combine_ProfitLock_BanksImmediately_WhenFlatAtTrigger() As Task
+            Dim flattener As New StubFlattener()
+            Dim svc = CreateCombineService(flattener)
+
+            Await InsertClosedTradeAsync(pnl:=160D)
+            Dim state = Await svc.EvaluateAsync()
+
+            Assert.True(state.IsHalted)
+            Assert.Equal(RiskHaltReason.DailyProfitLock, state.Reason)
+            ' Flattener still runs on a flat book: it sweeps pre-staged stop entries.
+            Assert.Equal(1, flattener.CallCount)
+        End Function
+
+        <Fact>
+        Public Async Function Combine_MaxTrades_SoftHalt_PersistsAcrossEvaluations() As Task
+            Dim svc = CreateCombineService(New StubFlattener())
+            ' Positive offsets keep every close inside the current trading day even when
+            ' the test runs moments after the 17:00 CT rollover.
+            For i = 1 To 4
+                Await InsertClosedTradeAsync(pnl:=10D, exitOffset:=TimeSpan.FromMinutes(i))
+            Next
+
+            Dim state = Await svc.EvaluateAsync()
+            Assert.True(state.SoftHalted)
+            Assert.Equal(RiskHaltReason.MaxTradesPerDay, state.Reason)
+            Assert.Equal(4, state.TradesToday)
+            Assert.False(svc.CanEnterNewTrade())
+
+            Dim again = Await svc.EvaluateAsync()
+            Assert.True(again.SoftHalted)
+        End Function
+
+        <Fact>
+        Public Async Function Combine_ConsecutiveLosers_SoftHalt_StickyEvenAfterLateWinner() As Task
+            Dim svc = CreateCombineService(New StubFlattener())
+            ' Positive offsets: inside the current trading day regardless of wall clock.
+            Await InsertClosedTradeAsync(pnl:=-50D, exitOffset:=TimeSpan.FromMinutes(1))
+            Await InsertClosedTradeAsync(pnl:=-50D, exitOffset:=TimeSpan.FromMinutes(2))
+
+            Dim state = Await svc.EvaluateAsync()
+            Assert.True(state.SoftHalted)
+            Assert.Equal(RiskHaltReason.ConsecutiveLosses, state.Reason)
+            Assert.Equal(2, state.ConsecutiveLosers)
+
+            ' A position that was already open closes green: the derived counter resets,
+            ' but the circuit breaker stays tripped for the day.
+            Await InsertClosedTradeAsync(pnl:=50D, exitOffset:=TimeSpan.FromMinutes(3))
+            Dim sticky = Await svc.EvaluateAsync()
+            Assert.Equal(0, sticky.ConsecutiveLosers)
+            Assert.True(sticky.SoftHalted)
+            Assert.Equal(RiskHaltReason.ConsecutiveLosses, sticky.Reason)
+            Assert.False(svc.CanEnterNewTrade())
+        End Function
+
+        <Fact>
+        Public Sub Combine_Lf11_EntryGate_ReEvaluatesWhenStaleWithOpenSlot()
+            ' No explicit EvaluateAsync: the gate must not answer from the (stale,
+            ' never-evaluated) cache while a slot is open and deep underwater.
+            Dim flattener As New StubFlattener()
+            Dim svc = CreateCombineService(flattener)
+            svc.RegisterOpenSlotPnlSource(New StubPnlSource With {.Unrealised = -800D})
+
+            Assert.False(svc.CanEnterNewTrade())
+            Assert.True(svc.GetState().IsHalted)
+            Assert.Equal(1, flattener.CallCount)
+        End Sub
+
+        <Fact>
+        Public Async Function Combine_DayRollover_ResetsLockStateAndCounters() As Task
+            Dim flattener As New StubFlattener()
+            Dim svc = CreateCombineService(flattener)
+            Dim t0 As DateTimeOffset = DateTimeOffset.UtcNow
+            svc.UtcNowProvider = Function() t0
+
+            Await InsertClosedTradeAsync(pnl:=-800D)
+            Dim haltedState = Await svc.EvaluateAsync()
+            Assert.True(haltedState.IsHalted)
+
+            Dim t1 As DateTimeOffset = t0.AddDays(2)
+            svc.UtcNowProvider = Function() t1
+            Dim state = Await svc.EvaluateAsync()
+
+            Assert.False(state.IsHalted)
+            Assert.False(state.SoftHalted)
+            Assert.False(state.ProfitLockArmed)
+            Assert.Equal(0D, state.ProfitLockHighWater)
+            Assert.Equal(0, state.TradesToday)
+            Assert.Equal(0, state.ConsecutiveLosers)
+            Assert.True(svc.CanEnterNewTrade())
         End Function
 
     End Class

@@ -11,6 +11,8 @@ Namespace TopStepTrader.Services.Risk
 
         <System.Runtime.CompilerServices.Extension>
         Public Sub AddDailyLossGuard(services As IServiceCollection)
+            ' FEAT-73: force-flatten sweep used by hard combine verdicts.
+            services.TryAddSingleton(Of IPositionFlattener, PositionFlattener)()
             services.TryAddSingleton(Of DailyLossGuardService)()
             services.TryAddSingleton(Of IDailyLossGuard)(Function(sp) sp.GetRequiredService(Of DailyLossGuardService)())
             services.AddHostedService(Function(sp) sp.GetRequiredService(Of DailyLossGuardService)())

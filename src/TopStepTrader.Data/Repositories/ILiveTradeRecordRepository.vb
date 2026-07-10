@@ -3,6 +3,21 @@ Imports TopStepTrader.Data.Entities
 
 Namespace TopStepTrader.Data.Repositories
 
+    ''' <summary>
+    ''' FEAT-73: aggregate over the trading day's closed trades, computed from a single
+    ''' repository read so the sum and the counters describe the same snapshot.
+    ''' </summary>
+    Public Class DailyCloseStats
+        ''' <summary>SUM(PnL) — same figure <c>SumRealisedPnlSinceAsync</c> returns.</summary>
+        Public Property GrossPnl As Decimal
+        ''' <summary>SUM(PnL − CommissionUsd − FeesUsd) — TopStep counts fees in daily P&amp;L.</summary>
+        Public Property NetPnlAfterFees As Decimal
+        ''' <summary>Closed trades since the window start.</summary>
+        Public Property TradeCount As Integer
+        ''' <summary>Consecutive closes with PnL &lt;= 0 walking newest-backwards until the first winner.</summary>
+        Public Property ConsecutiveLosers As Integer
+    End Class
+
     Public Interface ILiveTradeRecordRepository
 
         Function AddAsync(entity As LiveTradeRecordEntity) As Task(Of Long)
@@ -64,6 +79,15 @@ Namespace TopStepTrader.Data.Repositories
         ''' against a $1.5k cap so this is intentionally gross.
         ''' </summary>
         Function SumRealisedPnlSinceAsync(sinceUtc As DateTimeOffset) As Task(Of Decimal)
+
+        ''' <summary>
+        ''' FEAT-73: combine-mode day stats in one read — net-of-fees realised P&amp;L
+        ''' (the ticket's <c>SumRealisedPnlNetOfFeesSinceAsync</c> role), gross P&amp;L,
+        ''' closed-trade count and consecutive-loser streak, all over closed trades whose
+        ''' <c>ExitTime</c> is at or after <paramref name="sinceUtc"/>. Rows with NULL
+        ''' <c>PnL</c> (close fill not yet reconciled) are skipped.
+        ''' </summary>
+        Function GetDailyCloseStatsAsync(sinceUtc As DateTimeOffset) As Task(Of DailyCloseStats)
 
     End Interface
 

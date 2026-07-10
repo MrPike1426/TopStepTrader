@@ -15,6 +15,19 @@ Namespace TopStepTrader.Core.Interfaces
         Public Property LimitDollars As Decimal
         Public Property HaltedAtUtc As DateTimeOffset?
         Public Property HaltMessage As String = String.Empty
+
+        ' ── FEAT-73 combine-mode state (all default/zero when combine is off) ──
+        ''' <summary>Soft halt: new entries and scale-ins blocked; open positions keep managing.</summary>
+        Public Property SoftHalted As Boolean
+        ''' <summary>True once combined daily P&amp;L has reached the profit-lock trigger this trading day.</summary>
+        Public Property ProfitLockArmed As Boolean
+        ''' <summary>Highest combined daily P&amp;L observed since the lock armed (ratchets up only).</summary>
+        Public Property ProfitLockHighWater As Decimal
+        ''' <summary>Closed trades since the 17:00-CT trading-day start.</summary>
+        Public Property TradesToday As Integer
+        ''' <summary>Consecutive losing closes (PnL &lt;= 0) walking back from the most recent close.</summary>
+        Public Property ConsecutiveLosers As Integer
+        Public Property CombineEnabled As Boolean
     End Class
 
     ''' <summary>
@@ -28,7 +41,9 @@ Namespace TopStepTrader.Core.Interfaces
     ''' trading day rolls over.
     '''
     ''' Strategies opt in by consulting <see cref="CanEnterNewTrade"/> before opening
-    ''' a slot; the guard does not force-flatten existing positions.
+    ''' a slot. In non-combine mode the guard does not force-flatten existing positions;
+    ''' with combine mode on (FEAT-73) a hard verdict force-flattens the book via
+    ''' <c>IPositionFlattener</c> and raises <see cref="ForceFlattened"/>.
     ''' </summary>
     Public Interface IDailyLossGuard
 
@@ -62,6 +77,13 @@ Namespace TopStepTrader.Core.Interfaces
 
         ''' <summary>Raised when the guard transitions out of Halted (manual reset or day rollover).</summary>
         Event Released As EventHandler
+
+        ''' <summary>
+        ''' FEAT-73: raised (after <see cref="Halted"/>) when a hard combine verdict
+        ''' triggered a force-flatten sweep. Orchestrators/VMs should release their open
+        ''' slots immediately; TradeReconciliationWorker/BrokerSlotSweepWorker remain the backstop.
+        ''' </summary>
+        Event ForceFlattened As EventHandler(Of DailyLossGuardState)
     End Interface
 
     ''' <summary>

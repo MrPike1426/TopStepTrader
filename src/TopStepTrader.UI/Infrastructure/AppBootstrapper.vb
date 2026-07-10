@@ -54,6 +54,7 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.Configure(Of ApiSettings)(ctx.Configuration.GetSection("Api"))
                         services.Configure(Of ProjectXSettings)(ctx.Configuration.GetSection("ProjectX"))
                         services.Configure(Of RiskSettings)(ctx.Configuration.GetSection("Risk"))
+                        services.Configure(Of CombineSettings)(ctx.Configuration.GetSection("Combine")) ' FEAT-73
                         services.Configure(Of TradingSettings)(ctx.Configuration.GetSection("Trading"))
                         services.Configure(Of MLSettings)(ctx.Configuration.GetSection("ML"))
                         services.Configure(Of ClaudeSettings)(ctx.Configuration.GetSection("Claude"))

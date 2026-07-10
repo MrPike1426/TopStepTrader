@@ -168,6 +168,44 @@ Namespace TopStepTrader.Data.Repositories
             Return total
         End Function
 
+        Public Async Function GetDailyCloseStatsAsync(sinceUtc As DateTimeOffset) As Task(Of DailyCloseStats) _
+            Implements ILiveTradeRecordRepository.GetDailyCloseStatsAsync
+            ' Same SQLite DateTimeOffset caveat as SumRealisedPnlSinceAsync: project the
+            ' closed rows into memory, then filter/sort on materialised values. The set
+            ' is bounded by one trading day's closed trades.
+            Dim rows = Await _db.LiveTradeRecords _
+                .Where(Function(r) Not r.IsOpen AndAlso
+                                   r.PnL.HasValue AndAlso
+                                   r.ExitTime.HasValue) _
+                .Select(Function(r) New With {
+                    Key .PnL = r.PnL,
+                    Key .ExitTime = r.ExitTime,
+                    Key .Commission = r.CommissionUsd,
+                    Key .Fees = r.FeesUsd}) _
+                .ToListAsync()
+
+            Dim dayRows = rows _
+                .Where(Function(r) r.PnL.HasValue AndAlso r.ExitTime.HasValue AndAlso
+                                   r.ExitTime.Value >= sinceUtc) _
+                .OrderBy(Function(r) r.ExitTime.Value) _
+                .ToList()
+
+            Dim stats As New DailyCloseStats With {.TradeCount = dayRows.Count}
+            For Each r In dayRows
+                stats.GrossPnl += r.PnL.Value
+                stats.NetPnlAfterFees += r.PnL.Value - r.Commission - r.Fees
+            Next
+            ' Consecutive losers: newest backwards, counting PnL <= 0 until the first winner.
+            For i = dayRows.Count - 1 To 0 Step -1
+                If dayRows(i).PnL.Value <= 0D Then
+                    stats.ConsecutiveLosers += 1
+                Else
+                    Exit For
+                End If
+            Next
+            Return stats
+        End Function
+
     End Class
 
 End Namespace
