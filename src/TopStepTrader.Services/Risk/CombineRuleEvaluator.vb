@@ -13,6 +13,8 @@ Namespace TopStepTrader.Services.Risk
         HardHaltFlatten = 2
         ''' <summary>Flatten (if needed) and halt for the day with the profit banked.</summary>
         ProfitLockFlatten = 3
+        ''' <summary>FEAT-74: trailing max-drawdown (MLL) breached — flatten and halt; does NOT auto-release at rollover.</summary>
+        MaxDrawdownFlatten = 4
     End Enum
 
     ''' <summary>
@@ -29,9 +31,25 @@ Namespace TopStepTrader.Services.Risk
     End Class
 
     ''' <summary>
+    ''' FEAT-74 F3: outcome of a trailing max-drawdown evaluation. Pure data — the
+    ''' caller owns persisting <see cref="PeakEquity"/>/<see cref="MllFloor"/>.
+    ''' </summary>
+    Public Class TrailVerdict
+        ''' <summary>Peak after this evaluation (ratchets up only; unchanged when sampling is deferred).</summary>
+        Public Property PeakEquity As Decimal
+        ''' <summary>MLL line derived from the (possibly updated) peak.</summary>
+        Public Property MllFloor As Decimal
+        ''' <summary>True when equity is at or below floor + safety buffer — flatten and halt.</summary>
+        Public Property Breached As Boolean
+        Public Property Message As String = String.Empty
+    End Class
+
+    ''' <summary>
     ''' FEAT-73 F3: pure, timer-free combine-rule evaluation. No I/O, no clock —
     ''' fully unit-testable. Precedence: hard daily-loss line, then profit lock,
     ''' then soft halts (loss line, trade count, consecutive losers).
+    ''' FEAT-74 adds <see cref="EvaluateTrail"/> — the trailing MLL check the guard
+    ''' runs *before* the daily rules (an MLL breach outranks every daily verdict).
     ''' </summary>
     Public Module CombineRuleEvaluator
 
@@ -99,6 +117,40 @@ Namespace TopStepTrader.Services.Risk
             End If
 
             Return verdict
+        End Function
+
+        ''' <summary>
+        ''' FEAT-74 F3: trailing max-drawdown (MLL) evaluation.
+        ''' Peak ratchets up only (<paramref name="ratchetPeak"/> False defers sampling —
+        ''' <c>TrailMode="EndOfDay"</c> samples at day rollover instead of per tick).
+        ''' Floor = peak + <c>TrailingMaxDrawdownDollars</c>, capped at the starting
+        ''' balance when <c>TrailFreezeAtStartBalance</c> (TopStep's freeze rule).
+        ''' Breach at <c>equity &lt;= floor + SafetyBufferDollars</c> so the app halts
+        ''' before TopStep's own line.
+        ''' </summary>
+        Public Function EvaluateTrail(settings As CombineSettings,
+                                      equity As Decimal,
+                                      priorPeakEquity As Decimal,
+                                      ratchetPeak As Boolean) As TrailVerdict
+            Dim result As New TrailVerdict With {.PeakEquity = priorPeakEquity}
+            If settings Is Nothing OrElse Not settings.Enabled Then Return result
+
+            If ratchetPeak AndAlso equity > result.PeakEquity Then
+                result.PeakEquity = equity
+            End If
+
+            Dim floor As Decimal = result.PeakEquity + settings.TrailingMaxDrawdownDollars
+            If settings.TrailFreezeAtStartBalance Then
+                floor = Math.Min(floor, settings.StartingBalance)
+            End If
+            result.MllFloor = floor
+
+            If equity <= floor + settings.SafetyBufferDollars Then
+                result.Breached = True
+                result.Message = $"Trailing max-drawdown breached: equity ${equity:F2} <= MLL floor ${floor:F2} + buffer ${settings.SafetyBufferDollars:F2} (peak ${result.PeakEquity:F2}). Force-flattening and halting — combine rule; manual reset required."
+            End If
+
+            Return result
         End Function
 
     End Module

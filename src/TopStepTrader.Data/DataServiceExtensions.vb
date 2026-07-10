@@ -38,6 +38,7 @@ Namespace TopStepTrader.Data
             services.AddScoped(Of ITradeSetupSnapshotRepository, TradeSetupSnapshotRepository)()
             services.AddScoped(Of ITradeLifespanRepository, TradeLifespanRepository)()
             services.AddScoped(Of IAdaptiveParametersRepository, AdaptiveParametersRepository)()
+            services.AddScoped(Of ICombineAccountStateRepository, CombineAccountStateRepository)() ' FEAT-74
 
             ' ── Trade history (separate TradeHistory.db) ──────────────────────
             Dim diagnosticsFolderPath = DebugTradeDbContext.ResolveDiagnosticsFolder()

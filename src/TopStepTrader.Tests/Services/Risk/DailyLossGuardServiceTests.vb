@@ -7,6 +7,7 @@ Imports Microsoft.Extensions.Logging.Abstractions
 Imports Microsoft.Extensions.Options
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
+Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Core.Settings
 Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.Data
@@ -34,6 +35,7 @@ Namespace TopStepTrader.Tests.Services.Risk
         Private ReadOnly _provider As ServiceProvider
         Private ReadOnly _service As DailyLossGuardService
         Private ReadOnly _extraServices As New List(Of DailyLossGuardService)()
+        Private ReadOnly _session As New StubSessionContext()
         Private Const Limit As Decimal = -1000D
 
         Public Sub New()
@@ -46,6 +48,10 @@ Namespace TopStepTrader.Tests.Services.Risk
             services.AddDbContext(Of TradeHistoryDbContext)(
                 Sub(opts) opts.UseSqlite($"Data Source={_tradeDbPath}"))
             services.AddScoped(Of ILiveTradeRecordRepository, LiveTradeRecordRepository)()
+            services.AddScoped(Of ICombineAccountStateRepository, CombineAccountStateRepository)() ' FEAT-74
+            ' FEAT-74: session context stub; SelectedAccount stays Nothing until a trail
+            ' test selects one, so pre-FEAT-74 tests run with the trail inactive.
+            services.AddSingleton(Of ITradingSessionContext)(_session)
             services.AddSingleton(Of IOptions(Of RiskSettings))(
                 Options.Create(New RiskSettings With {.DailyLossLimitDollars = Limit}))
 
@@ -77,6 +83,48 @@ Namespace TopStepTrader.Tests.Services.Risk
             _extraServices.Add(svc)
             Return svc
         End Function
+
+        ''' <summary>FEAT-74: minimal session context so ResolveAccountId sees a selected account.</summary>
+        Private Class StubSessionContext
+            Implements ITradingSessionContext
+
+            Private _account As Account
+
+            Public Event AccountChanged As EventHandler(Of Account) _
+                Implements ITradingSessionContext.AccountChanged
+            Public Event AutoExecutionChanged As EventHandler _
+                Implements ITradingSessionContext.AutoExecutionChanged
+
+            Public ReadOnly Property SelectedAccount As Account _
+                Implements ITradingSessionContext.SelectedAccount
+                Get
+                    Return _account
+                End Get
+            End Property
+
+            Public ReadOnly Property ActiveBroker As BrokerType _
+                Implements ITradingSessionContext.ActiveBroker
+                Get
+                    Return BrokerType.TopStepX
+                End Get
+            End Property
+
+            Public ReadOnly Property AutoExecutionEnabled As Boolean _
+                Implements ITradingSessionContext.AutoExecutionEnabled
+                Get
+                    Return False
+                End Get
+            End Property
+
+            Public Sub SelectAccount(account As Account) _
+                Implements ITradingSessionContext.SelectAccount
+                _account = account
+            End Sub
+
+            Public Sub SetAutoExecution(enabled As Boolean) _
+                Implements ITradingSessionContext.SetAutoExecution
+            End Sub
+        End Class
 
         Private Class StubFlattener
             Implements IPositionFlattener
@@ -498,6 +546,156 @@ Namespace TopStepTrader.Tests.Services.Risk
             Assert.Equal(0, state.TradesToday)
             Assert.Equal(0, state.ConsecutiveLosers)
             Assert.True(svc.CanEnterNewTrade())
+        End Function
+
+        ' ═══ FEAT-74: trailing max-drawdown (MLL) ══════════════════════════════
+
+        Private Const MllAccountId As Long = 4242L
+
+        ''' <summary>
+        ''' Combine settings tuned so only the trail can fire: daily lines pushed far
+        ''' away, counters disabled. Start 50 000; trailing/buffer per test.
+        ''' </summary>
+        Private Shared Function MllSettings(Optional trailing As Decimal = -100D,
+                                            Optional buffer As Decimal = 0D,
+                                            Optional trailMode As String = "IntradayPeak") As CombineSettings
+            Return New CombineSettings With {
+                .Enabled = True,
+                .StartingBalance = 50000D,
+                .DailyLossSoftDollars = -9000D,
+                .DailyLossHardDollars = -9500D,
+                .MaxTradesPerDay = 0,
+                .MaxConsecutiveLosers = 0,
+                .TrailingMaxDrawdownDollars = trailing,
+                .SafetyBufferDollars = buffer,
+                .TrailMode = trailMode
+            }
+        End Function
+
+        Private Sub SelectMllAccount()
+            _session.SelectAccount(New Account With {.Id = MllAccountId})
+        End Sub
+
+        <Fact>
+        Public Async Function Mll_Breach_HaltsAndFlattens_WithMaxDrawdownReason() As Task
+            SelectMllAccount()
+            Dim flattener As New StubFlattener()
+            Dim svc = CreateCombineService(flattener, MllSettings())
+
+            ' No broker push in the fixture → fallback equity model:
+            ' 50 000 + 0 cumulative + (−150 realised) = 49 850 <= floor 49 900.
+            Await InsertClosedTradeAsync(pnl:=-150D)
+            Dim state = Await svc.EvaluateAsync()
+
+            Assert.True(state.IsHalted)
+            Assert.Equal(RiskHaltReason.MaxDrawdown, state.Reason)
+            Assert.True(state.MllTrailActive)
+            Assert.Equal(49850D, state.EquityNow)
+            Assert.Equal(49900D, state.MllFloor)
+            Assert.False(svc.CanEnterNewTrade())
+            Assert.Equal(1, flattener.CallCount)
+            Assert.Equal(1, Await CountRiskEventsAsync("CombineMaxDrawdown"))
+
+            ' Idempotent: same data must not flatten or log again.
+            Await svc.EvaluateAsync()
+            Assert.Equal(1, flattener.CallCount)
+            Assert.Equal(1, Await CountRiskEventsAsync("CombineMaxDrawdown"))
+        End Function
+
+        <Fact>
+        Public Async Function Mll_PeakRatchets_AndSurvivesRestart() As Task
+            SelectMllAccount()
+            Dim svc = CreateCombineService(New StubFlattener(), MllSettings(trailing:=-300D))
+            Dim source As New StubPnlSource With {.Unrealised = 200D}
+            svc.RegisterOpenSlotPnlSource(source)
+
+            Dim first = Await svc.EvaluateAsync()
+            Assert.Equal(50200D, first.PeakEquity)
+            Assert.Equal(49900D, first.MllFloor) ' min(50 200 − 300, 50 000 freeze)
+            Assert.False(first.IsHalted)
+            svc.Dispose()
+
+            ' "Restart": fresh service, same database — the trail resumes at the
+            ' ratcheted peak instead of resetting to the starting balance.
+            Dim restarted = CreateCombineService(New StubFlattener(), MllSettings(trailing:=-300D))
+            Dim state = Await restarted.EvaluateAsync()
+            Assert.Equal(50200D, state.PeakEquity)
+            Assert.Equal(49900D, state.MllFloor)
+            Assert.False(state.IsHalted) ' fallback equity 50 000 stays above 49 900
+        End Function
+
+        <Fact>
+        Public Async Function MllHalt_SurvivesDayRollover_NoAutoRelease() As Task
+            SelectMllAccount()
+            Dim flattener As New StubFlattener()
+            Dim svc = CreateCombineService(flattener, MllSettings())
+            Dim t0 As DateTimeOffset = DateTimeOffset.UtcNow
+            svc.UtcNowProvider = Function() t0
+
+            Await InsertClosedTradeAsync(pnl:=-150D)
+            Dim haltedState = Await svc.EvaluateAsync()
+            Assert.True(haltedState.IsHalted)
+            Assert.Equal(RiskHaltReason.MaxDrawdown, haltedState.Reason)
+
+            Dim releasedFireCount As Integer = 0
+            AddHandler svc.Released, Sub(s, e) releasedFireCount += 1
+
+            svc.UtcNowProvider = Function() t0.AddDays(2)
+            Dim state = Await svc.EvaluateAsync()
+
+            Assert.True(state.IsHalted)
+            Assert.Equal(RiskHaltReason.MaxDrawdown, state.Reason)
+            Assert.False(svc.CanEnterNewTrade())
+            Assert.Equal(0, releasedFireCount)
+            Assert.Equal(1, flattener.CallCount) ' no re-flatten across the rollover
+        End Function
+
+        <Fact>
+        Public Async Function MllHalt_ManualReset_ReBaselinesPersistedTrail() As Task
+            SelectMllAccount()
+            Dim svc = CreateCombineService(New StubFlattener(), MllSettings())
+
+            Await InsertClosedTradeAsync(pnl:=-150D)
+            Dim haltedState = Await svc.EvaluateAsync()
+            Assert.Equal(RiskHaltReason.MaxDrawdown, haltedState.Reason)
+
+            Await svc.ResetAsync("Practice account reset")
+
+            Assert.True(svc.CanEnterNewTrade())
+            Assert.False(svc.GetState().IsHalted)
+            Assert.Equal(1, Await CountRiskEventsAsync("DailyLossReset"))
+
+            ' Persisted row re-baselined for practice-account reuse.
+            Using scope = _provider.CreateScope()
+                Dim repo = scope.ServiceProvider.GetRequiredService(Of ICombineAccountStateRepository)()
+                Dim row = Await repo.GetOrCreateAsync(MllAccountId, 50000D)
+                Assert.Equal(50000D, row.PeakEquity)
+                Assert.Equal(0D, row.CumulativeRealisedPnl)
+                Assert.Equal(49900D, row.MllFloor)
+            End Using
+        End Function
+
+        <Fact>
+        Public Async Function Mll_EndOfDayMode_SamplesPeakOnlyAtRollover() As Task
+            SelectMllAccount()
+            Dim svc = CreateCombineService(New StubFlattener(),
+                                           MllSettings(trailing:=-300D, trailMode:="EndOfDay"))
+            Dim t0 As DateTimeOffset = DateTimeOffset.UtcNow
+            svc.UtcNowProvider = Function() t0
+            Dim source As New StubPnlSource With {.Unrealised = 200D}
+            svc.RegisterOpenSlotPnlSource(source)
+
+            ' Intraday high does NOT move the peak in EndOfDay mode.
+            Dim first = Await svc.EvaluateAsync()
+            Assert.Equal(50000D, first.PeakEquity)
+            Assert.Equal(49700D, first.MllFloor)
+
+            ' Rollover samples the last modelled equity (50 200) into the peak.
+            svc.UtcNowProvider = Function() t0.AddDays(2)
+            Dim state = Await svc.EvaluateAsync()
+            Assert.Equal(50200D, state.PeakEquity)
+            Assert.Equal(49900D, state.MllFloor)
+            Assert.False(state.IsHalted)
         End Function
 
     End Class

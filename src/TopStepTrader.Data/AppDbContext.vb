@@ -26,6 +26,7 @@ Namespace TopStepTrader.Data
         Public Property UltimateScalperConfig As DbSet(Of UltimateScalperConfigEntity)
         Public Property SlipStreamConfig As DbSet(Of SlipStreamConfigEntity)
         Public Property BreakAndBounceConfig As DbSet(Of BreakAndBounceConfigEntity)
+        Public Property CombineAccountStates As DbSet(Of CombineAccountStateEntity) ' FEAT-74
 
         Protected Overrides Sub OnModelCreating(modelBuilder As ModelBuilder)
             MyBase.OnModelCreating(modelBuilder)
@@ -107,6 +108,11 @@ Namespace TopStepTrader.Data
             modelBuilder.Entity(Of BreakAndBounceConfigEntity)() _
                 .ToTable("BreakAndBounceConfig") _
                 .HasKey(Function(c) c.Id)
+
+            ' CombineAccountState — one row per account, AccountId is the natural key (FEAT-74)
+            modelBuilder.Entity(Of CombineAccountStateEntity)() _
+                .ToTable("CombineAccountState") _
+                .HasKey(Function(c) c.AccountId)
 
         End Sub
 
@@ -655,6 +661,30 @@ Namespace TopStepTrader.Data
                 Next
             Finally
                 If mustClose12 Then conn.Close()
+            End Try
+
+            ' ── FEAT-74: trailing max-drawdown state, one row per account ─────────
+            Dim mustClose13 = (conn.State <> ConnectionState.Open)
+            If mustClose13 Then conn.Open()
+            Try
+                Dim combineDdl = New String() {
+                    "CREATE TABLE IF NOT EXISTS ""CombineAccountState"" (
+                         ""AccountId""             INTEGER NOT NULL PRIMARY KEY,
+                         ""StartingBalance""       TEXT    NOT NULL DEFAULT '0',
+                         ""PeakEquity""            TEXT    NOT NULL DEFAULT '0',
+                         ""MllFloor""              TEXT    NOT NULL DEFAULT '0',
+                         ""CumulativeRealisedPnl"" TEXT    NOT NULL DEFAULT '0',
+                         ""TradingDayKey""         TEXT    NOT NULL DEFAULT '',
+                         ""UpdatedAtUtc""          TEXT    NOT NULL DEFAULT '')"
+                }
+                For Each ddl In combineDdl
+                    Using cmd = conn.CreateCommand()
+                        cmd.CommandText = ddl
+                        cmd.ExecuteNonQuery()
+                    End Using
+                Next
+            Finally
+                If mustClose13 Then conn.Close()
             End Try
         End Sub
 

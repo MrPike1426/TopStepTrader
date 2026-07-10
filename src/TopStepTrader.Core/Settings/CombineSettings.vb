@@ -31,11 +31,14 @@ Namespace TopStepTrader.Core.Settings
         Public Property IncludeFeesInDailyPnl As Boolean = True
         Public Property MicrosOnly As Boolean = True
 
-        ' ── Trailing max-drawdown (consumed by FEAT-74; declared here so the
-        '    "Combine" section is complete from day one) ─────────────────────────
+        ' ── Trailing max-drawdown (FEAT-74) ─────────────────────────────────────
         Public Property TrailingMaxDrawdownDollars As Decimal = -2000D
+        ''' <summary>"IntradayPeak" (peak ratchets every tick) or "EndOfDay" (peak samples only at the 17:00-CT rollover).</summary>
         Public Property TrailMode As String = "IntradayPeak"
+        ''' <summary>TopStep's freeze rule: the MLL line never rises above the starting balance.</summary>
         Public Property TrailFreezeAtStartBalance As Boolean = True
+        ''' <summary>Halt app-side this many dollars before TopStep's MLL line (equity &lt;= floor + buffer).</summary>
+        Public Property SafetyBufferDollars As Decimal = 100D
     End Class
 
 End Namespace

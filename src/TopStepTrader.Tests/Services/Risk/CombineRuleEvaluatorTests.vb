@@ -182,6 +182,74 @@ Namespace TopStepTrader.Tests.Services.Risk
             Assert.Equal(RiskHaltReason.DailyLossLimit, verdict.Reason)
         End Sub
 
+        ' ═══ FEAT-74: trailing max-drawdown (EvaluateTrail) ════════════════════
+        ' Defaults under test: start 50 000, trailing −2 000, freeze on, buffer 100.
+
+        <Fact>
+        Public Sub Trail_Disabled_NeverBreaches()
+            Dim verdict = CombineRuleEvaluator.EvaluateTrail(New CombineSettings(), equity:=10000D,
+                                                             priorPeakEquity:=50000D, ratchetPeak:=True)
+            Assert.False(verdict.Breached)
+            Assert.Equal(50000D, verdict.PeakEquity)
+        End Sub
+
+        <Fact>
+        Public Sub Trail_PeakRatchetsUp_NeverDown()
+            Dim up = CombineRuleEvaluator.EvaluateTrail(EnabledSettings(), equity:=50500D,
+                                                        priorPeakEquity:=50000D, ratchetPeak:=True)
+            Assert.Equal(50500D, up.PeakEquity)
+
+            Dim down = CombineRuleEvaluator.EvaluateTrail(EnabledSettings(), equity:=50200D,
+                                                          priorPeakEquity:=50500D, ratchetPeak:=True)
+            Assert.Equal(50500D, down.PeakEquity)
+        End Sub
+
+        <Fact>
+        Public Sub Trail_EndOfDaySampling_DefersRatchet()
+            ' ratchetPeak:=False models TrailMode="EndOfDay" between rollovers:
+            ' a new intraday high must NOT move the peak.
+            Dim verdict = CombineRuleEvaluator.EvaluateTrail(EnabledSettings(), equity:=51000D,
+                                                             priorPeakEquity:=50000D, ratchetPeak:=False)
+            Assert.Equal(50000D, verdict.PeakEquity)
+            Assert.Equal(48000D, verdict.MllFloor)
+        End Sub
+
+        <Fact>
+        Public Sub Trail_FloorFreezesAtStartingBalance()
+            ' Peak 53 000 would put the raw floor at 51 000 — above the start.
+            ' TopStep freezes the MLL at the starting balance.
+            Dim frozen = CombineRuleEvaluator.EvaluateTrail(EnabledSettings(), equity:=53000D,
+                                                            priorPeakEquity:=53000D, ratchetPeak:=True)
+            Assert.Equal(50000D, frozen.MllFloor)
+
+            Dim unfrozen = CombineRuleEvaluator.EvaluateTrail(
+                New CombineSettings With {.Enabled = True, .TrailFreezeAtStartBalance = False},
+                equity:=53000D, priorPeakEquity:=53000D, ratchetPeak:=True)
+            Assert.Equal(51000D, unfrozen.MllFloor)
+        End Sub
+
+        <Fact>
+        Public Sub Trail_BreachesAtFloorPlusBuffer_ExactBoundary()
+            ' Peak 50 000 → floor 48 000; buffer 100 → breach line 48 100.
+            Dim atLine = CombineRuleEvaluator.EvaluateTrail(EnabledSettings(), equity:=48100D,
+                                                            priorPeakEquity:=50000D, ratchetPeak:=True)
+            Assert.True(atLine.Breached)
+
+            Dim justAbove = CombineRuleEvaluator.EvaluateTrail(EnabledSettings(), equity:=48100.01D,
+                                                               priorPeakEquity:=50000D, ratchetPeak:=True)
+            Assert.False(justAbove.Breached)
+        End Sub
+
+        <Fact>
+        Public Sub Trail_FloorTrailsBehindRatchetedPeak()
+            ' Peak moves to 51 000 in the same evaluation → floor = 49 000 (below start, no freeze cap).
+            Dim verdict = CombineRuleEvaluator.EvaluateTrail(EnabledSettings(), equity:=51000D,
+                                                             priorPeakEquity:=50000D, ratchetPeak:=True)
+            Assert.Equal(51000D, verdict.PeakEquity)
+            Assert.Equal(49000D, verdict.MllFloor)
+            Assert.False(verdict.Breached)
+        End Sub
+
     End Class
 
 End Namespace

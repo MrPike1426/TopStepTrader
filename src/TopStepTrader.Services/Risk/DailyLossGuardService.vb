@@ -4,6 +4,7 @@ Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 Imports Microsoft.Extensions.Logging
 Imports Microsoft.Extensions.Options
+Imports TopStepTrader.API.Hubs
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Settings
@@ -35,6 +36,15 @@ Namespace TopStepTrader.Services.Risk
     ''' <see cref="CanEnterNewTrade"/> re-evaluates synchronously when its cached state is
     ''' older than 1 s while a slot is open. With combine mode off, behaviour is exactly
     ''' FEAT-71's (RiskSettings daily loss, entry-block only, no flatten).
+    '''
+    ''' FEAT-74 (trailing max-drawdown / MLL): each combine tick models account equity —
+    ''' latest <c>GatewayUserAccount</c> balance push + unrealised aggregate, falling back
+    ''' to persisted starting balance + cumulative realised + today's P&amp;L before the
+    ''' first push — and runs <see cref="CombineRuleEvaluator.EvaluateTrail"/>. The peak
+    ''' equity trail is persisted per account (<c>CombineAccountState</c>) so it survives
+    ''' restarts. An MLL breach flattens and halts with <see cref="RiskHaltReason.MaxDrawdown"/>;
+    ''' unlike daily halts it does NOT auto-release at the 17:00-CT rollover — the combine
+    ''' is failed and only a manual reset (practice-account reuse) clears it.
     ''' </summary>
     Public Class DailyLossGuardService
         Implements IDailyLossGuard, IHostedService, IDisposable
@@ -59,6 +69,16 @@ Namespace TopStepTrader.Services.Risk
         Private _disposed As Boolean
         Private _lastTradingDayKey As String
         Private _lastEvaluationUtc As DateTimeOffset = DateTimeOffset.MinValue
+
+        ' ── FEAT-74 trailing max-drawdown state ─────────────────────────────────
+        ''' <summary>Latest GatewayUserAccount balance per account (TopStepX balance is realised-only).</summary>
+        Private ReadOnly _brokerBalances As New ConcurrentDictionary(Of Long, Decimal)()
+        Private _userHub As UserHubClient
+        ''' <summary>Cached persisted trail row for <see cref="_trailAccountId"/>; guarded by <c>_stateLock</c>.</summary>
+        Private _trail As Data.Entities.CombineAccountStateEntity
+        Private _trailAccountId As Long
+        ''' <summary>Last modelled equity — sampled into the peak at rollover when TrailMode="EndOfDay".</summary>
+        Private _lastModelledEquity As Decimal?
 
         ''' <summary>Test seam: injectable clock; production uses <see cref="DateTimeOffset.UtcNow"/>.</summary>
         Friend Property UtcNowProvider As Func(Of DateTimeOffset) = Function() DateTimeOffset.UtcNow
@@ -101,6 +121,20 @@ Namespace TopStepTrader.Services.Risk
                     _combineSettings.ProfitLockFloorDollars, _combineSettings.MaxTradesPerDay,
                     _combineSettings.MaxConsecutiveLosers, _combineSettings.IncludeFeesInDailyPnl)
             End If
+            ' FEAT-74: subscribe to the broker account push for the equity model.
+            ' GetService (not Required) — tests and non-TopStepX hosts run without a hub.
+            If _combineSettings.Enabled Then
+                Try
+                    Using scope = _scopeFactory.CreateScope()
+                        _userHub = scope.ServiceProvider.GetService(Of UserHubClient)()
+                    End Using
+                    If _userHub IsNot Nothing Then
+                        AddHandler _userHub.AccountUpdated, AddressOf OnAccountUpdated
+                    End If
+                Catch ex As Exception
+                    _logger?.LogWarning(ex, "DailyLossGuard could not attach to UserHubClient — MLL equity falls back to persisted model")
+                End Try
+            End If
             _timer = New Timer(AddressOf TickCallback, Nothing, InitialDelay, _currentCadence)
             Return Task.CompletedTask
         End Function
@@ -114,7 +148,17 @@ Namespace TopStepTrader.Services.Risk
         Public Sub Dispose() Implements IDisposable.Dispose
             If _disposed Then Return
             _disposed = True
+            If _userHub IsNot Nothing Then
+                RemoveHandler _userHub.AccountUpdated, AddressOf OnAccountUpdated
+                _userHub = Nothing
+            End If
             _timer?.Dispose()
+        End Sub
+
+        ''' <summary>FEAT-74: cache the latest broker balance per account for the equity model.</summary>
+        Private Sub OnAccountUpdated(sender As Object, e As PXAccountUpdateEventArgs)
+            If e?.AccountData Is Nothing Then Return
+            _brokerBalances(e.AccountData.AccountId) = CDec(e.AccountData.Balance)
         End Sub
 
         ' ─── Public API ─────────────────────────────────────────────────────────
@@ -192,6 +236,11 @@ Namespace TopStepTrader.Services.Risk
             End SyncLock
 
             If wasHalted Then
+                ' FEAT-74: clearing a MaxDrawdown halt re-baselines the persisted trail
+                ' (practice-account reuse — the combine itself is failed at TopStep).
+                If snapshotForLog.Reason = RiskHaltReason.MaxDrawdown Then
+                    Await ReBaselineTrailAsync()
+                End If
                 Await PersistRiskEventAsync(snapshotForLog,
                                             "DailyLossReset",
                                             If(String.IsNullOrWhiteSpace(reason), "Manual reset", reason))
@@ -279,6 +328,11 @@ Namespace TopStepTrader.Services.Risk
             Dim combined As Decimal = realised + unrealised
             Dim anyOpen As Boolean = HasOpenSlots()
 
+            ' FEAT-74: trailing MLL runs alongside the daily rules; a breach outranks
+            ' every daily verdict. Nothing when inactive (no account / no repository).
+            Dim trailResult = Await EvaluateTrailAsync(realised, unrealised)
+            Dim trail As TrailVerdict = trailResult.Verdict
+
             Dim priorArmed As Boolean
             Dim priorHighWater As Decimal
             SyncLock _stateLock
@@ -290,6 +344,12 @@ Namespace TopStepTrader.Services.Risk
                 _combineSettings, realised, unrealised,
                 stats.TradeCount, stats.ConsecutiveLosers,
                 priorArmed, priorHighWater, anyOpen)
+
+            If trail IsNot Nothing AndAlso trail.Breached Then
+                verdict.Kind = CombineVerdictKind.MaxDrawdownFlatten
+                verdict.Reason = RiskHaltReason.MaxDrawdown
+                verdict.Message = trail.Message
+            End If
 
             Dim previous As DailyLossGuardState
             Dim updated As DailyLossGuardState
@@ -307,10 +367,17 @@ Namespace TopStepTrader.Services.Risk
                     .ProfitLockArmed = verdict.ProfitLockArmed,
                     .ProfitLockHighWater = verdict.ProfitLockHighWater
                 }
+                If trail IsNot Nothing Then
+                    updated.MllTrailActive = True
+                    updated.EquityNow = trailResult.Equity
+                    updated.PeakEquity = trail.PeakEquity
+                    updated.MllFloor = trail.MllFloor
+                End If
 
                 Dim hardVerdict As Boolean =
                     verdict.Kind = CombineVerdictKind.HardHaltFlatten OrElse
-                    verdict.Kind = CombineVerdictKind.ProfitLockFlatten
+                    verdict.Kind = CombineVerdictKind.ProfitLockFlatten OrElse
+                    verdict.Kind = CombineVerdictKind.MaxDrawdownFlatten
 
                 If hardVerdict OrElse previous.IsHalted Then
                     ' Hard halts persist for the trading day (until reset/rollover), even
@@ -346,8 +413,15 @@ Namespace TopStepTrader.Services.Risk
             AdjustCadence()
 
             If transitionedToHalt Then
-                Dim eventType As String = If(verdict.Kind = CombineVerdictKind.ProfitLockFlatten,
-                                             "CombineProfitLock", "CombineHardLoss")
+                Dim eventType As String
+                Select Case verdict.Kind
+                    Case CombineVerdictKind.ProfitLockFlatten
+                        eventType = "CombineProfitLock"
+                    Case CombineVerdictKind.MaxDrawdownFlatten
+                        eventType = "CombineMaxDrawdown"
+                    Case Else
+                        eventType = "CombineHardLoss"
+                End Select
                 _logger?.LogWarning(
                     "DailyLossGuard COMBINE HALT ({EventType}) — {Message} (realised={Realised:F2}, unrealised={Unrealised:F2}, trades={Trades}, losers={Losers})",
                     eventType, verdict.Message, realised, unrealised, stats.TradeCount, stats.ConsecutiveLosers)
@@ -366,10 +440,16 @@ Namespace TopStepTrader.Services.Risk
                     _logger?.LogError(ex, "DailyLossGuard combine flatten threw — reconciliation workers are the backstop")
                 End Try
 
-                Await PersistRiskEventAsync(updated, eventType, verdict.Message,
-                                            If(verdict.Kind = CombineVerdictKind.ProfitLockFlatten,
-                                               _combineSettings.ProfitLockFloorDollars,
-                                               _combineSettings.DailyLossHardDollars))
+                Dim ruleValue As Decimal
+                Select Case verdict.Kind
+                    Case CombineVerdictKind.ProfitLockFlatten
+                        ruleValue = _combineSettings.ProfitLockFloorDollars
+                    Case CombineVerdictKind.MaxDrawdownFlatten
+                        ruleValue = trail.MllFloor
+                    Case Else
+                        ruleValue = _combineSettings.DailyLossHardDollars
+                End Select
+                Await PersistRiskEventAsync(updated, eventType, verdict.Message, ruleValue)
                 SafeRaiseHalted(updated)
                 SafeRaiseForceFlattened(updated)
             ElseIf updated.SoftHalted AndAlso Not previous.SoftHalted AndAlso Not updated.IsHalted Then
@@ -470,6 +550,146 @@ Namespace TopStepTrader.Services.Risk
             End Try
         End Function
 
+        ' ── FEAT-74 trailing max-drawdown internals ─────────────────────────────
+
+        ''' <summary>
+        ''' F2/F3: models account equity and runs the trailing-MLL check.
+        ''' Primary equity: latest broker balance push + unrealised aggregate (TopStepX
+        ''' pushes OpenPnL=0 for futures, so the balance is realised-only). Fallback
+        ''' before the first push: persisted StartingBalance + CumulativeRealisedPnl +
+        ''' today's realised + unrealised. Persists peak/floor only when they change.
+        ''' Returns (Nothing, 0) when the trail is inactive (no account selected or
+        ''' repository unavailable).
+        ''' </summary>
+        Private Async Function EvaluateTrailAsync(realised As Decimal, unrealised As Decimal) _
+            As Task(Of (Verdict As TrailVerdict, Equity As Decimal))
+            Dim accountId As Long = ResolveAccountId()
+            If accountId = 0 Then Return (Nothing, 0D)
+
+            Dim trailState = Await GetOrLoadTrailStateAsync(accountId)
+            If trailState Is Nothing Then Return (Nothing, 0D)
+
+            Dim balance As Decimal
+            Dim equity As Decimal
+            If _brokerBalances.TryGetValue(accountId, balance) Then
+                equity = balance + unrealised
+            Else
+                equity = trailState.StartingBalance + trailState.CumulativeRealisedPnl + realised + unrealised
+            End If
+
+            ' EndOfDay mode defers the peak ratchet to the day-rollover sample.
+            Dim ratchet As Boolean = Not String.Equals(_combineSettings.TrailMode, "EndOfDay",
+                                                       StringComparison.OrdinalIgnoreCase)
+            Dim verdict As TrailVerdict = CombineRuleEvaluator.EvaluateTrail(
+                _combineSettings, equity, trailState.PeakEquity, ratchet)
+
+            SyncLock _stateLock
+                _lastModelledEquity = equity
+            End SyncLock
+
+            If verdict.PeakEquity <> trailState.PeakEquity OrElse verdict.MllFloor <> trailState.MllFloor Then
+                trailState.PeakEquity = verdict.PeakEquity
+                trailState.MllFloor = verdict.MllFloor
+                Await PersistTrailStateAsync(trailState)
+            End If
+
+            Return (verdict, equity)
+        End Function
+
+        ''' <summary>F4: lazy per-account load so the trail continues where a restart left it.</summary>
+        Private Async Function GetOrLoadTrailStateAsync(accountId As Long) As Task(Of Data.Entities.CombineAccountStateEntity)
+            SyncLock _stateLock
+                If _trail IsNot Nothing AndAlso _trailAccountId = accountId Then Return _trail
+            End SyncLock
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetService(Of ICombineAccountStateRepository)()
+                    If repo Is Nothing Then Return Nothing
+                    Dim loaded = Await repo.GetOrCreateAsync(accountId, _combineSettings.StartingBalance)
+                    SyncLock _stateLock
+                        _trail = loaded
+                        _trailAccountId = accountId
+                    End SyncLock
+                    _logger?.LogInformation(
+                        "Combine trail state loaded for account {AccountId}: peak=${Peak:F2}, floor=${Floor:F2}, cumPnl=${Cum:F2}",
+                        accountId, loaded.PeakEquity, loaded.MllFloor, loaded.CumulativeRealisedPnl)
+                    Return loaded
+                End Using
+            Catch ex As Exception
+                _logger?.LogWarning(ex, "Combine trail state load failed for account {AccountId}", accountId)
+                Return Nothing
+            End Try
+        End Function
+
+        Private Async Function PersistTrailStateAsync(entity As Data.Entities.CombineAccountStateEntity) As Task
+            Try
+                Using scope = _scopeFactory.CreateScope()
+                    Dim repo = scope.ServiceProvider.GetService(Of ICombineAccountStateRepository)()
+                    If repo Is Nothing Then Return
+                    Await repo.UpsertAsync(entity)
+                End Using
+            Catch ex As Exception
+                _logger?.LogWarning(ex, "Combine trail state persistence failed for account {AccountId}", entity.AccountId)
+            End Try
+        End Function
+
+        ''' <summary>
+        ''' F4: day-rollover bookkeeping — folds the finished day's realised P&amp;L into
+        ''' the cumulative figure (equity fallback for future sessions) and, for
+        ''' TrailMode="EndOfDay", samples the last modelled equity into the peak.
+        ''' </summary>
+        Private Async Function RollTrailStateAsync(dayKey As String, dayRealised As Decimal) As Task
+            Dim entity As Data.Entities.CombineAccountStateEntity
+            Dim eodEquity As Decimal?
+            SyncLock _stateLock
+                entity = _trail
+                eodEquity = _lastModelledEquity
+                _lastModelledEquity = Nothing
+            End SyncLock
+            If entity Is Nothing Then Return
+
+            entity.CumulativeRealisedPnl += dayRealised
+            If String.Equals(_combineSettings.TrailMode, "EndOfDay", StringComparison.OrdinalIgnoreCase) AndAlso
+               eodEquity.HasValue AndAlso eodEquity.Value > entity.PeakEquity Then
+                entity.PeakEquity = eodEquity.Value
+            End If
+            Dim floor As Decimal = entity.PeakEquity + _combineSettings.TrailingMaxDrawdownDollars
+            If _combineSettings.TrailFreezeAtStartBalance Then
+                floor = Math.Min(floor, entity.StartingBalance)
+            End If
+            entity.MllFloor = floor
+            entity.TradingDayKey = dayKey
+            Await PersistTrailStateAsync(entity)
+        End Function
+
+        ''' <summary>
+        ''' Manual-reset path after a MaxDrawdown halt: re-baselines the persisted trail
+        ''' (peak back to starting balance, cumulative P&amp;L cleared) for practice-account
+        ''' reuse, and drops cached broker balances so a broker-side account reset is
+        ''' picked up fresh from the next push.
+        ''' </summary>
+        Private Async Function ReBaselineTrailAsync() As Task
+            Dim entity As Data.Entities.CombineAccountStateEntity
+            SyncLock _stateLock
+                entity = _trail
+                _lastModelledEquity = Nothing
+            End SyncLock
+            _brokerBalances.Clear()
+            If entity Is Nothing Then Return
+
+            entity.PeakEquity = entity.StartingBalance
+            entity.CumulativeRealisedPnl = 0D
+            Dim floor As Decimal = entity.StartingBalance + _combineSettings.TrailingMaxDrawdownDollars
+            If _combineSettings.TrailFreezeAtStartBalance Then
+                floor = Math.Min(floor, entity.StartingBalance)
+            End If
+            entity.MllFloor = floor
+            Await PersistTrailStateAsync(entity)
+            _logger?.LogInformation(
+                "Combine trail re-baselined after MaxDrawdown reset (peak=${Peak:F2}, floor=${Floor:F2})",
+                entity.PeakEquity, entity.MllFloor)
+        End Function
+
         Private Async Function PersistRiskEventAsync(snapshot As DailyLossGuardState,
                                                       eventType As String,
                                                       detail As String,
@@ -532,7 +752,11 @@ Namespace TopStepTrader.Services.Risk
                 .ProfitLockHighWater = s.ProfitLockHighWater,
                 .TradesToday = s.TradesToday,
                 .ConsecutiveLosers = s.ConsecutiveLosers,
-                .CombineEnabled = s.CombineEnabled
+                .CombineEnabled = s.CombineEnabled,
+                .MllTrailActive = s.MllTrailActive,
+                .EquityNow = s.EquityNow,
+                .PeakEquity = s.PeakEquity,
+                .MllFloor = s.MllFloor
             }
         End Function
 
@@ -542,21 +766,26 @@ Namespace TopStepTrader.Services.Risk
         ''' the caller's evaluation continue against the new day window. The first
         ''' observation after startup only records the key — no release.
         ''' FEAT-73: combine mode also resets soft halts, profit-lock state and counters.
+        ''' FEAT-74: a MaxDrawdown (MLL) halt survives the rollover — the combine is
+        ''' failed; only a manual reset clears it. Trail bookkeeping (cumulative realised
+        ''' fold + EndOfDay peak sample) also happens here.
         ''' </summary>
         Private Async Function HandleDayRolloverAsync(dayKey As String) As Task
             Dim wasBlocked As Boolean = False
+            Dim mllHaltPersists As Boolean = False
             Dim snapshotForEvent As DailyLossGuardState = Nothing
             SyncLock _stateLock
                 If String.Equals(_lastTradingDayKey, dayKey, StringComparison.Ordinal) Then Return
                 Dim isFirstObservation As Boolean = _lastTradingDayKey Is Nothing
                 _lastTradingDayKey = dayKey
                 If isFirstObservation Then Return
+                mllHaltPersists = _state.IsHalted AndAlso _state.Reason = RiskHaltReason.MaxDrawdown
                 ' Legacy mode never sets SoftHalted, so wasBlocked == IsHalted there —
                 ' the pre-FEAT-73 release semantics are unchanged.
-                wasBlocked = _state.IsHalted OrElse _state.SoftHalted
+                wasBlocked = (_state.IsHalted OrElse _state.SoftHalted) AndAlso Not mllHaltPersists
                 snapshotForEvent = _state
-                If wasBlocked OrElse _combineSettings.Enabled Then
-                    _state = New DailyLossGuardState With {
+                If wasBlocked OrElse mllHaltPersists OrElse _combineSettings.Enabled Then
+                    Dim fresh As New DailyLossGuardState With {
                         .IsHalted = False,
                         .Reason = RiskHaltReason.None,
                         .LimitDollars = ActiveLimitDollars(),
@@ -564,8 +793,24 @@ Namespace TopStepTrader.Services.Risk
                         .HaltedAtUtc = Nothing,
                         .HaltMessage = String.Empty
                     }
+                    If mllHaltPersists Then
+                        fresh.IsHalted = True
+                        fresh.Reason = snapshotForEvent.Reason
+                        fresh.HaltMessage = snapshotForEvent.HaltMessage
+                        fresh.HaltedAtUtc = snapshotForEvent.HaltedAtUtc
+                        fresh.MllTrailActive = snapshotForEvent.MllTrailActive
+                        fresh.EquityNow = snapshotForEvent.EquityNow
+                        fresh.PeakEquity = snapshotForEvent.PeakEquity
+                        fresh.MllFloor = snapshotForEvent.MllFloor
+                    End If
+                    _state = fresh
                 End If
             End SyncLock
+
+            ' FEAT-74 F4: trail bookkeeping for the finished day (no-op until loaded).
+            If _combineSettings.Enabled Then
+                Await RollTrailStateAsync(dayKey, If(snapshotForEvent?.RealisedDailyPnl, 0D))
+            End If
 
             If wasBlocked Then
                 Await PersistRiskEventAsync(snapshotForEvent,
@@ -573,6 +818,10 @@ Namespace TopStepTrader.Services.Risk
                                             $"Trading day rolled over to {dayKey}; halt auto-released")
                 _logger?.LogInformation("DailyLossGuard day rollover to {DayKey} — halt auto-released", dayKey)
                 SafeRaiseReleased()
+            ElseIf mllHaltPersists Then
+                _logger?.LogWarning(
+                    "DailyLossGuard day rollover to {DayKey} — MaxDrawdown (MLL) halt persists; manual reset required",
+                    dayKey)
             End If
         End Function
 

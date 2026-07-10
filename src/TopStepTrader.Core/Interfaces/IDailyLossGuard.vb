@@ -28,6 +28,16 @@ Namespace TopStepTrader.Core.Interfaces
         ''' <summary>Consecutive losing closes (PnL &lt;= 0) walking back from the most recent close.</summary>
         Public Property ConsecutiveLosers As Integer
         Public Property CombineEnabled As Boolean
+
+        ' ── FEAT-74 trailing max-drawdown state (zero until the trail is active) ──
+        ''' <summary>True once the trail has loaded persisted state for the selected account.</summary>
+        Public Property MllTrailActive As Boolean
+        ''' <summary>Modelled account equity at the last evaluation.</summary>
+        Public Property EquityNow As Decimal
+        ''' <summary>Highest modelled equity observed (sampling per <c>CombineSettings.TrailMode</c>).</summary>
+        Public Property PeakEquity As Decimal
+        ''' <summary>Current MLL line the equity must stay above (before the safety buffer).</summary>
+        Public Property MllFloor As Decimal
     End Class
 
     ''' <summary>
