@@ -5,6 +5,7 @@ Imports Microsoft.EntityFrameworkCore
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Logging
 Imports Microsoft.Extensions.Logging.Abstractions
+Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Models
 Imports TopStepTrader.Data
 Imports TopStepTrader.Data.Repositories
@@ -66,7 +67,7 @@ Namespace TopStepTrader.Tests.Services.Trades
             Return New TradeSignal With {
                 .ContractId = "CON.F.US.MNQ.U26",
                 .GeneratedAt = DateTimeOffset.UtcNow,
-                .SignalType = Core.Enums.SignalType.Buy,
+                .SignalType = SignalType.Buy,
                 .Confidence = 32.5F,
                 .ModelVersion = "Test.v1",
                 .SuggestedEntryPrice = 21000D,

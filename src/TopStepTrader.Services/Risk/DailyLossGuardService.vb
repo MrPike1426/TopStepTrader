@@ -7,6 +7,7 @@ Imports Microsoft.Extensions.Options
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Settings
+Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.Data
 Imports TopStepTrader.Data.Entities
 Imports TopStepTrader.Data.Repositories
@@ -22,8 +23,10 @@ Namespace TopStepTrader.Services.Risk
     ''' <c>IsHalted</c> flag — they do not block on the ticker. Halts persist a
     ''' <see cref="RiskEventEntity"/> row so a restart can audit the kill-switch event.
     '''
-    ''' Day boundary: trading day in Europe/London time matches the user's session.
-    ''' Roll happens automatically on the next tick after the local-time date crosses.
+    ''' Day boundary (ARCH-21): trading day resets at 17:00 US Central via
+    ''' <see cref="TradingDayClock"/>, matching TopStep's daily-loss accounting.
+    ''' On the first tick after rollover any active halt is auto-released and a
+    ''' "DayRollover" risk event is persisted (LF-7).
     ''' </summary>
     Public Class DailyLossGuardService
         Implements IDailyLossGuard, IHostedService, IDisposable
@@ -42,6 +45,10 @@ Namespace TopStepTrader.Services.Risk
         Private _ticking As Integer
         Private _currentCadence As TimeSpan = SlowCadence
         Private _disposed As Boolean
+        Private _lastTradingDayKey As String
+
+        ''' <summary>Test seam: injectable clock; production uses <see cref="DateTimeOffset.UtcNow"/>.</summary>
+        Friend Property UtcNowProvider As Func(Of DateTimeOffset) = Function() DateTimeOffset.UtcNow
 
         Public Event Halted As EventHandler(Of DailyLossGuardState) Implements IDailyLossGuard.Halted
         Public Event Released As EventHandler Implements IDailyLossGuard.Released
@@ -100,7 +107,9 @@ Namespace TopStepTrader.Services.Risk
         Public Async Function EvaluateAsync() As Task(Of DailyLossGuardState) _
             Implements IDailyLossGuard.EvaluateAsync
             Try
-                Dim dayStartUtc As DateTimeOffset = TodayTradingDayStartUtc()
+                Dim nowUtc As DateTimeOffset = UtcNowProvider.Invoke()
+                Await HandleDayRolloverAsync(TradingDayClock.TradingDayKey(nowUtc))
+                Dim dayStartUtc As DateTimeOffset = TradingDayClock.TradingDayStartUtc(nowUtc)
                 Dim realised As Decimal = Await LoadRealisedPnlAsync(dayStartUtc)
                 Dim unrealised As Decimal = SumUnrealisedAggregate()
                 Dim combined As Decimal = realised + unrealised
@@ -158,7 +167,6 @@ Namespace TopStepTrader.Services.Risk
             SyncLock _stateLock
                 wasHalted = _state.IsHalted
                 snapshotForLog = _state
-                Dim dayStartUtc = TodayTradingDayStartUtc()
                 _state = New DailyLossGuardState With {
                     .IsHalted = False,
                     .Reason = RiskHaltReason.None,
@@ -302,25 +310,39 @@ Namespace TopStepTrader.Services.Risk
         End Function
 
         ''' <summary>
-        ''' Returns the UTC instant at which the *current* trading day began for the user
-        ''' (Europe/London midnight, the session boundary specified by the ticket). Falls
-        ''' back to UTC midnight when the timezone DB lacks the requested zone.
+        ''' ARCH-21 F3 (LF-7): when the TopStep trading day rolls over (17:00 CT),
+        ''' auto-release any active halt, persist a "DayRollover" risk event, and let
+        ''' the caller's evaluation continue against the new day window. The first
+        ''' observation after startup only records the key — no release.
         ''' </summary>
-        Friend Shared Function TodayTradingDayStartUtc() As DateTimeOffset
-            Dim tz As TimeZoneInfo
-            Try
-                tz = TimeZoneInfo.FindSystemTimeZoneById("GMT Standard Time")
-            Catch
-                Try
-                    tz = TimeZoneInfo.FindSystemTimeZoneById("Europe/London")
-                Catch
-                    tz = TimeZoneInfo.Utc
-                End Try
-            End Try
-            Dim localNow As DateTimeOffset = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz)
-            Dim localMidnight As New DateTimeOffset(localNow.Year, localNow.Month, localNow.Day,
-                                                     0, 0, 0, localNow.Offset)
-            Return localMidnight.ToUniversalTime()
+        Private Async Function HandleDayRolloverAsync(dayKey As String) As Task
+            Dim wasHalted As Boolean = False
+            Dim snapshotForEvent As DailyLossGuardState = Nothing
+            SyncLock _stateLock
+                If String.Equals(_lastTradingDayKey, dayKey, StringComparison.Ordinal) Then Return
+                Dim isFirstObservation As Boolean = _lastTradingDayKey Is Nothing
+                _lastTradingDayKey = dayKey
+                If isFirstObservation Then Return
+                wasHalted = _state.IsHalted
+                snapshotForEvent = _state
+                If wasHalted Then
+                    _state = New DailyLossGuardState With {
+                        .IsHalted = False,
+                        .Reason = RiskHaltReason.None,
+                        .LimitDollars = _riskSettings.DailyLossLimitDollars,
+                        .HaltedAtUtc = Nothing,
+                        .HaltMessage = String.Empty
+                    }
+                End If
+            End SyncLock
+
+            If wasHalted Then
+                Await PersistRiskEventAsync(snapshotForEvent,
+                                            "DayRollover",
+                                            $"Trading day rolled over to {dayKey}; halt auto-released")
+                _logger?.LogInformation("DailyLossGuard day rollover to {DayKey} — halt auto-released", dayKey)
+                SafeRaiseReleased()
+            End If
         End Function
 
     End Class

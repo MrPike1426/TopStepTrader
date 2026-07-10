@@ -8,6 +8,7 @@ Imports Microsoft.Extensions.Options
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Settings
+Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.Data
 Imports TopStepTrader.Data.Entities
 Imports TopStepTrader.Data.Repositories
@@ -21,9 +22,9 @@ Namespace TopStepTrader.Tests.Services.Risk
     '''
     ''' Uses real SQLite-backed AppDbContext + TradeHistoryDbContext through a DI container
     ''' so the service's <c>IServiceScopeFactory</c> + scoped repository pattern matches
-    ''' production. <see cref="DailyLossGuardService.TodayTradingDayStartUtc"/> is invoked
-    ''' at evaluation time, so realised-PnL rows are stamped at "now" to land inside the
-    ''' current trading window.
+    ''' production. The day window comes from <see cref="TradingDayClock"/> evaluated at
+    ''' the service's injectable clock (ARCH-21), so realised-PnL rows are stamped at
+    ''' "now" to land inside the current trading window.
     ''' </summary>
     Public Class DailyLossGuardServiceTests
         Implements IDisposable
@@ -196,7 +197,7 @@ Namespace TopStepTrader.Tests.Services.Risk
         <Fact>
         Public Async Function Rollover_YesterdayLossDoesNotHaltToday() As Task
             ' Insert a closed trade with ExitTime well before today's trading-day start.
-            ' Service computes "today" via TodayTradingDayStartUtc, so a 5-day-old close
+            ' Service computes "today" via TradingDayClock, so a 5-day-old close
             ' is unambiguously outside the window regardless of the test's local timezone.
             Await InsertClosedTradeAsync(pnl:=-5000D, exitOffset:=TimeSpan.FromDays(-5))
 
@@ -222,6 +223,51 @@ Namespace TopStepTrader.Tests.Services.Risk
 
             Assert.Equal(-1150D, state.UnrealisedDailyPnl)
             Assert.True(state.IsHalted, $"Combined {state.CombinedDailyPnl} should breach limit {Limit}")
+        End Function
+
+        ' ── ARCH-21 F3: auto-release on trading-day rollover ──────────────────
+
+        <Fact>
+        Public Async Function DayRollover_AutoReleasesHalt_PersistsEvent_WindowResets() As Task
+            Dim t0 As DateTimeOffset = DateTimeOffset.UtcNow
+            _service.UtcNowProvider = Function() t0
+
+            Await InsertClosedTradeAsync(pnl:=-1500D)
+            Dim haltedState = Await _service.EvaluateAsync()
+            Assert.True(haltedState.IsHalted)
+            Assert.False(_service.CanEnterNewTrade())
+
+            Dim releasedFireCount As Integer = 0
+            AddHandler _service.Released, Sub(s, e) releasedFireCount += 1
+
+            ' Advance the injected clock two days — unambiguously past the next 17:00 CT.
+            Dim t1 As DateTimeOffset = t0.AddDays(2)
+            Assert.NotEqual(TradingDayClock.TradingDayKey(t0), TradingDayClock.TradingDayKey(t1))
+            _service.UtcNowProvider = Function() t1
+
+            Dim state = Await _service.EvaluateAsync()
+
+            Assert.False(state.IsHalted)
+            Assert.True(_service.CanEnterNewTrade())
+            Assert.Equal(1, releasedFireCount)
+            Assert.Equal(1, Await CountRiskEventsAsync("DayRollover"))
+            ' Realised window now starts at the new 17:00 CT boundary, excluding the old loss.
+            Assert.Equal(0D, state.RealisedDailyPnl)
+        End Function
+
+        <Fact>
+        Public Async Function SameTradingDay_ReEvaluation_DoesNotRelease() As Task
+            Dim t0 As DateTimeOffset = DateTimeOffset.UtcNow
+            _service.UtcNowProvider = Function() t0
+
+            Await InsertClosedTradeAsync(pnl:=-1500D)
+            Await _service.EvaluateAsync()
+            Assert.False(_service.CanEnterNewTrade())
+
+            ' Second tick inside the same trading day: halt must persist, no rollover event.
+            Dim state = Await _service.EvaluateAsync()
+            Assert.True(state.IsHalted)
+            Assert.Equal(0, Await CountRiskEventsAsync("DayRollover"))
         End Function
 
     End Class
