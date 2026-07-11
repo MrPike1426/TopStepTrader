@@ -1,5 +1,6 @@
 Imports System.Collections.ObjectModel
 Imports System.Windows
+Imports System.Windows.Threading
 Imports Microsoft.Extensions.Logging
 Imports Microsoft.Extensions.Options
 Imports TopStepTrader.Core.Enums
@@ -27,6 +28,10 @@ Namespace TopStepTrader.UI.ViewModels
         Private ReadOnly _logger As ILogger(Of DashboardViewModel)
         ''' <summary>FEAT-71: surfaces the daily-loss kill-switch state on the dashboard banner.</summary>
         Private ReadOnly _dailyLossGuard As IDailyLossGuard
+        ''' <summary>UX-06: combine rule parameters for the status strip (limits, max trades/losers).</summary>
+        Private ReadOnly _combineSettings As CombineSettings
+        ''' <summary>UX-06: polls the guard's cached snapshot so the strip tracks every evaluation tick.</summary>
+        Private _combinePollTimer As DispatcherTimer
 
         ''' <summary>
         ''' BUG-86 F3: an open trade older than this is flagged as stale on the
@@ -374,6 +379,157 @@ Namespace TopStepTrader.UI.ViewModels
             End Set
         End Property
 
+        ' ── UX-06 — Combine status strip ─────────────────────────────────────
+
+        ''' <summary>Latest guard snapshot backing the strip; refreshed by the poll
+        ''' timer and the guard's Halted/Released events.</summary>
+        Private _combineState As New DailyLossGuardState()
+
+        Private Shared ReadOnly CombineStripProperties As String() = {
+            NameOf(CombinePnlProgress), NameOf(CombinePnlFillWidth), NameOf(CombinePnlRestWidth),
+            NameOf(CombinePnlBarBrushKey), NameOf(LockChipText), NameOf(LockChipBrushKey),
+            NameOf(TradesCounterText), NameOf(LosersCounterText),
+            NameOf(MllStatusText), NameOf(MllVisibility),
+            NameOf(SoftHaltText), NameOf(SoftHaltVisibility)}
+
+        Public ReadOnly Property CombineStripVisibility As Visibility
+            Get
+                Return If(_combineSettings.Enabled, Visibility.Visible, Visibility.Collapsed)
+            End Get
+        End Property
+
+        ''' <summary>Fraction (0–1) of the hard loss line consumed by today's combined loss.
+        ''' 0 when flat or profitable; 1 at/beyond the hard line.</summary>
+        Public ReadOnly Property CombinePnlProgress As Double
+            Get
+                Dim hard As Decimal = _combineSettings.DailyLossHardDollars
+                If hard >= 0D Then Return 0.0R
+                Return Math.Max(0.0R, Math.Min(1.0R, CDbl(_combineState.CombinedDailyPnl / hard)))
+            End Get
+        End Property
+
+        ''' <summary>Soft line's position along the hard-line bar (soft/hard, ~0.8 at defaults).</summary>
+        Private ReadOnly Property SoftLineFraction As Double
+            Get
+                Dim hard As Decimal = _combineSettings.DailyLossHardDollars
+                If hard >= 0D Then Return 1.0R
+                Return Math.Max(0.0R, Math.Min(1.0R, CDbl(_combineSettings.DailyLossSoftDollars / hard)))
+            End Get
+        End Property
+
+        Public ReadOnly Property CombinePnlFillWidth As GridLength
+            Get
+                Return New GridLength(CombinePnlProgress, GridUnitType.Star)
+            End Get
+        End Property
+
+        Public ReadOnly Property CombinePnlRestWidth As GridLength
+            Get
+                Return New GridLength(1.0R - CombinePnlProgress, GridUnitType.Star)
+            End Get
+        End Property
+
+        Public ReadOnly Property SoftTickLeftWidth As GridLength
+            Get
+                Return New GridLength(SoftLineFraction, GridUnitType.Star)
+            End Get
+        End Property
+
+        Public ReadOnly Property SoftTickRightWidth As GridLength
+            Get
+                Return New GridLength(1.0R - SoftLineFraction, GridUnitType.Star)
+            End Get
+        End Property
+
+        Public ReadOnly Property CombinePnlBarBrushKey As String
+            Get
+                Dim p As Double = CombinePnlProgress
+                Dim soft As Double = SoftLineFraction
+                If p >= soft Then Return "SellBrush"
+                If p >= soft * 0.5R Then Return "WarningBrush"
+                Return "BuyBrush"
+            End Get
+        End Property
+
+        Public ReadOnly Property LockChipText As String
+            Get
+                If _combineState.IsHalted AndAlso _combineState.Reason = RiskHaltReason.DailyProfitLock Then
+                    Return $"Locked · banked {_combineState.CombinedDailyPnl:C0}"
+                End If
+                If _combineState.ProfitLockArmed Then
+                    Return $"Armed · HW {_combineState.ProfitLockHighWater:C0}"
+                End If
+                Return "Lock unarmed"
+            End Get
+        End Property
+
+        Public ReadOnly Property LockChipBrushKey As String
+            Get
+                If _combineState.IsHalted AndAlso _combineState.Reason = RiskHaltReason.DailyProfitLock Then
+                    Return "BuyBrush"
+                End If
+                Return If(_combineState.ProfitLockArmed, "WarningBrush", "TextSecondaryBrush")
+            End Get
+        End Property
+
+        Public ReadOnly Property TradesCounterText As String
+            Get
+                Dim max = _combineSettings.MaxTradesPerDay
+                Return If(max > 0,
+                          $"Trades {_combineState.TradesToday}/{max}",
+                          $"Trades {_combineState.TradesToday}")
+            End Get
+        End Property
+
+        Public ReadOnly Property LosersCounterText As String
+            Get
+                Dim max = _combineSettings.MaxConsecutiveLosers
+                Return If(max > 0,
+                          $"Losers {_combineState.ConsecutiveLosers}/{max}",
+                          $"Losers {_combineState.ConsecutiveLosers}")
+            End Get
+        End Property
+
+        ''' <summary>FEAT-74 MLL distance; collapsed until the trail has loaded for an account.</summary>
+        Public ReadOnly Property MllVisibility As Visibility
+            Get
+                Return If(_combineState.MllTrailActive, Visibility.Visible, Visibility.Collapsed)
+            End Get
+        End Property
+
+        Public ReadOnly Property MllStatusText As String
+            Get
+                If Not _combineState.MllTrailActive Then Return String.Empty
+                Dim distance As Decimal = _combineState.EquityNow - _combineState.MllFloor
+                Return If(distance >= 0D,
+                          $"MLL floor {_combineState.MllFloor:C0} · {distance:C0} above",
+                          $"MLL floor {_combineState.MllFloor:C0} · {Math.Abs(distance):C0} BELOW")
+            End Get
+        End Property
+
+        ''' <summary>Soft halts only — hard halts already surface via the FEAT-71 banner.</summary>
+        Public ReadOnly Property SoftHaltVisibility As Visibility
+            Get
+                Return If(_combineState.SoftHalted AndAlso Not _combineState.IsHalted,
+                          Visibility.Visible, Visibility.Collapsed)
+            End Get
+        End Property
+
+        Public ReadOnly Property SoftHaltText As String
+            Get
+                Select Case _combineState.Reason
+                    Case RiskHaltReason.MaxTradesPerDay
+                        Return "⏸ Soft halt · max trades"
+                    Case RiskHaltReason.ConsecutiveLosses
+                        Return "⏸ Soft halt · loser streak"
+                    Case RiskHaltReason.DailyLossLimit
+                        Return "⏸ Soft halt · daily loss"
+                    Case Else
+                        Return "⏸ Soft halt"
+                End Select
+            End Get
+        End Property
+
         ' ── Commands ─────────────────────────────────────────────────────────
 
         Public ReadOnly Property RefreshCommand As RelayCommand
@@ -392,7 +548,8 @@ Namespace TopStepTrader.UI.ViewModels
                        userPrefs As IUserPreferencesService,
                        tradeRecord As ITradeRecordService,
                        logger As ILogger(Of DashboardViewModel),
-                       Optional dailyLossGuard As IDailyLossGuard = Nothing)
+                       Optional dailyLossGuard As IDailyLossGuard = Nothing,
+                       Optional combineOptions As IOptions(Of CombineSettings) = Nothing)
             _accountService = accountService
             _authService = authService
             _balanceHistoryService = balanceHistoryService
@@ -402,6 +559,7 @@ Namespace TopStepTrader.UI.ViewModels
             _tradeRecord = tradeRecord
             _logger = logger
             _dailyLossGuard = dailyLossGuard
+            _combineSettings = If(combineOptions?.Value, New CombineSettings())
 
             ' Initialize from persisted session state (loaded from user-prefs.json at app startup)
             _autoExecutionEnabled = _session.AutoExecutionEnabled
@@ -424,6 +582,18 @@ Namespace TopStepTrader.UI.ViewModels
                 ApplyGuardState(initial)
                 AddHandler _dailyLossGuard.Halted, AddressOf OnGuardHalted
                 AddHandler _dailyLossGuard.Released, AddressOf OnGuardReleased
+
+                ' UX-06: the guard raises events only on halt transitions, but the strip
+                ' must track every 5s/30s evaluation tick — poll the cached snapshot
+                ' (GetState is documented cheap). Combine mode only.
+                If _combineSettings.Enabled AndAlso Application.Current?.Dispatcher IsNot Nothing Then
+                    _combinePollTimer = New DispatcherTimer(DispatcherPriority.Background,
+                                                            Application.Current.Dispatcher) With {
+                        .Interval = TimeSpan.FromSeconds(2)
+                    }
+                    AddHandler _combinePollTimer.Tick, Sub() ApplyGuardState(_dailyLossGuard.GetState())
+                    _combinePollTimer.Start()
+                End If
             End If
         End Sub
 
@@ -663,6 +833,14 @@ Namespace TopStepTrader.UI.ViewModels
                                    "Daily loss limit reached. New entries are disabled.",
                                    state.HaltMessage)
             GuardIsHalted = state.IsHalted
+
+            ' UX-06: refresh the combine strip's derived properties from the new snapshot.
+            _combineState = state
+            If _combineSettings.Enabled Then
+                For Each name In CombineStripProperties
+                    OnPropertyChanged(name)
+                Next
+            End If
         End Sub
 
         Private Sub ExecuteResetGuard(param As Object)
