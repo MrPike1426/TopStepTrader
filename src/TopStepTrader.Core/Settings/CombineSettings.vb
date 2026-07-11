@@ -31,6 +31,15 @@ Namespace TopStepTrader.Core.Settings
         Public Property IncludeFeesInDailyPnl As Boolean = True
         Public Property MicrosOnly As Boolean = True
 
+        ' ── Strategy profile (STRAT-45) ─────────────────────────────────────────
+        ''' <summary>
+        ''' SlipStream risk-per-trade ceiling (percent of balance) while combine mode is
+        ''' on: 0.4% of $50k ≈ $200. The effective RiskPct is the smaller of this and the
+        ''' user's SlipStreamConfig value — sizing can be tightened but never loosened
+        ''' past the combine profile.
+        ''' </summary>
+        Public Property SlipStreamRiskPct As Double = 0.4
+
         ' ── Trailing max-drawdown (FEAT-74) ─────────────────────────────────────
         Public Property TrailingMaxDrawdownDollars As Decimal = -2000D
         ''' <summary>"IntradayPeak" (peak ratchets every tick) or "EndOfDay" (peak samples only at the 17:00-CT rollover).</summary>

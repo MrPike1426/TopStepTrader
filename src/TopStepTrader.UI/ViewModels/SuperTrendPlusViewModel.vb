@@ -5,6 +5,7 @@ Imports System.Threading
 Imports System.Windows
 Imports System.Windows.Media
 Imports Microsoft.Extensions.Logging
+Imports Microsoft.Extensions.Options
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
@@ -713,6 +714,9 @@ Namespace TopStepTrader.UI.ViewModels
         ''' The singleton <c>BrokerSlotSweepWorker</c> iterates registered sinks every 60 s.</summary>
         Private ReadOnly _sweepRegistry As Core.Trading.OpenSlotReleaseSinkRegistry
 
+        ''' <summary>STRAT-45: combine profile — autopilot start is blocked while combine mode is on.</summary>
+        Private ReadOnly _combineSettings As CombineSettings
+
         Public Sub New(barService As IBarIngestionService,
                        orderService As IOrderService,
                        session As ITradingSessionContext,
@@ -734,7 +738,9 @@ Namespace TopStepTrader.UI.ViewModels
                        Optional positionMgmt As IPositionManagementService = Nothing,
                        Optional exitExecution As IExitExecutionService = Nothing,
                        Optional dailyLossGuard As IDailyLossGuard = Nothing,
-                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing)
+                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing,
+                       Optional combineOptions As IOptions(Of CombineSettings) = Nothing)
+            _combineSettings = If(combineOptions?.Value, New CombineSettings())
             _barService = barService
             _orderService = orderService
             _session = session
@@ -933,6 +939,16 @@ Namespace TopStepTrader.UI.ViewModels
         End Sub
 
         Private Sub StartMonitoring()
+            ' STRAT-45: SuperTrend+ is disabled in combine mode (May-2026 audit: 144 trades
+            ' net −$1,479.74 incl. fees). Combine sessions run SlipStream only.
+            If _combineSettings.Enabled Then
+                StatusText = "SuperTrend+ is disabled in combine mode — combine sessions run SlipStream only (STRAT-45)."
+                Application.Current?.Dispatcher?.Invoke(Sub()
+                                                            StatusBackground = New SolidColorBrush(Color.FromRgb(&HFF, &H8C, &H0))
+                                                        End Sub)
+                _logger?.LogWarning("SuperTrend+ autopilot start blocked — combine mode is enabled (STRAT-45).")
+                Return
+            End If
             IsHowItWorksExpanded = False
             IsMonitoring = True
             _instrumentsReleasedThisSession.Clear()

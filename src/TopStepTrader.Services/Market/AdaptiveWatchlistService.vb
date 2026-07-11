@@ -4,6 +4,7 @@ Imports System.Threading
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 Imports Microsoft.Extensions.Logging
+Imports Microsoft.Extensions.Options
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
 Imports TopStepTrader.Core.Models
@@ -49,6 +50,7 @@ Namespace TopStepTrader.Services.Market
         Private ReadOnly _scorer As InstrumentOpportunityScorer
         Private ReadOnly _preferences As IOpportunityScorePreferences
         Private ReadOnly _logger As ILogger(Of AdaptiveWatchlistService)
+        Private ReadOnly _combineSettings As CombineSettings
         Private ReadOnly _slotSources As New ConcurrentDictionary(Of IOpenSlotInstrumentSource, Byte)()
         Private ReadOnly _stateLock As New Object()
         Private ReadOnly _tenureStart As New Dictionary(Of String, DateTimeOffset)(StringComparer.OrdinalIgnoreCase)
@@ -63,12 +65,14 @@ Namespace TopStepTrader.Services.Market
         Public Sub New(scopeFactory As IServiceScopeFactory,
                        scorer As InstrumentOpportunityScorer,
                        preferences As IOpportunityScorePreferences,
-                       logger As ILogger(Of AdaptiveWatchlistService))
+                       logger As ILogger(Of AdaptiveWatchlistService),
+                       Optional combineOptions As IOptions(Of CombineSettings) = Nothing)
             _scopeFactory = scopeFactory
             _scorer = scorer
             _preferences = preferences
             _logger = logger
-            _current = BuildCoreFallback()
+            _combineSettings = If(combineOptions?.Value, New CombineSettings())
+            _current = FilterMicrosOnly(BuildCoreFallback(), _combineSettings)
             AddHandler _preferences.Changed, AddressOf OnPreferencesChanged
         End Sub
 
@@ -164,10 +168,13 @@ Namespace TopStepTrader.Services.Market
         Friend Async Function RefreshAsync(ct As CancellationToken) As Task
             Try
                 Dim settings = _preferences.GetSettings()
-                Dim universe = InstrumentUniverse.GetAll()
+                ' STRAT-45: combine mode + MicrosOnly restricts the universe to micro
+                ' contracts BEFORE scoring, so the scorer still picks the best of the
+                ' micro set day by day. Minis re-enter only when MicrosOnly is off.
+                Dim universe = FilterUniverseMicrosOnly(InstrumentUniverse.GetAll(), _combineSettings)
                 Dim selection = If(settings.AdaptiveWatchlistEnabled,
                                     Await PickAdaptiveAsync(universe, settings, ct),
-                                    BuildCoreFallback())
+                                    FilterMicrosOnly(BuildCoreFallback(), _combineSettings))
                 Dim added = New List(Of String)
                 Dim removed = New List(Of String)
                 Dim previous As IReadOnlyList(Of FavouriteContract)
@@ -346,6 +353,27 @@ Namespace TopStepTrader.Services.Market
         Private Shared Function BuildCoreFallback() As IReadOnlyList(Of FavouriteContract)
             Return FavouriteContracts.GetDefaults().
                 Where(Function(f) Not String.IsNullOrEmpty(f.PxRootSymbol)).
+                ToList()
+        End Function
+
+        ''' <summary>STRAT-45: drops non-micro universe entries when combine mode +
+        ''' MicrosOnly are on; pass-through otherwise. Friend for direct test coverage.</summary>
+        Friend Shared Function FilterUniverseMicrosOnly(universe As IList(Of UniverseEntry),
+                                                         combine As CombineSettings) As IList(Of UniverseEntry)
+            If combine Is Nothing OrElse Not combine.Enabled OrElse Not combine.MicrosOnly Then Return universe
+            Return universe.
+                Where(Function(e) e?.Contract IsNot Nothing AndAlso
+                                  InstrumentUniverse.IsMicro(e.Contract.PxRootSymbol)).
+                ToList()
+        End Function
+
+        ''' <summary>STRAT-45: same micro restriction for flat contract lists (the
+        ''' non-adaptive fallback path and the constructor's initial snapshot).</summary>
+        Friend Shared Function FilterMicrosOnly(contracts As IReadOnlyList(Of FavouriteContract),
+                                                 combine As CombineSettings) As IReadOnlyList(Of FavouriteContract)
+            If combine Is Nothing OrElse Not combine.Enabled OrElse Not combine.MicrosOnly Then Return contracts
+            Return contracts.
+                Where(Function(c) c IsNot Nothing AndAlso InstrumentUniverse.IsMicro(c.PxRootSymbol)).
                 ToList()
         End Function
 

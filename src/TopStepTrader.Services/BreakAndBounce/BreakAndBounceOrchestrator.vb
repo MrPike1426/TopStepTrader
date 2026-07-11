@@ -3,6 +3,7 @@ Imports System.Threading
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 Imports Microsoft.Extensions.Logging
+Imports Microsoft.Extensions.Options
 Imports TopStepTrader.API.Hubs
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
@@ -53,6 +54,7 @@ Namespace TopStepTrader.Services.BreakAndBounce
         Private ReadOnly _logger As ILogger(Of BreakAndBounceOrchestrator)
         Private ReadOnly _dailyLossGuard As IDailyLossGuard
         Private ReadOnly _adaptiveWatchlist As AdaptiveWatchlistService
+        Private ReadOnly _combineSettings As CombineSettings
         Private ReadOnly _lastFiredAsOf As New ConcurrentDictionary(Of String, DateTimeOffset)()
         Private ReadOnly _livePositionLock As New Object()
         Private _livePosition As LivePositionState
@@ -76,7 +78,8 @@ Namespace TopStepTrader.Services.BreakAndBounce
                        marketHub As IMarketQuoteFeed,
                        logger As ILogger(Of BreakAndBounceOrchestrator),
                        Optional dailyLossGuard As IDailyLossGuard = Nothing,
-                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing)
+                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing,
+                       Optional combineOptions As IOptions(Of CombineSettings) = Nothing)
             _scopeFactory = scopeFactory
             _session = session
             _entryExecution = entryExecution
@@ -86,6 +89,7 @@ Namespace TopStepTrader.Services.BreakAndBounce
             _logger = logger
             _dailyLossGuard = dailyLossGuard
             _adaptiveWatchlist = adaptiveWatchlist
+            _combineSettings = If(combineOptions?.Value, New CombineSettings())
             _dailyLossGuard?.RegisterOpenSlotPnlSource(New OrchestratorPnlSource(Function() GetLiveUnrealisedPnl(),
                                                                                   Function() IsInPosition))
             _adaptiveWatchlist?.RegisterOpenSlotSource(Me)
@@ -160,6 +164,14 @@ Namespace TopStepTrader.Services.BreakAndBounce
 
         Public Sub Enable()
             If _isEnabled Then Return
+            ' STRAT-45: combine mode runs SlipStream only. Refuse the enable and re-raise
+            ' EnabledChanged(False) so any optimistically-flipped UI toggle reverts.
+            If _combineSettings.Enabled Then
+                _logger?.LogWarning(
+                    "BreakAndBounceOrchestrator: enable refused — combine mode allows SlipStream only (STRAT-45).")
+                RaiseEvent EnabledChanged(Me, False)
+                Return
+            End If
             _isEnabled = True
             _logger?.LogInformation("BreakAndBounceOrchestrator: enabled.")
             RaiseEvent EnabledChanged(Me, True)

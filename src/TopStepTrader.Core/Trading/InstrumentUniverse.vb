@@ -27,6 +27,24 @@ Namespace TopStepTrader.Core.Trading
     Public Class InstrumentUniverse
 
         ''' <summary>
+        ''' STRAT-45: root symbols of the CME micro contracts tradable on TopStepX.
+        ''' Used by the combine-mode <c>MicrosOnly</c> watchlist restriction. Both "MCL"
+        ''' and "MCLE" appear because ProjectX embeds the E-suffixed root in contract IDs
+        ''' while the industry abbreviation is MCL. Full-size roots (ES, NQ, GC, CL, RTY…)
+        ''' are deliberately absent — membership here is the definition of "micro".
+        ''' </summary>
+        Public Shared ReadOnly MicroRootSymbols As IReadOnlySet(Of String) =
+            New HashSet(Of String)(StringComparer.OrdinalIgnoreCase) From {
+                "MES", "MNQ", "MGC", "MCL", "MCLE", "M2K", "M6E", "MBT",
+                "MYM", "M6B", "M6A", "MHG"
+            }
+
+        ''' <summary>STRAT-45: True when the root symbol is a known micro contract.</summary>
+        Public Shared Function IsMicro(rootSymbol As String) As Boolean
+            Return Not String.IsNullOrWhiteSpace(rootSymbol) AndAlso MicroRootSymbols.Contains(rootSymbol)
+        End Function
+
+        ''' <summary>
         ''' Returns the full universe. Core entries are sourced directly from
         ''' <see cref="FavouriteContracts.GetDefaults"/>; Extended entries are a small,
         ''' hand-curated set of CME micros known to be available on TopStepX.

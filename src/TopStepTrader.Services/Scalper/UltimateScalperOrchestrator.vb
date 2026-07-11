@@ -3,6 +3,7 @@ Imports System.Threading
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 Imports Microsoft.Extensions.Logging
+Imports Microsoft.Extensions.Options
 Imports TopStepTrader.API.Hubs
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
@@ -48,6 +49,7 @@ Namespace TopStepTrader.Services.Scalper
         Private ReadOnly _trailEngine As IScalperTrailEngine
         Private ReadOnly _stopEntryManager As IScalperStopEntryManager
         Private ReadOnly _logger As ILogger(Of UltimateScalperOrchestrator)
+        Private ReadOnly _combineSettings As CombineSettings
         Private ReadOnly _lastFiredAsOf As New ConcurrentDictionary(Of String, DateTimeOffset)()
         Private ReadOnly _livePositionLock As New Object()
         Private _livePosition As ScalperLivePosition
@@ -79,7 +81,8 @@ Namespace TopStepTrader.Services.Scalper
                        marketHub As IMarketQuoteFeed,
                        trailEngine As IScalperTrailEngine,
                        stopEntryManager As IScalperStopEntryManager,
-                       logger As ILogger(Of UltimateScalperOrchestrator))
+                       logger As ILogger(Of UltimateScalperOrchestrator),
+                       Optional combineOptions As IOptions(Of CombineSettings) = Nothing)
             _scopeFactory = scopeFactory
             _session = session
             _entryExecution = entryExecution
@@ -89,6 +92,7 @@ Namespace TopStepTrader.Services.Scalper
             _trailEngine = trailEngine
             _stopEntryManager = stopEntryManager
             _logger = logger
+            _combineSettings = If(combineOptions?.Value, New CombineSettings())
             _quoteHandler = AddressOf OnQuoteReceived
             _stopEntryFilledHandler = AddressOf OnStopEntryFilled
             _stopEntryArmedHandler = AddressOf OnStopEntryArmed
@@ -139,6 +143,14 @@ Namespace TopStepTrader.Services.Scalper
 
         Public Sub Enable()
             If _isEnabled Then Return
+            ' STRAT-45: combine mode runs SlipStream only. Refuse the enable and re-raise
+            ' EnabledChanged(False) so any optimistically-flipped UI toggle reverts.
+            If _combineSettings.Enabled Then
+                _logger?.LogWarning(
+                    "UltimateScalperOrchestrator: enable refused — combine mode allows SlipStream only (STRAT-45).")
+                RaiseEvent EnabledChanged(Me, False)
+                Return
+            End If
             _isEnabled = True
             _logger?.LogInformation("UltimateScalperOrchestrator: enabled.")
             RaiseEvent EnabledChanged(Me, True)

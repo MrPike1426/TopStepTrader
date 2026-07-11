@@ -3,6 +3,7 @@ Imports System.Threading
 Imports Microsoft.Extensions.DependencyInjection
 Imports Microsoft.Extensions.Hosting
 Imports Microsoft.Extensions.Logging
+Imports Microsoft.Extensions.Options
 Imports TopStepTrader.API.Hubs
 Imports TopStepTrader.Core.Enums
 Imports TopStepTrader.Core.Interfaces
@@ -59,6 +60,7 @@ Namespace TopStepTrader.Services.SlipStream
         Private ReadOnly _logger As ILogger(Of SlipStreamOrchestrator)
         Private ReadOnly _dailyLossGuard As IDailyLossGuard
         Private ReadOnly _adaptiveWatchlist As AdaptiveWatchlistService
+        Private ReadOnly _combineSettings As CombineSettings
         Private ReadOnly _lastFiredAsOf As New ConcurrentDictionary(Of String, DateTimeOffset)()
         Private ReadOnly _livePositionLock As New Object()
         Private _livePosition As SlipStreamLivePosition
@@ -83,7 +85,8 @@ Namespace TopStepTrader.Services.SlipStream
                        marketHub As IMarketQuoteFeed,
                        logger As ILogger(Of SlipStreamOrchestrator),
                        Optional dailyLossGuard As IDailyLossGuard = Nothing,
-                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing)
+                       Optional adaptiveWatchlist As AdaptiveWatchlistService = Nothing,
+                       Optional combineOptions As IOptions(Of CombineSettings) = Nothing)
             _scopeFactory = scopeFactory
             _session = session
             _entryExecution = entryExecution
@@ -93,6 +96,7 @@ Namespace TopStepTrader.Services.SlipStream
             _logger = logger
             _dailyLossGuard = dailyLossGuard
             _adaptiveWatchlist = adaptiveWatchlist
+            _combineSettings = If(combineOptions?.Value, New CombineSettings())
             _dailyLossGuard?.RegisterOpenSlotPnlSource(New OrchestratorPnlSource(Function() GetLiveUnrealisedPnl(),
                                                                                   Function() IsInPosition))
             _adaptiveWatchlist?.RegisterOpenSlotSource(Me)
@@ -341,13 +345,16 @@ Namespace TopStepTrader.Services.SlipStream
                 Dim initialStop As Decimal = ComputeRoundedStopPrice(eval.LastClose, side, stopDist, contract)
 
                 ' Fractional-risk sizing: equity × riskPct / (stopDist × pointValue), floor, clamp ≥ 1.
+                ' STRAT-45: combine mode caps riskPct at the combine profile and clamps the
+                ' quantity to CombineSettings.MaxContracts.
                 Dim equity As Decimal = account.Balance
-                Dim riskCash As Decimal = equity * CDec(config.RiskPct / 100.0)
+                Dim riskPct As Double = EffectiveRiskPct(config, _combineSettings)
                 Dim pointValue As Decimal = contract.PxTickValue / contract.PxTickSize  ' $ per 1 price point
-                Dim contracts As Integer = 1
-                If riskCash > 0D AndAlso pointValue > 0D Then
-                    Dim raw = Math.Floor(CDbl(riskCash / (stopDist * pointValue)))
-                    contracts = Math.Max(1, CInt(Math.Min(raw, 100)))  ' hard cap 100 as paranoia ceiling
+                Dim contracts As Integer = ComputeContracts(equity, riskPct, stopDist, pointValue, _combineSettings)
+                If _combineSettings.Enabled Then
+                    _logger?.LogInformation(
+                        "SlipStream combine sizing on {Symbol}: riskPct={RiskPct:F2} (config {ConfigPct:F2}), qty={Qty} (maxContracts={Max})",
+                        eval.Symbol, riskPct, config.RiskPct, contracts, _combineSettings.MaxContracts)
                 End If
 
                 Dim slot As New PositionSlot With {
@@ -718,6 +725,42 @@ Namespace TopStepTrader.Services.SlipStream
         End Function
 
         ' ─── Helpers ────────────────────────────────────────────────────────────
+
+        ''' <summary>
+        ''' STRAT-45: effective risk fraction (percent of balance). With combine mode off
+        ''' this is the user's <see cref="SlipStreamConfig.RiskPct"/> unchanged. With
+        ''' combine mode on, <see cref="CombineSettings.SlipStreamRiskPct"/> acts as a
+        ''' ceiling: the user may size tighter than the combine profile, never looser.
+        ''' </summary>
+        Friend Shared Function EffectiveRiskPct(config As SlipStreamConfig,
+                                                 combine As CombineSettings) As Double
+            If combine Is Nothing OrElse Not combine.Enabled Then Return config.RiskPct
+            Return Math.Min(config.RiskPct, combine.SlipStreamRiskPct)
+        End Function
+
+        ''' <summary>
+        ''' STRAT-45: fractional-risk quantity — floor(equity × riskPct% / (stopDist ×
+        ''' pointValue)), clamped to ≥ 1 and to the hard cap. The cap is 100 (paranoia
+        ''' ceiling) with combine mode off, and <see cref="CombineSettings.MaxContracts"/>
+        ''' with combine mode on.
+        ''' </summary>
+        Friend Shared Function ComputeContracts(equity As Decimal,
+                                                 riskPct As Double,
+                                                 stopDist As Decimal,
+                                                 pointValue As Decimal,
+                                                 combine As CombineSettings) As Integer
+            Dim hardCap As Integer = 100
+            If combine IsNot Nothing AndAlso combine.Enabled AndAlso combine.MaxContracts > 0 Then
+                hardCap = Math.Min(hardCap, combine.MaxContracts)
+            End If
+            Dim contracts As Integer = 1
+            Dim riskCash As Decimal = equity * CDec(riskPct / 100.0)
+            If riskCash > 0D AndAlso pointValue > 0D AndAlso stopDist > 0D Then
+                Dim raw = Math.Floor(CDbl(riskCash / (stopDist * pointValue)))
+                contracts = Math.Max(1, CInt(Math.Min(raw, hardCap)))
+            End If
+            Return contracts
+        End Function
 
         ''' <summary>Rounds the proposed stop price away from entry to the nearest tick.</summary>
         Private Shared Function ComputeRoundedStopPrice(referencePrice As Decimal,
