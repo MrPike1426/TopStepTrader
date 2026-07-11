@@ -89,6 +89,8 @@ Namespace TopStepTrader.UI
                     MainContent.Content = _viewModelLocator.SlipStreamView
                 Case "BreakAndBounce"
                     MainContent.Content = _viewModelLocator.BreakAndBounceView
+                Case "VwapMeanReversion"
+                    MainContent.Content = _viewModelLocator.VwapMeanReversionView
                 Case "Settings"
                     MainContent.Content = _viewModelLocator.SettingsView
                 Case "TradePostMortem"

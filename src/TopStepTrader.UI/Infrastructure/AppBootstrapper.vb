@@ -97,6 +97,8 @@ Namespace TopStepTrader.UI.Infrastructure
                         services.AddTransient(Of SlipStreamViewModel)()          ' FEAT-70
                         services.AddTransient(Of BreakAndBounceView)()           ' FEAT-62
                         services.AddTransient(Of BreakAndBounceViewModel)()      ' FEAT-62
+                        services.AddTransient(Of VwapMeanReversionView)()        ' FEAT-75
+                        services.AddTransient(Of VwapMeanReversionViewModel)()   ' FEAT-75
                         services.AddTransient(Of TestTradeView)()                ' BUG-94 F6
                         services.AddTransient(Of TestTradeViewModel)()           ' BUG-94 F6
                         services.AddTransient(Of SnapshotHealthViewModel)()      ' OBS-07 F2

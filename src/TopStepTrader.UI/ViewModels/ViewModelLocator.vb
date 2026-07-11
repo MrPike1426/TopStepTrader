@@ -75,6 +75,13 @@ Namespace TopStepTrader.UI.ViewModels
             End Get
         End Property
 
+        ''' <summary>FEAT-75: VWAP Mean-Reversion tab.</summary>
+        Public ReadOnly Property VwapMeanReversionView As Views.VwapMeanReversionView
+            Get
+                Return Resolve(Of Views.VwapMeanReversionView)("VwapMeanReversion")
+            End Get
+        End Property
+
         Public ReadOnly Property ApiKeysView As Views.ApiKeysView
             Get
                 Return Resolve(Of Views.ApiKeysView)("ApiKeys")

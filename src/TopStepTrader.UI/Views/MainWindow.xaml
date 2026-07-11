@@ -66,6 +66,7 @@
                 <Button Content="⚡  Ultimate Scalper" Tag="UltimateScalper" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="&#x1F30A;  SlipStream" Tag="SlipStream" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="&#x1F501;  Break &amp; Bounce" Tag="BreakAndBounce" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
+                <Button Content="&#x2696;  VWAP Mean-Rev" Tag="VwapMeanReversion" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="&#x1F50D;  Trade Post-Mortem" Tag="TradePostMortem" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
                 <Button Content="&#x1F9EA;  Test Trade" Tag="TestTrade" Click="NavButton_Click" Style="{StaticResource NavButtonStyle}"/>
 

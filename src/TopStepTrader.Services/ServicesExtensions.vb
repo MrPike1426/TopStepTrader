@@ -15,6 +15,7 @@ Imports TopStepTrader.Services.Risk
 Imports TopStepTrader.Services.Scalper
 Imports TopStepTrader.Services.SlipStream
 Imports TopStepTrader.Services.BreakAndBounce
+Imports TopStepTrader.Services.VwapMeanReversion
 Imports TopStepTrader.Core.Trading
 Imports TopStepTrader.Services.Trades
 Imports TopStepTrader.Services.Trading
@@ -85,6 +86,14 @@ Namespace TopStepTrader.Services
             services.AddScoped(Of IBreakAndBounceSignalDetector, BreakAndBounceSignalDetector)()
             services.AddSingleton(Of BreakAndBounceOrchestrator)()
             services.AddHostedService(Function(sp) sp.GetRequiredService(Of BreakAndBounceOrchestrator)())
+
+            ' ── FEAT-75: VWAP Mean-Reversion strategy (STRAT-43 Candidate B).
+            ' Config is a Singleton (no repository in v1) so the VM's live edits and the
+            ' persona selector apply to the same instance the scoped detector reads.
+            services.AddSingleton(Of VwapMeanReversionConfig)()
+            services.AddScoped(Of IVwapMeanReversionSignalDetector, VwapMeanReversionSignalDetector)()
+            services.AddSingleton(Of VwapMeanReversionOrchestrator)()
+            services.AddHostedService(Function(sp) sp.GetRequiredService(Of VwapMeanReversionOrchestrator)())
 
             ' ── API key store — Singleton: one file-backed store for the session lifetime
             services.AddSingleton(Of IApiKeyStore, ApiKeyStore)()

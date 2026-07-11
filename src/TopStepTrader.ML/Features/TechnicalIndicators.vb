@@ -867,6 +867,104 @@ Namespace TopStepTrader.ML.Features
             Return result
         End Function
 
+        ' ── Session-anchored VWAP (FEAT-75) ──────────────────────────────────
+
+        ''' <summary>
+        ''' FEAT-75: Session-anchored Volume-Weighted Average Price. Unlike <see cref="VWAP"/>
+        ''' (cumulative over the whole series), the accumulators hard-reset at each CME Globex
+        ''' session boundary (17:00 US Central reopen — 22:00/23:00 UTC depending on DST),
+        ''' matching the per-contract anchoring of <c>ContractSessionHours.NextOpenUtc</c>.
+        ''' Typical price = (H + L + C) / 3 weighted by volume. Bars must be chronological.
+        ''' Zero-cumulative-volume bars fall back to the bar close (mirrors <see cref="VWAP"/>).
+        ''' </summary>
+        Public Function SessionAnchoredVwap(timestampsUtc As IList(Of DateTimeOffset),
+                                            highs As IList(Of Decimal),
+                                            lows As IList(Of Decimal),
+                                            closes As IList(Of Decimal),
+                                            volumes As IList(Of Long)) As Single()
+            Return VwapStandardDeviationBands(timestampsUtc, highs, lows, closes, volumes).Vwap
+        End Function
+
+        ''' <summary>
+        ''' FEAT-75: Session-anchored VWAP plus the running standard deviation of typical
+        ''' price around it, computed within the current session only (both reset at the
+        ''' session boundary — see <see cref="SessionAnchoredVwap"/>). SD is the simple
+        ''' price-deviation SD (volume-weighted SD bands are out of scope for v1):
+        '''
+        '''   sd[i] = sqrt( Σ (tp[j] − vwap[i])² / n )  for j in the session up to i.
+        '''
+        ''' Callers derive the ±1/±2 SD bands as vwap ± k × sd. The first bar of a session
+        ''' has sd = 0 (a single sample has no deviation).
+        ''' </summary>
+        Public Function VwapStandardDeviationBands(timestampsUtc As IList(Of DateTimeOffset),
+                                                   highs As IList(Of Decimal),
+                                                   lows As IList(Of Decimal),
+                                                   closes As IList(Of Decimal),
+                                                   volumes As IList(Of Long)) As (Vwap As Single(), Sd As Single())
+            Dim n = Math.Min(Math.Min(timestampsUtc.Count, volumes.Count),
+                             Math.Min(highs.Count, Math.Min(lows.Count, closes.Count)))
+            Dim vwapOut(n - 1) As Single
+            Dim sdOut(n - 1) As Single
+            If n = 0 Then Return (vwapOut, sdOut)
+
+            Dim cumPV As Double = 0        ' Σ typical × volume
+            Dim cumVol As Double = 0       ' Σ volume
+            Dim cumTp As Double = 0        ' Σ typical (for the price-deviation SD)
+            Dim cumTp2 As Double = 0       ' Σ typical²
+            Dim count As Integer = 0
+            Dim currentSession As Date = Date.MinValue
+
+            For i = 0 To n - 1
+                Dim sessionKey = CmeSessionKey(timestampsUtc(i))
+                If sessionKey <> currentSession Then
+                    ' Hard reset at the session boundary — a buggy reset silently corrupts
+                    ' the signal (STRAT-43 §7), so nothing survives the boundary.
+                    currentSession = sessionKey
+                    cumPV = 0 : cumVol = 0 : cumTp = 0 : cumTp2 = 0 : count = 0
+                End If
+
+                Dim tp = (CDbl(highs(i)) + CDbl(lows(i)) + CDbl(closes(i))) / 3.0
+                cumPV += tp * volumes(i)
+                cumVol += volumes(i)
+                cumTp += tp
+                cumTp2 += tp * tp
+                count += 1
+
+                Dim vwap As Double = If(cumVol > 0, cumPV / cumVol, CDbl(closes(i)))
+                vwapOut(i) = CSng(vwap)
+
+                ' Σ(tp − vwap)²/n = Σtp²/n − 2·vwap·Σtp/n + vwap² (clamped ≥ 0 for fp noise).
+                Dim variance = cumTp2 / count - 2.0 * vwap * cumTp / count + vwap * vwap
+                sdOut(i) = CSng(Math.Sqrt(Math.Max(variance, 0.0)))
+            Next
+            Return (vwapOut, sdOut)
+        End Function
+
+        ''' <summary>
+        ''' Maps a UTC bar timestamp to its CME Globex session key: the US Central date on
+        ''' which the session opened (sessions run 17:00 CT → 16:00 CT next day). A bar at
+        ''' or after 17:00 CT belongs to the session opening that CT day; earlier bars
+        ''' belong to the previous day's session. DST is respected via the Central zone.
+        ''' </summary>
+        Public Function CmeSessionKey(timestampUtc As DateTimeOffset) As Date
+            Dim ctTime = TimeZoneInfo.ConvertTime(timestampUtc, s_centralTz)
+            Return ctTime.DateTime.AddHours(-17).Date
+        End Function
+
+        Private ReadOnly s_centralTz As TimeZoneInfo = ResolveCentralTz()
+
+        Private Function ResolveCentralTz() As TimeZoneInfo
+            Try
+                Return TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time")
+            Catch
+                Try
+                    Return TimeZoneInfo.FindSystemTimeZoneById("America/Chicago")
+                Catch
+                    Return TimeZoneInfo.Utc
+                End Try
+            End Try
+        End Function
+
     End Module
 
 End Namespace
