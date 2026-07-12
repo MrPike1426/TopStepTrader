@@ -13,6 +13,7 @@ Imports TopStepTrader.Services.Market
 Imports TopStepTrader.Services.Risk
 Imports TopStepTrader.Services.Scalper
 Imports TopStepTrader.Services.SlipStream
+Imports TopStepTrader.Services.VwapMeanReversion
 Imports Xunit
 
 Namespace TopStepTrader.Tests.Services.SlipStream
@@ -187,6 +188,34 @@ Namespace TopStepTrader.Tests.Services.SlipStream
             Dim orch As New UltimateScalperOrchestrator(
                 Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing,
                 NullLogger(Of UltimateScalperOrchestrator).Instance,
+                combineOptions:=Options.Create(New CombineSettings()))
+            orch.Enable()
+            Assert.True(orch.IsEnabled)
+        End Sub
+
+        <Fact>
+        Public Sub F3e_VwapMeanReversion_EnableRefusedInCombineMode()
+            ' BUG-104: FEAT-75 shipped after STRAT-45 without the combine gate.
+            Dim orch As New VwapMeanReversionOrchestrator(
+                Nothing, Nothing, Nothing, Nothing, Nothing, Nothing,
+                NullLogger(Of VwapMeanReversionOrchestrator).Instance,
+                combineOptions:=Options.Create(CombineOn()))
+            Dim raised As New List(Of Boolean)
+            AddHandler orch.EnabledChanged, Sub(s, enabled) raised.Add(enabled)
+
+            orch.Enable()
+
+            Assert.False(orch.IsEnabled)
+            ' EnabledChanged(False) re-raised so a UI toggle reverts.
+            Assert.Contains(False, raised)
+            Assert.DoesNotContain(True, raised)
+        End Sub
+
+        <Fact>
+        Public Sub F3f_VwapMeanReversion_EnableWorksWithCombineOff()
+            Dim orch As New VwapMeanReversionOrchestrator(
+                Nothing, Nothing, Nothing, Nothing, Nothing, Nothing,
+                NullLogger(Of VwapMeanReversionOrchestrator).Instance,
                 combineOptions:=Options.Create(New CombineSettings()))
             orch.Enable()
             Assert.True(orch.IsEnabled)

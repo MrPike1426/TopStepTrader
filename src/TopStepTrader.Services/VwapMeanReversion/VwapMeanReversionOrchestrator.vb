@@ -164,6 +164,14 @@ Namespace TopStepTrader.Services.VwapMeanReversion
 
         Public Sub Enable()
             If _isEnabled Then Return
+            ' STRAT-45/BUG-104: combine mode runs SlipStream only. Refuse the enable and
+            ' re-raise EnabledChanged(False) so any optimistically-flipped UI toggle reverts.
+            If _combineSettings.Enabled Then
+                _logger?.LogWarning(
+                    "VwapMeanReversionOrchestrator: enable refused — combine mode allows SlipStream only (STRAT-45).")
+                RaiseEvent EnabledChanged(Me, False)
+                Return
+            End If
             _isEnabled = True
             _logger?.LogInformation("VwapMeanReversionOrchestrator: enabled.")
             RaiseEvent EnabledChanged(Me, True)
