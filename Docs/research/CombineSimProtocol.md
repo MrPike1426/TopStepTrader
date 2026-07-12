@@ -82,6 +82,7 @@ session counter (see below), so re-run the drill afterwards.
 | G3 | Zero days past −$750 app-side; the guard fired first on every losing day that approached it | `combine_report.py` D4 (max adverse excursion of cumulative day P&L) |
 | G4 | Zero guard malfunctions: every flatten completed, no orphan positions or orders | `combine_report.py` D4 automated proxy (no entries after a hard halt) **plus manual cross-check of `TradeReconciliationWorker` logs and any "flatten INCOMPLETE" log lines** |
 | G5 | Profit lock banked ≥ +$170 on every day it armed (peak ≥ +$220) | `combine_report.py` D4 |
+| G6 | Total net over the 10 sessions ≥ +$750 | `combine_report.py` D4 |
 
 The $150 figure in G2 is TopStep's payout **winning-day threshold**: the 2026
 payout policy requires 5 winning days of ≥ $150 net P&L per payout cycle, so a
@@ -89,6 +90,13 @@ locked-in day below $150 is green for the combine but useless for withdrawals.
 The lock floor sits $20 above that line so flatten slippage cannot drop a
 banked day under it (STRAT-46/47; previously $150 arm / $100 floor, which
 systematically banked non-qualifying $100–149 days).
+
+G6 (OBS-09) exists because G1–G5 alone can pass on a net-losing configuration:
+7 green days at the median (~+$150 each) and 3 red days ended by the
+consecutive-loser or soft halt (−$400 to −$750 each) satisfies every other
+gate while losing money. +$750 is one payout cycle's worth (5 winning days ×
+$150) — a configuration that cannot clear it in 10 sessions cannot fund the
+weekly withdrawal goal either.
 
 G4 is the only gate with a manual component: the report cannot see broker-side
 state, so the reconciliation-log check is mandatory before declaring it passed.

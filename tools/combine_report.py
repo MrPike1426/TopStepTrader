@@ -81,6 +81,9 @@ LOCK_TRIGGER = 220.0
 LOCK_FLOOR = 170.0  # $20 over WINNING_DAY: flatten slippage can't drop a banked day under the line
 # TopStep payout policy: a "winning day" needs >= $150 net P&L (STRAT-46).
 WINNING_DAY = 150.0
+# OBS-09 G6: the gate window must be net profitable in aggregate — one payout
+# cycle's worth (5 winning days x $150). G1-G5 alone can pass on a losing config.
+MIN_WINDOW_NET = 750.0
 MAX_TRADES = 4
 MAX_CONSEC_LOSERS = 2
 TRAILING_MLL = -2_000.0
@@ -345,6 +348,7 @@ def section_gates(days):
     malfunctions = gate_malfunctions(window)
     armed = [d for d in window if d["lock_armed"]]
     lock_fails = [d for d in armed if d["net"] < LOCK_FLOOR]
+    total_net = sum(d["net"] for d in window)
 
     def verdict(ok, detail):
         if insufficient:
@@ -367,6 +371,8 @@ def section_gates(days):
          verdict(not lock_fails,
                  f"{len(armed)} armed day(s), {len(lock_fails)} closed under floor"
                  + ("" if armed else " (vacuous — lock never armed)"))),
+        ("G6", f"Total net over the {GATE_SESSIONS} sessions ≥ {money(MIN_WINDOW_NET)}",
+         verdict(total_net >= MIN_WINDOW_NET, f"total {money(total_net)}")),
     ]
     tbl = md_table(["Gate", "Requirement", "Result"], rows)
     return (f"{header}\n\n{tbl}\n\n"
