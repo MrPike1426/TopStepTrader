@@ -77,8 +77,8 @@ except Exception:
 STARTING_BALANCE = 50_000.0
 SOFT_HALT = -600.0
 HARD_FLATTEN = -750.0
-LOCK_TRIGGER = 200.0
-LOCK_FLOOR = 150.0
+LOCK_TRIGGER = 220.0
+LOCK_FLOOR = 170.0  # $20 over WINNING_DAY: flatten slippage can't drop a banked day under the line
 # TopStep payout policy: a "winning day" needs >= $150 net P&L (STRAT-46).
 WINNING_DAY = 150.0
 MAX_TRADES = 4

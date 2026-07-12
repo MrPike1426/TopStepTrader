@@ -432,22 +432,22 @@ Namespace TopStepTrader.Tests.Services.Risk
         Public Async Function Combine_ProfitLock_ArmsAtTrigger_FlattensOnFloorRetrace() As Task
             Dim flattener As New StubFlattener()
             Dim svc = CreateCombineService(flattener)
-            Dim source As New StubPnlSource With {.Unrealised = 200D}
+            Dim source As New StubPnlSource With {.Unrealised = 220D}
             svc.RegisterOpenSlotPnlSource(source)
 
             Dim armedState = Await svc.EvaluateAsync()
             Assert.True(armedState.ProfitLockArmed)
-            Assert.Equal(200D, armedState.ProfitLockHighWater)
+            Assert.Equal(220D, armedState.ProfitLockHighWater)
             Assert.False(armedState.IsHalted)
             Assert.True(svc.CanEnterNewTrade())
 
             ' Pullback above the floor: high-water holds, still trading.
             source.Unrealised = 180D
             Dim holdState = Await svc.EvaluateAsync()
-            Assert.Equal(200D, holdState.ProfitLockHighWater)
+            Assert.Equal(220D, holdState.ProfitLockHighWater)
             Assert.False(holdState.IsHalted)
 
-            ' Retrace to the +150 floor: flatten + halt with DailyProfitLock.
+            ' Retrace to the +170 floor: flatten + halt with DailyProfitLock.
             source.Unrealised = 90D
             Dim lockedState = Await svc.EvaluateAsync()
             Assert.True(lockedState.IsHalted)
@@ -461,7 +461,7 @@ Namespace TopStepTrader.Tests.Services.Risk
             Dim flattener As New StubFlattener()
             Dim svc = CreateCombineService(flattener)
 
-            Await InsertClosedTradeAsync(pnl:=210D)
+            Await InsertClosedTradeAsync(pnl:=230D)
             Dim state = Await svc.EvaluateAsync()
 
             Assert.True(state.IsHalted)

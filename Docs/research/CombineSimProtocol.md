@@ -22,7 +22,7 @@ date the day ends on) with at least one closed trade, run with
 |---|---|
 | Soft halt (entries blocked) | −$600 combined daily P&L |
 | Hard flatten + halt | −$750 combined daily P&L |
-| Profit lock | arms at +$200, floors at +$150 (STRAT-46) |
+| Profit lock | arms at +$220, floors at +$170 (STRAT-46/47) |
 | Max trades / day | 4 |
 | Max consecutive losers | 2 |
 | Trailing max drawdown (MLL) | −$2,000 from peak equity, frozen at start balance, +$100 app buffer |
@@ -81,13 +81,14 @@ session counter (see below), so re-run the drill afterwards.
 | G2 | Median green-day P&L ≥ +$150 | `combine_report.py` D4 |
 | G3 | Zero days past −$750 app-side; the guard fired first on every losing day that approached it | `combine_report.py` D4 (max adverse excursion of cumulative day P&L) |
 | G4 | Zero guard malfunctions: every flatten completed, no orphan positions or orders | `combine_report.py` D4 automated proxy (no entries after a hard halt) **plus manual cross-check of `TradeReconciliationWorker` logs and any "flatten INCOMPLETE" log lines** |
-| G5 | Profit lock banked ≥ +$150 on every day it armed (peak ≥ +$200) | `combine_report.py` D4 |
+| G5 | Profit lock banked ≥ +$170 on every day it armed (peak ≥ +$220) | `combine_report.py` D4 |
 
-The $150 figure in G2/G5 is TopStep's payout **winning-day threshold**: the 2026
+The $150 figure in G2 is TopStep's payout **winning-day threshold**: the 2026
 payout policy requires 5 winning days of ≥ $150 net P&L per payout cycle, so a
 locked-in day below $150 is green for the combine but useless for withdrawals.
-The lock floor sits exactly on that line (STRAT-46; previously $150 arm / $100
-floor, which systematically banked non-qualifying $100–149 days).
+The lock floor sits $20 above that line so flatten slippage cannot drop a
+banked day under it (STRAT-46/47; previously $150 arm / $100 floor, which
+systematically banked non-qualifying $100–149 days).
 
 G4 is the only gate with a manual component: the report cannot see broker-side
 state, so the reconciliation-log check is mandatory before declaring it passed.
