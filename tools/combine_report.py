@@ -9,8 +9,9 @@ practice session; it prints (and optionally writes) markdown with:
       (type + CT timestamp), max adverse excursion of the cumulative day P&L,
       and whether the day ended by profit lock
   D2  per-strategy expectancy: n, net, win rate, $/trade, R/trade
-  D3  aggregates: green-day rate, median green-day P&L, app-side −$750
-      breaches, equity curve vs the trailing MLL floor
+  D3  aggregates: green-day rate, TopStep winning days (>= $150 net),
+      median green-day P&L, app-side −$750 breaches, equity curve vs the
+      trailing MLL floor
   D4  promotion-gate checklist (Docs/research/CombineSimProtocol.md) with
       PASS / FAIL / INSUFFICIENT DATA per gate, evaluated over the most
       recent 10 sessions
@@ -76,8 +77,10 @@ except Exception:
 STARTING_BALANCE = 50_000.0
 SOFT_HALT = -600.0
 HARD_FLATTEN = -750.0
-LOCK_TRIGGER = 150.0
-LOCK_FLOOR = 100.0
+LOCK_TRIGGER = 200.0
+LOCK_FLOOR = 150.0
+# TopStep payout policy: a "winning day" needs >= $150 net P&L (STRAT-46).
+WINNING_DAY = 150.0
 MAX_TRADES = 4
 MAX_CONSEC_LOSERS = 2
 TRAILING_MLL = -2_000.0
@@ -277,10 +280,13 @@ def section_aggregate(days):
     if not days:
         return "_No sessions in the window._"
     green = [d for d in days if d["net"] > 0]
+    winning = [d for d in days if d["net"] >= WINNING_DAY]
     breaches = [d for d in days if d["mae"] <= HARD_FLATTEN]
     lines = [
         f"- Sessions (trading days with ≥1 closed trade): **{len(days)}**",
         f"- Green-day rate: **{len(green)}/{len(days)} ({len(green) / len(days):.0%})**",
+        f"- Winning days (≥ {money(WINNING_DAY)} net — TopStep payout eligibility): "
+        f"**{len(winning)}/{len(days)}**",
         f"- Median green-day P&L: **{money(statistics.median(d['net'] for d in green)) if green else '—'}**",
         f"- Days past {money(HARD_FLATTEN)} app-side (must be zero): **{len(breaches)}**"
         + (f" ({', '.join(d['day'] for d in breaches)})" if breaches else ""),
@@ -349,8 +355,8 @@ def section_gates(days):
     rows = [
         ("G1", f"≥7/{GATE_SESSIONS} green days",
          verdict(len(green) >= 7, f"{len(green)}/{n} green")),
-        ("G2", f"Median green day ≥ {money(LOCK_FLOOR)}",
-         verdict(med is not None and med >= 100.0,
+        ("G2", f"Median green day ≥ {money(WINNING_DAY)} (TopStep winning day)",
+         verdict(med is not None and med >= WINNING_DAY,
                  f"median {money(med) if med is not None else '—'}")),
         ("G3", f"Zero days past {money(HARD_FLATTEN)} app-side",
          verdict(not breaches, f"{len(breaches)} breach day(s)")),

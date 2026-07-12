@@ -3,8 +3,11 @@ Namespace TopStepTrader.Core.Settings
     ''' <summary>
     ''' FEAT-73: TopStep combine rule parameters, bound to the "Combine" appsettings
     ''' section. Defaults are the "TopStep50k" preset (soft halt −$600, hard
-    ''' force-flatten −$750, profit lock arming at +$150 with a +$100 floor,
+    ''' force-flatten −$750, profit lock arming at +$200 with a +$150 floor,
     ''' max 4 trades/day, halt after 2 consecutive losers).
+    '''
+    ''' STRAT-46: the lock floor sits on TopStep's payout winning-day threshold
+    ''' (≥ $150 net P&amp;L) so a lock-banked day counts toward payout eligibility.
     '''
     ''' When <see cref="Enabled"/> is False the daily-loss guard behaves exactly as
     ''' FEAT-71 shipped it (RiskSettings daily loss, entry-block only, no flatten).
@@ -19,9 +22,10 @@ Namespace TopStepTrader.Core.Settings
         ''' Default leaves a $250 slippage/fee buffer under TopStep's −$1,000 line.</summary>
         Public Property DailyLossHardDollars As Decimal = -750D
         ''' <summary>Combined daily P&amp;L at or above this arms the trailing profit lock.</summary>
-        Public Property ProfitLockTriggerDollars As Decimal = 150D
-        ''' <summary>Once armed, a retrace to at or below this flattens and banks the day.</summary>
-        Public Property ProfitLockFloorDollars As Decimal = 100D
+        Public Property ProfitLockTriggerDollars As Decimal = 200D
+        ''' <summary>Once armed, a retrace to at or below this flattens and banks the day.
+        ''' Sits on TopStep's ≥$150 winning-day payout threshold (STRAT-46).</summary>
+        Public Property ProfitLockFloorDollars As Decimal = 150D
         ''' <summary>Soft-halt after this many closed trades in the trading day (0 disables).</summary>
         Public Property MaxTradesPerDay As Integer = 4
         ''' <summary>Soft-halt after this many consecutive losing closes (0 disables).</summary>

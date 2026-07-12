@@ -94,15 +94,15 @@ Namespace TopStepTrader.Tests.Services.Risk
 
         <Fact>
         Public Sub LockArms_AtExactTrigger_WithOpenPositions()
-            Dim verdict = Evaluate(EnabledSettings(), combined:=150D, anyOpen:=True)
+            Dim verdict = Evaluate(EnabledSettings(), combined:=200D, anyOpen:=True)
             Assert.Equal(CombineVerdictKind.None, verdict.Kind)
             Assert.True(verdict.ProfitLockArmed)
-            Assert.Equal(150D, verdict.ProfitLockHighWater)
+            Assert.Equal(200D, verdict.ProfitLockHighWater)
         End Sub
 
         <Fact>
         Public Sub BelowTrigger_DoesNotArm()
-            Dim verdict = Evaluate(EnabledSettings(), combined:=149.99D, anyOpen:=True)
+            Dim verdict = Evaluate(EnabledSettings(), combined:=199.99D, anyOpen:=True)
             Assert.False(verdict.ProfitLockArmed)
             Assert.Equal(CombineVerdictKind.None, verdict.Kind)
         End Sub
@@ -121,29 +121,29 @@ Namespace TopStepTrader.Tests.Services.Risk
 
         <Fact>
         Public Sub Armed_RetraceToExactFloor_ProfitLockFlatten()
-            Dim verdict = Evaluate(EnabledSettings(), combined:=100D, armed:=True, highWater:=200D, anyOpen:=True)
+            Dim verdict = Evaluate(EnabledSettings(), combined:=150D, armed:=True, highWater:=200D, anyOpen:=True)
             Assert.Equal(CombineVerdictKind.ProfitLockFlatten, verdict.Kind)
             Assert.Equal(RiskHaltReason.DailyProfitLock, verdict.Reason)
         End Sub
 
         <Fact>
         Public Sub Armed_JustAboveFloor_KeepsRunning()
-            Dim verdict = Evaluate(EnabledSettings(), combined:=100.01D, armed:=True, highWater:=200D, anyOpen:=True)
+            Dim verdict = Evaluate(EnabledSettings(), combined:=150.01D, armed:=True, highWater:=200D, anyOpen:=True)
             Assert.Equal(CombineVerdictKind.None, verdict.Kind)
         End Sub
 
         <Fact>
         Public Sub FlatBook_AtExactTrigger_BanksImmediately()
-            Dim verdict = Evaluate(EnabledSettings(), combined:=150D, anyOpen:=False)
+            Dim verdict = Evaluate(EnabledSettings(), combined:=200D, anyOpen:=False)
             Assert.Equal(CombineVerdictKind.ProfitLockFlatten, verdict.Kind)
             Assert.Equal(RiskHaltReason.DailyProfitLock, verdict.Reason)
         End Sub
 
         <Fact>
         Public Sub FlatBook_ArmedButBetweenFloorAndTrigger_KeepsRunning()
-            ' Armed earlier, closed at +120: above the floor, below the trigger —
+            ' Armed earlier, closed at +175: above the floor, below the trigger —
             ' trading may continue.
-            Dim verdict = Evaluate(EnabledSettings(), combined:=120D, armed:=True, highWater:=200D, anyOpen:=False)
+            Dim verdict = Evaluate(EnabledSettings(), combined:=175D, armed:=True, highWater:=200D, anyOpen:=False)
             Assert.Equal(CombineVerdictKind.None, verdict.Kind)
         End Sub
 

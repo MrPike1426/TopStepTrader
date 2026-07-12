@@ -447,7 +447,7 @@ Namespace TopStepTrader.Tests.Services.Risk
             Assert.Equal(200D, holdState.ProfitLockHighWater)
             Assert.False(holdState.IsHalted)
 
-            ' Retrace to the +100 floor: flatten + halt with DailyProfitLock.
+            ' Retrace to the +150 floor: flatten + halt with DailyProfitLock.
             source.Unrealised = 90D
             Dim lockedState = Await svc.EvaluateAsync()
             Assert.True(lockedState.IsHalted)
@@ -461,7 +461,7 @@ Namespace TopStepTrader.Tests.Services.Risk
             Dim flattener As New StubFlattener()
             Dim svc = CreateCombineService(flattener)
 
-            Await InsertClosedTradeAsync(pnl:=160D)
+            Await InsertClosedTradeAsync(pnl:=210D)
             Dim state = Await svc.EvaluateAsync()
 
             Assert.True(state.IsHalted)
