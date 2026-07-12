@@ -1,8 +1,10 @@
 Namespace TopStepTrader.Core.Settings
 
     Public Class RiskSettings
-        ''' <summary>Daily loss limit in dollars. Negative value e.g. -1500</summary>
-        Public Property DailyLossLimitDollars As Decimal = -1500D
+        ''' <summary>Daily loss limit in dollars (negative). Non-combine fallback only —
+        ''' the combine guard's soft/hard lines govern when Combine:Enabled. Default −$900
+        ''' keeps a $100 buffer under TopStep's $1,000 account DLL (STRAT-48).</summary>
+        Public Property DailyLossLimitDollars As Decimal = -900D
         ''' <summary>Maximum drawdown in dollars. Negative value e.g. -2000</summary>
         Public Property MaxDrawdownDollars As Decimal = -2000D
         Public Property MaxPositionSizeContracts As Integer = 3
